@@ -1,6 +1,6 @@
 # RIS — Plan Complet de Implementare
 
-Data actualizare: 2026-03-22 | Versiune plan: 4.3
+Data actualizare: 2026-03-22 | Versiune plan: 5.0
 
 ---
 
@@ -25,7 +25,9 @@ Data actualizare: 2026-03-22 | Versiune plan: 4.3
 | **Faza 7D — Testare & Refactorizare** | **COMPLET** | **28 pytest tests, 11 vitest tests, split agent_verification, React.lazy 10 pagini, retry logic ANAF+openapi.ro** |
 | **Faza 7E — Calitate Analiza** | **COMPLET** | **CAEN fallback Bilant, retry BNR+SEAP, completeness gate <50%, anti-halucinare prompts, GET diagnostics, POST retry-source** |
 | **Faza 10A-10F — R3 Module Upgrades** | **COMPLET** | **51 P1 features: scoring matrix, synthesis degradation, prompt hardening, orchestrator dedup+checkpoints, cache LRU, batch parallel, security tracing+sanitization, form validation, HTML responsive** |
-| **Faza 11 — R4 Bug Fixes & Quality** | **PLANIFICAT** | **27 items: 6 CRIT bugs, 13 HIGH data quality/reliability, 8 MED polish — vezi ROLAND_PLANIFICARI_MODULE.md** |
+| **Faza 11 — R4 Bug Fixes & Quality** | **PLANIFICAT** | **27 items: 6 CRIT, 13 HIGH, 8 MED — vezi ROLAND_PLANIFICARI_MODULE.md** |
+| **Faza 12 — R5 Deep Research Fixes** | **PLANIFICAT** | **25 items: 4 CRIT (delta dead, SEAP bonus dead, diagnostics dead, settings phantom), 16 HIGH, 5 MED** |
+| **Infra — Git + Tests** | **COMPLET** | **Git init + push GitHub, 88 teste (77 pytest + 11 vitest), .gitignore cleanup** |
 
 ---
 

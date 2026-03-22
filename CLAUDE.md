@@ -35,7 +35,10 @@ Sistem local de Business Intelligence care ruleaza pe Windows 10. Extrage automa
 - **Faza 10D:** COMPLETATA — Time-series delta 2-5 ani, Financial ratios auto-calc, Chart.js data format return, PDF bookmarks, Excel CAGR KPI, DOCX custom properties
 - **Faza 10E:** COMPLETATA — Severity throttling, Alert escalation retry 3x, Monitoring health endpoint, Batch state checkpoint, CSV pre-validation
 - **Faza 10F:** COMPLETATA — Solvency stress matrix 3x3, Early warning confidence, Structured degradation 3-tier, Prompt injection hardening, Token budget enforcement, Parallel Agent 2+3, Request dedup, State checkpoint recovery, Anomaly flags delta, Sector percentile scoring, Parallel batch 2-CUI, Batch queue max 2, Fresh data option, Cache LRU 100MB, HTTP pool metrics, Event-driven invalidation, Request ID tracing, Error sanitization, Sensitive data redaction, Request validation handler, Form validation, HTML responsive mobile
-- **Faza 11 (R4):** PLANIFICATA — 27 items: 6 CRIT bugs (bilant crash, schema mismatch, CAEN chain rupt, completeness logic, batch gather), 13 HIGH (synthesis quality, reports data loss, provider routing), 8 MED (cache race, delta dimensions, compare year) — vezi ROLAND_PLANIFICARI_MODULE.md
+- **Faza 11 (R4):** PLANIFICATA — 27 items: 6 CRIT bugs (bilant crash, schema mismatch, CAEN chain rupt, completeness logic, batch gather), 13 HIGH (synthesis quality, reports data loss, provider routing), 8 MED (cache race, delta dimensions, compare year)
+- **Faza 12 (R5):** PLANIFICATA — 25 items: 4 CRIT (delta dead, SEAP bonus dead, diagnostics dead, settings phantom save), 16 HIGH (solvency null, TOC wrong, positive factors invisible, cache invalidation broken, batch safety, API leaks, frontend leaks), 5 MED (PDF truncation, HTML validation, batch type)
+- **Git:** https://github.com/RolandPetrila/Sistem-Inteligent-Analize.git | 88 teste (77 pytest + 11 vitest)
+- **Planificari detaliate:** ROLAND_PLANIFICARI_MODULE.md (R4 + R5 = 52 items total)
 - **Deep Research:** 99_Deep_Research/ (2 rapoarte complete cu roadmap)
 - **Spec complet:** SPEC_INTELLIGENCE_SYSTEM_V2.md
 - **37 REST endpoints + 1 WebSocket + 11 pagini frontend + 7 formate raport + diagnostic + audit + request tracing**
