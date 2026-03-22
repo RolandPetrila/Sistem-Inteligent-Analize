@@ -43,7 +43,7 @@ def check_completeness(verified: dict, official: dict, market: dict) -> dict:
     # --- Actionariat ---
     total_checks += 1
     actionariat = verified.get("actionariat", {})
-    if actionariat.get("available") and (actionariat.get("asociati") or actionariat.get("administratori")):
+    if actionariat.get("available"):
         passed_checks += 1
     else:
         gaps.append({
@@ -108,7 +108,9 @@ def check_completeness(verified: dict, official: dict, market: dict) -> dict:
     total_checks += 1
     market_verified = verified.get("market", {})
     seap_data = market.get("seap", {})
-    if market_verified or seap_data.get("total_contracts", 0) > 0:
+    # B6 fix: Check actual SEAP data, not bare dict truthiness
+    seap_contracts = seap_data.get("total_contracts", 0) or 0
+    if seap_contracts > 0:
         passed_checks += 1
     else:
         gaps.append({

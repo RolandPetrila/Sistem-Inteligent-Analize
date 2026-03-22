@@ -58,7 +58,7 @@
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
 | 1 | B1 | **CAEN din ANAF API v9 nu se extrage** — campul `cod_caen` exista in `date_generale` dar NU e parsat | anaf_client.py | S | HIGH |
-| 2 | B2 | **openapi_client "found" field lipseste** — CAEN fallback chain rupt, actionariat skipat | openapi_client.py | S | CRIT |
+| 2 | B2 | [x] **openapi_client "found" field lipseste** — VERIFICAT: found prezent in toate path-urile | openapi_client.py | S | CRIT |
 | 3 | B3 | **Litigation = same reference as insolvency** — pointer, nu copie | agent_official.py:199-204 | S | HIGH |
 | 4 | B4 | **SEAP valute mixte sumate fara conversie** | seap_client.py:117-122 | M | MED |
 
@@ -66,8 +66,8 @@
 
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
-| 5 | B5 | **Actionariat `[]` falsy → INCOMPLETE gresit** | completeness.py:46 | S | CRIT |
-| 6 | B6 | **Market `{}` truthy → PASS gresit** | completeness.py:111 | S | CRIT |
+| 5 | B5 | [x] **Actionariat `[]` falsy → INCOMPLETE gresit** — fix: check available flag only | completeness.py:46 | S | CRIT |
+| 6 | B6 | [x] **Market `{}` truthy → PASS gresit** — fix: check actual SEAP contracts | completeness.py:111 | S | CRIT |
 | 7 | B7 | **Confidence nefolosita in scor final** | scoring.py:403-421 | M | HIGH |
 | 8 | B8 | **Risk factors duplicate** | scoring.py:489-502 | S | MED |
 
@@ -84,7 +84,7 @@
 
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
-| 13 | B13 | **`years` nedefinita → crash bilant multi-an** | anaf_bilant_client.py:146 | S | CRIT |
+| 13 | B13 | [x] **`years` nedefinita → crash bilant multi-an** — fix: years → years_desc | anaf_bilant_client.py:146 | S | CRIT |
 | 14 | B14 | **Early warnings neconectate la recomandari** | orchestrator.py + section_prompts | M | HIGH |
 
 ## R4 — 6. Rapoarte
@@ -101,9 +101,9 @@
 |---|-----|-------------------|---------|-------|-----|
 | 18 | B18 | Compare year hardcodat | compare.py:45 | S | MED |
 | 19 | B19 | Delta doar pe scor total, fara dimensiuni | delta_service.py | M | MED |
-| 20 | B20 | gather() exception = batch RUNNING forever | batch.py:389 | S | CRIT |
+| 20 | B20 | [x] gather() exception = batch RUNNING forever — fix: return_exceptions=True | batch.py:389 | S | CRIT |
 | 21 | B21 | Stuck batch = concurrent limit blocat | batch.py:110 + scheduler.py | M | HIGH |
-| 22 | B22 | Schema mismatch: `triggered_at` vs `created_at` | monitoring_service.py | S | CRIT |
+| 22 | B22 | [x] Schema mismatch: `triggered_at` vs `created_at` — fix: created_at → triggered_at | monitoring_service.py | S | CRIT |
 | 23 | B23 | Firma radiata = silentios ignorata | monitoring_service.py:136 | M | HIGH |
 | 24 | B24 | get_or_fetch race condition | cache_service.py | M | MED |
 | 25 | B25 | WebSocket broadcast exception swallowing | main.py | S | MED |

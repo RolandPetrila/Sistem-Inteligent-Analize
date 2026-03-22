@@ -65,7 +65,7 @@ async def _is_duplicate_alert(alert_id: str, change_type: str, new_val) -> bool:
         existing = await db.fetch_one(
             "SELECT id FROM monitoring_audit "
             "WHERE alert_id = ? AND change_type = ? AND new_value = ? "
-            "AND created_at >= datetime('now', '-24 hours') "
+            "AND triggered_at >= datetime('now', '-24 hours') "
             "ORDER BY created_at DESC LIMIT 1",
             (alert_id, change_type, str(new_val)),
         )
@@ -85,7 +85,7 @@ async def _should_throttle(alert_id: str, severity: str) -> bool:
         row = await db.fetch_one(
             f"SELECT id FROM monitoring_audit "
             f"WHERE alert_id = ? AND severity = ? "
-            f"AND created_at >= datetime('now', {window}) "
+            f"AND triggered_at >= datetime('now', {window}) "
             f"ORDER BY created_at DESC LIMIT 1",
             (alert_id, severity),
         )

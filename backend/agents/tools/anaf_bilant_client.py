@@ -143,7 +143,7 @@ async def get_bilant_multi_year(cui: str, start_year: int = 2019, end_year: int 
 
     return {
         "cui": str(cui).strip(),
-        "years_requested": years,
+        "years_requested": years_desc,
         "years_found": list(results.keys()),
         "data": results,
         "trend": trend,

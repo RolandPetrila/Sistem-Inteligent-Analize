@@ -386,20 +386,27 @@ async def _run_batch(
             })
 
         # 10F M8.3: Fire all CUIs in chunk in parallel via asyncio.gather
+        # B20 fix: return_exceptions=True so one failure doesn't crash entire batch
         chunk_results = await asyncio.gather(
             *[
                 _analyze_one_cui(sem, cui, analysis_type, report_level, refresh)
                 for cui in chunk
             ],
-            return_exceptions=False,
+            return_exceptions=True,
         )
 
-        for result in chunk_results:
-            results.append(result)
-            if result["status"] == "OK":
-                completed += 1
-            else:
+        for idx, result in enumerate(chunk_results):
+            if isinstance(result, BaseException):
+                # B20: Unhandled exception from gather — treat as failed
+                failed_cui = chunk[idx] if idx < len(chunk) else "unknown"
+                results.append({"cui": failed_cui, "job_id": "", "status": "FAILED", "error": str(result)[:200]})
                 failed += 1
+            else:
+                results.append(result)
+                if result["status"] == "OK":
+                    completed += 1
+                else:
+                    failed += 1
 
     # Genereaza ZIP cu toate rapoartele
     zip_path = batch_dir / "batch_rapoarte.zip"
