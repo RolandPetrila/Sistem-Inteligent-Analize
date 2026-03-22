@@ -70,7 +70,11 @@ def generate_one_pager(verified_data: dict, meta: dict, output_path: str):
     pdf.set_xy(10, y)
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_text_color(r, g, b)
-    recom_short = "RECOMANDAT" if score_color == "Verde" else "PRUDENTA" if score_color == "Galben" else "NERECOMANDAT"
+    # C8 fix: N/A or missing score → "INSUFICIENT DATE" instead of "NERECOMANDAT"
+    if score_color in ("Verde", "Galben", "Rosu"):
+        recom_short = "RECOMANDAT" if score_color == "Verde" else "PRUDENTA" if score_color == "Galben" else "NERECOMANDAT"
+    else:
+        recom_short = "INSUFICIENT DATE"
     pdf.cell(0, 6, f"Recomandare: {recom_short}")
     pdf.set_font("Helvetica", "", 8)
     pdf.set_text_color(80, 80, 80)

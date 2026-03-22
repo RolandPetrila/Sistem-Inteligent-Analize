@@ -28,14 +28,30 @@ async def get_bilant(cui: str, year: int) -> dict:
 
     client = get_client()
     logger.debug(f"ANAF Bilant: CUI={cui_clean} an={year}")
-    response = await client.get(ANAF_BILANT_URL, params=params)
 
-    if response.status_code != 200:
+    # C2 fix: Retry once on transient errors (timeout, 5xx)
+    response = None
+    for attempt in range(2):
+        try:
+            response = await client.get(ANAF_BILANT_URL, params=params)
+            if response.status_code < 500:
+                break
+            if attempt == 0:
+                logger.debug(f"ANAF Bilant: retrying {cui_clean}/{year} after HTTP {response.status_code}")
+                await asyncio.sleep(2)
+        except Exception as e:
+            if attempt == 0:
+                logger.debug(f"ANAF Bilant: retrying {cui_clean}/{year} after {e}")
+                await asyncio.sleep(2)
+            else:
+                return {"cui": cui_clean, "year": year, "found": False, "error": str(e)[:100]}
+
+    if response is None or response.status_code != 200:
         return {
             "cui": cui_clean,
             "year": year,
             "found": False,
-            "error": f"HTTP {response.status_code}",
+            "error": f"HTTP {response.status_code if response else 'no response'}",
         }
 
     data = response.json()
@@ -171,6 +187,11 @@ def _calculate_trends(data: dict) -> dict:
         values = []
         for year in sorted_years:
             val = data[year].get(metric_key)
+            # C1 fix: Use pierdere_neta as negative profit when profit_net is missing
+            if val is None and metric_key == "profit_net":
+                pierdere = data[year].get("pierdere_neta")
+                if pierdere is not None and pierdere > 0:
+                    val = -pierdere
             if val is not None:
                 values.append({"year": year, "value": val})
 

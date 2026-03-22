@@ -129,8 +129,8 @@
 
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
-| 1 | C1 | **_calculate_trends ignora pierdere_neta** — Ani cu pierdere apar ca "date lipsa", nu ca profit negativ. Trend-ul financiar incomplet/gresit pt firme cu ani de pierdere | anaf_bilant_client.py:165 | S | HIGH |
-| 2 | C2 | **get_bilant() fara retry per-an** — 2 erori tranziente consecutive trigger early-stop, bilant multi-an se opreste prematur. Firma cu 5 ani date primeste doar 2 | anaf_bilant_client.py:31 | S | HIGH |
+| 1 | C1 | [x] **_calculate_trends ignora pierdere_neta** — fix: use pierdere_neta as negative profit | anaf_bilant_client.py:165 | S | HIGH |
+| 2 | C2 | [x] **get_bilant() fara retry per-an** — fix: retry once on 5xx/timeout per-year request | anaf_bilant_client.py:31 | S | HIGH |
 | 3 | C3 | **Completeness score formula gresita** — Numitor = len(expected_sources)+2, dar numaratorul = field checks. Mixeaza doua unitati diferite, score mereu supra-estimat | agent_official.py:312-314 | S | MED |
 
 ---
@@ -142,7 +142,7 @@
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
 | 4 | C4 | [x] **SEAP bonus niciodata aplicat** — fix: unwrap _make_field .value before checking | scoring.py:338-340 | S | CRIT |
-| 5 | C5 | **Solvency matrix null safety** — `profit_val = None` trece prin comparatii fara eroare. `None < 0` = False in Python, deci profit necunoscut = clasificat "Sanatos". Firma fara date profit = falsa siguranta | scoring.py:149-151 | S | HIGH |
+| 5 | C5 | [x] **Solvency matrix null safety** — fix: flag missing profit/equity as INDETERMINAT, apply score penalty | scoring.py:149-151 | S | HIGH |
 
 ---
 
@@ -153,8 +153,8 @@
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
 | 6 | C6 | **PDF TOC page numbers mereu gresite** — Presupune 1 pagina per sectiune, dar text lung = 3-4 pagini. Dupa prima sectiune lunga, TOT restul TOC pointeaza pagini gresite | pdf_generator.py:119-126 | M | HIGH |
-| 7 | C7 | **POSITIVE factors invizibile** — scoring.py emite severity "POSITIVE" dar Excel/PPTX/1-Pager au doar maps pt HIGH/MEDIUM/LOW. Rapoartele apar mai negative decat sunt — vesti bune (crestere CA) nu apar nicaieri | excel/pptx/one_pager generators | S | HIGH |
-| 8 | C8 | **One-pager: N/A scor → "NERECOMANDAT"** — Agent 4 eroare → scor "N/A" → label "NERECOMANDAT". Firma fara date suficiente primeste eticheta negativa in loc de "INSUFICIENT DATE" | one_pager_generator.py:73 | S | HIGH |
+| 7 | C7 | [x] **POSITIVE factors invizibile** — fix: add POSITIVE to severity color maps in Excel+PPTX | excel/pptx/one_pager generators | S | HIGH |
+| 8 | C8 | [x] **One-pager: N/A scor → "NERECOMANDAT"** — fix: unknown score_color → "INSUFICIENT DATE" | one_pager_generator.py:73 | S | HIGH |
 | 9 | C9 | **PDF truncheaza cuvinte > 60 caractere** — `w[:60]` taie URLs, termeni lungi, fara marker. Output corupt silentios in raportul PDF | pdf_generator.py:164 | S | MED |
 | 10 | C10 | **PDF sterge paragrafe silentios la eroare render** — `except Exception: pass` in multi_cell. Paragraf intreg disparut, fara log, fara placeholder | pdf_generator.py:180-182 | S | MED |
 | 11 | C11 | **HTML: `<li>` fara `<ul>` wrapper** — Bullet-uri fara lista HTML valida. Formatare stricata in browser, invalid pentru screen readers | html_generator.py:30-31 | S | MED |
@@ -190,7 +190,7 @@
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
 | 16 | C16 | **invalidate_company nu sterge cache-ul real** — Foloseste hash(cui) dar cache keys reale sunt hash("bilant_CUI_YEAR"), hash("fin_CUI"), etc. DELETE by exact key nu gaseste nimic. Cache invalidation e 95% nefunctionala | cache_service.py:183-193 | M | HIGH |
-| 17 | C17 | **Compare sleeps 2s chiar si pe cache hit** — `asyncio.sleep(2)` e INAUNTRU loop-ului dar AFARA de if-ul de cache miss. 5 firme = 20s sleep inutil pe date deja cached | compare.py:58,80 | S | HIGH |
+| 17 | C17 | [x] **Compare sleeps 2s chiar si pe cache hit** — VERIFICAT: sleep already inside cache miss block | compare.py:58,80 | S | HIGH |
 
 ---
 
@@ -201,8 +201,8 @@
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
 | 18 | C18 | [x] **get_latest_diagnostics foloseste 'COMPLETED' in loc de 'DONE'** — fix: COMPLETED → DONE | jobs.py:22 | S | CRIT |
-| 19 | C19 | **retry-source leaks raw exception str(e)** — `except Exception as e: return {"error": str(e)}` trimite stack trace / paths / potential API keys catre client. Bypass-eaza error sanitization | jobs.py:260-266 | S | HIGH |
-| 20 | C20 | **cancel_job nu verifica status curent** — Poate seta DONE → FAILED. Rapoarte completate corupt retroactiv, statisticile gresite | jobs.py:269-279 | S | HIGH |
+| 19 | C19 | [x] **retry-source leaks raw exception str(e)** — fix: sanitize to first 100 chars, wrap in safe message | jobs.py:260-266 | S | HIGH |
+| 20 | C20 | [x] **cancel_job nu verifica status curent** — fix: block cancel on DONE/ERROR/FAILED | jobs.py:269-279 | S | HIGH |
 | 21 | C21 | **Settings .env scris dar in-memory settings nu se reincarca** — User salveaza API keys din UI, vede "Salvat!", dar runtime-ul continua cu valorile vechi pana la restart | settings.py:123-140 + config.py:66 | M | HIGH |
 
 ---

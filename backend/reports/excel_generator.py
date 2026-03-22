@@ -211,6 +211,7 @@ def generate_excel(report_sections: dict, meta: dict, verified_data: dict, outpu
                 "HIGH": PatternFill(start_color=RED, end_color=RED, fill_type="solid"),
                 "MEDIUM": PatternFill(start_color=YELLOW, end_color=YELLOW, fill_type="solid"),
                 "LOW": PatternFill(start_color="60A5FA", end_color="60A5FA", fill_type="solid"),
+                "POSITIVE": PatternFill(start_color=GREEN, end_color=GREEN, fill_type="solid"),
             }.get(severity, PatternFill())
             sev_cell.fill = sev_fill
             sev_cell.font = Font(bold=True, color=WHITE)

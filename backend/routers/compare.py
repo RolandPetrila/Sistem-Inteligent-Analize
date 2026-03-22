@@ -55,6 +55,7 @@ async def compare_companies(data: CompareRequest):
             except Exception as e:
                 anaf = {}
                 company["error_anaf"] = str(e)
+            # C17 fix: Only sleep on cache miss (rate limit), not on hit
             await asyncio.sleep(2)
 
         if anaf and anaf.get("found"):
@@ -77,6 +78,7 @@ async def compare_companies(data: CompareRequest):
                     await cache_service.set(cache_key_bilant, bilant, "anaf")
             except Exception:
                 bilant = {}
+            # C17 fix: Only sleep on cache miss
             await asyncio.sleep(2)
 
         if bilant and bilant.get("found"):

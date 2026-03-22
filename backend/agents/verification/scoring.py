@@ -141,10 +141,16 @@ def calculate_risk_score(verified: dict) -> dict:
         elif solvency_ratio > 0.3:
             fin_score += 5
 
+    # C5 fix: Flag missing profit/equity as INDETERMINAT
+    if ca_val is not None and ca_val > 0:
+        if profit_val is None:
+            risk_factors.append(("Profit net indisponibil — solvabilitate inestimabila", "MEDIUM"))
+            fin_score -= 5
+        if cap_val is None:
+            risk_factors.append(("Capitaluri proprii indisponibile — subcapitalizare neverificabila", "MEDIUM"))
+            fin_score -= 5
+
     # --- 10F M3.3: Solvency Stress Matrix 3x3 ---
-    # X axis: Profit Margin (Pierdere / Fragil / Sanatos)
-    # Y axis: Equity Ratio  (Subcapitalizat / Moderat / Solid)
-    # Maps to 9 risk zones from RISC CRITIC (1) to RISC MINIM (9)
     solvency_matrix = None
     if ca_val is not None and ca_val > 0:
         profit_margin_pct = round((profit_val / ca_val * 100), 2) if profit_val is not None else None

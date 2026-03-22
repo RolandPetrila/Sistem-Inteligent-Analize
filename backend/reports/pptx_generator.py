@@ -148,7 +148,7 @@ def generate_pptx(report_sections: dict, meta: dict, verified_data: dict, output
         y_f = 3.2
         _add_text(slide4, 7, y_f - 0.4, 5, 0.35, "Factori de Risc:", 13, ACCENT, bold=True)
         for factor, severity in factors[:6]:
-            sev_color = {"HIGH": RED, "MEDIUM": YELLOW, "LOW": RGBColor(96, 165, 250)}.get(severity, GRAY_TEXT)
+            sev_color = {"HIGH": RED, "MEDIUM": YELLOW, "LOW": RGBColor(96, 165, 250), "POSITIVE": RGBColor(74, 222, 128)}.get(severity, GRAY_TEXT)
             _add_text(slide4, 7, y_f, 5.5, 0.35, f"[{severity}] {factor}", 11, sev_color)
             y_f += 0.35
 

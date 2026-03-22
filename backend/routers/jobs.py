@@ -258,11 +258,13 @@ async def retry_single_source(job_id: str, source: str):
         }
 
     except Exception as e:
+        # C19 fix: Sanitize error — don't leak raw exception details to client
+        safe_error = str(e)[:100].split("\n")[0]  # First line, max 100 chars
         return {
             "job_id": job_id,
             "source": source_lower,
             "success": False,
-            "error": str(e),
+            "error": f"Eroare la interogarea sursei: {safe_error}",
         }
 
 
@@ -271,6 +273,10 @@ async def cancel_job(job_id: str):
     row = await db.fetch_one("SELECT * FROM jobs WHERE id = ?", (job_id,))
     if not row:
         raise HTTPException(status_code=404, detail="Job not found")
+
+    # C20 fix: Don't allow canceling already-completed jobs
+    if row["status"] in ("DONE", "ERROR", "FAILED"):
+        raise HTTPException(status_code=400, detail=f"Job deja finalizat (status: {row['status']})")
 
     await db.execute(
         "UPDATE jobs SET status = ?, error_message = ? WHERE id = ?",
