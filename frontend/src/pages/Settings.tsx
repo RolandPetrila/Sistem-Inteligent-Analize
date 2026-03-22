@@ -64,11 +64,12 @@ export default function Settings() {
     setSaving(true);
     setSaved(false);
     try {
-      await fetch("/api/settings", {
+      const res = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fields }),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch {

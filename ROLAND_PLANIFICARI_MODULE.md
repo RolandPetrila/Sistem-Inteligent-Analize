@@ -141,7 +141,7 @@
 
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
-| 4 | C4 | **SEAP bonus niciodata aplicat** — `_verify_market()` wrapeaza in `_make_field()`, scoring cauta `total_contracts` la nivel top dar il gaseste sub `.value`. Bonus +10 piata e cod mort. Toate firmele cu SEAP sunt sub-evaluate | scoring.py:338-340 | S | CRIT |
+| 4 | C4 | [x] **SEAP bonus niciodata aplicat** — fix: unwrap _make_field .value before checking | scoring.py:338-340 | S | CRIT |
 | 5 | C5 | **Solvency matrix null safety** — `profit_val = None` trece prin comparatii fara eroare. `None < 0` = False in Python, deci profit necunoscut = clasificat "Sanatos". Firma fara date profit = falsa siguranta | scoring.py:149-151 | S | HIGH |
 
 ---
@@ -167,7 +167,7 @@
 
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
-| 12 | C12 | **Delta compara raportul cu sine insusi** — `compute_delta` e apelat DUPA INSERT in DB. Query LIMIT 2 returneaza raportul tocmai inserat ca `rows[0]`. Compara date identice → delta MEREU gol. Intreaga functionalitate delta (anomaly flags, CA_DROP, PROFIT_TO_LOSS) e cod mort | delta_service.py:23-34 / job_service.py:218,256 | S | CRIT |
+| 12 | C12 | [x] **Delta compara raportul cu sine insusi** — fix: rows[0]→rows[1], len<1→len<2 | delta_service.py:23-34 / job_service.py:218,256 | S | CRIT |
 
 ---
 
@@ -200,7 +200,7 @@
 
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
-| 18 | C18 | **get_latest_diagnostics foloseste 'COMPLETED' in loc de 'DONE'** — Endpoint-ul /api/jobs/diagnostics/latest returneaza MEREU "Niciun job completat". Complet nefunctional de la implementare | jobs.py:22 | S | CRIT |
+| 18 | C18 | [x] **get_latest_diagnostics foloseste 'COMPLETED' in loc de 'DONE'** — fix: COMPLETED → DONE | jobs.py:22 | S | CRIT |
 | 19 | C19 | **retry-source leaks raw exception str(e)** — `except Exception as e: return {"error": str(e)}` trimite stack trace / paths / potential API keys catre client. Bypass-eaza error sanitization | jobs.py:260-266 | S | HIGH |
 | 20 | C20 | **cancel_job nu verifica status curent** — Poate seta DONE → FAILED. Rapoarte completate corupt retroactiv, statisticile gresite | jobs.py:269-279 | S | HIGH |
 | 21 | C21 | **Settings .env scris dar in-memory settings nu se reincarca** — User salveaza API keys din UI, vede "Salvat!", dar runtime-ul continua cu valorile vechi pana la restart | settings.py:123-140 + config.py:66 | M | HIGH |
@@ -213,7 +213,7 @@
 
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
-| 22 | C22 | **Settings save nu verifica res.ok** — `fetch()` fara check status HTTP. Server 400/500 → user vede "Salvat!" → crede ca setarile sunt active | Settings.tsx:67-71 | S | CRIT |
+| 22 | C22 | [x] **Settings save nu verifica res.ok** — fix: check res.ok, throw on failure | Settings.tsx:67-71 | S | CRIT |
 | 23 | C23 | **Batch polling interval + WS reconnect timer nu se curata la unmount** — setInterval ramas activ dupa navigare = toast-uri pe pagini gresite, WS orfane acumulate, memory leak | BatchAnalysis.tsx:49-67, useWebSocket.ts:57 | S | HIGH |
 | 24 | C24 | **api.compareCompanies + api.createMonitoring schema gresita** — `{cuis}` in loc de `{cui_list}`, `{cui,company_name}` in loc de `{company_id,alert_type}`. Functii API complet nefunctionale | api.ts:146,175 | S | HIGH |
 | 25 | C25 | **Monitoring toggle/delete + CompareCompanies score 0** — Toggle/delete fara try/catch (eroare silentioasa), scor 0 afisat ca "date lipsa" (gri) in loc de rosu | Monitoring.tsx:62-70, CompareCompanies.tsx:35 | S | HIGH |

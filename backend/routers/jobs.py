@@ -19,7 +19,7 @@ router = APIRouter()
 async def get_latest_diagnostics():
     """CA6: Returneaza diagnosticul ultimului job completat."""
     row = await db.fetch_one(
-        "SELECT id FROM jobs WHERE status = 'COMPLETED' ORDER BY completed_at DESC LIMIT 1"
+        "SELECT id FROM jobs WHERE status = 'DONE' ORDER BY completed_at DESC LIMIT 1"
     )
     if not row:
         return {"error": "Niciun job completat", "diagnostics": None}

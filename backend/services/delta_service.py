@@ -26,12 +26,11 @@ async def compute_delta(company_id: str, new_verified_data: dict) -> dict | None
         (company_id,),
     )
 
-    if len(rows) < 1:
+    if len(rows) < 2:
         return None
 
-    # Primul e cel curent (inca nesalvat sau tocmai salvat), al doilea e anterior
-    # Daca avem doar 1, nu avem cu ce compara
-    old_row = rows[0]  # cel mai recent deja salvat
+    # C12 fix: rows[0] is the report just inserted, rows[1] is the actual previous
+    old_row = rows[1]
     old_data = {}
     if old_row["full_data"]:
         try:

@@ -334,9 +334,10 @@ def calculate_risk_score(verified: dict) -> dict:
     market = verified.get("market", {})
     if isinstance(market, dict) and market:
         mkt_score = 70
-        # Bonus for SEAP contracts
+        # C4 fix: Unwrap _make_field wrapper to access actual SEAP data
         seap = market.get("seap", {})
-        if isinstance(seap, dict) and seap.get("total_contracts", 0) > 0:
+        seap_val = seap.get("value", seap) if isinstance(seap, dict) else {}
+        if isinstance(seap_val, dict) and (seap_val.get("total_contracts", 0) or 0) > 0:
             mkt_score += 10
 
     # Benchmark comparison bonus (8B)
