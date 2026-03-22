@@ -113,13 +113,19 @@ async def get_contracts_won(cui: str, page_size: int = 20, use_cache: bool = Tru
         logger.warning(f"SEAP direct error: {e}")
         results["direct_error"] = str(e)
 
-    # Total valoare contracte
-    total_value = 0
+    # B4 fix: Sum contract values with RON conversion (EUR→RON approx)
+    total_value_ron = 0
+    eur_rate = 5.0  # approximate EUR/RON for SEAP totals
     for c in results["contracts"] + results["direct_acquisitions"]:
         val = c.get("value")
         if isinstance(val, (int, float)):
-            total_value += val
-    results["total_value"] = total_value
+            currency = str(c.get("currency", "RON")).upper()
+            if currency == "EUR":
+                total_value_ron += val * eur_rate
+            else:
+                total_value_ron += val
+    results["total_value"] = round(total_value_ron)
+    results["total_value_currency"] = "RON"
     results["total_contracts"] = len(results["contracts"]) + len(results["direct_acquisitions"])
 
     # Cache save

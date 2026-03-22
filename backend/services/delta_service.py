@@ -62,6 +62,25 @@ async def compute_delta(company_id: str, new_verified_data: dict) -> dict | None
             if change:
                 delta["changes"].append(change)
 
+    # B19 fix: Delta on risk dimensions (not just total score)
+    old_dims = old_data.get("risk_score", {}).get("dimensions", {})
+    new_dims = new_verified_data.get("risk_score", {}).get("dimensions", {})
+    for dim_name in new_dims:
+        if dim_name in old_dims:
+            old_sc = old_dims[dim_name].get("score")
+            new_sc = new_dims[dim_name].get("score")
+            if old_sc is not None and new_sc is not None:
+                diff = round(new_sc - old_sc, 1)
+                if abs(diff) >= 3:  # only significant changes
+                    delta["changes"].append({
+                        "indicator": f"Dimensiune {dim_name.capitalize()}",
+                        "old_value": old_sc,
+                        "new_value": new_sc,
+                        "diff": diff,
+                        "direction": "crestere" if diff > 0 else "scadere",
+                        "display": f"Dimensiune {dim_name}: {old_sc} → {new_sc} ({'+' if diff > 0 else ''}{diff})",
+                    })
+
     # Stare ANAF (text comparison)
     old_company = old_data.get("company", {})
     new_company = new_verified_data.get("company", {})

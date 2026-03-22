@@ -39,7 +39,8 @@ async def compare_companies(data: CompareRequest):
         clean_cuis.append(v["cui_clean"])
 
     results = []
-    last_year = date.today().year - 2
+    # B18 fix: Use year-1 (last complete year), not year-2
+    last_year = date.today().year - 1
 
     for cui in clean_cuis:
         company = {"cui": cui}

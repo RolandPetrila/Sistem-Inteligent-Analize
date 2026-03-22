@@ -120,6 +120,24 @@ def generate_pptx(report_sections: dict, meta: dict, verified_data: dict, output
         _add_text(slide3, 0.8, y, 11, 0.4, display, 14, LIGHT_TEXT)
         y += 0.45
 
+    # B17: Add financial trend data if available
+    trend = financial.get("trend_financiar", {})
+    trend_val = trend.get("value") if isinstance(trend, dict) else None
+    if isinstance(trend_val, dict):
+        y += 0.3
+        _add_text(slide3, 0.8, y, 11, 0.4, "Trend Multi-An:", 14, ACCENT, bold=True)
+        y += 0.45
+        for metric_key in ["cifra_afaceri_neta", "profit_net"]:
+            metric_data = trend_val.get(metric_key, {})
+            if isinstance(metric_data, dict) and metric_data.get("values"):
+                growth = metric_data.get("growth_percent")
+                direction = metric_data.get("direction", "")
+                name = metric_data.get("name", metric_key)
+                color = GREEN if direction == "crestere" else RED if direction == "scadere" else LIGHT_TEXT
+                growth_str = f" ({'+' if growth and growth > 0 else ''}{growth}%)" if growth is not None else ""
+                _add_text(slide3, 0.8, y, 11, 0.4, f"{name}: {direction}{growth_str}", 12, color)
+                y += 0.4
+
     # --- Slide 4: Scor Risc ---
     slide4 = prs.slides.add_slide(prs.slide_layouts[6])
     _set_slide_bg(slide4)

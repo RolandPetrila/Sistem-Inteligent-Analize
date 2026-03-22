@@ -37,7 +37,8 @@ export default function BatchAnalysis() {
     formData.append("file", file);
 
     try {
-      const res = await fetch("/api/batch?analysis_type=COMPANY_PROFILE&report_level=2", {
+      // C15 fix: Use FULL_COMPANY_PROFILE to match backend routing (enables Agent 3 for Market/SEAP)
+      const res = await fetch("/api/batch?analysis_type=FULL_COMPANY_PROFILE&report_level=2", {
         method: "POST",
         body: formData,
       });

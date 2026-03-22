@@ -88,6 +88,16 @@ export default function Companies() {
         <button type="submit" className="btn-primary">
           Cauta
         </button>
+        {/* B27 fix: Clear search button that also resets pagination */}
+        {search && (
+          <button
+            type="button"
+            onClick={() => { setSearch(""); setPage(0); loadCompanies("", 0); }}
+            className="btn-secondary text-sm"
+          >
+            Sterge
+          </button>
+        )}
       </form>
 
       {loading ? (

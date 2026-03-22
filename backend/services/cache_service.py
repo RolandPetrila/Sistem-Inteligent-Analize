@@ -156,6 +156,11 @@ async def get_stats() -> dict:
     }
 
 
+# B24 fix: In-flight lock to prevent duplicate fetches for same key
+import asyncio as _asyncio
+_fetch_locks: dict[str, _asyncio.Lock] = {}
+
+
 async def get_or_fetch(
     key: str,
     source: str,
@@ -165,7 +170,7 @@ async def get_or_fetch(
 ) -> dict:
     """
     Returneaza din cache sau apeleaza fetch_coro si salveaza.
-    Pattern principal pentru agenti.
+    B24 fix: Lock per key prevents duplicate concurrent fetches.
     """
     if not force_refresh:
         cached = await get(key)
@@ -173,11 +178,21 @@ async def get_or_fetch(
             _track(source, hit=True)
             return cached
 
-    _track(source, hit=False)
-    data = await fetch_coro()
-    if data:
-        await set(key, data, source, ttl_hours)
-    return data
+    # B24: Acquire per-key lock so only one coroutine fetches
+    if key not in _fetch_locks:
+        _fetch_locks[key] = _asyncio.Lock()
+    async with _fetch_locks[key]:
+        # Double-check cache after acquiring lock
+        if not force_refresh:
+            cached = await get(key)
+            if cached is not None:
+                _track(source, hit=True)
+                return cached
+        _track(source, hit=False)
+        data = await fetch_coro()
+        if data:
+            await set(key, data, source, ttl_hours)
+        return data
 
 
 async def invalidate_company(cui: str):

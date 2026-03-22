@@ -39,11 +39,16 @@ class ConnectionManager:
     async def broadcast(self, job_id: str, message: dict):
         if job_id in self.active:
             data = json.dumps(message, ensure_ascii=False)
+            dead = []
             for ws in self.active[job_id]:
                 try:
                     await ws.send_text(data)
                 except Exception:
-                    pass
+                    # B25 fix: Track dead connections for cleanup instead of silently ignoring
+                    dead.append(ws)
+            # Remove dead connections
+            for ws in dead:
+                self.active[job_id].discard(ws)
 
 
 ws_manager = ConnectionManager()

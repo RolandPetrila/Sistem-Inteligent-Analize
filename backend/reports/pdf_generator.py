@@ -147,9 +147,9 @@ def generate_pdf(report_sections: dict, meta: dict, output_path: str, verified_d
             if not paragraph:
                 pdf.ln(3)
                 continue
-            # Truncate very long words to prevent overflow
+            # C9 fix: Break very long words with hyphens instead of truncating
             words = paragraph.split()
-            paragraph = " ".join(w[:60] for w in words)
+            paragraph = " ".join(w[:55] + "-" + w[55:110] if len(w) > 60 else w for w in words)
             # Skip lines that are too short to render or are raw JSON
             if paragraph.startswith("{") or paragraph.startswith("["):
                 continue
@@ -165,9 +165,13 @@ def generate_pdf(report_sections: dict, meta: dict, output_path: str, verified_d
                     pdf.set_text_color(40, 40, 40)
                 else:
                     pdf.multi_cell(0, 5.5, paragraph)
-            except Exception:
-                # Skip paragraphs that cause rendering errors
-                pass
+            except Exception as e:
+                # C10 fix: Log instead of silently swallowing render errors
+                pdf.set_font("Helvetica", "I", 8)
+                pdf.set_text_color(180, 180, 180)
+                pdf.cell(0, 4, "[paragraf nerandat]", new_x="LMARGIN", new_y="NEXT")
+                pdf.set_font("Helvetica", "", 10)
+                pdf.set_text_color(40, 40, 40)
 
     # B15: Due Diligence Checklist from verified_data
     due_diligence = verified_data.get("due_diligence", {})

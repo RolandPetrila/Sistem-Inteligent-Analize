@@ -20,14 +20,23 @@ def _escape(text: str) -> str:
 
 def _render_content(content: str) -> str:
     lines = []
+    in_list = False
     for line in content.split("\n"):
         line = line.strip()
+        is_list_item = line.startswith("- ") or line.startswith("* ")
+        # C11 fix: Close <ul> when transitioning out of list
+        if in_list and not is_list_item:
+            lines.append("</ul>")
+            in_list = False
         if not line:
             lines.append("<br>")
         elif line.startswith("## ") or line.startswith("**"):
             clean = line.replace("**", "").replace("## ", "")
             lines.append(f'<h3 class="subsection">{_escape(clean)}</h3>')
-        elif line.startswith("- ") or line.startswith("* "):
+        elif is_list_item:
+            if not in_list:
+                lines.append('<ul class="list-disc ml-6 space-y-1">')
+                in_list = True
             lines.append(f'<li>{_escape(line[2:])}</li>')
         else:
             escaped = _escape(line)
@@ -36,6 +45,8 @@ def _render_content(content: str) -> str:
             escaped = escaped.replace("[ESTIMAT]", '<span class="trust-estimat">[ESTIMAT]</span>')
             escaped = escaped.replace("[INDISPONIBIL]", '<span class="trust-indisponibil">[INDISPONIBIL]</span>')
             lines.append(f"<p>{escaped}</p>")
+    if in_list:
+        lines.append("</ul>")
     return "\n".join(lines)
 
 

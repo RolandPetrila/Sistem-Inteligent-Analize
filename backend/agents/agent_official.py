@@ -314,8 +314,9 @@ class OfficialAgent(BaseAgent):
             "per_source": diagnostics,
             "missing_sources": missing_sources,
             "missing_fields": missing_fields,
+            # C3 fix: Use total expected fields (5 field checks) as denominator, not source count
             "completeness_score": round(
-                (1 - len(missing_fields) / max(len(expected_sources) + 2, 1)) * 100
+                (1 - len(missing_fields) / max(5, 1)) * 100
             ),
         }
 

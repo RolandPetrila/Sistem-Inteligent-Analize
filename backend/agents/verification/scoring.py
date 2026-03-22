@@ -515,6 +515,15 @@ def calculate_risk_score(verified: dict) -> dict:
                 "severity": "HIGH",
             })
 
+    # B8 fix: Dedup risk factors — keep first occurrence per text
+    seen_factors = set()
+    deduped_factors = []
+    for text, sev in risk_factors:
+        if text not in seen_factors:
+            seen_factors.add(text)
+            deduped_factors.append((text, sev))
+    risk_factors = deduped_factors
+
     return {
         "score": color,
         "numeric_score": total_score,

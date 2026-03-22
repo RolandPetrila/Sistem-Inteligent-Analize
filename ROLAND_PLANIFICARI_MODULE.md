@@ -60,7 +60,7 @@
 | 1 | B1 | [x] **CAEN din ANAF API v9 nu se extrage** — fix: extract cod_CAEN from date_generale | anaf_client.py | S | HIGH |
 | 2 | B2 | [x] **openapi_client "found" field lipseste** — VERIFICAT: found prezent in toate path-urile | openapi_client.py | S | CRIT |
 | 3 | B3 | [x] **Litigation = same reference as insolvency** — fix: deep copy dict | agent_official.py:199-204 | S | HIGH |
-| 4 | B4 | **SEAP valute mixte sumate fara conversie** | seap_client.py:117-122 | M | MED |
+| 4 | B4 | [x] **SEAP valute mixte sumate fara conversie** — fix: EUR→RON conversion at approx rate | seap_client.py:116-128 | M | MED |
 
 ## R4 — 3. Verificare & Scoring (Agent 4)
 
@@ -69,7 +69,7 @@
 | 5 | B5 | [x] **Actionariat `[]` falsy → INCOMPLETE gresit** — fix: check available flag only | completeness.py:46 | S | CRIT |
 | 6 | B6 | [x] **Market `{}` truthy → PASS gresit** — fix: check actual SEAP contracts | completeness.py:111 | S | CRIT |
 | 7 | B7 | [x] **Confidence nefolosita in scor final** — fix: apply confidence weighting to dimension scores | scoring.py:403-421 | M | HIGH |
-| 8 | B8 | **Risk factors duplicate** | scoring.py:489-502 | S | MED |
+| 8 | B8 | [x] **Risk factors duplicate** — fix: dedup by text before return | scoring.py:518-524 | S | MED |
 
 ## R4 — 4. Sinteza AI (Agent 5)
 
@@ -93,22 +93,22 @@
 |---|-----|-------------------|---------|-------|-----|
 | 15 | B15 | [x] **PDF/DOCX ignora due_diligence + early_warnings** — fix: added structured DD checklist + EW sections to both generators | pdf_generator.py, docx_generator.py, generator.py | M | HIGH |
 | 16 | B16 | [x] **Excel CAGR crash pe firma < 2 ani** — fix: handle negative CA with simple growth rate | excel_generator.py:324-371 | S | HIGH |
-| 17 | B17 | **PPTX fara trend financiar** | pptx_generator.py | M | MED |
+| 17 | B17 | [x] **PPTX fara trend financiar** — fix: added trend multi-an section on Slide 3 | pptx_generator.py:123-137 | M | MED |
 
 ## R4 — 7-12 (Celelalte module)
 
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
-| 18 | B18 | Compare year hardcodat | compare.py:45 | S | MED |
-| 19 | B19 | Delta doar pe scor total, fara dimensiuni | delta_service.py | M | MED |
+| 18 | B18 | [x] Compare year hardcodat — fix: `date.today().year - 1` instead of hardcoded -2 | compare.py:45 | S | MED |
+| 19 | B19 | [x] Delta doar pe scor total, fara dimensiuni — fix: added dimension-level scoring delta with ±3 threshold | delta_service.py | M | MED |
 | 20 | B20 | [x] gather() exception = batch RUNNING forever — fix: return_exceptions=True | batch.py:389 | S | CRIT |
 | 21 | B21 | [x] Stuck batch = concurrent limit blocat — fix: auto-timeout RUNNING batches > 4h before checking limit | batch.py:110-127 | M | HIGH |
 | 22 | B22 | [x] Schema mismatch: `triggered_at` vs `created_at` — fix: created_at → triggered_at | monitoring_service.py | S | CRIT |
 | 23 | B23 | [x] Firma radiata = silentios ignorata — fix: triggers RED alert + Telegram when CUI not found | monitoring_service.py:134-155 | M | HIGH |
-| 24 | B24 | get_or_fetch race condition | cache_service.py | M | MED |
-| 25 | B25 | WebSocket broadcast exception swallowing | main.py | S | MED |
+| 24 | B24 | [x] get_or_fetch race condition — fix: per-key asyncio.Lock with double-check-locking | cache_service.py | M | MED |
+| 25 | B25 | [x] WebSocket broadcast exception swallowing — fix: track dead connections and remove from active | main.py | S | MED |
 | 26 | B26 | [x] Retry-source fara UI — fix: added 5 source retry buttons to AnalysisProgress page | AnalysisProgress.tsx:163-198 | M | HIGH |
-| 27 | B27 | Companies search reset nu reseteaza paginare | Companies.tsx | S | MED |
+| 27 | B27 | [x] Companies search reset nu reseteaza paginare — fix: added "Sterge" button resetting search+pagination | Companies.tsx | S | MED |
 
 ---
 
@@ -131,7 +131,7 @@
 |---|-----|-------------------|---------|-------|-----|
 | 1 | C1 | [x] **_calculate_trends ignora pierdere_neta** — fix: use pierdere_neta as negative profit | anaf_bilant_client.py:165 | S | HIGH |
 | 2 | C2 | [x] **get_bilant() fara retry per-an** — fix: retry once on 5xx/timeout per-year request | anaf_bilant_client.py:31 | S | HIGH |
-| 3 | C3 | **Completeness score formula gresita** — Numitor = len(expected_sources)+2, dar numaratorul = field checks. Mixeaza doua unitati diferite, score mereu supra-estimat | agent_official.py:312-314 | S | MED |
+| 3 | C3 | [x] **Completeness score formula gresita** — fix: denominator changed to `max(5, 1)` matching the 5 field checks in numerator | agent_official.py:312-314 | S | MED |
 
 ---
 
@@ -155,9 +155,9 @@
 | 6 | C6 | [x] **PDF TOC page numbers mereu gresite** — fix: replaced manual TOC with fpdf2 insert_toc_placeholder (auto-tracked page numbers) | pdf_generator.py:106-122 | M | HIGH |
 | 7 | C7 | [x] **POSITIVE factors invizibile** — fix: add POSITIVE to severity color maps in Excel+PPTX | excel/pptx/one_pager generators | S | HIGH |
 | 8 | C8 | [x] **One-pager: N/A scor → "NERECOMANDAT"** — fix: unknown score_color → "INSUFICIENT DATE" | one_pager_generator.py:73 | S | HIGH |
-| 9 | C9 | **PDF truncheaza cuvinte > 60 caractere** — `w[:60]` taie URLs, termeni lungi, fara marker. Output corupt silentios in raportul PDF | pdf_generator.py:164 | S | MED |
-| 10 | C10 | **PDF sterge paragrafe silentios la eroare render** — `except Exception: pass` in multi_cell. Paragraf intreg disparut, fara log, fara placeholder | pdf_generator.py:180-182 | S | MED |
-| 11 | C11 | **HTML: `<li>` fara `<ul>` wrapper** — Bullet-uri fara lista HTML valida. Formatare stricata in browser, invalid pentru screen readers | html_generator.py:30-31 | S | MED |
+| 9 | C9 | [x] **PDF truncheaza cuvinte > 60 caractere** — fix: hyphenated break `w[:55] + "-" + w[55:110]` instead of silent truncation | pdf_generator.py:164 | S | MED |
+| 10 | C10 | [x] **PDF sterge paragrafe silentios la eroare render** — fix: renders "[paragraf nerandat]" placeholder instead of silent pass | pdf_generator.py:180-182 | S | MED |
+| 11 | C11 | [x] **HTML: `<li>` fara `<ul>` wrapper** — fix: `in_list` state tracking, proper `<ul>` open/close transitions | html_generator.py:30-31 | S | MED |
 
 ---
 
@@ -179,7 +179,7 @@
 |---|-----|-------------------|---------|-------|-----|
 | 13 | C13 | [x] **_run_batch fara top-level try/except** — fix: wrapped in try/except, sets ERROR status on failure | batch.py:340-348 | S | HIGH |
 | 14 | C14 | [x] **Batch resume pierde rezultate precedente** — fix: loads existing results from progress before appending | batch.py:365-370 | M | HIGH |
-| 15 | C15 | **BatchAnalysis trimite COMPANY_PROFILE in loc de FULL_COMPANY_PROFILE** — Backend are routing pe FULL_COMPANY_PROFILE (state.py:72), batch trimite alt string → Agent 3 (Market/SEAP) skipat in batch | BatchAnalysis.tsx:32 | S | MED |
+| 15 | C15 | [x] **BatchAnalysis trimite COMPANY_PROFILE in loc de FULL_COMPANY_PROFILE** — fix: changed to FULL_COMPANY_PROFILE matching backend routing | BatchAnalysis.tsx:32 | S | MED |
 
 ---
 
