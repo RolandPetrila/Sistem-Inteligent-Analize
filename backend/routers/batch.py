@@ -106,6 +106,25 @@ async def create_batch(
     if len(cuis) > 50:
         raise HTTPException(status_code=400, detail="Maximum 50 CUI-uri per batch")
 
+    # B21 fix: Auto-timeout stuck batches (RUNNING > 4 hours) before checking limit
+    four_hours_ago = (datetime.utcnow().timestamp() - 4 * 3600)
+    stuck = await db.fetch_all(
+        "SELECT id FROM jobs WHERE type LIKE 'BATCH_%' AND status = 'RUNNING' AND started_at IS NOT NULL"
+    )
+    for row in stuck:
+        try:
+            started = await db.fetch_one("SELECT started_at FROM jobs WHERE id = ?", (row["id"],))
+            if started and started["started_at"]:
+                started_ts = datetime.fromisoformat(started["started_at"]).timestamp()
+                if started_ts < four_hours_ago:
+                    await db.execute(
+                        "UPDATE jobs SET status = 'ERROR', error_message = 'Timeout: batch blocat > 4h' WHERE id = ?",
+                        (row["id"],),
+                    )
+                    logger.warning(f"[batch] Auto-timeout stuck batch {row['id'][:8]}")
+        except Exception:
+            pass
+
     # 10F M8.4: Batch Queue — max 2 concurrent batches
     active = await db.fetch_one(
         "SELECT COUNT(*) as c FROM jobs WHERE type LIKE 'BATCH_%' AND status = 'RUNNING'"

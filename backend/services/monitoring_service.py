@@ -134,7 +134,24 @@ async def run_monitoring_check() -> list[dict]:
         try:
             current = await get_anaf_data(cui)
             if not current.get("found"):
-                results.append({"cui": cui, "changed": False, "error": "CUI not found"})
+                # B23 fix: CUI not found = firma radiata/dizolvata — trigger RED alert
+                await db.execute(
+                    "UPDATE monitoring_alerts SET last_checked_at = datetime('now') WHERE id = ?",
+                    (alert_id,),
+                )
+                if alert.get("telegram_notify"):
+                    msg = (
+                        f"🔴 <b>ALERTA RIS [RED] — {company_name}</b>\n"
+                        f"CUI: {cui}\n"
+                        f"Firma NU mai apare in ANAF — posibil radiata/dizolvata!\n"
+                        f"Verificat: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+                    )
+                    await _send_telegram_with_retry(msg)
+                await _log_audit(alert_id, cui, company_name, "stare_firma", "activa", "NEGASIT ANAF", "RED")
+                results.append({"cui": cui, "company": company_name, "changed": True,
+                                "changes": [{"field": "stare_firma", "old": "activa",
+                                             "new": "NEGASIT ANAF — posibil radiata", "severity": "RED"}],
+                                "severity": "RED"})
                 continue
 
             # Compara cu ultimul raport

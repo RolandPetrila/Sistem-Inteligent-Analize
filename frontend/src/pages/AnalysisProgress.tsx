@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   Pause,
   Download,
+  RefreshCw,
 } from "lucide-react";
 import clsx from "clsx";
 import { api } from "@/lib/api";
@@ -157,6 +158,44 @@ export default function AnalysisProgress() {
                 </button>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* B26: Retry individual sources when job is DONE or FAILED */}
+      {(job.status === "DONE" || job.status === "FAILED") && id && (
+        <div className="card">
+          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
+            Reincercare Surse Individuale
+          </h2>
+          <p className="text-xs text-gray-600 mb-3">
+            Reinterogheaza o sursa specifica fara a relua toata analiza
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {["anaf", "openapi", "bilant", "bnr", "seap"].map((source) => (
+              <button
+                key={source}
+                onClick={() => {
+                  api.retrySource(id, source)
+                    .then((res) => {
+                      if (res.success) {
+                        toast(`Sursa ${source.toUpperCase()} reinterogata cu succes`, "success");
+                        setLogs((prev) => [...prev, { text: `Retry ${source}: OK`, type: "success" }]);
+                      } else {
+                        toast(`Eroare ${source}: ${res.error || "necunoscuta"}`, "warning");
+                        setLogs((prev) => [...prev, { text: `Retry ${source}: ${res.error || "eroare"}`, type: "warning" }]);
+                      }
+                    })
+                    .catch(() => toast(`Eroare la reinterogarea sursei ${source}`, "error"));
+                }}
+                className="text-xs px-3 py-1.5 rounded bg-dark-surface border border-dark-border
+                           hover:border-accent-primary hover:text-accent-light transition-colors
+                           flex items-center gap-1.5 text-gray-400"
+              >
+                <RefreshCw className="w-3 h-3" />
+                {source.toUpperCase()}
+              </button>
+            ))}
           </div>
         </div>
       )}

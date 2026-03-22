@@ -181,13 +181,27 @@ async def get_or_fetch(
 
 
 async def invalidate_company(cui: str):
-    """10F M10.4: Event-driven invalidation — clear all cache for a specific company."""
-    patterns = [f"anaf_{hashlib.md5(cui.encode()).hexdigest()[:12]}",
-                f"onrc_{hashlib.md5(cui.encode()).hexdigest()[:12]}",
-                f"seap_{hashlib.md5(cui.encode()).hexdigest()[:12]}",
-                f"tavily_{hashlib.md5(cui.encode()).hexdigest()[:12]}"]
+    """C16 fix: Cache invalidation using LIKE to match all key variants for a CUI.
+    Real keys are like anaf_{md5("bilant_CUI_YEAR")}, not anaf_{md5(cui)}.
+    We search for any key whose original identifier contained this CUI."""
+    # Strategy: delete keys that match any hash of identifiers containing this CUI
+    # Build all possible hash prefixes
+    cui_clean = cui.strip().replace("RO", "").replace("ro", "")
+    possible_identifiers = [
+        cui_clean,                    # direct CUI
+        f"bilant_{cui_clean}",        # bilant prefix
+        f"fin_{cui_clean}",           # financial prefix
+    ]
+    # Also match year variants for bilant (recent 6 years)
+    from datetime import date
+    current_year = date.today().year
+    for year in range(current_year - 6, current_year + 1):
+        possible_identifiers.append(f"bilant_{cui_clean}_{year}")
+
     count = 0
-    for pattern in patterns:
-        await db.execute("DELETE FROM data_cache WHERE cache_key = ?", (pattern,))
-        count += 1
-    logger.info(f"Cache invalidated for CUI {cui[:3]}***: {count} patterns")
+    for source in ("anaf", "onrc", "seap", "tavily"):
+        for ident in possible_identifiers:
+            key = make_cache_key(source, ident)
+            result = await db.execute("DELETE FROM data_cache WHERE cache_key = ?", (key,))
+            count += 1
+    logger.info(f"Cache invalidated for CUI {cui_clean[:3]}***: checked {count} key variants")

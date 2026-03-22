@@ -85,7 +85,7 @@
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
 | 13 | B13 | [x] **`years` nedefinita → crash bilant multi-an** — fix: years → years_desc | anaf_bilant_client.py:146 | S | CRIT |
-| 14 | B14 | **Early warnings neconectate la recomandari** | orchestrator.py + section_prompts | M | HIGH |
+| 14 | B14 | [x] **Early warnings neconectate la recomandari** — fix: added early_warnings instruction to recommendations prompt | section_prompts.py:105 | M | HIGH |
 
 ## R4 — 6. Rapoarte
 
@@ -102,12 +102,12 @@
 | 18 | B18 | Compare year hardcodat | compare.py:45 | S | MED |
 | 19 | B19 | Delta doar pe scor total, fara dimensiuni | delta_service.py | M | MED |
 | 20 | B20 | [x] gather() exception = batch RUNNING forever — fix: return_exceptions=True | batch.py:389 | S | CRIT |
-| 21 | B21 | Stuck batch = concurrent limit blocat | batch.py:110 + scheduler.py | M | HIGH |
+| 21 | B21 | [x] Stuck batch = concurrent limit blocat — fix: auto-timeout RUNNING batches > 4h before checking limit | batch.py:110-127 | M | HIGH |
 | 22 | B22 | [x] Schema mismatch: `triggered_at` vs `created_at` — fix: created_at → triggered_at | monitoring_service.py | S | CRIT |
-| 23 | B23 | Firma radiata = silentios ignorata | monitoring_service.py:136 | M | HIGH |
+| 23 | B23 | [x] Firma radiata = silentios ignorata — fix: triggers RED alert + Telegram when CUI not found | monitoring_service.py:134-155 | M | HIGH |
 | 24 | B24 | get_or_fetch race condition | cache_service.py | M | MED |
 | 25 | B25 | WebSocket broadcast exception swallowing | main.py | S | MED |
-| 26 | B26 | Retry-source fara UI | AnalysisProgress.tsx | M | HIGH |
+| 26 | B26 | [x] Retry-source fara UI — fix: added 5 source retry buttons to AnalysisProgress page | AnalysisProgress.tsx:163-198 | M | HIGH |
 | 27 | B27 | Companies search reset nu reseteaza paginare | Companies.tsx | S | MED |
 
 ---
@@ -189,7 +189,7 @@
 
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
-| 16 | C16 | **invalidate_company nu sterge cache-ul real** — Foloseste hash(cui) dar cache keys reale sunt hash("bilant_CUI_YEAR"), hash("fin_CUI"), etc. DELETE by exact key nu gaseste nimic. Cache invalidation e 95% nefunctionala | cache_service.py:183-193 | M | HIGH |
+| 16 | C16 | [x] **invalidate_company nu sterge cache-ul real** — fix: enumerate all possible key variants (bilant_CUI_YEAR, fin_CUI, etc) for each source | cache_service.py:183-210 | M | HIGH |
 | 17 | C17 | [x] **Compare sleeps 2s chiar si pe cache hit** — VERIFICAT: sleep already inside cache miss block | compare.py:58,80 | S | HIGH |
 
 ---
