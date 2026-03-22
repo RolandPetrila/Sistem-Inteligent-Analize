@@ -76,9 +76,9 @@
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
 | 9 | B9 | [x] **Provider order gresit pt fast route** — fix: fast=Groq→Cerebras→Mistral→Gemini, quality=Claude→Gemini→Groq→Mistral | agent_synthesis.py:59-107 | S | HIGH |
-| 10 | B10 | **JSON context limits statice si prea mici** | agent_synthesis.py:147-149 | M | HIGH |
-| 11 | B11 | **Hallucination detection pasiva** — returneaza text cu nota sistem | agent_synthesis.py:245-275 | M | HIGH |
-| 12 | B12 | **Degradation fallback = JSON dump** | agent_synthesis.py:519-543 | M | HIGH |
+| 10 | B10 | [x] **JSON context limits statice si prea mici** — fix: dynamic limits (Claude 50K, Groq/Mistral/Cerebras 20K, Gemini 80K) | agent_synthesis.py:139-150 | M | HIGH |
+| 11 | B11 | [x] **Hallucination detection pasiva** — fix: strip suspicious %%, replace invented CUI | agent_synthesis.py:263-276 | M | HIGH |
+| 12 | B12 | [x] **Degradation fallback = JSON dump** — fix: readable key-value format instead of raw JSON | agent_synthesis.py:537-560 | M | HIGH |
 
 ## R4 — 5. Orchestrator
 
@@ -91,7 +91,7 @@
 
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
-| 15 | B15 | **PDF/DOCX ignora due_diligence + early_warnings** | pdf_generator.py, docx_generator.py | M | HIGH |
+| 15 | B15 | [x] **PDF/DOCX ignora due_diligence + early_warnings** — fix: added structured DD checklist + EW sections to both generators | pdf_generator.py, docx_generator.py, generator.py | M | HIGH |
 | 16 | B16 | [x] **Excel CAGR crash pe firma < 2 ani** — fix: handle negative CA with simple growth rate | excel_generator.py:324-371 | S | HIGH |
 | 17 | B17 | **PPTX fara trend financiar** | pptx_generator.py | M | MED |
 

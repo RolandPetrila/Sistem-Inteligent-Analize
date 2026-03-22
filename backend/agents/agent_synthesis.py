@@ -135,16 +135,18 @@ class SynthesisAgent(BaseAgent):
         # Context awareness injection (8C) — structured summary
         context_summary = self._build_context_summary(section["key"], verified_data)
 
-        # 9B: Provider capacity awareness — auto-truncate per provider context limits
+        # B10 fix: Dynamic JSON context limits based on actual provider context windows
+        # Reserve ~40% of context for prompt+output; use ~60% for data JSON
         max_json_chars = {
-            "claude": 15000,  # 200K context
-            "groq": 4000,     # 4K output but limited context
-            "mistral": 6000,
-            "gemini": 10000,
-            "cerebras": 6000,
+            "claude": 50000,   # 200K context → plenty of room
+            "groq": 20000,     # 131K context (Llama 4 Scout)
+            "mistral": 20000,  # 128K context (Small 3)
+            "gemini": 80000,   # 1M context → generous
+            "cerebras": 20000, # 128K context (Qwen 3 235B)
         }
-        json_limit = max_json_chars.get(provider, 8000)
+        json_limit = max_json_chars.get(provider, 15000)
         data_json = json.dumps(verified_data, ensure_ascii=False, default=str, indent=2)
+        # Only truncate if actually exceeds limit — small data passes through intact
         if len(data_json) > json_limit:
             data_json = data_json[:json_limit] + f"\n... [date trunchiate la {json_limit} chars pt {provider}]"
 
@@ -260,11 +262,20 @@ class SynthesisAgent(BaseAgent):
         if isinstance(name_field, dict):
             input_name = str(name_field.get("value", ""))
 
-        # Flag: detect suspicious percentage values (>1000% or <-1000%)
+        # B11 fix: Active hallucination detection — strip suspicious percentages
         suspicious = re.findall(r'[-+]?\d{4,}%', text)
         if suspicious:
-            logger.warning(f"[synthesis] Suspicious percentages found: {suspicious[:3]}")
-            text += f"\n\n*[Nota sistem: Unele procente ({', '.join(suspicious[:3])}) ar putea fi eronate. Verificati datele sursa.]*"
+            logger.warning(f"[synthesis] Stripping suspicious percentages: {suspicious[:5]}")
+            for s in suspicious:
+                text = text.replace(s, "[procent neverificat]")
+
+        # Strip invented CUI numbers not matching input
+        if input_cui:
+            invented_cuis = re.findall(r'\bCUI\s*:?\s*(\d{6,10})\b', text)
+            for found_cui in invented_cuis:
+                if found_cui != input_cui and found_cui not in text[:50]:  # allow header mentions
+                    logger.warning(f"[synthesis] Stripping invented CUI: {found_cui} (expected {input_cui})")
+                    text = text.replace(found_cui, input_cui)
 
         # Word count check
         word_count = len(text.split())
@@ -534,13 +545,31 @@ class SynthesisAgent(BaseAgent):
             logger.info(f"[synthesis] Degraded Tier 2 for '{key}': {len(bullets)} bullet points")
             return header + body
 
-        # --- Tier 3: raw JSON extract ---
-        raw = self._extract_raw_for_section(key, verified_data)
-        logger.info(f"[synthesis] Degraded Tier 3 for '{key}': raw data dump")
-        return (
-            f"**{title}** — *Indisponibil (toti providerii AI au esuat)*\n\n"
-            f"Date disponibile:\n```json\n{raw}\n```"
-        )
+        # --- Tier 3: B12 fix — readable key-value format instead of raw JSON ---
+        raw_data = self._extract_raw_dict_for_section(key, verified_data)
+        logger.info(f"[synthesis] Degraded Tier 3 for '{key}': readable data extract")
+        lines = [f"**{title}** — *Indisponibil (toti providerii AI au esuat)*\n"]
+        lines.append("Date disponibile din surse oficiale:\n")
+        for category, values in raw_data.items():
+            lines.append(f"**{category.replace('_', ' ').title()}:**")
+            if isinstance(values, dict):
+                for k, v in values.items():
+                    val = v.get("value", v) if isinstance(v, dict) else v
+                    if val is not None and val != "" and val != {}:
+                        label = k.replace("_", " ").title()
+                        if isinstance(val, (int, float)) and abs(val) > 1000:
+                            lines.append(f"- {label}: {val:,.0f}")
+                        else:
+                            lines.append(f"- {label}: {val}")
+            elif isinstance(values, list):
+                for item in values[:5]:
+                    if isinstance(item, dict):
+                        summary = ", ".join(f"{k}: {v}" for k, v in list(item.items())[:3])
+                        lines.append(f"- {summary}")
+                    else:
+                        lines.append(f"- {item}")
+            lines.append("")
+        return "\n".join(lines)
 
     def _extract_bullets_for_section(self, section_key: str, data: dict) -> list[str]:
         """Extrage bullet-point facts relevante din verified_data per section key."""
@@ -659,6 +688,29 @@ class SynthesisAgent(BaseAgent):
         if len(raw) > 3000:
             raw = raw[:3000] + "\n... [trunchiat]"
         return raw
+
+    def _extract_raw_dict_for_section(self, section_key: str, data: dict) -> dict:
+        """B12: Return raw dict subset for readable Tier 3 rendering."""
+        section_data_map = {
+            "executive_summary": ["company", "financial", "risk_score"],
+            "company_overview": ["company"],
+            "company_profile": ["company"],
+            "financial_analysis": ["financial"],
+            "risk_assessment": ["risk_score", "early_warnings"],
+            "competition": ["market", "benchmark"],
+            "legal_compliance": ["legal"],
+            "due_diligence": ["due_diligence"],
+            "swot_analysis": ["risk_score", "financial", "market"],
+            "swot": ["risk_score", "financial", "market"],
+            "opportunities": ["market", "benchmark"],
+            "recommendations": ["risk_score", "early_warnings"],
+        }
+        keys = section_data_map.get(section_key, ["company", "financial"])
+        subset = {}
+        for k in keys:
+            if k in data:
+                subset[k] = data[k]
+        return subset
 
     # ── 10F M4.4: Prompt Injection Hardening ───────────────────────────────
     def _sanitize_data_for_prompt(self, data: dict) -> dict:

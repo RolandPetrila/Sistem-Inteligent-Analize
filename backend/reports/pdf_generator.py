@@ -64,9 +64,10 @@ class RISPdf(FPDF):
         self.cell(0, 5, f"CONFIDENTIAL | Pagina {self.page_no()}/{{nb}}", align="C")
 
 
-def generate_pdf(report_sections: dict, meta: dict, output_path: str):
-    """Genereaza PDF din report_sections. 9D: watermark + TOC."""
+def generate_pdf(report_sections: dict, meta: dict, output_path: str, verified_data: dict = None):
+    """Genereaza PDF din report_sections. 9D: watermark + TOC. B15: due_diligence + early_warnings."""
     # meta and report_sections should already be sanitized by caller
+    verified_data = verified_data or {}
     pdf = RISPdf(meta)
     pdf.alias_nb_pages()
     pdf.add_page()
@@ -125,8 +126,18 @@ def generate_pdf(report_sections: dict, meta: dict, output_path: str):
         dots = "." * max(2, 60 - len(title))
         pdf.cell(0, 8, f"  {title} {dots} {page_num}", new_x="LMARGIN", new_y="NEXT")
 
-    # Sources + Disclaimer entries
+    # B15: TOC entries for new sections + Sources + Disclaimer
     extra_pages = toc_start_page + len(section_titles)
+    dd_check = verified_data.get("due_diligence", {})
+    has_dd = bool((isinstance(dd_check, dict) and dd_check.get("checklist")) or (isinstance(dd_check, list) and dd_check))
+    ew_check = verified_data.get("early_warnings", [])
+    has_ew = isinstance(ew_check, list) and bool(ew_check)
+    if has_dd:
+        pdf.cell(0, 8, f"  Due Diligence Checklist {'.' * 33} {extra_pages}", new_x="LMARGIN", new_y="NEXT")
+        extra_pages += 1
+    if has_ew:
+        pdf.cell(0, 8, f"  Semnale de Alarma {'.' * 38} {extra_pages}", new_x="LMARGIN", new_y="NEXT")
+        extra_pages += 1
     sources = meta.get("sources", [])
     if sources:
         pdf.cell(0, 8, f"  Surse Utilizate {'.' * 40} {extra_pages}", new_x="LMARGIN", new_y="NEXT")
@@ -180,6 +191,67 @@ def generate_pdf(report_sections: dict, meta: dict, output_path: str):
             except Exception:
                 # Skip paragraphs that cause rendering errors
                 pass
+
+    # B15: Due Diligence Checklist from verified_data
+    due_diligence = verified_data.get("due_diligence", {})
+    dd_checklist = []
+    if isinstance(due_diligence, dict):
+        dd_checklist = due_diligence.get("checklist", [])
+    elif isinstance(due_diligence, list):
+        dd_checklist = due_diligence
+    if dd_checklist:
+        pdf.add_page()
+        pdf.start_section("Due Diligence Checklist", level=0)
+        pdf.set_font("Helvetica", "B", 16)
+        pdf.set_text_color(99, 102, 241)
+        pdf.cell(0, 12, "Due Diligence Checklist", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_draw_color(99, 102, 241)
+        pdf.line(10, pdf.get_y(), 80, pdf.get_y())
+        pdf.ln(6)
+        pdf.set_font("Helvetica", "", 10)
+        for item in dd_checklist[:15]:
+            if isinstance(item, dict):
+                name = _sanitize(str(item.get("name", "N/A")))
+                status = item.get("status", "N/A")
+                icon = "DA" if status in ("DA", True) else "NU" if status in ("NU", False) else "N/A"
+                color = (34, 197, 94) if icon == "DA" else (239, 68, 68) if icon == "NU" else (150, 150, 150)
+                pdf.set_text_color(*color)
+                pdf.set_font("Helvetica", "B", 10)
+                pdf.cell(15, 6, f"[{icon}]")
+                pdf.set_font("Helvetica", "", 10)
+                pdf.set_text_color(40, 40, 40)
+                pdf.cell(0, 6, name, new_x="LMARGIN", new_y="NEXT")
+
+    # B15: Early Warning Signals from verified_data
+    early_warnings = verified_data.get("early_warnings", [])
+    if isinstance(early_warnings, list) and early_warnings:
+        pdf.add_page()
+        pdf.start_section("Semnale de Alarma", level=0)
+        pdf.set_font("Helvetica", "B", 16)
+        pdf.set_text_color(99, 102, 241)
+        pdf.cell(0, 12, "Semnale de Alarma (Early Warnings)", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_draw_color(99, 102, 241)
+        pdf.line(10, pdf.get_y(), 80, pdf.get_y())
+        pdf.ln(6)
+        pdf.set_font("Helvetica", "", 10)
+        pdf.set_text_color(40, 40, 40)
+        for ew in early_warnings[:10]:
+            if isinstance(ew, dict):
+                signal = _sanitize(str(ew.get("signal", ew.get("message", "N/A"))))
+                severity = ew.get("severity", "MEDIUM")
+                color = (239, 68, 68) if severity == "HIGH" else (234, 179, 8) if severity == "MEDIUM" else (150, 150, 150)
+                pdf.set_text_color(*color)
+                pdf.set_font("Helvetica", "B", 10)
+                pdf.cell(0, 6, f"[{severity}] {signal}", new_x="LMARGIN", new_y="NEXT")
+                detail = ew.get("detail", "")
+                if detail:
+                    pdf.set_font("Helvetica", "", 9)
+                    pdf.set_text_color(80, 80, 80)
+                    pdf.multi_cell(0, 5, _sanitize(str(detail)))
+                    pdf.ln(2)
+            elif isinstance(ew, str):
+                pdf.set_text_color(234, 179, 8)
+                pdf.cell(0, 6, _sanitize(f"- {ew}"), new_x="LMARGIN", new_y="NEXT")
 
     # Sources page
     sources = meta.get("sources", [])

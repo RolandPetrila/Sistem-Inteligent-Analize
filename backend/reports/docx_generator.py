@@ -35,8 +35,9 @@ def _setup_styles(doc: Document):
         h.font.bold = True
 
 
-def generate_docx(report_sections: dict, meta: dict, output_path: str):
-    """Genereaza DOCX din report_sections."""
+def generate_docx(report_sections: dict, meta: dict, output_path: str, verified_data: dict = None):
+    """Genereaza DOCX din report_sections. B15: due_diligence + early_warnings."""
+    verified_data = verified_data or {}
     doc = Document()
     _setup_styles(doc)
 
@@ -141,6 +142,57 @@ def generate_docx(report_sections: dict, meta: dict, output_path: str):
                             run.font.color.rgb = RGBColor(255, 136, 0)
 
         doc.add_paragraph()  # spacer
+
+    # B15: Due Diligence Checklist from verified_data
+    due_diligence = verified_data.get("due_diligence", {})
+    dd_checklist = []
+    if isinstance(due_diligence, dict):
+        dd_checklist = due_diligence.get("checklist", [])
+    elif isinstance(due_diligence, list):
+        dd_checklist = due_diligence
+    if dd_checklist:
+        doc.add_page_break()
+        doc.add_heading("Due Diligence Checklist", level=1)
+        for item in dd_checklist[:15]:
+            if isinstance(item, dict):
+                name = str(item.get("name", "N/A"))
+                status = item.get("status", "N/A")
+                icon = "DA" if status in ("DA", True) else "NU" if status in ("NU", False) else "N/A"
+                p = doc.add_paragraph()
+                run = p.add_run(f"[{icon}] ")
+                run.bold = True
+                if icon == "DA":
+                    run.font.color.rgb = RGBColor(34, 197, 94)
+                elif icon == "NU":
+                    run.font.color.rgb = RGBColor(220, 50, 50)
+                else:
+                    run.font.color.rgb = RGBColor(150, 150, 150)
+                p.add_run(name)
+
+    # B15: Early Warning Signals from verified_data
+    early_warnings = verified_data.get("early_warnings", [])
+    if isinstance(early_warnings, list) and early_warnings:
+        doc.add_page_break()
+        doc.add_heading("Semnale de Alarma (Early Warnings)", level=1)
+        for ew in early_warnings[:10]:
+            if isinstance(ew, dict):
+                signal = str(ew.get("signal", ew.get("message", "N/A")))
+                severity = ew.get("severity", "MEDIUM")
+                p = doc.add_paragraph()
+                sev_run = p.add_run(f"[{severity}] ")
+                sev_run.bold = True
+                if severity == "HIGH":
+                    sev_run.font.color.rgb = RGBColor(220, 50, 50)
+                elif severity == "MEDIUM":
+                    sev_run.font.color.rgb = RGBColor(200, 150, 0)
+                p.add_run(signal)
+                detail = ew.get("detail", "")
+                if detail:
+                    dp = doc.add_paragraph(str(detail))
+                    dp.runs[0].font.size = Pt(9)
+                    dp.runs[0].font.color.rgb = RGBColor(100, 100, 100)
+            elif isinstance(ew, str):
+                doc.add_paragraph(ew, style="List Bullet")
 
     # Sources
     sources = meta.get("sources", [])

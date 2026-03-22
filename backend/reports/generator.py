@@ -76,7 +76,7 @@ async def generate_all_reports(
 
         pdf_meta = _pdf_sanitize(meta)
         pdf_sections = _pdf_sanitize(report_sections)
-        generate_pdf(pdf_sections, pdf_meta, str(pdf_path))
+        generate_pdf(pdf_sections, pdf_meta, str(pdf_path), verified_data=verified_data)
         paths["pdf"] = str(pdf_path)
         logger.info(f"PDF generated: {pdf_path}")
     except Exception as e:
@@ -86,7 +86,7 @@ async def generate_all_reports(
     try:
         from backend.reports.docx_generator import generate_docx
         docx_path = output_dir / "raport.docx"
-        generate_docx(report_sections, meta, str(docx_path))
+        generate_docx(report_sections, meta, str(docx_path), verified_data=verified_data)
         paths["docx"] = str(docx_path)
         logger.info(f"DOCX generated: {docx_path}")
     except Exception as e:
