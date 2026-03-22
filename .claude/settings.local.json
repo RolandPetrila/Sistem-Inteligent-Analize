@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__sequential-thinking__sequentialthinking",
+      "mcp__firecrawl__firecrawl_search",
+      "mcp__firecrawl__firecrawl_scrape",
+      "Bash(curl:*)",
+      "Bash(python:*)",
+      "Bash(mkdir -p \"C:\\\\Users\\\\ALIENWARE\\\\Desktop\\\\Roly\\\\4. Artificial Inteligence\\\\Folder_Lucru\\\\API_Key\\\\API_Vechi\")",
+      "Bash(mv \"api keys.docx\" \"api keys.xlsx\" \"API_Claude.md\" \"api_config.json\" \"api_deepl.png\" \"API_FB.png\" \"API_Grok_GEMINI_CEREBRAS_Mistral.md\" \"API_Key.env\" \"API_Keys.png\" \"Facebook_Token.md\" API_Vechi/)",
+      "Bash(npm install:*)"
+    ]
+  }
+}

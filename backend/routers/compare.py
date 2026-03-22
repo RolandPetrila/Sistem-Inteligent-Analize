@@ -1,0 +1,292 @@
+"""
+Compare API — Compara 2-5 firme side-by-side pe baza datelor ANAF + ANAF Bilant.
+8D: Cache ANAF, consistent risk scoring, compare persistence.
+"""
+
+import asyncio
+import json
+import uuid
+from datetime import date
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+from backend.agents.tools.anaf_client import get_anaf_data
+from backend.agents.tools.anaf_bilant_client import get_bilant
+from backend.agents.tools.cui_validator import validate_cui
+from backend.agents.tools.caen_context import get_caen_description, CAEN_BENCHMARK
+from backend.services import cache_service
+from backend.database import db
+
+router = APIRouter()
+
+
+class CompareRequest(BaseModel):
+    cui_list: list[str]
+
+
+@router.post("")
+async def compare_companies(data: CompareRequest):
+    """Compara 2-5 firme pe baza CUI-urilor. 8D: cached + consistent scoring."""
+    if len(data.cui_list) < 2 or len(data.cui_list) > 5:
+        raise HTTPException(status_code=400, detail="Introdu intre 2 si 5 CUI-uri")
+
+    clean_cuis = []
+    for cui in data.cui_list:
+        v = validate_cui(cui.strip())
+        if not v["valid"]:
+            raise HTTPException(status_code=400, detail=f"CUI invalid: {cui} - {v['error']}")
+        clean_cuis.append(v["cui_clean"])
+
+    results = []
+    last_year = date.today().year - 2
+
+    for cui in clean_cuis:
+        company = {"cui": cui}
+
+        # 8D: Cache ANAF data for Compare (use cache_service)
+        cache_key_anaf = cache_service.make_cache_key("anaf", cui)
+        anaf = await cache_service.get(cache_key_anaf)
+        if anaf is None:
+            try:
+                anaf = await get_anaf_data(cui)
+                if anaf:
+                    await cache_service.set(cache_key_anaf, anaf, "anaf")
+            except Exception as e:
+                anaf = {}
+                company["error_anaf"] = str(e)
+            await asyncio.sleep(2)
+
+        if anaf and anaf.get("found"):
+            company["denumire"] = anaf.get("denumire", "N/A")
+            company["adresa"] = anaf.get("adresa", "")
+            company["stare"] = anaf.get("stare_inregistrare", "")
+            company["platitor_tva"] = anaf.get("platitor_tva", False)
+            company["inactiv"] = anaf.get("inactiv", False)
+            company["data_inregistrare"] = anaf.get("data_inregistrare", "")
+        else:
+            company["denumire"] = f"CUI {cui} - negasit ANAF"
+
+        # 8D: Cache Bilant data
+        cache_key_bilant = cache_service.make_cache_key("anaf", f"bilant_{cui}_{last_year}")
+        bilant = await cache_service.get(cache_key_bilant)
+        if bilant is None:
+            try:
+                bilant = await get_bilant(cui, last_year)
+                if bilant:
+                    await cache_service.set(cache_key_bilant, bilant, "anaf")
+            except Exception:
+                bilant = {}
+            await asyncio.sleep(2)
+
+        if bilant and bilant.get("found"):
+            company["cifra_afaceri"] = bilant.get("cifra_afaceri_neta")
+            company["profit_brut"] = bilant.get("profit_brut")
+            company["profit_net"] = bilant.get("profit_net")
+            company["pierdere_neta"] = bilant.get("pierdere_neta")
+            company["angajati"] = bilant.get("numar_mediu_salariati")
+            company["capitaluri"] = bilant.get("capitaluri_proprii")
+            company["caen_code"] = bilant.get("caen_code", "")
+            company["caen_description"] = bilant.get("caen_description", "")
+            company["an_financiar"] = last_year
+        else:
+            company["an_financiar"] = None
+
+        # 8D: Consistent risk scoring (aligned with Agent 4 formula)
+        company["scor_risc"] = _calculate_compare_score(company)
+        results.append(company)
+
+    # Determina cel mai bun per indicator
+    best = {}
+    for key in ["cifra_afaceri", "profit_net", "angajati", "capitaluri", "scor_risc"]:
+        vals = [(i, r.get(key)) for i, r in enumerate(results) if r.get(key) is not None]
+        if vals:
+            best[key] = max(vals, key=lambda x: x[1] if isinstance(x[1], (int, float)) else 0)[0]
+
+    # 8D: Persist compare in DB
+    compare_id = str(uuid.uuid4())
+    try:
+        await db.execute(
+            "INSERT INTO compare_history (id, cui_list, result_data) VALUES (?, ?, ?)",
+            (compare_id, json.dumps(clean_cuis), json.dumps(results, ensure_ascii=False, default=str)),
+        )
+    except Exception:
+        pass  # table may not exist yet if migration hasn't run
+
+    # 10D M7.4: Chart.js-ready data format for frontend instant charts
+    chart_data = _build_chart_data(results)
+
+    # 10D M7.2: Financial ratios auto-calculated
+    for company in results:
+        company["ratios"] = _calculate_financial_ratios(company)
+
+    # 10F M7.5: Sector Percentile Scoring
+    for company in results:
+        company["sector_percentile"] = _calculate_sector_percentile(company, results)
+
+    return {
+        "compare_id": compare_id,
+        "companies": results,
+        "best_per_indicator": best,
+        "an_financiar": last_year,
+        "count": len(results),
+        "chart_data": chart_data,
+    }
+
+
+def _calculate_compare_score(company: dict) -> int:
+    """Consistent risk scoring aligned with Agent 4 (6 dimensions simplified)."""
+    score = 70
+
+    # Financiar
+    ca = company.get("cifra_afaceri") or 0
+    if ca > 10_000_000:
+        score += 10
+    elif ca > 1_000_000:
+        score += 5
+    elif ca <= 0:
+        score -= 15
+
+    pn = company.get("profit_net")
+    if pn is not None and pn > 0:
+        score += 10
+    elif pn is not None and pn < 0:
+        score -= 10
+
+    # Fiscal
+    if company.get("inactiv"):
+        score -= 40
+
+    # Operational
+    angajati = company.get("angajati")
+    if angajati is not None:
+        if angajati >= 50:
+            score += 10
+        elif angajati >= 10:
+            score += 5
+        elif angajati == 0 and ca > 1_000_000:
+            score -= 20
+
+    # Solvency (8B)
+    cap = company.get("capitaluri")
+    if cap is not None and ca > 0:
+        if cap < 0:
+            score -= 15
+        elif cap / ca < 0.05:
+            score -= 5
+
+    return max(0, min(100, score))
+
+
+def _calculate_financial_ratios(company: dict) -> dict:
+    """10D M7.2: Auto-calculate financial ratios from compare data."""
+    ratios = {}
+    ca = company.get("cifra_afaceri") or 0
+    pn = company.get("profit_net") or 0
+    cap = company.get("capitaluri")
+    angajati = company.get("angajati")
+
+    if ca > 0:
+        ratios["profit_margin_pct"] = round(pn / ca * 100, 2)
+    if cap and cap != 0:
+        ratios["roe_pct"] = round(pn / cap * 100, 2)
+    if ca > 0 and cap is not None:
+        ratios["solvency_ratio"] = round(cap / ca, 3) if ca > 0 else None
+    if angajati and angajati > 0 and ca > 0:
+        ratios["ca_per_angajat"] = round(ca / angajati)
+        ratios["angajati_per_1m_ca"] = round(angajati / (ca / 1_000_000), 1) if ca >= 1_000_000 else None
+
+    return ratios
+
+
+def _calculate_sector_percentile(company: dict, all_companies: list[dict]) -> dict:
+    """10F M7.5: Position company within the compare group (percentile for CA, profit, angajati)."""
+    percentiles = {}
+    for key in ["cifra_afaceri", "profit_net", "angajati", "scor_risc"]:
+        val = company.get(key)
+        if val is None:
+            continue
+        all_vals = sorted([c.get(key) for c in all_companies if c.get(key) is not None])
+        if not all_vals:
+            continue
+        rank = sum(1 for v in all_vals if v <= val)
+        pct = round(rank / len(all_vals) * 100)
+        if pct >= 90:
+            label = "P90+ (Top)"
+        elif pct >= 75:
+            label = "P75-P90"
+        elif pct >= 50:
+            label = "P50-P75"
+        elif pct >= 25:
+            label = "P25-P50"
+        else:
+            label = "sub P25"
+        percentiles[key] = {"percentile": pct, "label": label, "rank": rank, "total": len(all_vals)}
+    return percentiles
+
+
+def _build_chart_data(results: list[dict]) -> dict:
+    """10D M7.4: Chart.js-ready data for frontend instant rendering."""
+    labels = [r.get("denumire", r.get("cui", "?"))[:25] for r in results]
+    colors = ["#6366F1", "#22C55E", "#3B82F6", "#EAB308", "#EF4444"]
+
+    datasets = {}
+    for key, label in [("cifra_afaceri", "Cifra Afaceri"), ("profit_net", "Profit Net"),
+                        ("angajati", "Angajati"), ("scor_risc", "Scor Risc")]:
+        values = [r.get(key) or 0 for r in results]
+        if any(v != 0 for v in values):
+            datasets[key] = {
+                "label": label,
+                "labels": labels,
+                "data": values,
+                "backgroundColor": colors[:len(results)],
+            }
+
+    return datasets
+
+
+class SectorRequest(BaseModel):
+    caen_section: str
+    min_ca: int = 0
+    limit: int = 50
+
+
+@router.post("/sector")
+async def sector_report(data: SectorRequest):
+    """ADV4: Raport sector — agregate firme din baza de date per CAEN."""
+    section = data.caen_section.strip()[:2]
+    caen_desc = get_caen_description(section)
+    benchmark = CAEN_BENCHMARK.get(section, {})
+
+    rows = await db.fetch_all(
+        "SELECT c.cui, c.name, c.caen_code, c.caen_description, c.county, c.analysis_count, "
+        "r.risk_score, r.created_at as last_report_at "
+        "FROM companies c "
+        "LEFT JOIN reports r ON c.id = r.company_id "
+        "WHERE c.caen_code LIKE ? "
+        "GROUP BY c.id "
+        "ORDER BY c.last_analyzed_at DESC "
+        "LIMIT ?",
+        (f"{section}%", data.limit),
+    )
+
+    companies = [dict(r) for r in rows]
+    total = len(companies)
+    with_score = [c for c in companies if c.get("risk_score")]
+
+    return {
+        "caen_section": section,
+        "caen_description": caen_desc,
+        "benchmark": benchmark,
+        "companies": companies,
+        "total_in_db": total,
+        "stats": {
+            "total_analyzed": total,
+            "with_risk_score": len(with_score),
+            "risk_distribution": {
+                "verde": sum(1 for c in with_score if c["risk_score"] == "Verde"),
+                "galben": sum(1 for c in with_score if c["risk_score"] == "Galben"),
+                "rosu": sum(1 for c in with_score if c["risk_score"] == "Rosu"),
+            },
+        },
+    }

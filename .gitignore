@@ -1,0 +1,52 @@
+# Environment
+.env
+*.env.local
+
+# Database
+data/*.db
+data/*.db-wal
+data/*.db-shm
+
+# Generated reports
+outputs/
+
+# Backups & Logs
+backups/
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Playwright
+frontend/test-results/
+
+# Pytest cache artifacts
+UsersALIENWAREDesktopRoly_WORK_cachepytest/
+.pytest_cache/
+frontend/.pytest_cache/
+
+# Temporary/stray files (not part of project)
+Club_82*.html
+compass_artifact_*

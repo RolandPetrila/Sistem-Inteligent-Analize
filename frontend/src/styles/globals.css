@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-dark-border;
+  }
+  body {
+    @apply bg-dark-bg text-gray-100 font-sans antialiased;
+  }
+  ::-webkit-scrollbar {
+    @apply w-2;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-dark-bg;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-dark-border rounded-full hover:bg-dark-hover;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-dark-card border border-dark-border rounded-xl p-5;
+  }
+  .btn-primary {
+    @apply bg-accent-primary hover:bg-accent-glow text-white font-medium
+           px-4 py-2 rounded-lg transition-colors duration-200;
+  }
+  .btn-secondary {
+    @apply bg-dark-surface hover:bg-dark-hover text-gray-300
+           border border-dark-border px-4 py-2 rounded-lg
+           transition-colors duration-200;
+  }
+  .input-field {
+    @apply bg-dark-surface border border-dark-border rounded-lg px-3 py-2
+           text-gray-100 placeholder-gray-500 focus:outline-none
+           focus:ring-2 focus:ring-accent-primary/50 focus:border-accent-primary
+           transition-all duration-200;
+  }
+  .sidebar-link {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400
+           hover:text-gray-100 hover:bg-dark-hover transition-colors duration-200;
+  }
+  .sidebar-link.active {
+    @apply text-white bg-accent-primary/10 border-l-2 border-accent-primary;
+  }
+}
