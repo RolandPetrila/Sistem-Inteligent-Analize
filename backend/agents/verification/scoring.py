@@ -7,6 +7,63 @@ import math
 from datetime import date
 
 
+def _calculate_financial_ratios(financial: dict) -> list[dict]:
+    """N1: Calculate standard financial ratios from ANAF Bilant data.
+    Returns list of {name, value, unit, interpretation} for display in reports."""
+    ratios = []
+
+    def _fv(field):
+        if isinstance(field, dict):
+            v = field.get("value")
+            if isinstance(v, (int, float)):
+                return v
+        return None
+
+    ca = _fv(financial.get("cifra_afaceri", {}))
+    profit = _fv(financial.get("profit_net", {}))
+    capital = _fv(financial.get("capitaluri_proprii", {}))
+    angajati = _fv(financial.get("numar_angajati", {}))
+    datorii = _fv(financial.get("datorii_totale", {}))
+    active = _fv(financial.get("active_totale", {}))
+
+    # Marja profit net
+    if ca and ca > 0 and profit is not None:
+        marja = round(profit / ca * 100, 2)
+        interp = "Excelent" if marja > 15 else "Bun" if marja > 5 else "Fragil" if marja > 0 else "Pierdere"
+        ratios.append({"name": "Marja Profit Net", "value": marja, "unit": "%", "interpretation": interp})
+
+    # ROE (Return on Equity)
+    if capital and capital > 0 and profit is not None:
+        roe = round(profit / capital * 100, 2)
+        interp = "Excelent" if roe > 20 else "Bun" if roe > 10 else "Slab" if roe > 0 else "Negativ"
+        ratios.append({"name": "ROE", "value": roe, "unit": "%", "interpretation": interp})
+
+    # ROA (Return on Assets)
+    if active and active > 0 and profit is not None:
+        roa = round(profit / active * 100, 2)
+        interp = "Excelent" if roa > 10 else "Bun" if roa > 5 else "Slab" if roa > 0 else "Negativ"
+        ratios.append({"name": "ROA", "value": roa, "unit": "%", "interpretation": interp})
+
+    # Rata indatorare (Debt-to-Equity)
+    if capital and capital > 0 and datorii is not None:
+        dte = round(datorii / capital, 2)
+        interp = "Conservator" if dte < 1 else "Moderat" if dte < 2 else "Ridicat" if dte < 4 else "Periculos"
+        ratios.append({"name": "Datorii/Capital", "value": dte, "unit": "x", "interpretation": interp})
+
+    # Rata capitalizare (Equity Ratio)
+    if active and active > 0 and capital is not None:
+        eq_ratio = round(capital / active * 100, 2)
+        interp = "Solid" if eq_ratio > 40 else "Moderat" if eq_ratio > 20 else "Subcapitalizat"
+        ratios.append({"name": "Rata Capitalizare", "value": eq_ratio, "unit": "%", "interpretation": interp})
+
+    # Productivitate per angajat (CA/angajat)
+    if ca and ca > 0 and angajati and angajati > 0:
+        prod = round(ca / angajati)
+        ratios.append({"name": "CA per Angajat", "value": prod, "unit": "RON", "interpretation": ""})
+
+    return ratios
+
+
 def calculate_risk_score(verified: dict) -> dict:
     """
     Calculeaza scor de risc numeric 0-100 pe 6 dimensiuni:
@@ -537,4 +594,5 @@ def calculate_risk_score(verified: dict) -> dict:
         "sector_position": sector_position,  # 10B M3.4
         "solvency_matrix": solvency_matrix,  # 10F M3.3
         "early_warning_confidence": early_warnings_with_confidence,  # 10F M3.2
+        "financial_ratios": _calculate_financial_ratios(financial),  # N1: Standard financial ratios
     }

@@ -144,6 +144,107 @@ def _chart_radar(canvas_id: str, title: str, labels: list, values: list) -> str:
     </div>'''
 
 
+def _build_executive_summary(verified_data: dict, meta: dict) -> str:
+    """N3: Executive Summary — 3 lines with key KPIs at the top of the report."""
+    company = verified_data.get("company", {})
+    financial = verified_data.get("financial", {})
+    risk_score = verified_data.get("risk_score", {})
+
+    def _fv(f):
+        return f.get("value") if isinstance(f, dict) else None
+
+    name = _fv(company.get("denumire", {})) or meta.get("company_name", "N/A")
+    cui = _fv(company.get("cui", {})) or ""
+    caen = _fv(company.get("caen_code", {})) or ""
+    caen_desc = _fv(company.get("caen_description", {})) or ""
+
+    ca = _fv(financial.get("cifra_afaceri", {}))
+    profit = _fv(financial.get("profit_net", {}))
+    angajati = _fv(financial.get("numar_angajati", {}))
+    score = risk_score.get("numeric_score")
+    color = risk_score.get("score", "N/A")
+
+    # Format CA
+    ca_str = "N/A"
+    if isinstance(ca, (int, float)):
+        if ca >= 1_000_000:
+            ca_str = f"{ca/1_000_000:.2f}M RON"
+        elif ca >= 1_000:
+            ca_str = f"{ca/1_000:.0f}K RON"
+        else:
+            ca_str = f"{ca:,.0f} RON"
+
+    profit_str = ""
+    if isinstance(profit, (int, float)):
+        sign = "+" if profit >= 0 else ""
+        if abs(profit) >= 1_000_000:
+            profit_str = f" | Profit: {sign}{profit/1_000_000:.2f}M RON"
+        else:
+            profit_str = f" | Profit: {sign}{profit:,.0f} RON"
+
+    ang_str = f" | {int(angajati)} angajati" if isinstance(angajati, (int, float)) and angajati > 0 else ""
+    caen_str = f" | CAEN {caen}" if caen else ""
+    if caen_desc:
+        caen_str += f" ({_escape(caen_desc[:50])})"
+
+    score_color = {"Verde": "#22c55e", "Galben": "#eab308", "Rosu": "#ef4444"}.get(color, "#888")
+    score_str = f'<span style="color:{score_color};font-weight:700">{score}/100 ({color})</span>' if score else "N/A"
+
+    # Key risk factor
+    factors = risk_score.get("factors", [])
+    high_risks = [f[0] for f in factors if isinstance(f, (list, tuple)) and len(f) >= 2 and f[1] == "HIGH"]
+    risk_line = ""
+    if high_risks:
+        risk_line = f'<div style="color:#ef4444;font-size:0.85em;margin-top:4px">Risc principal: {_escape(high_risks[0])}</div>'
+
+    return f'''
+    <div class="exec-summary">
+        <div style="font-size:0.75em;color:#6366f1;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px">Executive Summary</div>
+        <div style="font-size:1.05em;color:#e2e8f0"><strong>{_escape(str(name))}</strong> (CUI: {_escape(str(cui))}){caen_str}</div>
+        <div style="font-size:0.95em;color:#cbd5e1;margin-top:4px">CA: <strong>{ca_str}</strong>{profit_str}{ang_str}</div>
+        <div style="font-size:0.95em;margin-top:4px">Scor Risc: {score_str}</div>
+        {risk_line}
+    </div>'''
+
+
+def _build_financial_ratios_html(risk_score: dict) -> str:
+    """N1: Financial ratios table from calculated data."""
+    ratios = risk_score.get("financial_ratios", [])
+    if not ratios:
+        return ""
+
+    rows = ""
+    for r in ratios:
+        val = r.get("value", 0)
+        unit = r.get("unit", "")
+        interp = r.get("interpretation", "")
+        interp_color = "#22c55e" if interp in ("Excelent", "Solid", "Conservator") else "#eab308" if interp in ("Bun", "Moderat") else "#ef4444" if interp in ("Pierdere", "Negativ", "Periculos", "Subcapitalizat") else "#94a3b8"
+
+        if unit == "RON":
+            val_str = f"{val:,.0f} {unit}"
+        else:
+            val_str = f"{val}{unit}"
+
+        rows += f'''<tr>
+            <td style="padding:8px 12px;color:#e2e8f0;font-weight:500">{_escape(r.get("name", ""))}</td>
+            <td style="padding:8px 12px;color:#a5b4fc;font-weight:700;text-align:right">{val_str}</td>
+            <td style="padding:8px 12px;color:{interp_color};text-align:center">{_escape(interp)}</td>
+        </tr>'''
+
+    return f'''
+    <section id="ratios" class="report-section">
+        <h2>Indicatori Financiari</h2>
+        <table style="width:100%;border-collapse:collapse;margin-top:12px">
+            <thead><tr style="border-bottom:2px solid #2a3a5c">
+                <th style="padding:8px 12px;text-align:left;color:#94a3b8;font-size:0.85em">Indicator</th>
+                <th style="padding:8px 12px;text-align:right;color:#94a3b8;font-size:0.85em">Valoare</th>
+                <th style="padding:8px 12px;text-align:center;color:#94a3b8;font-size:0.85em">Interpretare</th>
+            </tr></thead>
+            <tbody>{rows}</tbody>
+        </table>
+    </section>'''
+
+
 def generate_html(report_sections: dict, meta: dict, verified_data: dict, output_path: str):
     """Genereaza HTML single-file din report_sections + verified_data."""
     company = _escape(meta.get("company_name", "N/A"))
@@ -161,8 +262,15 @@ def generate_html(report_sections: dict, meta: dict, verified_data: dict, output
     if numeric is not None:
         risk_display += f" ({numeric}/100)"
 
+    # N3: Executive Summary
+    exec_summary_html = _build_executive_summary(verified_data, meta)
+
+    # N1: Financial Ratios
+    risk_score_obj = verified_data.get("risk_score", {})
+    financial_ratios_html = _build_financial_ratios_html(risk_score_obj)
+
     # Build sections HTML
-    nav_items = '<a href="#charts" class="nav-link">Grafice</a>\n'
+    nav_items = '<a href="#ratios" class="nav-link">Indicatori</a>\n<a href="#charts" class="nav-link">Grafice</a>\n'
     sections_html = ""
     for key, section in report_sections.items():
         sec_title = _escape(section.get("title", key))
@@ -266,6 +374,7 @@ body{{font-family:'Segoe UI',system-ui,sans-serif;background:#1a1a2e;color:#e2e8
 .source-level{{display:inline-block;width:28px;font-weight:700;color:#6366f1}}
 .source-status{{float:right;color:#22c55e;font-size:0.85em}}
 .disclaimer{{padding:40px 0;border-top:1px solid #2a3a5c;color:#64748b;font-size:0.75em;font-style:italic}}
+.exec-summary{{background:#16213e;border:1px solid #6366f140;border-radius:12px;padding:20px 24px;margin:24px 0}}
 .footer{{text-align:center;padding:20px 0;color:#475569;font-size:0.7em}}
 .watermark{{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-45deg);font-size:6em;font-weight:900;color:rgba(255,255,255,0.03);pointer-events:none;z-index:0;white-space:nowrap;letter-spacing:0.1em}}
 @media print{{.watermark{{color:rgba(0,0,0,0.05)}}body{{background:#fff;color:#333}}.container{{max-width:100%;padding:10px}}.header{{padding:20px 0}}.report-section h2{{color:#4338ca}}.nav{{display:none}}.risk-badge{{border:1px solid #333}}canvas{{max-height:200px!important}}}}
@@ -284,6 +393,8 @@ body{{font-family:'Segoe UI',system-ui,sans-serif;background:#1a1a2e;color:#e2e8
         {f'<p style="margin-top:8px;color:#94a3b8;font-size:0.85em">{risk_rec}</p>' if risk_rec else ''}
     </div>
     <nav class="nav">{nav_items}</nav>
+    {exec_summary_html}
+    {financial_ratios_html}
     {charts_html}
     {sections_html}
     {completeness_html}
