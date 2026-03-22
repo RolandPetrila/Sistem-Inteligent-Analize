@@ -1,10 +1,11 @@
-# RIS — Planificari Extindere Module (Runda 4 + Runda 5)
+# RIS — Planificari Extindere Module (Runda 4 + Runda 5 + Runda 6)
 
 > Deep-dive pe cod sursa post-Faza 10F. Focus: bug-uri critice, data quality pipeline, calitate raport, reliability.
 > Metoda: 6 agenti paraleli deep research + sequential thinking + filtrare stricta ROI.
 > Reguli: free tier only, single user, DOAR imbunatatiri cu impact semnificativ pe calitatea functionarii.
-> R4 generat: 2026-03-22 | 27 items din 90+ findings
-> R5 generat: 2026-03-22 | 25 items din 61 findings (filtrare stricta HIGH ROI)
+> R4 generat: 2026-03-22 | 27 items din 90+ findings — COMPLET IMPLEMENTAT
+> R5 generat: 2026-03-22 | 25 items din 61 findings (filtrare stricta HIGH ROI) — COMPLET IMPLEMENTAT
+> R6 generat: 2026-03-23 | 21 items din 52 findings (post R4+R5, verificat pe cod real)
 
 ---
 
@@ -19,24 +20,24 @@
 
 ---
 
-## Harta Module — Evolutie R1 -> R2 -> R3 -> R4 -> R5
+## Harta Module — Evolutie R1 -> R2 -> R3 -> R4 -> R5 -> R6
 
-| # | Modul | R1 % | R2 % | R3 % | R4 target | R5 target | Status |
-|---|-------|------|------|------|-----------|-----------|--------|
-| 1 | **Dashboard** | 45% | 58% | 78% | 78% | 78% | - |
-| 2 | **Colectare Date (Agent 1)** | 62% | 68% | 92% | 97% | 99% | [ ] R5 PROPUS |
-| 3 | **Verificare & Scoring (Agent 4)** | 67% | 82% | 98% | 99% | 100% | [ ] R5 PROPUS |
-| 4 | **Sinteza AI (Agent 5)** | 62% | 78% | 97% | 99% | 99% | - (R4 acoperit) |
-| 5 | **Orchestrator** | 67% | 75% | 95% | 97% | 97% | - (R4 acoperit) |
-| 6 | **Rapoarte** | 62% | 72% | 92% | 97% | 99% | [ ] R5 PROPUS |
-| 7 | **Comparator & Delta** | 57% | 60% | 85% | 90% | 97% | [ ] R5 PROPUS |
-| 8 | **Batch Analysis** | 52% | 65% | 90% | 95% | 98% | [ ] R5 PROPUS |
-| 9 | **Monitoring & Alerte** | 57% | 62% | 85% | 95% | 95% | - (R4 acoperit) |
-| 10 | **Cache & Performance** | 72% | 78% | 95% | 97% | 99% | [ ] R5 PROPUS |
-| 11 | **Securitate & API** | 68% | 75% | 94% | 96% | 99% | [ ] R5 PROPUS |
-| 12 | **Frontend UI** | 62% | 62% | 88% | 92% | 97% | [ ] R5 PROPUS |
+| # | Modul | R1 % | R2 % | R3 % | R4 | R5 | R6 target | Status |
+|---|-------|------|------|------|-----|-----|-----------|--------|
+| 1 | **Dashboard** | 45% | 58% | 78% | 78% | 78% | 78% | - (stabil) |
+| 2 | **Colectare Date (Agent 1)** | 62% | 68% | 92% | 97% | 99% | 100% | [ ] R6 PROPUS |
+| 3 | **Verificare & Scoring (Agent 4)** | 67% | 82% | 98% | 99% | 100% | 100% | [ ] R6 PROPUS |
+| 4 | **Sinteza AI (Agent 5)** | 62% | 78% | 97% | 99% | 99% | 100% | [ ] R6 PROPUS |
+| 5 | **Orchestrator** | 67% | 75% | 95% | 97% | 97% | 97% | - (stabil) |
+| 6 | **Rapoarte** | 62% | 72% | 92% | 97% | 99% | 100% | [ ] R6 PROPUS |
+| 7 | **Comparator & Delta** | 57% | 60% | 85% | 90% | 97% | 97% | - (stabil) |
+| 8 | **Batch Analysis** | 52% | 65% | 90% | 95% | 98% | 99% | [ ] R6 PROPUS |
+| 9 | **Monitoring & Alerte** | 57% | 62% | 85% | 95% | 95% | 98% | [ ] R6 PROPUS |
+| 10 | **Cache & Performance** | 72% | 78% | 95% | 97% | 99% | 100% | [ ] R6 PROPUS |
+| 11 | **Securitate & Config** | 68% | 75% | 94% | 96% | 99% | 100% | [ ] R6 PROPUS |
+| 12 | **Frontend UI** | 62% | 62% | 88% | 92% | 97% | 99% | [ ] R6 PROPUS |
 
-**Media exploatare:** R1=61% -> R2=70% -> R3=91% -> R4=96% -> R5 target=97%
+**Media exploatare:** R1=61% -> R2=70% -> R3=91% -> R4=96% -> R5=97% -> R6 target=99.3%
 
 ---
 
@@ -452,3 +453,229 @@ R4→R5 Dependencies:
 ```
 
 **Regula:** Implementeaza in ordinea dependintelor. Nu sari peste un CRIT care e dependinta pt alt item.
+
+---
+
+# ============================================
+# RUNDA 6 — 21 items (post R4+R5 implementation)
+# ============================================
+
+> Metoda R6: 6 agenti paraleli deep research pe cod ACTUALIZAT (post 52 fix-uri R4+R5).
+> Filtru aplicat: DOAR items cu impact DIRECT pe calitatea functionarii. Verificat pe cod real.
+> Eliminat: duplicate R4/R5, false alarms, cosmetic, LOW ROI.
+> Data: 2026-03-23 | 52 findings brute → 21 filtrate
+
+---
+
+## R6 — 2. Colectare Date (Agent 1)
+
+**Probleme noi gasite:** SEAP EUR hardcoded, JSON parsing fara try/except pe 2 clienti API, BNR namespace suspect, INS TEMPO pierde float values.
+
+| # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
+|---|-----|-------------------|---------|-------|-----|
+| 1 | D1 | [ ] **SEAP EUR rate hardcoded 5.0** — fix: use BNR rates from state, fallback 4.97 | seap_client.py:118 | M | HIGH |
+| 2 | D2 | [ ] **ANAF Bilant JSON parse fara try/except** — fix: wrap response.json() in try/except, return found=False on error | anaf_bilant_client.py:49-55 | S | HIGH |
+| 3 | D3 | [ ] **OpenAPI.ro JSON parse fara try/except** — fix: idem, wrap response.json() in try/except | openapi_client.py:45 | S | HIGH |
+| 4 | D4 | [ ] **BNR XML namespace posibil incorect** — fix: verifica cu BNR XML real, fallback pe `{uri}Body` notation | bnr_client.py:34 | S | MED |
+| 5 | D5 | [ ] **INS TEMPO filter pierde float values** — `str(v).isdigit()` skip "123.5" → fix: `int(float(val))` | caen_context.py:296-302 | S | MED |
+
+---
+
+## R6 — 3. Verificare & Scoring (Agent 4)
+
+**Problema noua:** Score 50 din confidence weighting pare "risk mediu" cand e de fapt "date insuficiente".
+
+| # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
+|---|-----|-------------------|---------|-------|-----|
+| 6 | D6 | [ ] **Confidence implicit: scor 50 = "date lipsa" nu "risk mediu"** — fix: flag `data_available=False` pe dimensiuni cu confidence < 0.4, afiseaza "[Date insuficiente]" in raport | scoring.py:403-409 | M | HIGH |
+
+---
+
+## R6 — 4. Sinteza AI (Agent 5)
+
+**Probleme noi gasite:** Token budget Groq gresit, Gemini JSON limit prea mic, hallucination regex false positive pe ani, Level 1 skip sectiuni.
+
+| # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
+|---|-----|-------------------|---------|-------|-----|
+| 7 | D7 | [x] **Groq _PROVIDER_MAX_CONTEXT = 6000** — fix: 131000 (Llama 4 Scout actual context) | agent_synthesis.py:756 | S | HIGH |
+| 8 | D8 | [x] **Gemini JSON limit 80K chars** — fix: 400000 chars + token budget 1M | agent_synthesis.py:144 | S | HIGH |
+| 9 | D9 | [x] **Hallucination regex `\d{4,}%` detecteaza "2024%" ca suspect** — fix: exclude `20\d{2}%` pattern | agent_synthesis.py:266 | S | HIGH |
+| 10 | D10 | [ ] **Prompt word_count=0 Level 1 skip competition+opportunities** — raport RAPID nu contine competitori/oportunitati. Fix: minim 150 cuvinte | section_prompts.py:73,82 | S | MED |
+
+---
+
+## R6 — 6. Rapoarte
+
+**Probleme noi gasite:** Early Warnings complet absent din HTML, Excel KPI fara scoring dimensiuni, PPTX crash pe null, Due Diligence absent din Excel.
+
+| # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
+|---|-----|-------------------|---------|-------|-----|
+| 11 | D11 | [ ] **Early Warnings absent din HTML report** — PDF/DOCX/Excel le au, HTML NU. Fix: sectiune dedicata cu severity colors | html_generator.py | M | HIGH |
+| 12 | D12 | [ ] **Excel KPI sheet fara scor pe dimensiuni** — Sheet 5 (KPI) are doar 4 metrics, lipsesc scorurile 6D. Fix: adauga sectiune "Score pe Dimensiuni" | excel_generator.py:276+ | M | HIGH |
+| 13 | D13 | [ ] **PPTX risk_score None → crash AttributeError** — `risk_score.get()` fara isinstance check. Fix: `risk_score = ... or {}` + isinstance guard | pptx_generator.py:152 | S | HIGH |
+| 14 | D14 | [ ] **Due Diligence checklist absent din Excel** — PDF/DOCX il au, Excel NU. Fix: Sheet 6 "Due Diligence" cu checklist DA/NU | excel_generator.py | M | MED |
+
+---
+
+## R6 — 8. Batch Analysis
+
+| # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
+|---|-----|-------------------|---------|-------|-----|
+| 15 | D15 | [ ] **Batch CSV summary fara CAEN description** — coloana "CAEN" are doar cod, nu descriere sector. Fix: adauga coloana CAEN_Descriere | batch.py:268-305 | S | MED |
+
+---
+
+## R6 — 9. Monitoring & Alerte
+
+**Problema critica:** B22 (R4) a fixat WHERE dar NU ORDER BY — dedup+throttle inca broken.
+
+| # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
+|---|-----|-------------------|---------|-------|-----|
+| 16 | D16 | [x] **ORDER BY created_at pe tabel cu triggered_at** — fix: ORDER BY triggered_at in both queries | monitoring_service.py:69,89 | S | CRIT |
+
+---
+
+## R6 — 10. Cache & Performance
+
+**Probleme noi gasite:** Tavily bypaseaza complet cache_service, _fetch_locks cresc nelimitat.
+
+| # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
+|---|-----|-------------------|---------|-------|-----|
+| 17 | D17 | [x] **Tavily INSERT direct in DB bypaseaza LRU + stats + schema_version** — fix: uses cache_service.set() | tavily_client.py:42-46 | S | HIGH |
+| 18 | D18 | [x] **_fetch_locks dict creste nelimitat → memory leak** — fix: OrderedDict max 500 + popitem eviction | cache_service.py:161 | S | HIGH |
+
+---
+
+## R6 — 11. Securitate & Config
+
+| # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
+|---|-----|-------------------|---------|-------|-----|
+| 19 | D19 | [ ] **Config secret key hardcoded "change-me-to-random-string"** — orice deploy fara .env = secret public. Fix: generate random key on startup daca nu e setat, log warning | config.py:35 | S | MED |
+
+---
+
+## R6 — 12. Frontend UI
+
+**Probleme noi gasite:** WebSocket reconnect leak, 429 retry incomplet.
+
+| # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
+|---|-----|-------------------|---------|-------|-----|
+| 20 | D20 | [x] **WebSocket reconnect setTimeout fara cleanup** — fix: reconnectTimeoutRef + clearTimeout on unmount | useWebSocket.ts:57 | S | HIGH |
+| 21 | D21 | [ ] **429 Rate Limit: toast "reincercati" dar nu reexecuta automat** — ApiError cu retryAfter dar nicio logica de auto-retry. Fix: retry wrapper cu exponential backoff in api.ts | api.ts:10-16 | M | MED |
+
+---
+
+## Rezumat General R6
+
+| # | Modul | CRIT | HIGH | MED | Total |
+|---|-------|------|------|-----|-------|
+| 2 | Colectare Date (Agent 1) | 0 | 2 | 2 | 4 |
+| 3 | Verificare & Scoring (Agent 4) | 0 | 1 | 0 | 1 |
+| 4 | Sinteza AI (Agent 5) | 0 | 3 | 1 | 4 |
+| 6 | Rapoarte | 0 | 3 | 1 | 4 |
+| 8 | Batch Analysis | 0 | 0 | 1 | 1 |
+| 9 | Monitoring & Alerte | 1 | 0 | 0 | 1 |
+| 10 | Cache & Performance | 0 | 2 | 0 | 2 |
+| 11 | Securitate & Config | 0 | 0 | 1 | 1 |
+| 12 | Frontend UI | 0 | 1 | 1 | 2 |
+| | **TOTAL R6** | **1** | **12** | **7** | **20** |
+
+**Combinat R4+R5+R6: 72 items total (11 CRIT, 41 HIGH, 20 MED)**
+
+---
+
+## Top 10 Quick Wins R6 (Impact maxim, efort minim)
+
+| Ord | Cod | Modul | Ce fixeaza | Efort | Sev |
+|-----|-----|-------|-----------|-------|-----|
+| 1 | D16 | Monitoring | ORDER BY created_at → triggered_at (dedup broken) | S | CRIT |
+| 2 | D7 | Synthesis | Groq token budget 6K → 131K (routing gresit) | S | HIGH |
+| 3 | D8 | Synthesis | Gemini JSON limit 80K → 400K (data trunchiate) | S | HIGH |
+| 4 | D9 | Synthesis | Hallucination regex: "2024%" = false positive | S | HIGH |
+| 5 | D17 | Cache | Tavily bypaseaza LRU + stats + schema_version | S | HIGH |
+| 6 | D18 | Cache | _fetch_locks unbounded → memory leak | S | HIGH |
+| 7 | D20 | Frontend | WebSocket reconnect setTimeout leak | S | HIGH |
+| 8 | D2 | Agent 1 | ANAF Bilant JSON parse fara try/except | S | HIGH |
+| 9 | D3 | Agent 1 | OpenAPI.ro JSON parse fara try/except | S | HIGH |
+| 10 | D13 | Rapoarte | PPTX risk_score null → crash | S | HIGH |
+
+**Timp estimat Top 10 R6:** ~4h (toate S)
+
+---
+
+## REGULI DE EXECUTIE R6
+
+### Workflow identic cu R4/R5 (vezi sectiunea "REGULI DE EXECUTIE CERINTE")
+
+### Ordinea recomandata per sesiune R6
+
+```
+Sesiune 1 (R6 CRITICAL + Quick Wins HIGH):
+   D16 + D7 + D8 + D9 + D17 + D18 + D20
+   = 1 CRIT + 6 HIGH, toate S, ~3h cu testare
+
+Sesiune 2 (R6 Data Quality + Reports HIGH):
+   D1 + D2 + D3 + D6 + D11 + D12 + D13
+   = 7 items (5 HIGH + 2 HIGH), ~4h total
+
+Sesiune 3 (R6 MED polish):
+   D4 + D5 + D10 + D14 + D15 + D19 + D21
+   = 7 MED items, ~3h total
+
+Dupa fiecare sesiune:
+   python -m pytest tests/ -v --tb=short
+   cd frontend && npx vitest run
+   git add + commit + push
+```
+
+---
+
+## DEPENDINTE CROSS-MODULE R6
+
+```
+R6 Dependencies:
+   D16 (monitoring ORDER BY) → dedup + throttle pt TOATE alertele
+   D7 + D8 (token/JSON limits) → synthesis quality pt ORICE raport
+   D17 (Tavily via cache_service) → D18 (LRU enforcement acum include Tavily)
+   D6 (confidence flag) → D11 (Early Warnings HTML) — D6 INAINTE de D11
+   D1 (SEAP EUR via BNR) → depinde de BNR rates functional (D4 verifica)
+
+R5→R6 Dependencies:
+   C4 (SEAP unwrap) → D1 (SEAP EUR conversion) — C4 deja implementat
+   C18 (DONE query fix) → D16 (monitoring column) — C18 deja implementat
+```
+
+---
+
+## PROTOCOL TEST R6
+
+### Test rapid per cerinta (obligatoriu)
+
+```
+1. Porneste RIS: dublu-click START_RIS.vbs
+2. Deschide http://localhost:5173/new-analysis
+3. CUI test: 26313362 (MOSSLEIN S.R.L.)
+4. Tip: FULL_COMPANY_PROFILE | Nivel: STANDARD (2)
+5. Asteapta finalizare (~2-3 min)
+6. Verifica raportul HTML:
+   [ ] Early Warnings prezente cu severity colors (D11)
+   [ ] Fara "[procent neverificat]" pe ani 2022-2025 (D9)
+   [ ] Dimensiuni scor vizibile (D6 confidence flag)
+7. Verifica Excel descarcat:
+   [ ] Sheet KPI contine dimensiuni scoring (D12)
+   [ ] Sheet Due Diligence prezent (D14)
+8. Verifica PPTX descarcat:
+   [ ] Nu crash pe Slide 4 (D13)
+9. Verifica monitoring:
+   [ ] Dedup functioneaza — nu duplicateaza alerte in 24h (D16)
+10. Verifica logs/:
+   [ ] Fara JSONDecodeError crash (D2, D3)
+```
+
+### Test automated (la finalul sesiunii)
+
+```bash
+cd C:\Proiecte\Sistem_Inteligent_Analize
+python -m pytest tests/ -v --tb=short
+cd frontend && npx vitest run --reporter=verbose
+```

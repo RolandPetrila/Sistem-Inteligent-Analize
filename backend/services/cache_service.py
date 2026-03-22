@@ -157,8 +157,11 @@ async def get_stats() -> dict:
 
 
 # B24 fix: In-flight lock to prevent duplicate fetches for same key
+# D18 fix: Bounded OrderedDict to prevent memory leak (max 500 entries)
 import asyncio as _asyncio
-_fetch_locks: dict[str, _asyncio.Lock] = {}
+from collections import OrderedDict as _OrderedDict
+_fetch_locks: _OrderedDict[str, _asyncio.Lock] = _OrderedDict()
+_MAX_LOCKS = 500
 
 
 async def get_or_fetch(
@@ -179,7 +182,10 @@ async def get_or_fetch(
             return cached
 
     # B24: Acquire per-key lock so only one coroutine fetches
+    # D18 fix: Evict oldest locks when exceeding _MAX_LOCKS
     if key not in _fetch_locks:
+        if len(_fetch_locks) >= _MAX_LOCKS:
+            _fetch_locks.popitem(last=False)
         _fetch_locks[key] = _asyncio.Lock()
     async with _fetch_locks[key]:
         # Double-check cache after acquiring lock

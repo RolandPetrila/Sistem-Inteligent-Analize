@@ -12,6 +12,7 @@ export function useWebSocket(
   const wsRef = useRef<WebSocket | null>(null);
   const retryCountRef = useRef(0);
   const pingIntervalRef = useRef<number | null>(null);
+  const reconnectTimeoutRef = useRef<number | null>(null); // D20 fix: track reconnect timeout
   const onMessageRef = useRef(onMessage);
   onMessageRef.current = onMessage;
 
@@ -50,11 +51,11 @@ export function useWebSocket(
       if (pingIntervalRef.current) {
         clearInterval(pingIntervalRef.current);
       }
-      // Retry with backoff
+      // D20 fix: Retry with backoff — save timeout ID for cleanup
       if (enabled && retryCountRef.current < RECONNECT_DELAYS.length) {
         const delay = RECONNECT_DELAYS[retryCountRef.current];
         retryCountRef.current++;
-        setTimeout(connect, delay);
+        reconnectTimeoutRef.current = window.setTimeout(connect, delay);
       }
     };
 
@@ -66,6 +67,10 @@ export function useWebSocket(
   useEffect(() => {
     connect();
     return () => {
+      // D20 fix: Clear reconnect timeout on unmount
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
       if (pingIntervalRef.current) {
         clearInterval(pingIntervalRef.current);
       }

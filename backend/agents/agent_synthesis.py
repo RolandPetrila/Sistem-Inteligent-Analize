@@ -141,7 +141,7 @@ class SynthesisAgent(BaseAgent):
             "claude": 50000,   # 200K context → plenty of room
             "groq": 20000,     # 131K context (Llama 4 Scout)
             "mistral": 20000,  # 128K context (Small 3)
-            "gemini": 80000,   # 1M context → generous
+            "gemini": 400000,  # D8 fix: 1M context → use 400K chars for data
             "cerebras": 20000, # 128K context (Qwen 3 235B)
         }
         json_limit = max_json_chars.get(provider, 15000)
@@ -263,11 +263,14 @@ class SynthesisAgent(BaseAgent):
             input_name = str(name_field.get("value", ""))
 
         # B11 fix: Active hallucination detection — strip suspicious percentages
+        # D9 fix: Exclude calendar years (2020%, 2024%, etc.) from false positives
         suspicious = re.findall(r'[-+]?\d{4,}%', text)
         if suspicious:
-            logger.warning(f"[synthesis] Stripping suspicious percentages: {suspicious[:5]}")
-            for s in suspicious:
-                text = text.replace(s, "[procent neverificat]")
+            real_suspicious = [s for s in suspicious if not re.match(r'^-?20\d{2}%$', s)]
+            if real_suspicious:
+                logger.warning(f"[synthesis] Stripping suspicious percentages: {real_suspicious[:5]}")
+                for s in real_suspicious:
+                    text = text.replace(s, "[procent neverificat]")
 
         # Strip invented CUI numbers not matching input
         if input_cui:
@@ -753,10 +756,10 @@ class SynthesisAgent(BaseAgent):
     # Max context windows per provider (in tokens)
     _PROVIDER_MAX_CONTEXT = {
         "claude": 150_000,
-        "groq": 6_000,
-        "gemini": 30_000,
-        "mistral": 12_000,
-        "cerebras": 12_000,
+        "groq": 131_000,    # D7 fix: Llama 4 Scout has 131K context
+        "gemini": 1_000_000, # D8 fix: Gemini 2.5 Flash has 1M context
+        "mistral": 128_000,  # Mistral Small 3 has 128K context
+        "cerebras": 128_000, # Qwen 3 235B has 128K context
     }
     # Provider preference order: from largest to smallest context
     _PROVIDER_SIZE_ORDER = ["claude", "gemini", "mistral", "cerebras", "groq"]

@@ -66,7 +66,7 @@ async def _is_duplicate_alert(alert_id: str, change_type: str, new_val) -> bool:
             "SELECT id FROM monitoring_audit "
             "WHERE alert_id = ? AND change_type = ? AND new_value = ? "
             "AND triggered_at >= datetime('now', '-24 hours') "
-            "ORDER BY created_at DESC LIMIT 1",
+            "ORDER BY triggered_at DESC LIMIT 1",
             (alert_id, change_type, str(new_val)),
         )
         return existing is not None
@@ -86,7 +86,7 @@ async def _should_throttle(alert_id: str, severity: str) -> bool:
             f"SELECT id FROM monitoring_audit "
             f"WHERE alert_id = ? AND severity = ? "
             f"AND triggered_at >= datetime('now', {window}) "
-            f"ORDER BY created_at DESC LIMIT 1",
+            f"ORDER BY triggered_at DESC LIMIT 1",
             (alert_id, severity),
         )
         if row:

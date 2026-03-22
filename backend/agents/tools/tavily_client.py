@@ -37,13 +37,9 @@ async def _check_quota() -> tuple[bool, int]:
 
 
 async def _log_usage(query: str, cache_key: str, data: dict):
-    """Salveaza query-ul in cache pentru tracking."""
-    import json
-    await db.execute(
-        "INSERT OR REPLACE INTO data_cache (cache_key, data, source, cached_at, expires_at) "
-        "VALUES (?, ?, 'tavily', datetime('now'), datetime('now', '+6 hours'))",
-        (cache_key, json.dumps(data, ensure_ascii=False)),
-    )
+    """D17 fix: Salveaza query-ul prin cache_service (LRU + stats + schema_version)."""
+    from backend.services import cache_service
+    await cache_service.set(cache_key, data, "tavily", ttl_hours=6)
 
 
 async def search(
