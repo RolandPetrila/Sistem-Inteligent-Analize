@@ -97,6 +97,13 @@ export const api = {
     );
   },
 
+  // N4: Company detail page
+  getCompany: (id: string) =>
+    request<import("./types").Company & {
+      reports: { id: string; report_type: string; report_level: number; title: string | null; summary: string | null; risk_score: string | null; created_at: string }[];
+      score_history: { numeric_score: number | null; dimensions: string | null; recorded_at: string }[];
+    }>(`/companies/${id}`),
+
   exportCompaniesCSV: async () => {
     const res = await fetch(`${BASE}/companies/export/csv`);
     const blob = await res.blob();

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Building2,
   Swords,
@@ -46,8 +46,23 @@ export default function NewAnalysis() {
   const [submitting, setSubmitting] = useState(false);
   const [cuiError, setCuiError] = useState("");
 
+  // N4: Pre-fill CUI from URL params (re-analiza from CompanyDetail)
+  const [searchParams] = useSearchParams();
+
   useEffect(() => {
-    api.getAnalysisTypes().then(setTypes).catch(() => toast("Eroare la incarcarea tipurilor de analiza", "error"));
+    api.getAnalysisTypes().then((loaded) => {
+      setTypes(loaded);
+      // Auto-select FULL_COMPANY_PROFILE and pre-fill CUI if provided
+      const cuiParam = searchParams.get("cui");
+      if (cuiParam && loaded.length > 0) {
+        const fullProfile = loaded.find((t) => t.type === "FULL_COMPANY_PROFILE");
+        if (fullProfile) {
+          setSelected(fullProfile);
+          setAnswers({ cui: cuiParam });
+          setStep(fullProfile.questions.length > 0 ? "questions" : "level");
+        }
+      }
+    }).catch(() => toast("Eroare la incarcarea tipurilor de analiza", "error"));
   }, []);
 
   const handleSelectType = (t: AnalysisTypeInfo) => {

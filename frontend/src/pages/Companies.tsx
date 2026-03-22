@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Building2, Download, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -118,11 +119,15 @@ export default function Companies() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {companies.map((company) => (
-              <div key={company.id} className="card">
+              <Link
+                key={company.id}
+                to={`/company/${company.id}`}
+                className="card hover:border-accent-primary/30 transition-colors group"
+              >
                 <div className="flex items-start gap-3">
                   <Building2 className="w-8 h-8 text-accent-secondary shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-white truncate">
+                    <h3 className="font-semibold text-white truncate group-hover:text-accent-secondary">
                       {company.name}
                     </h3>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-gray-500">
@@ -139,8 +144,9 @@ export default function Companies() {
                         : "Neanalizata"}
                     </p>
                   </div>
+                  <ChevronRight className="w-4 h-4 text-gray-600 group-hover:text-accent-secondary shrink-0 mt-1" />
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
 

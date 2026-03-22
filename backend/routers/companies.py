@@ -95,7 +95,15 @@ async def get_company(company_id: str):
         (company_id,),
     )
 
+    # N4: Get score history for trend display
+    score_history = await db.fetch_all(
+        "SELECT numeric_score, dimensions, recorded_at "
+        "FROM score_history WHERE company_id = ? ORDER BY recorded_at DESC LIMIT 10",
+        (company_id,),
+    )
+
     return {
         **dict(row),
         "reports": [dict(r) for r in reports],
+        "score_history": [dict(s) for s in score_history],
     }
