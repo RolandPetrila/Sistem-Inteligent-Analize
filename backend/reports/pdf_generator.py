@@ -103,46 +103,23 @@ def generate_pdf(report_sections: dict, meta: dict, output_path: str, verified_d
             score_text += f" ({numeric}/100)"
         pdf.cell(0, 10, score_text, align="C", new_x="LMARGIN", new_y="NEXT")
 
-    # 9D: Table of Contents page
-    pdf.add_page()
-    pdf.set_font("Helvetica", "B", 16)
-    pdf.set_text_color(99, 102, 241)
-    pdf.cell(0, 12, "Cuprins", new_x="LMARGIN", new_y="NEXT")
-    pdf.set_draw_color(99, 102, 241)
-    pdf.line(10, pdf.get_y(), 80, pdf.get_y())
-    pdf.ln(8)
+    # C6 fix: Use fpdf2 built-in TOC with correct page numbers (auto-tracked via start_section)
+    def _render_toc(pdf_obj, outline):
+        pdf_obj.set_font("Helvetica", "B", 16)
+        pdf_obj.set_text_color(99, 102, 241)
+        pdf_obj.cell(0, 12, "Cuprins", new_x="LMARGIN", new_y="NEXT")
+        pdf_obj.set_draw_color(99, 102, 241)
+        pdf_obj.line(10, pdf_obj.get_y(), 80, pdf_obj.get_y())
+        pdf_obj.ln(8)
+        pdf_obj.set_font("Helvetica", "", 11)
+        pdf_obj.set_text_color(60, 60, 60)
+        for entry in outline:
+            title = entry.name[:55]
+            page_num = entry.page_number
+            dots = "." * max(2, 58 - len(title))
+            pdf_obj.cell(0, 8, f"  {title} {dots} {page_num}", new_x="LMARGIN", new_y="NEXT")
 
-    toc_start_page = pdf.page_no() + 1  # next page after TOC
-    section_titles = []
-    for key, section in report_sections.items():
-        section_titles.append(section.get("title", key))
-
-    # Pre-calculate: each section starts on a new page, so page = toc_start_page + index
-    pdf.set_font("Helvetica", "", 11)
-    pdf.set_text_color(60, 60, 60)
-    for idx, title in enumerate(section_titles):
-        page_num = toc_start_page + idx
-        # TOC entry: title ........... page
-        dots = "." * max(2, 60 - len(title))
-        pdf.cell(0, 8, f"  {title} {dots} {page_num}", new_x="LMARGIN", new_y="NEXT")
-
-    # B15: TOC entries for new sections + Sources + Disclaimer
-    extra_pages = toc_start_page + len(section_titles)
-    dd_check = verified_data.get("due_diligence", {})
-    has_dd = bool((isinstance(dd_check, dict) and dd_check.get("checklist")) or (isinstance(dd_check, list) and dd_check))
-    ew_check = verified_data.get("early_warnings", [])
-    has_ew = isinstance(ew_check, list) and bool(ew_check)
-    if has_dd:
-        pdf.cell(0, 8, f"  Due Diligence Checklist {'.' * 33} {extra_pages}", new_x="LMARGIN", new_y="NEXT")
-        extra_pages += 1
-    if has_ew:
-        pdf.cell(0, 8, f"  Semnale de Alarma {'.' * 38} {extra_pages}", new_x="LMARGIN", new_y="NEXT")
-        extra_pages += 1
-    sources = meta.get("sources", [])
-    if sources:
-        pdf.cell(0, 8, f"  Surse Utilizate {'.' * 40} {extra_pages}", new_x="LMARGIN", new_y="NEXT")
-        extra_pages += 1
-    pdf.cell(0, 8, f"  Disclaimer {'.' * 45} {extra_pages}", new_x="LMARGIN", new_y="NEXT")
+    pdf.insert_toc_placeholder(_render_toc, pages=1)
 
     # Sections
     for key, section in report_sections.items():

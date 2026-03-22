@@ -139,16 +139,16 @@ export const api = {
   testTelegram: () =>
     request<{ success: boolean }>("/settings/test-telegram", { method: "POST" }),
 
-  // Compare
-  compareCompanies: (cuis: string[], report_level?: number) =>
+  // Compare (C24 fix: match backend CompareRequest/SectorRequest schemas)
+  compareCompanies: (cui_list: string[]) =>
     request<unknown>("/compare", {
       method: "POST",
-      body: JSON.stringify({ cuis, report_level: report_level ?? 2 }),
+      body: JSON.stringify({ cui_list }),
     }),
-  compareSector: (caen_code: string, limit?: number) =>
+  compareSector: (caen_section: string, limit?: number) =>
     request<unknown>("/compare/sector", {
       method: "POST",
-      body: JSON.stringify({ caen_code, limit: limit ?? 10 }),
+      body: JSON.stringify({ caen_section, limit: limit ?? 10 }),
     }),
 
   // Batch
@@ -169,10 +169,10 @@ export const api = {
       `/batch/${batchId}/resume`, { method: "POST" }
     ),
 
-  // Monitoring
+  // Monitoring (C24 fix: match backend MonitoringCreate schema)
   listMonitoring: () =>
     request<{ alerts: unknown[] }>("/monitoring"),
-  createMonitoring: (data: { cui: string; company_name?: string; check_interval_hours?: number }) =>
+  createMonitoring: (data: { company_id: string; alert_type?: string; check_frequency?: string; telegram_notify?: boolean }) =>
     request<unknown>("/monitoring", { method: "POST", body: JSON.stringify(data) }),
   deleteMonitoring: (id: string) =>
     request<unknown>(`/monitoring/${id}`, { method: "DELETE" }),

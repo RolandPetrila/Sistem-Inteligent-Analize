@@ -136,8 +136,40 @@ async def update_settings(data: SettingsUpdate):
 
     if updated:
         _write_env(env)
+        # C21 fix: Reload in-memory settings from updated .env
+        _reload_settings(env, updated)
 
     return {"updated": updated, "count": len(updated)}
+
+
+def _reload_settings(env: dict, updated_keys: list[str]):
+    """C21: Reload in-memory settings for changed keys."""
+    key_to_attr = {
+        "GOOGLE_AI_API_KEY": "google_ai_api_key",
+        "GROQ_API_KEY": "groq_api_key",
+        "CEREBRAS_API_KEY": "cerebras_api_key",
+        "TAVILY_API_KEY": "tavily_api_key",
+        "TELEGRAM_BOT_TOKEN": "telegram_bot_token",
+        "TELEGRAM_CHAT_ID": "telegram_chat_id",
+        "GMAIL_USER": "gmail_user",
+        "GMAIL_APP_PASSWORD": "gmail_app_password",
+        "SYNTHESIS_MODE": "synthesis_mode",
+        "TAVILY_MONTHLY_QUOTA": "tavily_monthly_quota",
+        "TAVILY_WARN_AT": "tavily_warn_at",
+        "MAX_CONCURRENT_JOBS": "max_concurrent_jobs",
+        "LOG_LEVEL": "log_level",
+    }
+    for key in updated_keys:
+        attr = key_to_attr.get(key)
+        if attr and hasattr(settings, attr):
+            new_val = env.get(key, "")
+            # Convert to int for numeric fields
+            if attr in ("tavily_monthly_quota", "tavily_warn_at", "max_concurrent_jobs"):
+                try:
+                    new_val = int(new_val)
+                except (ValueError, TypeError):
+                    continue
+            object.__setattr__(settings, attr, new_val)
 
 
 @router.post("/test-telegram")

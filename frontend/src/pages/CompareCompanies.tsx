@@ -31,8 +31,9 @@ function formatNumber(val: number | undefined | null): string {
   return val.toLocaleString("ro-RO");
 }
 
-function riskColor(score: number | undefined): string {
-  if (!score) return "text-gray-500";
+function riskColor(score: number | undefined | null): string {
+  // C25 fix: score 0 is valid (red), only undefined/null is gray
+  if (score === undefined || score === null) return "text-gray-500";
   if (score >= 70) return "text-green-400";
   if (score >= 40) return "text-yellow-400";
   return "text-red-400";

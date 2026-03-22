@@ -338,7 +338,26 @@ async def _run_batch(
     refresh: bool = False,  # 10F M8.5: Fresh Data Option
 ):
     """Executa analiza pentru CUI-uri in paralel (chunks). Progress persistent in DB."""
+    # C13 fix: Top-level try/except so batch doesn't stay RUNNING on unexpected errors
+    try:
+        await _run_batch_inner(batch_id, cuis, analysis_type, report_level, ws_manager, refresh=refresh)
+    except Exception as e:
+        logger.error(f"[batch] {batch_id[:8]}: Top-level error: {e}")
+        await db.execute(
+            "UPDATE jobs SET status = 'ERROR', error_message = ?, completed_at = ? WHERE id = ?",
+            (f"Eroare neasteptata: {str(e)[:200]}", datetime.utcnow().isoformat(), batch_id),
+        )
 
+
+async def _run_batch_inner(
+    batch_id: str,
+    cuis: list[str],
+    analysis_type: str,
+    report_level: int,
+    ws_manager,
+    refresh: bool = False,
+):
+    """Inner batch execution — called by _run_batch with error protection."""
     total = len(cuis)
     batch_dir = Path(settings.outputs_dir) / batch_id
     batch_dir.mkdir(parents=True, exist_ok=True)
@@ -348,9 +367,12 @@ async def _run_batch(
         (datetime.utcnow().isoformat(), batch_id),
     )
 
-    completed = 0
-    failed = 0
-    results = []
+    # C14 fix: Load existing results from progress (for resume scenarios)
+    existing_progress = await _get_batch_progress(batch_id)
+    existing_results = existing_progress.get("results", [])
+    completed = sum(1 for r in existing_results if r.get("status") == "OK")
+    failed = sum(1 for r in existing_results if r.get("status") == "FAILED")
+    results = list(existing_results)
 
     # 10F M8.3: Parallel Analysis — process CUIs in chunks of MAX_PARALLEL_BATCH
     sem = asyncio.Semaphore(MAX_PARALLEL_BATCH)

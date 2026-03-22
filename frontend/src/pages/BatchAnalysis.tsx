@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Upload, Download, Loader2, CheckCircle, XCircle } from "lucide-react";
 import clsx from "clsx";
 import { useToast } from "@/components/Toast";
@@ -20,6 +20,14 @@ export default function BatchAnalysis() {
   const [submitting, setSubmitting] = useState(false);
   const [batch, setBatch] = useState<BatchStatus | null>(null);
   const [polling, setPolling] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // C23 fix: Clean up polling interval on unmount
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
 
   const handleUpload = async () => {
     if (!file) return;
@@ -44,8 +52,9 @@ export default function BatchAnalysis() {
       const data = await res.json();
       toast(`Batch pornit: ${data.total_cuis} firme`, "success");
 
-      // Start polling
+      // Start polling (C23 fix: use ref for cleanup on unmount)
       setPolling(true);
+      if (intervalRef.current) clearInterval(intervalRef.current);
       const interval = setInterval(async () => {
         try {
           const statusRes = await fetch(`/api/batch/${data.batch_id}`);
@@ -54,6 +63,7 @@ export default function BatchAnalysis() {
 
           if (status.status === "DONE" || status.status === "FAILED") {
             clearInterval(interval);
+            intervalRef.current = null;
             setPolling(false);
             if (status.status === "DONE") {
               toast("Batch complet! Descarca ZIP-ul.", "success");
@@ -61,10 +71,12 @@ export default function BatchAnalysis() {
           }
         } catch {
           clearInterval(interval);
+          intervalRef.current = null;
           setPolling(false);
           toast("Eroare la verificarea statusului batch-ului", "warning");
         }
       }, 3000);
+      intervalRef.current = interval;
 
       setBatch({
         batch_id: data.batch_id,

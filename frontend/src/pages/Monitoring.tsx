@@ -59,14 +59,22 @@ export default function Monitoring() {
     } catch { toast("Eroare la adaugarea alertei", "error"); }
   };
 
+  // C25 fix: Add try/catch to toggle and delete
   const toggleAlert = async (id: string) => {
-    await fetch(`/api/monitoring/${id}/toggle`, { method: "PUT" });
-    loadData();
+    try {
+      const res = await fetch(`/api/monitoring/${id}/toggle`, { method: "PUT" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      loadData();
+    } catch { toast("Eroare la schimbarea starii alertei", "error"); }
   };
 
   const deleteAlert = async (id: string) => {
-    await fetch(`/api/monitoring/${id}`, { method: "DELETE" });
-    loadData();
+    try {
+      const res = await fetch(`/api/monitoring/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      loadData();
+      toast("Alerta stearsa", "success");
+    } catch { toast("Eroare la stergerea alertei", "error"); }
   };
 
   const checkNow = async () => {

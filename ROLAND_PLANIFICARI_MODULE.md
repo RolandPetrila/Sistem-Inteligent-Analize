@@ -152,7 +152,7 @@
 
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
-| 6 | C6 | **PDF TOC page numbers mereu gresite** — Presupune 1 pagina per sectiune, dar text lung = 3-4 pagini. Dupa prima sectiune lunga, TOT restul TOC pointeaza pagini gresite | pdf_generator.py:119-126 | M | HIGH |
+| 6 | C6 | [x] **PDF TOC page numbers mereu gresite** — fix: replaced manual TOC with fpdf2 insert_toc_placeholder (auto-tracked page numbers) | pdf_generator.py:106-122 | M | HIGH |
 | 7 | C7 | [x] **POSITIVE factors invizibile** — fix: add POSITIVE to severity color maps in Excel+PPTX | excel/pptx/one_pager generators | S | HIGH |
 | 8 | C8 | [x] **One-pager: N/A scor → "NERECOMANDAT"** — fix: unknown score_color → "INSUFICIENT DATE" | one_pager_generator.py:73 | S | HIGH |
 | 9 | C9 | **PDF truncheaza cuvinte > 60 caractere** — `w[:60]` taie URLs, termeni lungi, fara marker. Output corupt silentios in raportul PDF | pdf_generator.py:164 | S | MED |
@@ -177,8 +177,8 @@
 
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
-| 13 | C13 | **_run_batch fara top-level try/except** — Exceptie in DB/ZIP/progress (NU in gather) = task moare silentios, batch ramane RUNNING forever. Distinct de B20 (gather-specific) | batch.py:332 | S | HIGH |
-| 14 | C14 | **Batch resume pierde rezultate precedente** — resume creeaza `results = []` fresh, suprascrie progresul. ZIP-ul final contine DOAR CUI-urile reincercate, nu batch-ul complet | batch.py:186-229 | M | HIGH |
+| 13 | C13 | [x] **_run_batch fara top-level try/except** — fix: wrapped in try/except, sets ERROR status on failure | batch.py:340-348 | S | HIGH |
+| 14 | C14 | [x] **Batch resume pierde rezultate precedente** — fix: loads existing results from progress before appending | batch.py:365-370 | M | HIGH |
 | 15 | C15 | **BatchAnalysis trimite COMPANY_PROFILE in loc de FULL_COMPANY_PROFILE** — Backend are routing pe FULL_COMPANY_PROFILE (state.py:72), batch trimite alt string → Agent 3 (Market/SEAP) skipat in batch | BatchAnalysis.tsx:32 | S | MED |
 
 ---
@@ -203,7 +203,7 @@
 | 18 | C18 | [x] **get_latest_diagnostics foloseste 'COMPLETED' in loc de 'DONE'** — fix: COMPLETED → DONE | jobs.py:22 | S | CRIT |
 | 19 | C19 | [x] **retry-source leaks raw exception str(e)** — fix: sanitize to first 100 chars, wrap in safe message | jobs.py:260-266 | S | HIGH |
 | 20 | C20 | [x] **cancel_job nu verifica status curent** — fix: block cancel on DONE/ERROR/FAILED | jobs.py:269-279 | S | HIGH |
-| 21 | C21 | **Settings .env scris dar in-memory settings nu se reincarca** — User salveaza API keys din UI, vede "Salvat!", dar runtime-ul continua cu valorile vechi pana la restart | settings.py:123-140 + config.py:66 | M | HIGH |
+| 21 | C21 | [x] **Settings .env scris dar in-memory settings nu se reincarca** — fix: _reload_settings() updates in-memory attrs after write | settings.py:140-170 | M | HIGH |
 
 ---
 
@@ -214,9 +214,9 @@
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
 | 22 | C22 | [x] **Settings save nu verifica res.ok** — fix: check res.ok, throw on failure | Settings.tsx:67-71 | S | CRIT |
-| 23 | C23 | **Batch polling interval + WS reconnect timer nu se curata la unmount** — setInterval ramas activ dupa navigare = toast-uri pe pagini gresite, WS orfane acumulate, memory leak | BatchAnalysis.tsx:49-67, useWebSocket.ts:57 | S | HIGH |
-| 24 | C24 | **api.compareCompanies + api.createMonitoring schema gresita** — `{cuis}` in loc de `{cui_list}`, `{cui,company_name}` in loc de `{company_id,alert_type}`. Functii API complet nefunctionale | api.ts:146,175 | S | HIGH |
-| 25 | C25 | **Monitoring toggle/delete + CompareCompanies score 0** — Toggle/delete fara try/catch (eroare silentioasa), scor 0 afisat ca "date lipsa" (gri) in loc de rosu | Monitoring.tsx:62-70, CompareCompanies.tsx:35 | S | HIGH |
+| 23 | C23 | [x] **Batch polling interval nu se curata la unmount** — fix: useRef + useEffect cleanup | BatchAnalysis.tsx:24-30 | S | HIGH |
+| 24 | C24 | [x] **api.compareCompanies + api.createMonitoring schema gresita** — fix: cui_list, caen_section, company_id match backend | api.ts:143-177 | S | HIGH |
+| 25 | C25 | [x] **Monitoring toggle/delete + CompareCompanies score 0** — fix: try/catch + toast, riskColor checks null explicitly | Monitoring.tsx:62-75, CompareCompanies.tsx:34-39 | S | HIGH |
 
 ---
 
