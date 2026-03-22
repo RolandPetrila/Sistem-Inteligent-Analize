@@ -375,6 +375,33 @@ def calculate_risk_score(verified: dict) -> dict:
 
     dimensions["piata"] = {"score": max(0, min(100, mkt_score)), "weight": 10}
 
+    # 9B: Confidence scoring per dimension (moved before total for B7)
+    confidence = {}
+    for dim_name, dim_data in dimensions.items():
+        if dim_name == "financiar":
+            data_points = sum(1 for v in [ca_val, profit_val, cap_val, trend_val] if v is not None)
+            confidence[dim_name] = round(min(1.0, data_points / 4), 2)
+        elif dim_name == "juridic":
+            has_insolvency = isinstance(insolvency, dict) and insolvency.get("value") is not None
+            has_litigation = isinstance(litigation, dict) and litigation.get("value") is not None
+            confidence[dim_name] = 1.0 if (has_insolvency and has_litigation) else 0.5 if (has_insolvency or has_litigation) else 0.2
+        elif dim_name == "fiscal":
+            confidence[dim_name] = 1.0 if isinstance(anaf_inactive, dict) and anaf_inactive.get("value") is not None else 0.3
+        elif dim_name == "operational":
+            confidence[dim_name] = 0.8 if angajati_val is not None and company_age_years is not None else 0.4
+        elif dim_name == "reputational":
+            confidence[dim_name] = 0.7 if isinstance(web, dict) and web else 0.3
+        elif dim_name == "piata":
+            confidence[dim_name] = 0.8 if isinstance(market, dict) and market else 0.3
+
+    # B7 fix: Apply confidence weighting — low confidence pulls score toward neutral 50
+    NEUTRAL_SCORE = 50
+    for dim_name, dim_data in dimensions.items():
+        dim_conf = confidence.get(dim_name, 0.5)
+        raw = dim_data["score"]
+        dim_data["score"] = round(raw * dim_conf + NEUTRAL_SCORE * (1 - dim_conf), 1)
+        dim_data["confidence"] = dim_conf
+
     # --- SCOR TOTAL ---
     total_score = sum(d["score"] * d["weight"] / 100 for d in dimensions.values())
     total_score = round(total_score, 1)
@@ -400,26 +427,6 @@ def calculate_risk_score(verified: dict) -> dict:
         anomalies.append(f"ANOMALIE: profit ({profit_val}) disproportionat fata de CA ({ca_val})")
     if cap_val is not None and cap_val < 0 and ca_val and ca_val > 5_000_000:
         anomalies.append("ANOMALIE: capitaluri negative la CA > 5M → risc insolventa tehnica")
-
-    # 9B: Confidence scoring per dimension
-    confidence = {}
-    for dim_name, dim_data in dimensions.items():
-        # Confidence = number of real data points used for that dimension
-        if dim_name == "financiar":
-            data_points = sum(1 for v in [ca_val, profit_val, cap_val, trend_val] if v is not None)
-            confidence[dim_name] = round(min(1.0, data_points / 4), 2)
-        elif dim_name == "juridic":
-            has_insolvency = isinstance(insolvency, dict) and insolvency.get("value") is not None
-            has_litigation = isinstance(litigation, dict) and litigation.get("value") is not None
-            confidence[dim_name] = 1.0 if (has_insolvency and has_litigation) else 0.5 if (has_insolvency or has_litigation) else 0.2
-        elif dim_name == "fiscal":
-            confidence[dim_name] = 1.0 if isinstance(anaf_inactive, dict) and anaf_inactive.get("value") is not None else 0.3
-        elif dim_name == "operational":
-            confidence[dim_name] = 0.8 if angajati_val is not None and company_age_years is not None else 0.4
-        elif dim_name == "reputational":
-            confidence[dim_name] = 0.7 if isinstance(web, dict) and web else 0.3
-        elif dim_name == "piata":
-            confidence[dim_name] = 0.8 if isinstance(market, dict) and market else 0.3
 
     # --- 10F M3.2: Early Warning Confidence (0-100) ---
     # Each early warning signal gets a confidence score based on:

@@ -323,7 +323,11 @@ def generate_excel(report_sections: dict, meta: dict, verified_data: dict, outpu
     _style_data_cell(ws5.cell(row=kpi_row, column=1))
     if ca_first and ca_latest and ca_years_count >= 2 and ca_first > 0:
         n_years = ca_years_count - 1
-        cagr = ((ca_latest / ca_first) ** (1 / n_years) - 1) * 100
+        # B16 fix: Handle negative CA — CAGR undefined, use simple growth rate
+        if ca_latest > 0:
+            cagr = ((ca_latest / ca_first) ** (1 / n_years) - 1) * 100
+        else:
+            cagr = ((ca_latest - ca_first) / ca_first) * 100
         cagr_cell = ws5.cell(row=kpi_row, column=2, value=round(cagr, 2))
         _style_data_cell(cagr_cell, "0.00\"%\"")
         ws5.cell(row=kpi_row, column=3, value=f"Calculat pe {ca_years_count} ani ({n_years} perioade)")

@@ -57,9 +57,9 @@
 
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
-| 1 | B1 | **CAEN din ANAF API v9 nu se extrage** — campul `cod_caen` exista in `date_generale` dar NU e parsat | anaf_client.py | S | HIGH |
+| 1 | B1 | [x] **CAEN din ANAF API v9 nu se extrage** — fix: extract cod_CAEN from date_generale | anaf_client.py | S | HIGH |
 | 2 | B2 | [x] **openapi_client "found" field lipseste** — VERIFICAT: found prezent in toate path-urile | openapi_client.py | S | CRIT |
-| 3 | B3 | **Litigation = same reference as insolvency** — pointer, nu copie | agent_official.py:199-204 | S | HIGH |
+| 3 | B3 | [x] **Litigation = same reference as insolvency** — fix: deep copy dict | agent_official.py:199-204 | S | HIGH |
 | 4 | B4 | **SEAP valute mixte sumate fara conversie** | seap_client.py:117-122 | M | MED |
 
 ## R4 — 3. Verificare & Scoring (Agent 4)
@@ -68,14 +68,14 @@
 |---|-----|-------------------|---------|-------|-----|
 | 5 | B5 | [x] **Actionariat `[]` falsy → INCOMPLETE gresit** — fix: check available flag only | completeness.py:46 | S | CRIT |
 | 6 | B6 | [x] **Market `{}` truthy → PASS gresit** — fix: check actual SEAP contracts | completeness.py:111 | S | CRIT |
-| 7 | B7 | **Confidence nefolosita in scor final** | scoring.py:403-421 | M | HIGH |
+| 7 | B7 | [x] **Confidence nefolosita in scor final** — fix: apply confidence weighting to dimension scores | scoring.py:403-421 | M | HIGH |
 | 8 | B8 | **Risk factors duplicate** | scoring.py:489-502 | S | MED |
 
 ## R4 — 4. Sinteza AI (Agent 5)
 
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
-| 9 | B9 | **Provider order gresit pt fast route** | agent_synthesis.py:59-107 | S | HIGH |
+| 9 | B9 | [x] **Provider order gresit pt fast route** — fix: fast=Groq→Cerebras→Mistral→Gemini, quality=Claude→Gemini→Groq→Mistral | agent_synthesis.py:59-107 | S | HIGH |
 | 10 | B10 | **JSON context limits statice si prea mici** | agent_synthesis.py:147-149 | M | HIGH |
 | 11 | B11 | **Hallucination detection pasiva** — returneaza text cu nota sistem | agent_synthesis.py:245-275 | M | HIGH |
 | 12 | B12 | **Degradation fallback = JSON dump** | agent_synthesis.py:519-543 | M | HIGH |
@@ -92,7 +92,7 @@
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
 | 15 | B15 | **PDF/DOCX ignora due_diligence + early_warnings** | pdf_generator.py, docx_generator.py | M | HIGH |
-| 16 | B16 | **Excel CAGR crash pe firma < 2 ani** | excel_generator.py:324-371 | S | HIGH |
+| 16 | B16 | [x] **Excel CAGR crash pe firma < 2 ani** — fix: handle negative CA with simple growth rate | excel_generator.py:324-371 | S | HIGH |
 | 17 | B17 | **PPTX fara trend financiar** | pptx_generator.py | M | MED |
 
 ## R4 — 7-12 (Celelalte module)

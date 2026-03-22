@@ -57,7 +57,7 @@ class SynthesisAgent(BaseAgent):
             logger.info(f"[synthesis] Section {i+1}/{total}: {title} ({word_target}w, route={route})")
 
             if route == "fast":
-                # Sectiuni scurte: Groq (rapid) → Mistral → altele
+                # B9 fix: Fast route — speed priority: Groq → Cerebras → Mistral → Gemini
                 # 10F M4.5: Token Budget Enforcement — check if prompt fits provider context
                 initial_provider = "groq"
                 test_prompt = self._build_section_prompt(section, verified_data, initial_provider)
@@ -67,18 +67,18 @@ class SynthesisAgent(BaseAgent):
                     text = await self._generate_with_groq(
                         self._build_section_prompt(section, verified_data, "groq"))
                 else:
-                    text = None  # Budget exceeded for groq, skip to recommended provider
-                if not text and initial_provider in ("mistral", "groq"):
+                    text = None
+                if not text:
+                    text = await self._generate_with_cerebras(
+                        self._build_section_prompt(section, verified_data, "cerebras"))
+                if not text:
                     text = await self._generate_with_mistral(
                         self._build_section_prompt(section, verified_data, "mistral"))
-                if not text and initial_provider in ("gemini", "mistral", "groq"):
+                if not text:
                     text = await self._generate_with_gemini(
                         self._build_section_prompt(section, verified_data, "gemini"))
-                if not text:
-                    text = await self._generate_with_claude(
-                        self._build_section_prompt(section, verified_data, "claude"))
             else:
-                # Sectiuni lungi/complexe: Claude (calitate) → fallback chain
+                # B9 fix: Quality route — quality priority: Claude → Gemini → Groq → Mistral
                 # 10F M4.5: Token Budget Enforcement
                 initial_provider = "claude"
                 test_prompt = self._build_section_prompt(section, verified_data, initial_provider)
@@ -88,16 +88,16 @@ class SynthesisAgent(BaseAgent):
                     text = await self._generate_with_claude(
                         self._build_section_prompt(section, verified_data, "claude"))
                 else:
-                    text = None  # Budget exceeded for claude, skip to recommended provider
-                if not text and initial_provider in ("groq", "claude"):
-                    text = await self._generate_with_groq(
-                        self._build_section_prompt(section, verified_data, "groq"))
-                if not text and initial_provider in ("mistral", "groq", "claude"):
-                    text = await self._generate_with_mistral(
-                        self._build_section_prompt(section, verified_data, "mistral"))
+                    text = None
                 if not text:
                     text = await self._generate_with_gemini(
                         self._build_section_prompt(section, verified_data, "gemini"))
+                if not text:
+                    text = await self._generate_with_groq(
+                        self._build_section_prompt(section, verified_data, "groq"))
+                if not text:
+                    text = await self._generate_with_mistral(
+                        self._build_section_prompt(section, verified_data, "mistral"))
 
             if not text:
                 text = await self._generate_with_cerebras(

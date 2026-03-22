@@ -201,7 +201,12 @@ class OfficialAgent(BaseAgent):
                     "answer": merged_data.get("answer", ""),
                     "query": merged_data.get("query", ""),
                 }
-                official_data["litigation"] = official_data["insolvency"]  # Same merged result
+                # B3 fix: Deep copy, not pointer — avoid shared mutation
+                official_data["litigation"] = {
+                    "results": merged_data.get("results", []),
+                    "answer": merged_data.get("answer", ""),
+                    "query": merged_data.get("query", ""),
+                }
                 log_source_result(job_id, "Legal (merged)", True,
                     merged_source.get("response_time_ms", 0), ["insolvency+litigation"])
             else:

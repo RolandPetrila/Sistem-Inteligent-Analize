@@ -69,6 +69,8 @@ async def get_anaf_data(cui: str | int) -> dict:
         "stare_inregistrare": date_generale.get("stare_inregistrare", ""),
         "data_inregistrare": date_generale.get("data_inregistrare", ""),
         "status_rpc": date_generale.get("statusRO_e_Factura", False),
+        # B1: Extract CAEN code from ANAF date_generale
+        "cod_caen": str(date_generale.get("cod_CAEN", "")),
 
         # TVA
         "platitor_tva": inregistrare_scop_tva.get("scpTVA", False),
