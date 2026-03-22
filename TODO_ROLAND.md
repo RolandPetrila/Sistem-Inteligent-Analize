@@ -1,6 +1,6 @@
 # RIS — Plan Complet de Implementare
 
-Data actualizare: 2026-03-22 | Versiune plan: 5.0
+Data actualizare: 2026-03-23 | Versiune plan: 6.0
 
 ---
 
@@ -28,6 +28,7 @@ Data actualizare: 2026-03-22 | Versiune plan: 5.0
 | **Faza 11 — R4 Bug Fixes & Quality** | **COMPLET** | **27 items: 6 CRIT + 13 HIGH + 8 MED — toate B1-B27 implementate (2026-03-22)** |
 | **Faza 12 — R5 Deep Research Fixes** | **COMPLET** | **25 items: 4 CRIT + 16 HIGH + 5 MED — toate C1-C25 implementate (2026-03-22)** |
 | **Infra — Git + Tests** | **COMPLET** | **Git init + push GitHub, 88 teste (77 pytest + 11 vitest), .gitignore cleanup** |
+| **Faza 13 — R6 Deep Research** | **PLANIFICAT** | **21 items: 1 CRIT + 12 HIGH + 7 MED — D1-D21 propuse (2026-03-23)** |
 
 ---
 

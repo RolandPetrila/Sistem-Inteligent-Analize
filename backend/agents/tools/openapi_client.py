@@ -42,7 +42,11 @@ async def get_company_onrc(cui: str) -> dict:
         if response.status_code != 200:
             return {"cui": cui_clean, "found": False, "error": f"HTTP {response.status_code}"}
 
-        data = response.json()
+        # D3 fix: Safe JSON parsing
+        try:
+            data = response.json()
+        except (ValueError, Exception):
+            return {"cui": cui_clean, "found": False, "error": "Invalid JSON from openapi.ro"}
 
         result = {
             "cui": cui_clean,

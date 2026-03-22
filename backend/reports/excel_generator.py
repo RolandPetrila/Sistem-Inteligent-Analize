@@ -379,6 +379,49 @@ def generate_excel(report_sections: dict, meta: dict, verified_data: dict, outpu
         ws5.cell(row=kpi_row, column=3, value="Necesita profit net si capitaluri proprii nenule")
     _style_data_cell(ws5.cell(row=kpi_row, column=3))
 
+    # D12 fix: Add scoring dimensions to KPI sheet
+    kpi_row += 2
+    ws5.cell(row=kpi_row, column=1, value="Scor pe Dimensiuni (0-100)").font = Font(bold=True, size=11, color="6366f1")
+    ws5.merge_cells(start_row=kpi_row, start_column=1, end_row=kpi_row, end_column=3)
+    kpi_row += 1
+
+    ws5.cell(row=kpi_row, column=1, value="Dimensiune")
+    ws5.cell(row=kpi_row, column=2, value="Scor")
+    ws5.cell(row=kpi_row, column=3, value="Pondere / Confidence")
+    _style_header_row(ws5, kpi_row, 3)
+    kpi_row += 1
+
+    risk_score = verified_data.get("risk_score", {})
+    dims = risk_score.get("dimensions", {})
+    dim_labels = {"financiar": "Financiar", "juridic": "Juridic", "fiscal": "Fiscal",
+                  "operational": "Operational", "reputational": "Reputational", "piata": "Piata"}
+    for dim_key, dim_data in dims.items():
+        ws5.cell(row=kpi_row, column=1, value=dim_labels.get(dim_key, dim_key.capitalize()))
+        _style_data_cell(ws5.cell(row=kpi_row, column=1))
+        score_val = dim_data.get("score", 0)
+        score_cell = ws5.cell(row=kpi_row, column=2, value=round(score_val, 1))
+        _style_data_cell(score_cell, "0.0")
+        if score_val >= 70:
+            score_cell.font = Font(bold=True, color="22c55e")
+        elif score_val >= 40:
+            score_cell.font = Font(bold=True, color="eab308")
+        else:
+            score_cell.font = Font(bold=True, color="ef4444")
+        conf = dim_data.get("confidence", 0)
+        ws5.cell(row=kpi_row, column=3, value=f"{dim_data.get('weight', 0)}% pondere | Conf: {conf:.0%}")
+        _style_data_cell(ws5.cell(row=kpi_row, column=3))
+        kpi_row += 1
+
+    # Total score
+    total = risk_score.get("numeric_score")
+    if total is not None:
+        ws5.cell(row=kpi_row, column=1, value="SCOR TOTAL")
+        ws5.cell(row=kpi_row, column=1).font = Font(bold=True, size=11)
+        total_cell = ws5.cell(row=kpi_row, column=2, value=round(total, 1))
+        total_cell.font = Font(bold=True, size=11)
+        color_label = risk_score.get("score", "N/A")
+        ws5.cell(row=kpi_row, column=3, value=f"Clasificare: {color_label}")
+
     ws5.column_dimensions["A"].width = 28
     ws5.column_dimensions["B"].width = 16
     ws5.column_dimensions["C"].width = 45

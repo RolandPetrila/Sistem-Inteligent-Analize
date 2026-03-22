@@ -15,7 +15,7 @@ SEAP_DIRECT_URL = "https://e-licitatie.ro/api-pub/DirectAcquisitionCommon/GetDir
 REQUEST_DELAY = 3
 
 
-async def get_contracts_won(cui: str, page_size: int = 20, use_cache: bool = True) -> dict:
+async def get_contracts_won(cui: str, page_size: int = 20, use_cache: bool = True, eur_ron_rate: float | None = None) -> dict:
     """Cauta contracte/licitatii castigate de o firma pe SEAP. Cu cache optional."""
     cui_clean = str(cui).strip()
     if not cui_clean.isdigit():
@@ -113,9 +113,10 @@ async def get_contracts_won(cui: str, page_size: int = 20, use_cache: bool = Tru
         logger.warning(f"SEAP direct error: {e}")
         results["direct_error"] = str(e)
 
-    # B4 fix: Sum contract values with RON conversion (EUR→RON approx)
+    # B4 fix: Sum contract values with RON conversion
+    # D1 fix: Use BNR rate if provided, fallback 4.97 (closer to real rate)
     total_value_ron = 0
-    eur_rate = 5.0  # approximate EUR/RON for SEAP totals
+    eur_rate = eur_ron_rate or 4.97
     for c in results["contracts"] + results["direct_acquisitions"]:
         val = c.get("value")
         if isinstance(val, (int, float)):

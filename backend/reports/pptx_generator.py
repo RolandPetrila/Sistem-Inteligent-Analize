@@ -55,8 +55,9 @@ def generate_pptx(report_sections: dict, meta: dict, verified_data: dict, output
     prs.slide_width = Inches(13.333)
     prs.slide_height = Inches(7.5)
 
-    risk_score = verified_data.get("risk_score", {})
-    company = verified_data.get("company", {})
+    # D13 fix: Guard against None risk_score
+    risk_score = verified_data.get("risk_score") or {}
+    company = verified_data.get("company") or {}
 
     # --- Slide 1: Cover ---
     slide1 = prs.slides.add_slide(prs.slide_layouts[6])  # blank

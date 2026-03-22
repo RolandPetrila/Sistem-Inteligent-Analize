@@ -54,7 +54,11 @@ async def get_bilant(cui: str, year: int) -> dict:
             "error": f"HTTP {response.status_code if response else 'no response'}",
         }
 
-    data = response.json()
+    # D2 fix: Safe JSON parsing
+    try:
+        data = response.json()
+    except (ValueError, Exception):
+        return {"cui": cui_clean, "year": year, "found": False, "error": "Invalid JSON response"}
 
     # ANAF returneaza dict cu: an, cui, deni, caen, den_caen, i (lista indicatori)
     if not data:

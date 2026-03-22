@@ -473,9 +473,9 @@ R4→R5 Dependencies:
 
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
-| 1 | D1 | [ ] **SEAP EUR rate hardcoded 5.0** — fix: use BNR rates from state, fallback 4.97 | seap_client.py:118 | M | HIGH |
-| 2 | D2 | [ ] **ANAF Bilant JSON parse fara try/except** — fix: wrap response.json() in try/except, return found=False on error | anaf_bilant_client.py:49-55 | S | HIGH |
-| 3 | D3 | [ ] **OpenAPI.ro JSON parse fara try/except** — fix: idem, wrap response.json() in try/except | openapi_client.py:45 | S | HIGH |
+| 1 | D1 | [x] **SEAP EUR rate hardcoded 5.0** — fix: param eur_ron_rate, fallback 4.97 | seap_client.py:118 | M | HIGH |
+| 2 | D2 | [x] **ANAF Bilant JSON parse fara try/except** — fix: try/except around response.json() | anaf_bilant_client.py:49-55 | S | HIGH |
+| 3 | D3 | [x] **OpenAPI.ro JSON parse fara try/except** — fix: try/except around response.json() | openapi_client.py:45 | S | HIGH |
 | 4 | D4 | [ ] **BNR XML namespace posibil incorect** — fix: verifica cu BNR XML real, fallback pe `{uri}Body` notation | bnr_client.py:34 | S | MED |
 | 5 | D5 | [ ] **INS TEMPO filter pierde float values** — `str(v).isdigit()` skip "123.5" → fix: `int(float(val))` | caen_context.py:296-302 | S | MED |
 
@@ -487,7 +487,7 @@ R4→R5 Dependencies:
 
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
-| 6 | D6 | [ ] **Confidence implicit: scor 50 = "date lipsa" nu "risk mediu"** — fix: flag `data_available=False` pe dimensiuni cu confidence < 0.4, afiseaza "[Date insuficiente]" in raport | scoring.py:403-409 | M | HIGH |
+| 6 | D6 | [x] **Confidence implicit: scor 50 = "date lipsa" nu "risk mediu"** — fix: `data_available=False` flag on dimensions with confidence < 0.4 | scoring.py:403-409 | M | HIGH |
 
 ---
 
@@ -510,9 +510,9 @@ R4→R5 Dependencies:
 
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
-| 11 | D11 | [ ] **Early Warnings absent din HTML report** — PDF/DOCX/Excel le au, HTML NU. Fix: sectiune dedicata cu severity colors | html_generator.py | M | HIGH |
-| 12 | D12 | [ ] **Excel KPI sheet fara scor pe dimensiuni** — Sheet 5 (KPI) are doar 4 metrics, lipsesc scorurile 6D. Fix: adauga sectiune "Score pe Dimensiuni" | excel_generator.py:276+ | M | HIGH |
-| 13 | D13 | [ ] **PPTX risk_score None → crash AttributeError** — `risk_score.get()` fara isinstance check. Fix: `risk_score = ... or {}` + isinstance guard | pptx_generator.py:152 | S | HIGH |
+| 11 | D11 | [x] **Early Warnings absent din HTML report** — fix: "Semnale de Avertizare" section with severity colors + confidence | html_generator.py | M | HIGH |
+| 12 | D12 | [x] **Excel KPI sheet fara scor pe dimensiuni** — fix: scoring dimensions section with color + confidence + total | excel_generator.py:276+ | M | HIGH |
+| 13 | D13 | [x] **PPTX risk_score None → crash AttributeError** — fix: `risk_score = ... or {}` | pptx_generator.py:152 | S | HIGH |
 | 14 | D14 | [ ] **Due Diligence checklist absent din Excel** — PDF/DOCX il au, Excel NU. Fix: Sheet 6 "Due Diligence" cu checklist DA/NU | excel_generator.py | M | MED |
 
 ---

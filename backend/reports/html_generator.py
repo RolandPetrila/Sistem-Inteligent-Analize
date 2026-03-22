@@ -323,6 +323,32 @@ def generate_html(report_sections: dict, meta: dict, verified_data: dict, output
 
         nav_items += '<a href="#completeness" class="nav-link">Diagnostic</a>\n'
 
+    # D11 fix: Early Warnings section in HTML (was missing — PDF/DOCX had it, HTML didn't)
+    early_warnings_html = ""
+    ew_list = risk_score_obj.get("early_warning_confidence", [])
+    if ew_list:
+        ew_items = ""
+        for ew in ew_list:
+            sev = ew.get("severity", "MEDIUM")
+            conf = ew.get("confidence", 0)
+            sev_color = "#ef4444" if sev == "HIGH" else "#eab308" if sev == "MEDIUM" else "#22c55e"
+            sev_icon = "!!" if sev == "HIGH" else "!" if sev == "MEDIUM" else "i"
+            ew_items += (
+                f'<div style="padding:10px 14px;margin-bottom:8px;background:#16213e;border-radius:8px;'
+                f'border-left:4px solid {sev_color};display:flex;align-items:center;gap:12px">'
+                f'<span style="background:{sev_color}20;color:{sev_color};font-weight:700;font-size:0.85em;'
+                f'padding:2px 8px;border-radius:4px;min-width:28px;text-align:center">{sev_icon}</span>'
+                f'<span style="color:#e2e8f0;flex:1">{_escape(ew.get("warning", ""))}</span>'
+                f'<span style="color:#64748b;font-size:0.8em">Conf: {conf}%</span>'
+                f'</div>\n'
+            )
+        early_warnings_html = f'''
+        <section id="warnings" class="report-section">
+            <h2>Semnale de Avertizare</h2>
+            <div style="margin-top:12px">{ew_items}</div>
+        </section>'''
+        nav_items += '<a href="#warnings" class="nav-link">Avertizari</a>\n'
+
     # Diagnostics section (per-source from agent_official)
     diag = verified_data.get("diagnostics") if "diagnostics" in verified_data else None
     if not diag:
@@ -397,6 +423,7 @@ body{{font-family:'Segoe UI',system-ui,sans-serif;background:#1a1a2e;color:#e2e8
     {financial_ratios_html}
     {charts_html}
     {sections_html}
+    {early_warnings_html}
     {completeness_html}
     <div class="sources">
         <h2>Surse Utilizate</h2>

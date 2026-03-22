@@ -458,12 +458,14 @@ def calculate_risk_score(verified: dict) -> dict:
             confidence[dim_name] = 0.8 if isinstance(market, dict) and market else 0.3
 
     # B7 fix: Apply confidence weighting — low confidence pulls score toward neutral 50
+    # D6 fix: Flag dimensions with confidence < 0.4 as insufficient data
     NEUTRAL_SCORE = 50
     for dim_name, dim_data in dimensions.items():
         dim_conf = confidence.get(dim_name, 0.5)
         raw = dim_data["score"]
         dim_data["score"] = round(raw * dim_conf + NEUTRAL_SCORE * (1 - dim_conf), 1)
         dim_data["confidence"] = dim_conf
+        dim_data["data_available"] = dim_conf >= 0.4
 
     # --- SCOR TOTAL ---
     total_score = sum(d["score"] * d["weight"] / 100 for d in dimensions.values())
