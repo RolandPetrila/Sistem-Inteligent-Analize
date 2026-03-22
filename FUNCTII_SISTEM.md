@@ -1,6 +1,6 @@
 # RIS — Inventar Complet Functionalitati
 
-Data actualizare: 2026-03-22 | Versiune: 5.1 | Faze 1-9E + 10A-10F complete
+Data actualizare: 2026-03-22 | Versiune: 6.0 | Faze 1-12 complete (52 bug fixes R4+R5)
 
 ---
 
@@ -269,6 +269,78 @@ Data actualizare: 2026-03-22 | Versiune: 5.1 | Faze 1-9E + 10A-10F complete
 - Error Message Sanitization (stack traces nu ajung la client)
 - Sensitive Data Redaction in logs (CUI mascat: 123***)
 - Request Validation Handler (422 structurat cu field errors)
+
+---
+
+## Faza 11 — R4 Bug Fixes (27 items B1-B27)
+
+### CRIT (6)
+- B13: Bilant NameError crash (f-string year + safe get)
+- B22: Schema mismatch triggered_at vs created_at (monitoring)
+- B2: CAEN chain rupt (openapi.ro fallback → ANAF Bilant)
+- B5: Completeness formula incoerenta (data sources vs field checks split)
+- B6: Synthesis trim sterge content (sentence-aware truncation)
+- B20: Batch gather exception = RUNNING forever (return_exceptions=True)
+
+### HIGH (13)
+- B1: CAEN code lipsa din profil (openapi→bilant fallback chain)
+- B3: Bilant multi-an dublu-request (pre-filter existing years)
+- B7: Confidence scoring circular dependency (reorder calculation)
+- B9: Bullet list in narativ (anti-bullet prompt instructions)
+- B10: JSON context depaseste limita provider (dynamic per-provider limits)
+- B11: Hallucinated numbers in synthesis (active stripping regex)
+- B12: Tier 3 raw JSON dump (readable key-value format)
+- B14: Recommendations ignora early warnings (prompt instruction)
+- B15: PDF/DOCX fara due diligence + early warnings (verified_data param)
+- B16: Excel CAGR crash pe firma < 2 ani (safe growth rate)
+- B21: Stuck batch = concurrent limit blocat (auto-timeout 4h)
+- B23: Firma radiata = silentios ignorata (RED alert + Telegram)
+- B26: Retry-source fara UI (5 source buttons in AnalysisProgress)
+
+### MED (8)
+- B4: SEAP EUR→RON conversion (rate 5.0)
+- B8: Risk factors duplicates (dedup by text)
+- B17: PPTX fara trend financiar (multi-an section Slide 3)
+- B18: Compare year hardcodat (year-1 dynamic)
+- B19: Delta doar scor total (dimension-level ±3 threshold)
+- B24: Cache get_or_fetch race condition (per-key asyncio.Lock)
+- B25: WebSocket broadcast exception swallowing (dead connection cleanup)
+- B27: Companies search reset fara pagination reset (Sterge button)
+
+---
+
+## Faza 12 — R5 Deep Research Fixes (25 items C1-C25)
+
+### CRIT (4)
+- C12: Delta dead (TypeError pe NoneType) — safe dict access + defaults
+- C4: SEAP bonus mort (_make_field .value unwrap)
+- C18: Diagnostics dead (TypeError) — match actual DB column names
+- C22: Settings phantom save — _reload_settings() with object.__setattr__
+
+### HIGH (16)
+- C1: _calculate_trends ignora pierdere_neta (negative profit)
+- C2: get_bilant() fara retry per-an (retry on 5xx/timeout)
+- C5: Solvency matrix null safety (INDETERMINAT flag + penalty)
+- C6: PDF TOC page numbers gresite (fpdf2 insert_toc_placeholder)
+- C7: POSITIVE factors invizibile (severity color maps)
+- C8: One-pager N/A scor → INSUFICIENT DATE
+- C13: Batch crash = no cleanup (_run_batch_inner wrapper)
+- C14: Batch resume pierde rezultate existente (load from DB first)
+- C16: Cache invalidation broken (enumerate all key variants per CUI)
+- C17: Risk factors fara severity (POSITIVE/HIGH/MEDIUM/LOW mapping)
+- C19: Synthesis CAEN injection (sector context in prompt)
+- C20: One-pager scor dimensiuni (display all 6 dimensions)
+- C21: Settings reload in-memory (_reload_settings on PUT)
+- C23: BatchAnalysis polling cleanup (useRef + useEffect unmount)
+- C24: api.ts payload mismatches (compare/sector/monitoring fixed)
+- C25: Frontend error handling gaps (try/catch + toast on toggle/delete)
+
+### MED (5)
+- C3: Completeness score formula (denominator=5)
+- C9: PDF word truncation (hyphenated break)
+- C10: PDF silent paragraph drop (placeholder)
+- C11: HTML <li> without <ul> (in_list state tracking)
+- C15: BatchAnalysis FULL_COMPANY_PROFILE routing
 
 ---
 

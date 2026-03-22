@@ -25,8 +25,8 @@ Data actualizare: 2026-03-22 | Versiune plan: 5.0
 | **Faza 7D — Testare & Refactorizare** | **COMPLET** | **28 pytest tests, 11 vitest tests, split agent_verification, React.lazy 10 pagini, retry logic ANAF+openapi.ro** |
 | **Faza 7E — Calitate Analiza** | **COMPLET** | **CAEN fallback Bilant, retry BNR+SEAP, completeness gate <50%, anti-halucinare prompts, GET diagnostics, POST retry-source** |
 | **Faza 10A-10F — R3 Module Upgrades** | **COMPLET** | **51 P1 features: scoring matrix, synthesis degradation, prompt hardening, orchestrator dedup+checkpoints, cache LRU, batch parallel, security tracing+sanitization, form validation, HTML responsive** |
-| **Faza 11 — R4 Bug Fixes & Quality** | **PLANIFICAT** | **27 items: 6 CRIT, 13 HIGH, 8 MED — vezi ROLAND_PLANIFICARI_MODULE.md** |
-| **Faza 12 — R5 Deep Research Fixes** | **PLANIFICAT** | **25 items: 4 CRIT (delta dead, SEAP bonus dead, diagnostics dead, settings phantom), 16 HIGH, 5 MED** |
+| **Faza 11 — R4 Bug Fixes & Quality** | **COMPLET** | **27 items: 6 CRIT + 13 HIGH + 8 MED — toate B1-B27 implementate (2026-03-22)** |
+| **Faza 12 — R5 Deep Research Fixes** | **COMPLET** | **25 items: 4 CRIT + 16 HIGH + 5 MED — toate C1-C25 implementate (2026-03-22)** |
 | **Infra — Git + Tests** | **COMPLET** | **Git init + push GitHub, 88 teste (77 pytest + 11 vitest), .gitignore cleanup** |
 
 ---
@@ -381,9 +381,14 @@ SESIUNE 12: Faza 8A-8E — Extindere Module (25 imbunatatiri)     DONE (2026-03-
      |
 SESIUNE 13: Faza 9A-9E — Runda 2 imbunatatiri (17 implementari)  DONE (2026-03-22)
      |
-VIITOR (V1-V12 + 9F) — nice to have, fara urgenta
+SESIUNE 14: Faza 10A-10F — R3 Module Upgrades (51 P1 features)   DONE (2026-03-22)
+     |
+SESIUNE 15-22: Faza 11+12 — R4+R5 Bug Fixes (52 items, 8 sesiuni) DONE (2026-03-22)
+     |
+VIITOR (V1-V12) — nice to have, fara urgenta
 
 37 REST endpoints + 1 WebSocket + 11 pagini frontend + 7 formate raport + DIAGNOSTICARE + AUDIT
+52 bug fixes (B1-B27 + C1-C25) — toate implementate si pe GitHub
 ```
 
 **Dupa fiecare sesiune, Claude actualizeaza:**
