@@ -37,12 +37,13 @@ Sistem local de Business Intelligence care ruleaza pe Windows 10. Extrage automa
 - **Faza 10F:** COMPLETATA — Solvency stress matrix 3x3, Early warning confidence, Structured degradation 3-tier, Prompt injection hardening, Token budget enforcement, Parallel Agent 2+3, Request dedup, State checkpoint recovery, Anomaly flags delta, Sector percentile scoring, Parallel batch 2-CUI, Batch queue max 2, Fresh data option, Cache LRU 100MB, HTTP pool metrics, Event-driven invalidation, Request ID tracing, Error sanitization, Sensitive data redaction, Request validation handler, Form validation, HTML responsive mobile
 - **Faza 11 (R4):** COMPLETATA — 27 bug fixes: B1-B27 (6 CRIT + 13 HIGH + 8 MED) — bilant crash, schema mismatch, CAEN chain, synthesis quality, reports data, cache race, delta dimensions
 - **Faza 12 (R5):** COMPLETATA — 25 deep research fixes: C1-C25 (4 CRIT + 16 HIGH + 5 MED) — delta dead, SEAP bonus, TOC accuracy, settings phantom, cache invalidation, batch safety, PDF/HTML fixes
-- **Faza 13 (R6):** PLANIFICATA — 21 items: D1-D21 (1 CRIT + 12 HIGH + 7 MED) — token budgets, HTML early warnings, monitoring dedup, Tavily cache bypass, JSON parsing safety
+- **Faza 13 (R6):** COMPLETATA — 21 items: D1-D21 (1 CRIT + 12 HIGH + 7 MED) + 4 N-items (financial ratios, charts, exec summary, company page)
 - **Git:** https://github.com/RolandPetrila/Sistem-Inteligent-Analize.git | 88 teste (77 pytest + 11 vitest)
+- **12 pagini frontend** (adaugat CompanyDetail /company/:id)
 - **Planificari detaliate:** ROLAND_PLANIFICARI_MODULE.md (R4 + R5 + R6 = 73 items total)
 - **Deep Research:** 99_Deep_Research/ (2 rapoarte complete cu roadmap)
 - **Spec complet:** SPEC_INTELLIGENCE_SYSTEM_V2.md
-- **37 REST endpoints + 1 WebSocket + 11 pagini frontend + 7 formate raport + diagnostic + audit + request tracing**
+- **37 REST endpoints + 1 WebSocket + 12 pagini frontend + 7 formate raport + diagnostic + audit + request tracing**
 
 ## Stack
 - Backend: Python 3.13 + FastAPI + SQLite (aiosqlite, WAL mode)
@@ -105,6 +106,7 @@ Sistem local de Business Intelligence care ruleaza pe Windows 10. Extrage automa
 - `frontend/src/pages/BatchAnalysis.tsx` — Upload CSV + progress + ZIP download
 - `frontend/src/pages/Companies.tsx` — Lista companii + Export CSV CRM
 - `frontend/src/pages/Monitoring.tsx` — Monitorizare firme cu toast notifications
+- `frontend/src/pages/CompanyDetail.tsx` — N4: Pagina per firma cu profil, rapoarte, scor history, re-analiza
 - `frontend/src/pages/` — AnalysisProgress, ReportsList, ReportView, CompareCompanies, Settings
 - `frontend/src/hooks/useWebSocket.ts` — WebSocket cu reconnect + ping/pong
 - `frontend/src/lib/api.ts` — API client complet (toate endpoint-urile)

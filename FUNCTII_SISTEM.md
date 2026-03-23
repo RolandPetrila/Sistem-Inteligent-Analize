@@ -344,7 +344,48 @@ Data actualizare: 2026-03-22 | Versiune: 6.0 | Faze 1-12 complete (52 bug fixes 
 
 ---
 
-## Frontend — 11 Pagini
+## Functionalitati Faza 13 (R6 — 21 D-items + 4 N-items)
+
+### Data Quality & Parsing
+- D1: SEAP EUR rate dynamic via BNR (fallback 4.97, nu hardcoded 5.0)
+- D2: ANAF Bilant JSON parse safety (try/except pe response.json())
+- D3: openapi.ro JSON parse safety (try/except pe response.json())
+- D4: BNR XML namespace auto-detect fallback (root tag extraction)
+- D5: INS TEMPO float values (int(float(val)) inlocuieste isdigit())
+
+### Scoring & Verification
+- D6: Confidence data_available flag per dimensiune (threshold 0.4)
+
+### Synthesis & Prompts
+- D7: Groq token budget corect (131K nu 6K — Llama 4 Scout)
+- D8: Gemini JSON limit 400K chars + token budget 1M (2.5 Flash real)
+- D9: Hallucination regex exclude calendar years (2024% nu mai e suspect)
+- D10: Level 1 reports include competition+opportunities (min 150 cuvinte)
+
+### Reports
+- D11: Early Warnings section in HTML report (severity colors + confidence %)
+- D12: Scoring dimensions in Excel KPI sheet (color-coded + confidence)
+- D13: PPTX null risk_score guard (or {} pattern)
+- D14: Due Diligence checklist sheet in Excel (DA/NU color-coded)
+- N1: Financial ratios auto-calc (Marja Profit, ROE, ROA, D/E, Capitalizare, CA/Angajat)
+- N2: Financial ratios table in HTML report (styled with interpretations)
+- N3: Executive Summary 3-line KPI block in HTML report
+
+### Infrastructure
+- D16: Monitoring ORDER BY triggered_at (nu created_at care nu exista)
+- D17: Tavily cache via cache_service.set() (LRU + stats + versioning)
+- D18: _fetch_locks OrderedDict max 500 cu evictie automata
+- D19: Config auto-generate random secret key (cu warning la startup)
+
+### Frontend
+- D20: WebSocket reconnect setTimeout cleanup on unmount
+- D21: Auto-retry pe 429 (2x backoff) si 503 (1x dupa 2s)
+- N4: CompanyDetail page (/company/:id) — profil, rapoarte, scor history, re-analiza 1-click
+- D15: Batch CSV summary cu CAEN_Descriere coloana
+
+---
+
+## Frontend — 12 Pagini
 
 | Pagina | Ruta | Descriere |
 |--------|------|-----------|
@@ -354,6 +395,7 @@ Data actualizare: 2026-03-22 | Versiune: 6.0 | Faze 1-12 complete (52 bug fixes 
 | Rapoarte | /reports | Lista rapoarte, download (6 formate) |
 | Vizualizare Raport | /report/:id | Full data, sectiuni, surse, download |
 | Companii | /companies | Lista + search + export CSV CRM |
+| Detalii Firma | /company/:id | Profil, KPI, scor history, rapoarte, re-analiza |
 | Comparator | /compare | Comparatie 2-5 firme side-by-side |
 | Monitorizare | /monitoring | Alerte, toggle, check-now, Telegram |
 | Batch Analysis | /batch | Upload CSV, progress, download ZIP |
