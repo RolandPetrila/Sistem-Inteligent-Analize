@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Plus, Trash2, Search, ArrowUpDown, CheckCircle, XCircle, Download } from "lucide-react";
 import { validateCUI } from "@/lib/cui-validator";
+import { logAction } from "@/lib/logger";
 import clsx from "clsx";
 
 interface CompanyResult {
@@ -67,6 +68,7 @@ export default function CompareCompanies() {
     }
     setLoading(true);
     setError(null);
+    logAction("Compare", "start", { cuis: valid });
     try {
       const res = await fetch("/api/compare", {
         method: "POST",
@@ -77,9 +79,13 @@ export default function CompareCompanies() {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || `HTTP ${res.status}`);
       }
-      setResult(await res.json());
+      const data = await res.json();
+      setResult(data);
+      logAction("Compare", "done", { companies: data.companies?.length });
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Eroare necunoscuta");
+      const msg = e instanceof Error ? e.message : "Eroare necunoscuta";
+      logAction("Compare", "failed", { error: msg });
+      setError(msg);
     } finally {
       setLoading(false);
     }

@@ -207,8 +207,8 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         if not settings.ris_api_key:
             return await call_next(request)
         path = request.url.path
-        # Exclude health checks si WebSocket
-        if path in ("/api/health", "/api/health/deep") or path.startswith("/ws/"):
+        # Exclude health checks, WebSocket, frontend-log
+        if path in ("/api/health", "/api/health/deep", "/api/frontend-log") or path.startswith("/ws/"):
             return await call_next(request)
         if path.startswith("/api/"):
             key = request.headers.get("X-RIS-Key", "")
@@ -286,6 +286,49 @@ app.include_router(settings_router.router, prefix="/api/settings", tags=["Settin
 app.include_router(compare.router, prefix="/api/compare", tags=["Compare"])
 app.include_router(monitoring.router, prefix="/api/monitoring", tags=["Monitoring"])
 app.include_router(batch.router, prefix="/api/batch", tags=["Batch"])
+
+
+# --- Frontend Log Endpoint ---
+
+_FRONTEND_LOG = _Path("logs") / "ris_frontend.log"
+
+
+@app.post("/api/frontend-log")
+async def frontend_log(request: Request):
+    """Receives frontend log entries (errors, actions, API calls, validations, session).
+    Writes to logs/ris_frontend.log — consolidated file for session review."""
+    try:
+        body = await request.json()
+        entries = body if isinstance(body, list) else [body]
+
+        with open(_FRONTEND_LOG, "a", encoding="utf-8") as f:
+            for entry in entries:
+                ts = entry.get("ts", "")
+                level = entry.get("level", "INFO")
+                page = entry.get("page", "-")
+                message = entry.get("message", "")
+                details = entry.get("details", "")
+
+                # Session markers get special formatting
+                if level == "SESSION":
+                    f.write(f"\n{'=' * 60}\n")
+                    f.write(f"SESSION | {ts} | {message}\n")
+                    if details:
+                        f.write(f"  {details}\n")
+                    f.write(f"{'=' * 60}\n\n")
+                else:
+                    line = f"[{ts}] {level: <8} | {page: <20} | {message}"
+                    if details:
+                        line += f" | {details}"
+                    f.write(line + "\n")
+                    # Multi-line details for errors (stack traces)
+                    if entry.get("stack"):
+                        for sline in str(entry["stack"]).split("\n")[:5]:
+                            f.write(f"{'': <12} | {'': <20} | {sline.strip()}\n")
+
+        return {"ok": True}
+    except Exception:
+        return {"ok": False}
 
 
 @app.get("/api/health")

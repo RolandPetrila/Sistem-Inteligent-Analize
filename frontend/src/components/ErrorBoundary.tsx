@@ -1,5 +1,6 @@
 import { Component } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
+import { logError } from "@/lib/logger";
 
 interface Props {
   children: React.ReactNode;
@@ -18,6 +19,10 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error) {
+    logError("ErrorBoundary", error, "React render crash");
   }
 
   render() {

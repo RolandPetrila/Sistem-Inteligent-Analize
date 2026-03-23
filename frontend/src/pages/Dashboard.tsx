@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
+import { logAction } from "@/lib/logger";
 import type { Stats, Job } from "@/lib/types";
 import { JOB_STATUS_LABELS, ANALYSIS_TYPE_LABELS } from "@/lib/constants";
 import clsx from "clsx";
@@ -48,6 +49,7 @@ export default function Dashboard() {
         setRecentJobs(j.jobs);
         if (settings) setIntegrations(settings);
         if (health) setHealthData(health);
+        logAction("Dashboard", "loaded", { companies: s?.total_companies, reports: s?.total_reports, jobs: s?.total_jobs });
       })
       .catch(() => toast("Eroare la incarcarea dashboard-ului", "error"))
       .finally(() => setLoading(false));

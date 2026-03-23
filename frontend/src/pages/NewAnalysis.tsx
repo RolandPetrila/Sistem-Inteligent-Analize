@@ -16,6 +16,7 @@ import {
 import clsx from "clsx";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
+import { logAction } from "@/lib/logger";
 import { validateCUI } from "@/lib/cui-validator";
 import type { AnalysisTypeInfo } from "@/lib/types";
 import { REPORT_LEVEL_LABELS } from "@/lib/constants";
@@ -114,6 +115,7 @@ export default function NewAnalysis() {
   const handleSubmit = async () => {
     if (!selected) return;
     setSubmitting(true);
+    logAction("NewAnalysis", "start", { type: selected.type, level, cui: answers.cui });
     try {
       const job = await api.createJob({
         analysis_type: selected.type,
@@ -122,8 +124,10 @@ export default function NewAnalysis() {
       });
       // Auto-start the job
       await api.startJob(job.id).catch(() => toast("Job creat, dar pornirea automata a esuat", "warning"));
+      logAction("NewAnalysis", "job_created", { jobId: job.id });
       navigate(`/analysis/${job.id}`);
     } catch {
+      logAction("NewAnalysis", "submit_failed", { type: selected.type });
       toast("Eroare la pornirea analizei", "error");
       setSubmitting(false);
     }

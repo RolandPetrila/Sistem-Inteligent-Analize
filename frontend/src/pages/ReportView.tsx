@@ -13,6 +13,7 @@ import {
 import clsx from "clsx";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
+import { logAction, logValidation, validateReportData } from "@/lib/logger";
 import { ANALYSIS_TYPE_LABELS } from "@/lib/constants";
 
 interface ReportFull {
@@ -50,7 +51,21 @@ export default function ReportView() {
     if (!id) return;
     api
       .getReport(id)
-      .then((r) => setReport(r as unknown as ReportFull))
+      .then((r) => {
+        const rep = r as unknown as ReportFull;
+        setReport(rep);
+        // Componenta 4: Validate report data
+        const issues = validateReportData(rep.full_data as Record<string, unknown> | null);
+        if (issues.length > 0) {
+          logValidation("ReportView", issues);
+        }
+        logAction("ReportView", "open", {
+          reportId: id,
+          type: rep.report_type,
+          hasData: !!rep.full_data,
+          sources: rep.sources?.length,
+        });
+      })
       .catch(() => toast("Eroare la incarcarea raportului", "error"))
       .finally(() => setLoading(false));
   }, [id]);
@@ -138,6 +153,7 @@ export default function ReportView() {
             <a
               key={fmt}
               href={`/api/reports/${report.id}/download/${fmt}`}
+              onClick={() => logAction("ReportView", "download", { reportId: report.id, format: fmt })}
               className="btn-secondary flex items-center gap-1.5 text-sm"
             >
               <Download className="w-3.5 h-3.5" />

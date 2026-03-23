@@ -1,14 +1,29 @@
+import { logApi } from "./logger";
+
 const BASE = "/api";
 
 // D21: Auto-retry with exponential backoff for 429 and transient errors
 async function request<T>(path: string, options?: RequestInit, _attempt = 0): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    ...options,
-  });
+  const method = options?.method || "GET";
+  const start = performance.now();
+
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      ...options,
+    });
+  } catch (netErr) {
+    const ms = Math.round(performance.now() - start);
+    logApi(method, path, 0, ms, `Network error: ${netErr}`);
+    throw netErr;
+  }
+
+  const durationMs = Math.round(performance.now() - start);
 
   // D21: Auto-retry on 429 (rate limit) — up to 2 retries with backoff
   if (res.status === 429 && _attempt < 2) {
+    logApi(method, path, 429, durationMs, `Rate limited, retry ${_attempt + 1}`);
     const retryAfter = parseInt(res.headers.get("Retry-After") || "3", 10);
     const delay = Math.min(retryAfter * 1000, 10_000);
     await new Promise((r) => setTimeout(r, delay));
@@ -16,6 +31,7 @@ async function request<T>(path: string, options?: RequestInit, _attempt = 0): Pr
   }
 
   if (res.status === 429) {
+    logApi(method, path, 429, durationMs, "Rate limited, max retries exhausted");
     const retryAfter = parseInt(res.headers.get("Retry-After") || "5", 10);
     const err = await res.json().catch(() => ({}));
     const code = err.error_code || "RATE_LIMITED";
@@ -24,6 +40,7 @@ async function request<T>(path: string, options?: RequestInit, _attempt = 0): Pr
 
   // D21: Auto-retry on 503 (service unavailable) — 1 retry after 2s
   if (res.status === 503 && _attempt < 1) {
+    logApi(method, path, 503, durationMs, "Service unavailable, retrying");
     await new Promise((r) => setTimeout(r, 2000));
     return request<T>(path, options, _attempt + 1);
   }
@@ -32,8 +49,15 @@ async function request<T>(path: string, options?: RequestInit, _attempt = 0): Pr
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     const code = err.error_code || err.code || "";
     const msg = err.detail || `HTTP ${res.status}`;
+    logApi(method, path, res.status, durationMs, msg);
     throw new ApiError(msg, code, res.status);
   }
+
+  // Success — log it (skip frontend-log to avoid infinite loop)
+  if (!path.includes("frontend-log")) {
+    logApi(method, path, res.status, durationMs);
+  }
+
   return res.json();
 }
 
