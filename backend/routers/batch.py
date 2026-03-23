@@ -122,8 +122,8 @@ async def create_batch(
                         (row["id"],),
                     )
                     logger.warning(f"[batch] Auto-timeout stuck batch {row['id'][:8]}")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"[batch] Timeout check failed: {e}")
 
     # 10F M8.4: Batch Queue — max 2 concurrent batches
     active = await db.fetch_one(

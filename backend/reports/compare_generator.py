@@ -192,21 +192,47 @@ def generate_compare_pdf(company_a: dict, company_b: dict, output_path: str):
     pdf.set_text_color(40, 40, 40)
 
     conclusions = []
+    a_wins = 0
+    b_wins = 0
     for label, key in [("Cifra Afaceri", "cifra_afaceri"), ("Profit Net", "profit_net"),
                        ("Angajati", "angajati"), ("Scor Risc", "scor_risc")]:
         va = company_a.get(key)
         vb = company_b.get(key)
         if isinstance(va, (int, float)) and isinstance(vb, (int, float)):
+            if va != 0 or vb != 0:
+                base = max(abs(va), abs(vb), 1)
+                pct_diff = abs(va - vb) / base * 100
+                pct_str = f" ({pct_diff:.0f}% diferenta)" if pct_diff > 1 else ""
+            else:
+                pct_str = ""
             if va > vb:
-                conclusions.append(f"{label}: {name_a} este superior ({va:,.0f} vs {vb:,.0f})")
+                conclusions.append(f"{label}: {name_a} este superior ({va:,.0f} vs {vb:,.0f}){pct_str}")
+                a_wins += 1
             elif vb > va:
-                conclusions.append(f"{label}: {name_b} este superior ({vb:,.0f} vs {va:,.0f})")
+                conclusions.append(f"{label}: {name_b} este superior ({vb:,.0f} vs {va:,.0f}){pct_str}")
+                b_wins += 1
             else:
                 conclusions.append(f"{label}: Egalitate ({va:,.0f})")
 
     for c in conclusions:
         pdf.multi_cell(0, 6, _sanitize(f"- {c}"))
         pdf.ln(1)
+
+    # F18: Narrative summary
+    if conclusions:
+        pdf.ln(4)
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.set_text_color(99, 102, 241)
+        pdf.cell(0, 8, "Rezumat", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("Helvetica", "", 10)
+        pdf.set_text_color(40, 40, 40)
+        if a_wins > b_wins:
+            narrative = f"{name_a} prezinta performante superioare in {a_wins} din {len(conclusions)} indicatori analizati."
+        elif b_wins > a_wins:
+            narrative = f"{name_b} prezinta performante superioare in {b_wins} din {len(conclusions)} indicatori analizati."
+        else:
+            narrative = f"Cele doua firme au performante similare ({a_wins} indicatori fiecare)."
+        pdf.multi_cell(0, 6, _sanitize(narrative))
 
     if not conclusions:
         pdf.multi_cell(0, 6, "Date insuficiente pentru concluzii comparative.")

@@ -391,28 +391,48 @@ class SynthesisAgent(BaseAgent):
             logger.warning(f"[synthesis] Claude Code error: {e}")
             return None
 
-    async def _generate_with_groq(self, prompt: str) -> str | None:
-        """Genereaza text via Groq API (fallback rapid, gratuit, OpenAI-compatibil)."""
-        if not settings.groq_api_key:
+    # F14: DRY provider config — OpenAI-compatible providers
+    _PROVIDERS = {
+        "groq": {
+            "url": "https://api.groq.com/openai/v1/chat/completions",
+            "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+            "api_key_attr": "groq_api_key",
+        },
+        "mistral": {
+            "url": "https://api.mistral.ai/v1/chat/completions",
+            "model": "mistral-small-latest",
+            "api_key_attr": "mistral_api_key",
+        },
+        "cerebras": {
+            "url": "https://api.cerebras.ai/v1/chat/completions",
+            "model": "qwen-3-235b-a22b-instruct-2507",
+            "api_key_attr": "cerebras_api_key",
+        },
+    }
+
+    async def _generate_with_openai_compat(self, prompt: str, provider: str) -> str | None:
+        """F14: Generic OpenAI-compatible API call (Groq, Mistral, Cerebras)."""
+        cfg = self._PROVIDERS.get(provider)
+        if not cfg:
+            return None
+        api_key = getattr(settings, cfg["api_key_attr"], "")
+        if not api_key:
             return None
 
         try:
-            logger.debug("[synthesis] Trying Groq API...")
-
-            url = "https://api.groq.com/openai/v1/chat/completions"
+            logger.debug(f"[synthesis] Trying {provider.capitalize()} API...")
             payload = {
-                "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+                "model": cfg["model"],
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.3,
                 "max_tokens": 4096,
             }
             headers = {
-                "Authorization": f"Bearer {settings.groq_api_key}",
+                "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
             }
-
             client = get_client()
-            response = await client.post(url, json=payload, headers=headers, timeout=60)
+            response = await client.post(cfg["url"], json=payload, headers=headers, timeout=60)
             response.raise_for_status()
             data = response.json()
 
@@ -420,76 +440,40 @@ class SynthesisAgent(BaseAgent):
             if choices:
                 text = choices[0].get("message", {}).get("content", "").strip()
                 if text:
-                    logger.debug(f"[synthesis] Groq OK: {len(text.split())} words")
+                    logger.debug(f"[synthesis] {provider.capitalize()} OK: {len(text.split())} words")
                     return text
 
-            logger.warning("[synthesis] Groq returned empty response")
+            logger.warning(f"[synthesis] {provider.capitalize()} returned empty response")
+            return None
+        except Exception as e:
+            logger.warning(f"[synthesis] {provider.capitalize()} error: {e}")
             return None
 
-        except Exception as e:
-            logger.warning(f"[synthesis] Groq error: {e}")
-            return None
+    async def _generate_with_groq(self, prompt: str) -> str | None:
+        return await self._generate_with_openai_compat(prompt, "groq")
 
     async def _generate_with_mistral(self, prompt: str) -> str | None:
-        """Genereaza text via Mistral API (1B tokeni/luna gratis, excelent pt limbi europene)."""
-        if not settings.mistral_api_key:
-            return None
+        return await self._generate_with_openai_compat(prompt, "mistral")
 
-        try:
-            logger.debug("[synthesis] Trying Mistral API...")
-
-            url = "https://api.mistral.ai/v1/chat/completions"
-            payload = {
-                "model": "mistral-small-latest",
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.3,
-                "max_tokens": 4096,
-            }
-            headers = {
-                "Authorization": f"Bearer {settings.mistral_api_key}",
-                "Content-Type": "application/json",
-            }
-
-            client = get_client()
-            response = await client.post(url, json=payload, headers=headers, timeout=60)
-            response.raise_for_status()
-            data = response.json()
-
-            choices = data.get("choices", [])
-            if choices:
-                text = choices[0].get("message", {}).get("content", "").strip()
-                if text:
-                    logger.debug(f"[synthesis] Mistral OK: {len(text.split())} words")
-                    return text
-
-            logger.warning("[synthesis] Mistral returned empty response")
-            return None
-
-        except Exception as e:
-            logger.warning(f"[synthesis] Mistral error: {e}")
-            return None
+    async def _generate_with_cerebras(self, prompt: str) -> str | None:
+        return await self._generate_with_openai_compat(prompt, "cerebras")
 
     async def _generate_with_gemini(self, prompt: str) -> str | None:
-        """Genereaza text via Gemini Flash API (fallback gratuit)."""
+        """Gemini uses a different API format (not OpenAI-compatible)."""
         if not settings.google_ai_api_key:
             logger.warning("[synthesis] No GOOGLE_AI_API_KEY — cannot use Gemini fallback")
             return None
 
         try:
             logger.debug("[synthesis] Trying Gemini Flash API...")
-
             url = (
                 f"https://generativelanguage.googleapis.com/v1beta/models/"
                 f"gemini-2.5-flash-preview-05-20:generateContent?key={settings.google_ai_api_key}"
             )
             payload = {
                 "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {
-                    "temperature": 0.3,
-                    "maxOutputTokens": 4096,
-                },
+                "generationConfig": {"temperature": 0.3, "maxOutputTokens": 4096},
             }
-
             client = get_client()
             response = await client.post(url, json=payload, timeout=60)
             response.raise_for_status()
@@ -506,48 +490,8 @@ class SynthesisAgent(BaseAgent):
 
             logger.warning("[synthesis] Gemini returned empty response")
             return None
-
         except Exception as e:
             logger.warning(f"[synthesis] Gemini error: {e}")
-            return None
-
-    async def _generate_with_cerebras(self, prompt: str) -> str | None:
-        """Genereaza text via Cerebras API (fallback cu Qwen 3 235B)."""
-        if not settings.cerebras_api_key:
-            return None
-
-        try:
-            logger.debug("[synthesis] Trying Cerebras API...")
-
-            url = "https://api.cerebras.ai/v1/chat/completions"
-            payload = {
-                "model": "qwen-3-235b-a22b-instruct-2507",
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.3,
-                "max_tokens": 4096,
-            }
-            headers = {
-                "Authorization": f"Bearer {settings.cerebras_api_key}",
-                "Content-Type": "application/json",
-            }
-
-            client = get_client()
-            response = await client.post(url, json=payload, headers=headers, timeout=60)
-            response.raise_for_status()
-            data = response.json()
-
-            choices = data.get("choices", [])
-            if choices:
-                text = choices[0].get("message", {}).get("content", "").strip()
-                if text:
-                    logger.debug(f"[synthesis] Cerebras OK: {len(text.split())} words")
-                    return text
-
-            logger.warning("[synthesis] Cerebras returned empty response")
-            return None
-
-        except Exception as e:
-            logger.warning(f"[synthesis] Cerebras error: {e}")
             return None
 
 
@@ -556,6 +500,11 @@ class SynthesisAgent(BaseAgent):
         """ER1: Verify numbers in AI-generated text against verified_data.
         Returns (is_ok, list_of_discrepancies)."""
         if not text:
+            return True, []
+
+        # F10: Skip sections with computed/derived numbers (ratios, SWOT, recommendations)
+        skip_sections = {"financial_analysis", "swot_analysis", "recommendations", "opportunities"}
+        if section_key in skip_sections:
             return True, []
 
         # Extract numbers with units from text
@@ -782,31 +731,6 @@ class SynthesisAgent(BaseAgent):
 
         return bullets
 
-    def _extract_raw_for_section(self, section_key: str, data: dict) -> str:
-        """Extrage un subset JSON relevant din verified_data pentru fallback Tier 3."""
-        # Map section keys to relevant data subtrees
-        section_data_map = {
-            "executive_summary": ["company", "financial", "risk_score"],
-            "company_overview": ["company"],
-            "financial_analysis": ["financial"],
-            "risk_assessment": ["risk_score", "early_warnings"],
-            "competition": ["market", "benchmark"],
-            "legal_compliance": ["legal"],
-            "due_diligence": ["due_diligence"],
-            "swot_analysis": ["risk_score", "financial", "market"],
-            "opportunities": ["market", "benchmark"],
-            "recommendations": ["risk_score", "early_warnings"],
-        }
-        keys = section_data_map.get(section_key, ["company", "financial"])
-        subset = {}
-        for k in keys:
-            if k in data:
-                subset[k] = data[k]
-        # Truncate to avoid huge output
-        raw = json.dumps(subset, ensure_ascii=False, default=str, indent=2)
-        if len(raw) > 3000:
-            raw = raw[:3000] + "\n... [trunchiat]"
-        return raw
 
     def _extract_raw_dict_for_section(self, section_key: str, data: dict) -> dict:
         """B12: Return raw dict subset for readable Tier 3 rendering."""

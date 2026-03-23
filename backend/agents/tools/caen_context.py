@@ -337,8 +337,8 @@ async def _fetch_ins_tempo_all(section: str) -> dict | None:
                     )
                     if total > 0:
                         result["nr_firme"] = total
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"[caen] INS nr_firme fetch failed: {e}")
 
     # 2. Cifra afaceri (INT101I — CA neta per CAEN)
     try:
@@ -361,7 +361,7 @@ async def _fetch_ins_tempo_all(section: str) -> dict | None:
                     if total_ca > 0 and nr > 0:
                         # CA vine in mii RON, convertim la RON per firma
                         result["ca_medie"] = int((total_ca * 1000) / nr)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"[caen] INS ca_medie fetch failed: {e}")
 
     return result if result else None

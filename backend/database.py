@@ -21,11 +21,13 @@ class Database:
         await self._db.execute("PRAGMA foreign_keys=ON")
         await self._db.execute("PRAGMA cache_size=-20000")
         await self._db.execute("PRAGMA mmap_size=268435456")
+        await self._db.execute("PRAGMA temp_store=MEMORY")
         self._db.row_factory = aiosqlite.Row
         logger.info(f"Database connected: {self.db_path}")
 
     async def close(self):
         if self._db:
+            await self._db.execute("PRAGMA optimize")
             await self._db.close()
             logger.info("Database closed")
 

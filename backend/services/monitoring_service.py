@@ -92,8 +92,8 @@ async def _should_throttle(alert_id: str, severity: str) -> bool:
         if row:
             logger.debug(f"[monitoring] Throttled {severity} alert for {alert_id}")
             return True
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"[monitoring] Throttle check error: {e}")
     return False
 
 

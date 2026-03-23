@@ -39,7 +39,8 @@ Sistem local de Business Intelligence care ruleaza pe Windows 10. Extrage automa
 - **Faza 12 (R5):** COMPLETATA — 25 deep research fixes: C1-C25 (4 CRIT + 16 HIGH + 5 MED) — delta dead, SEAP bonus, TOC accuracy, settings phantom, cache invalidation, batch safety, PDF/HTML fixes
 - **Faza 13 (R6):** COMPLETATA — 21 items: D1-D21 (1 CRIT + 12 HIGH + 7 MED) + 4 N-items (financial ratios, charts, exec summary, company page)
 - **Faza 14 (R7):** COMPLETATA — 15 items: E1-E13 + EP1-EP3 + ER1-ER2 — calitate rapoarte, surse noi (BPI insolventa, ANAF inactivi/risc fiscal), anti-halucination, template-uri, raport comparativ PDF, sparkline trend, Excel Trend sheet
-- **Git:** https://github.com/RolandPetrila/Sistem-Inteligent-Analize.git | 88 teste (77 pytest + 11 vitest)
+- **Faza 15 (R8):** COMPLETATA — 21 items: F1-F21 (3 CRIT + 9 HIGH + 8 MED + 1 LOW) — WS bug fix, HTML tables/bold/numbered lists, version unify, PRAGMA optimize, dead deps cleanup, silent except→logger.debug, anti-hallucination skip, DRY providers, split verification (1248→982 LOC), BPI robust, compare PDF narrative, teste html/orchestrator/pdf, PDF markdown tables
+- **Git:** https://github.com/RolandPetrila/Sistem-Inteligent-Analize.git | 121 teste (110 pytest + 11 vitest)
 - **12 pagini frontend** (adaugat CompanyDetail /company/:id)
 - **Planificari detaliate:** ROLAND_PLANIFICARI_MODULE.md (R4 + R5 + R6 + R7 = 88 items total)
 - **Deep Research:** 99_Deep_Research/ (2 rapoarte complete cu roadmap)

@@ -18,36 +18,105 @@ def _escape(text: str) -> str:
     return html_lib.escape(text)
 
 
+def _render_inline(text: str) -> str:
+    """F3: Convert **bold** to <strong> and escape HTML."""
+    import re
+    escaped = _escape(text)
+    escaped = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', escaped)
+    escaped = escaped.replace("[OFICIAL]", '<span class="trust-oficial">[OFICIAL]</span>')
+    escaped = escaped.replace("[VERIFICAT]", '<span class="trust-verificat">[VERIFICAT]</span>')
+    escaped = escaped.replace("[ESTIMAT]", '<span class="trust-estimat">[ESTIMAT]</span>')
+    escaped = escaped.replace("[INDISPONIBIL]", '<span class="trust-indisponibil">[INDISPONIBIL]</span>')
+    return escaped
+
+
 def _render_content(content: str) -> str:
+    import re
     lines = []
-    in_list = False
+    in_ul = False
+    in_ol = False
+    in_table = False
+    table_rows: list[list[str]] = []
+    table_header = False
+
     for line in content.split("\n"):
         line = line.strip()
-        is_list_item = line.startswith("- ") or line.startswith("* ")
-        # C11 fix: Close <ul> when transitioning out of list
-        if in_list and not is_list_item:
+        is_ul_item = line.startswith("- ") or line.startswith("* ")
+        is_ol_item = bool(re.match(r'^\d+\.\s', line))
+        is_table_row = line.startswith("|") and line.endswith("|") and line.count("|") >= 3
+        is_table_sep = bool(re.match(r'^\|[\s\-:|]+\|$', line))
+
+        # Close open lists/table when transitioning
+        if in_ul and not is_ul_item:
             lines.append("</ul>")
-            in_list = False
+            in_ul = False
+        if in_ol and not is_ol_item:
+            lines.append("</ol>")
+            in_ol = False
+        if in_table and not is_table_row and not is_table_sep:
+            lines.append(_build_table(table_rows, table_header))
+            in_table = False
+            table_rows = []
+            table_header = False
+
         if not line:
             lines.append("<br>")
-        elif line.startswith("### ") or line.startswith("## ") or line.startswith("**"):
-            clean = line.replace("**", "").replace("### ", "").replace("## ", "")
+        elif is_table_sep:
+            table_header = True
+        elif is_table_row:
+            cells = [c.strip() for c in line.strip("|").split("|")]
+            if not in_table:
+                in_table = True
+            table_rows.append(cells)
+        elif line.startswith("### ") or line.startswith("## "):
+            clean = line.lstrip("#").strip()
             lines.append(f'<h3 class="subsection">{_escape(clean)}</h3>')
-        elif is_list_item:
-            if not in_list:
+        elif line.startswith("**") and line.endswith("**") and len(line) > 4:
+            clean = line[2:-2]
+            lines.append(f'<h3 class="subsection">{_escape(clean)}</h3>')
+        elif is_ul_item:
+            if not in_ul:
                 lines.append('<ul class="list-disc ml-6 space-y-1">')
-                in_list = True
-            lines.append(f'<li>{_escape(line[2:])}</li>')
+                in_ul = True
+            lines.append(f'<li>{_render_inline(line[2:])}</li>')
+        elif is_ol_item:
+            if not in_ol:
+                lines.append('<ol class="list-decimal ml-6 space-y-1">')
+                in_ol = True
+            text = re.sub(r'^\d+\.\s', '', line)
+            lines.append(f'<li>{_render_inline(text)}</li>')
         else:
-            escaped = _escape(line)
-            escaped = escaped.replace("[OFICIAL]", '<span class="trust-oficial">[OFICIAL]</span>')
-            escaped = escaped.replace("[VERIFICAT]", '<span class="trust-verificat">[VERIFICAT]</span>')
-            escaped = escaped.replace("[ESTIMAT]", '<span class="trust-estimat">[ESTIMAT]</span>')
-            escaped = escaped.replace("[INDISPONIBIL]", '<span class="trust-indisponibil">[INDISPONIBIL]</span>')
-            lines.append(f"<p>{escaped}</p>")
-    if in_list:
+            lines.append(f"<p>{_render_inline(line)}</p>")
+
+    if in_ul:
         lines.append("</ul>")
+    if in_ol:
+        lines.append("</ol>")
+    if in_table:
+        lines.append(_build_table(table_rows, table_header))
     return "\n".join(lines)
+
+
+def _build_table(rows: list[list[str]], has_header: bool) -> str:
+    """F2: Build HTML <table> from parsed markdown table rows."""
+    if not rows:
+        return ""
+    html_parts = ['<table class="ris-table">']
+    start = 0
+    if has_header and len(rows) >= 1:
+        html_parts.append("<thead><tr>")
+        for cell in rows[0]:
+            html_parts.append(f"<th>{_render_inline(cell)}</th>")
+        html_parts.append("</tr></thead>")
+        start = 1
+    html_parts.append("<tbody>")
+    for row in rows[start:]:
+        html_parts.append("<tr>")
+        for cell in row:
+            html_parts.append(f"<td>{_render_inline(cell)}</td>")
+        html_parts.append("</tr>")
+    html_parts.append("</tbody></table>")
+    return "\n".join(html_parts)
 
 
 def _build_charts_html(verified_data: dict, risk_score: dict) -> str:
@@ -432,6 +501,11 @@ body{{font-family:'Segoe UI',system-ui,sans-serif;background:#1a1a2e;color:#e2e8
 .trust-verificat{{color:#0066CC;font-weight:600}}
 .trust-estimat{{color:#FF8800;font-weight:600}}
 .trust-indisponibil{{color:#888;font-weight:600}}
+.ris-table{{width:100%;border-collapse:collapse;margin:16px 0;font-size:0.9em}}
+.ris-table th{{background:#1e293b;color:#a5b4fc;padding:10px 12px;text-align:left;border-bottom:2px solid #6366f140;font-weight:600}}
+.ris-table td{{padding:8px 12px;border-bottom:1px solid #2a3a5c;color:#cbd5e1}}
+.ris-table tbody tr:hover{{background:#16213e80}}
+.list-decimal{{list-style-type:decimal}}
 .sources{{padding:40px 0}}
 .sources h2{{color:#6366f1;margin-bottom:16px}}
 .source-item{{padding:6px 12px;margin-bottom:4px;background:#16213e;border-radius:6px;font-size:0.85em}}

@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from loguru import logger
 
 from backend.database import db
 from backend.rate_limiter import rate_limit_jobs
@@ -190,8 +191,8 @@ async def get_job_diagnostics(job_id: str):
             diagnostics["log_lines"] = len(lines)
             # Last 20 lines as summary
             diagnostics["log_tail"] = [l.rstrip() for l in lines[-20:]]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"[diagnostics] Log read failed: {e}")
 
     return diagnostics
 

@@ -110,8 +110,8 @@ async def monitoring_health():
             "WHERE severity = 'RED' AND created_at >= datetime('now', '-24 hours')"
         )
         failed_count = row["cnt"] if row else 0
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"[monitoring] Failed count query error: {e}")
 
     # Get scheduler last run from scheduler_state
     scheduler_last_run = None
@@ -121,8 +121,8 @@ async def monitoring_health():
         )
         if sched_row:
             scheduler_last_run = sched_row["last_run"]
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"[monitoring] Scheduler state query error: {e}")
 
     alert_details = []
     for a in alerts:

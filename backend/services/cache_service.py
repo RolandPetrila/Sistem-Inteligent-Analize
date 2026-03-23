@@ -36,7 +36,6 @@ TTL_HOURS = {
     "seap_active": 2,
     "seap_history": 720,  # 30 zile
     "tavily": 6,
-    "playwright": 12,
     "bnr": 24,
     "ins": 720,         # 30 zile
     "funds": 24,

@@ -5,6 +5,7 @@ Phase 9B: Cash flow proxy, anomaly feedback, confidence scoring.
 """
 import math
 from datetime import date
+from loguru import logger
 
 
 def _calculate_financial_ratios(financial: dict) -> list[dict]:
@@ -367,8 +368,8 @@ def calculate_risk_score(verified: dict) -> dict:
             else:
                 year = int(data_val[:4])
             company_age_years = date.today().year - year
-        except (ValueError, IndexError):
-            pass
+        except (ValueError, IndexError) as e:
+            logger.debug(f"[scoring] Age parse error: {e}")
 
     if company_age_years is not None:
         if company_age_years >= 10:

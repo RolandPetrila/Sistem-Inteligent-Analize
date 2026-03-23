@@ -1,8 +1,10 @@
 """
 PDF Generator -fpdf2 (zero dependinte native Windows).
 Genereaza PDF profesional din report_sections.
+F21: Markdown table rendering via fpdf2 native cells.
 """
 
+import re
 from fpdf import FPDF
 
 DISCLAIMER = (
@@ -29,6 +31,40 @@ def _sanitize(text: str) -> str:
         text = text.replace(orig, repl)
     # Encode to latin-1, replacing any remaining unsupported chars
     return text.encode("latin-1", errors="replace").decode("latin-1")
+
+
+def _render_pdf_table(pdf, rows: list[list[str]], has_header: bool):
+    """F21: Render a markdown table as fpdf2 cells."""
+    if not rows:
+        return
+    num_cols = max(len(r) for r in rows)
+    if num_cols == 0:
+        return
+    # Calculate column widths proportionally (total usable width ~190mm)
+    col_width = 190 / num_cols
+
+    start = 0
+    if has_header and len(rows) >= 1:
+        # Header row
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_fill_color(99, 102, 241)
+        pdf.set_text_color(255, 255, 255)
+        for j, cell in enumerate(rows[0]):
+            border = 1
+            pdf.cell(col_width, 7, _sanitize(cell[:40]), border=border, fill=True,
+                     align="C" if j > 0 else "L")
+        pdf.ln()
+        start = 1
+
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(40, 40, 40)
+    for row in rows[start:]:
+        for j, cell in enumerate(row):
+            pdf.cell(col_width, 6, _sanitize(cell[:50]), border=1,
+                     align="C" if j > 0 else "L")
+        pdf.ln()
+    pdf.ln(2)
+    pdf.set_font("Helvetica", "", 10)
 
 
 class RISPdf(FPDF):
@@ -142,31 +178,53 @@ def generate_pdf(report_sections: dict, meta: dict, output_path: str, verified_d
         pdf.set_font("Helvetica", "", 10)
         pdf.set_text_color(40, 40, 40)
 
-        for paragraph in content.split("\n"):
-            paragraph = paragraph.strip()
-            if not paragraph:
+        # F21: Pre-parse content to detect markdown tables
+        lines = content.split("\n")
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+
+            # F21: Detect markdown table block
+            if line.startswith("|") and line.endswith("|") and line.count("|") >= 3:
+                table_rows = []
+                has_header = False
+                while i < len(lines):
+                    tl = lines[i].strip()
+                    if not (tl.startswith("|") and tl.endswith("|")):
+                        break
+                    if re.match(r'^\|[\s\-:|]+\|$', tl):
+                        has_header = True
+                        i += 1
+                        continue
+                    cells = [c.strip() for c in tl.strip("|").split("|")]
+                    table_rows.append(cells)
+                    i += 1
+                _render_pdf_table(pdf, table_rows, has_header)
+                continue
+
+            i += 1
+
+            if not line:
                 pdf.ln(3)
                 continue
             # C9 fix: Break very long words with hyphens instead of truncating
-            words = paragraph.split()
-            paragraph = " ".join(w[:55] + "-" + w[55:110] if len(w) > 60 else w for w in words)
-            # Skip lines that are too short to render or are raw JSON
-            if paragraph.startswith("{") or paragraph.startswith("["):
+            words = line.split()
+            line = " ".join(w[:55] + "-" + w[55:110] if len(w) > 60 else w for w in words)
+            # Skip raw JSON
+            if line.startswith("{") or line.startswith("["):
                 continue
 
             try:
-                # Bold headers (lines starting with ** or ##)
-                if paragraph.startswith("**") or paragraph.startswith("##"):
-                    clean = paragraph.replace("**", "").replace("##", "").strip()
+                if line.startswith("**") or line.startswith("##"):
+                    clean = line.replace("**", "").replace("##", "").strip()
                     pdf.set_font("Helvetica", "B", 11)
                     pdf.set_text_color(60, 60, 60)
-                    pdf.multi_cell(0, 6, clean)
+                    pdf.multi_cell(0, 6, _sanitize(clean))
                     pdf.set_font("Helvetica", "", 10)
                     pdf.set_text_color(40, 40, 40)
                 else:
-                    pdf.multi_cell(0, 5.5, paragraph)
-            except Exception as e:
-                # C10 fix: Log instead of silently swallowing render errors
+                    pdf.multi_cell(0, 5.5, _sanitize(line))
+            except Exception:
                 pdf.set_font("Helvetica", "I", 8)
                 pdf.set_text_color(180, 180, 180)
                 pdf.cell(0, 4, "[paragraf nerandat]", new_x="LMARGIN", new_y="NEXT")

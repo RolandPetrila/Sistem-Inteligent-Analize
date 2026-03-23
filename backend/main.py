@@ -48,7 +48,10 @@ class ConnectionManager:
                     dead.append(ws)
             # Remove dead connections
             for ws in dead:
-                self.active[job_id].discard(ws)
+                try:
+                    self.active[job_id].remove(ws)
+                except ValueError:
+                    pass
 
 
 ws_manager = ConnectionManager()
@@ -275,7 +278,7 @@ app.include_router(batch.router, prefix="/api/batch", tags=["Batch"])
 @app.get("/api/health")
 async def health_check():
     """Health check simplu — raspuns rapid."""
-    return {"status": "ok", "service": "RIS", "version": "3.0.0"}
+    return {"status": "ok", "service": "RIS", "version": "3.1.0"}
 
 
 @app.get("/api/cache/stats")
@@ -289,7 +292,7 @@ async def get_cache_stats():
 async def health_check_deep():
     """Health check avansat — verifica DB, APIs, quota, disk."""
     import shutil
-    checks = {"service": "RIS", "version": "1.1.0"}
+    checks = {"service": "RIS", "version": "3.1.0"}
 
     # DB writable
     try:

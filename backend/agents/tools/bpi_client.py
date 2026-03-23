@@ -51,8 +51,26 @@ async def _check_buletinul_ro(cui: str) -> dict | None:
             return None  # Site blocks — fall through to Tavily
 
         text = resp.text.lower()
+
+        # F19: Check keywords only near CUI mention (within 500 chars)
+        # Avoids false positives from boilerplate site text mentioning insolvency
+        cui_pos = text.find(cui)
+        if cui_pos == -1:
+            # CUI not found on page — no match
+            return {
+                "found": False,
+                "status": None,
+                "details": None,
+                "source": "buletinul.ro",
+            }
+
+        # Extract context window around CUI
+        ctx_start = max(0, cui_pos - 500)
+        ctx_end = min(len(text), cui_pos + 500)
+        context = text[ctx_start:ctx_end]
+
         keywords = ["insolventa", "faliment", "dizolvare", "lichidare", "reorganizare"]
-        found_keywords = [k for k in keywords if k in text]
+        found_keywords = [k for k in keywords if k in context]
 
         if found_keywords:
             status = found_keywords[0].capitalize()
