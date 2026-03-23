@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   Download,
@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronRight,
   ExternalLink,
+  RefreshCw,
 } from "lucide-react";
 import clsx from "clsx";
 import { api } from "@/lib/api";
@@ -37,11 +38,13 @@ interface ReportFull {
 
 export default function ReportView() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [report, setReport] = useState<ReportFull | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
   const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [reanalyzing, setReanalyzing] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -105,6 +108,32 @@ export default function ReportView() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* E13: Re-analyze button */}
+          <button
+            onClick={async () => {
+              if (reanalyzing) return;
+              const cui = data?.company?.cui?.value || data?.company?.denumire?.value;
+              if (!cui) { toast("CUI indisponibil pentru re-analiza", "error"); return; }
+              setReanalyzing(true);
+              try {
+                const job = await api.createJob({
+                  analysis_type: report.report_type as any,
+                  report_level: report.report_level as any,
+                  input_params: { cui: String(typeof cui === "object" ? "" : cui) },
+                });
+                await api.startJob(job.id);
+                navigate(`/analysis/${job.id}`);
+              } catch {
+                toast("Eroare la pornirea re-analizei", "error");
+                setReanalyzing(false);
+              }
+            }}
+            disabled={reanalyzing}
+            className="btn-primary flex items-center gap-1.5 text-sm"
+          >
+            <RefreshCw className={clsx("w-3.5 h-3.5", reanalyzing && "animate-spin")} />
+            {reanalyzing ? "Se porneste..." : "Re-analiza"}
+          </button>
           {report.formats_available.map((fmt) => (
             <a
               key={fmt}

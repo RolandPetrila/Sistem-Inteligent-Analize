@@ -5,10 +5,12 @@ Compare API — Compara 2-5 firme side-by-side pe baza datelor ANAF + ANAF Bilan
 
 import asyncio
 import json
+import os
 import uuid
 from datetime import date
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from backend.agents.tools.anaf_client import get_anaf_data
@@ -246,6 +248,36 @@ def _build_chart_data(results: list[dict]) -> dict:
             }
 
     return datasets
+
+
+class CompareReportRequest(BaseModel):
+    cui_1: str
+    cui_2: str
+
+
+@router.post("/report")
+async def compare_report_pdf(data: CompareReportRequest):
+    """E9: Generate comparative PDF for 2 companies."""
+    from backend.reports.compare_generator import generate_compare_pdf
+
+    # Reuse compare logic to get both companies' data
+    compare_data = await compare_companies(CompareRequest(cui_list=[data.cui_1, data.cui_2]))
+    companies = compare_data["companies"]
+    if len(companies) < 2:
+        raise HTTPException(status_code=400, detail="Nu s-au putut obtine date pentru ambele firme")
+
+    output_dir = os.path.join("outputs", "compare")
+    os.makedirs(output_dir, exist_ok=True)
+    filename = f"comparativ_{data.cui_1}_{data.cui_2}.pdf"
+    output_path = os.path.join(output_dir, filename)
+
+    generate_compare_pdf(companies[0], companies[1], output_path)
+
+    return FileResponse(
+        output_path,
+        media_type="application/pdf",
+        filename=filename,
+    )
 
 
 class SectorRequest(BaseModel):

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2, Search, ArrowUpDown, CheckCircle, XCircle } from "lucide-react";
+import { Plus, Trash2, Search, ArrowUpDown, CheckCircle, XCircle, Download } from "lucide-react";
 import { validateCUI } from "@/lib/cui-validator";
 import clsx from "clsx";
 
@@ -172,6 +172,35 @@ export default function CompareCompanies() {
               <ArrowUpDown className="w-5 h-5 text-accent-primary" />
               Comparatie — Date {result.an_financiar}
             </h2>
+            {result.companies.length === 2 && (
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await fetch("/api/compare/report", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        cui_1: result.companies[0].cui,
+                        cui_2: result.companies[1].cui,
+                      }),
+                    });
+                    if (!res.ok) throw new Error("PDF generation failed");
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `comparativ_${result.companies[0].cui}_${result.companies[1].cui}.pdf`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  } catch {
+                    setError("Eroare la generarea PDF comparativ");
+                  }
+                }}
+                className="btn-secondary flex items-center gap-1.5 text-sm"
+              >
+                <Download className="w-3.5 h-3.5" /> PDF Comparativ
+              </button>
+            )}
           </div>
 
           <table className="w-full text-sm">

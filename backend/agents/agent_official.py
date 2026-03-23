@@ -13,6 +13,7 @@ from backend.agents.base import BaseAgent
 from backend.agents.state import AnalysisState, SourceResult
 from backend.agents.tools import anaf_client, bnr_client, tavily_client
 from backend.agents.tools.anaf_bilant_client import get_bilant_multi_year
+from backend.agents.tools.bpi_client import check_insolvency
 from backend.agents.tools.cui_validator import validate_cui
 from backend.agents.tools.openapi_client import get_company_onrc
 from backend.agents.tools.caen_context import get_caen_context
@@ -88,9 +89,15 @@ class OfficialAgent(BaseAgent):
                 source_name="BNR",
                 source_url="https://www.bnr.ro/nbrfxrates.xml",
             )
+            # EP1: BPI insolvency check in parallel
+            bpi_task = self.fetch_with_retry(
+                lambda c=cui_clean: self._fetch_bpi(c),
+                source_name="BPI (buletinul.ro)",
+                source_url="https://www.buletinul.ro",
+            )
 
-            anaf_source, openapi_source, bilant_source, bnr_source = await asyncio.gather(
-                anaf_task, openapi_task, bilant_task, bnr_task
+            anaf_source, openapi_source, bilant_source, bnr_source, bpi_source = await asyncio.gather(
+                anaf_task, openapi_task, bilant_task, bnr_task, bpi_task
             )
 
             # Process ANAF result
@@ -136,6 +143,43 @@ class OfficialAgent(BaseAgent):
                 log_source_result(job_id, "BNR", True, bnr_source.get("response_time_ms", 0), ["exchange_rates"])
             else:
                 log_source_result(job_id, "BNR", False, bnr_source.get("response_time_ms", 0), error="no rates")
+
+            # EP1: Process BPI insolvency result
+            sources.append(bpi_source)
+            if bpi_source["data_found"]:
+                official_data["bpi_insolventa"] = bpi_source["data"]
+                bpi_found = bpi_source["data"].get("found", False)
+                log_source_result(job_id, "BPI", True, bpi_source.get("response_time_ms", 0),
+                    [f"insolventa={'DA' if bpi_found else 'NU'}"])
+            else:
+                log_source_result(job_id, "BPI", False, bpi_source.get("response_time_ms", 0),
+                    error="BPI check failed")
+
+            # EP2+EP3: Extract ANAF inactivi + risc fiscal (already in ANAF v9 response)
+            if anaf_source["data_found"]:
+                anaf_data = anaf_source["data"]
+                official_data["anaf_inactiv"] = {
+                    "inactiv": anaf_data.get("inactiv", False),
+                    "data_inactivare": anaf_data.get("data_inactivare", ""),
+                    "data_reactivare": anaf_data.get("data_reactivare", ""),
+                    "source": "ANAF",
+                }
+                # EP3: Derive risc fiscal from ANAF fields
+                is_risc = (
+                    anaf_data.get("inactiv", False)
+                    or anaf_data.get("split_tva", False)
+                    or (anaf_data.get("stare_inregistrare", "").upper() not in ("", "INREGISTRAT"))
+                )
+                official_data["risc_fiscal"] = {
+                    "risc_fiscal": is_risc,
+                    "tip_risc": (
+                        "Contribuabil inactiv" if anaf_data.get("inactiv") else
+                        "Split TVA activ" if anaf_data.get("split_tva") else
+                        f"Stare: {anaf_data.get('stare_inregistrare')}" if is_risc else
+                        None
+                    ),
+                    "source": "ANAF",
+                }
         else:
             # Fara CUI — incercam sa gasim prin Tavily
             official_data["company_name"] = cui  # presupunem ca e numele firmei
@@ -439,6 +483,16 @@ class OfficialAgent(BaseAgent):
                 max_results=5,
                 include_domains=["bpi.ro", "portal.just.ro", "lfrm.ro"],
             ),
+        )
+
+    async def _fetch_bpi(self, cui: str) -> dict:
+        """EP1: Fetch BPI insolvency data (buletinul.ro with Tavily fallback)."""
+        cache_key = cache_service.make_cache_key("bpi", cui)
+        return await cache_service.get_or_fetch(
+            key=cache_key,
+            source="bpi",
+            fetch_coro=lambda: check_insolvency(cui),
+            ttl_hours=24,
         )
 
     async def _fetch_insolvency(self, name: str, cui: str) -> dict:

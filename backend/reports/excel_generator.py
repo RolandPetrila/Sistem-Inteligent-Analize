@@ -5,7 +5,7 @@ Genereaza raport Excel profesional cu 4 sheet-uri din verified_data + report_sec
 
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from openpyxl.chart import BarChart, Reference
+from openpyxl.chart import BarChart, LineChart, Reference
 from openpyxl.utils import get_column_letter
 
 
@@ -473,5 +473,81 @@ def generate_excel(report_sections: dict, meta: dict, verified_data: dict, outpu
         ws6.column_dimensions["B"].width = 16
         ws6.column_dimensions["C"].width = 14
         ws6.column_dimensions["D"].width = 16
+
+    # --- E3: Sheet Trend — dedicated multi-year trend data + LineChart ---
+    if isinstance(trend_kpi_val, dict) and trend_kpi_val:
+        # Check we have at least 2 years of data
+        all_trend_years = set()
+        for mk, md in trend_kpi_val.items():
+            if isinstance(md, dict) and "values" in md:
+                for v in md["values"]:
+                    all_trend_years.add(v.get("year"))
+        if len(all_trend_years) >= 2:
+            ws_trend = wb.create_sheet("Trend")
+            ws_trend.sheet_properties.tabColor = "10B981"
+            ws_trend.cell(row=1, column=1, value="Evolutie Multi-An").font = TITLE_FONT
+            ws_trend.merge_cells("A1:E1")
+
+            trend_years = sorted(all_trend_years)
+            # Header row
+            ws_trend.cell(row=3, column=1, value="An")
+            ws_trend.cell(row=3, column=2, value="CA (RON)")
+            ws_trend.cell(row=3, column=3, value="Profit Net (RON)")
+            ws_trend.cell(row=3, column=4, value="Nr Angajati")
+            _style_header_row(ws_trend, 3, 4)
+
+            # Build year->metric maps
+            ca_map, profit_map, ang_map = {}, {}, {}
+            for mk, md in trend_kpi_val.items():
+                if not isinstance(md, dict) or "values" not in md:
+                    continue
+                for v in md["values"]:
+                    yr, val = v.get("year"), v.get("value")
+                    if mk == "cifra_afaceri_neta":
+                        ca_map[yr] = val
+                    elif mk == "profit_net":
+                        profit_map[yr] = val
+                    elif mk in ("numar_mediu_salariati", "numar_mediu_angajati"):
+                        ang_map[yr] = val
+
+            for i, yr in enumerate(trend_years, start=4):
+                ws_trend.cell(row=i, column=1, value=yr)
+                _style_data_cell(ws_trend.cell(row=i, column=1))
+                c = ws_trend.cell(row=i, column=2, value=ca_map.get(yr))
+                _style_data_cell(c, "#,##0")
+                c = ws_trend.cell(row=i, column=3, value=profit_map.get(yr))
+                _style_data_cell(c, "#,##0")
+                c = ws_trend.cell(row=i, column=4, value=ang_map.get(yr))
+                _style_data_cell(c, "#,##0")
+
+            last_data_row = 3 + len(trend_years)
+
+            # LineChart: CA + Profit
+            if len(trend_years) >= 2:
+                lc = LineChart()
+                lc.title = "Evolutie CA si Profit Net"
+                lc.y_axis.title = "RON"
+                lc.x_axis.title = "An"
+                lc.style = 10
+                lc.height = 12
+                lc.width = 20
+
+                ca_ref = Reference(ws_trend, min_col=2, max_col=2, min_row=3, max_row=last_data_row)
+                profit_ref = Reference(ws_trend, min_col=3, max_col=3, min_row=3, max_row=last_data_row)
+                cats = Reference(ws_trend, min_col=1, max_col=1, min_row=4, max_row=last_data_row)
+                lc.add_data(ca_ref, titles_from_data=True)
+                lc.add_data(profit_ref, titles_from_data=True)
+                lc.set_categories(cats)
+                if lc.series:
+                    lc.series[0].graphicalProperties.line.solidFill = "6366F1"
+                if len(lc.series) > 1:
+                    lc.series[1].graphicalProperties.line.solidFill = "22C55E"
+
+                ws_trend.add_chart(lc, f"A{last_data_row + 2}")
+
+            ws_trend.column_dimensions["A"].width = 10
+            ws_trend.column_dimensions["B"].width = 18
+            ws_trend.column_dimensions["C"].width = 18
+            ws_trend.column_dimensions["D"].width = 14
 
     wb.save(output_path)

@@ -29,6 +29,7 @@ Data actualizare: 2026-03-23 | Versiune plan: 6.0
 | **Faza 12 — R5 Deep Research Fixes** | **COMPLET** | **25 items: 4 CRIT + 16 HIGH + 5 MED — toate C1-C25 implementate (2026-03-22)** |
 | **Infra — Git + Tests** | **COMPLET** | **Git init + push GitHub, 88 teste (77 pytest + 11 vitest), .gitignore cleanup** |
 | **Faza 13 — R6 Deep Research** | **COMPLET** | **21 items D1-D21 + 4 N-items (ratii financiare, grafice, exec summary, pagina firma) — implementate (2026-03-23)** |
+| **Faza 14 — R7 Calitate & Surse Noi** | **COMPLET** | **15 items E1-E13 + EP1-EP3 + ER1-ER2 — BPI insolventa, ANAF inactivi/risc fiscal, scoring penalizari, anti-halucination, few-shot prompts, sparkline, PDF ratii, Excel Trend, template-uri, raport comparativ PDF (2026-03-23)** |
 
 ---
 

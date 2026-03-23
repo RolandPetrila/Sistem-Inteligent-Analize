@@ -282,6 +282,14 @@ def calculate_risk_score(verified: dict) -> dict:
             jur_score -= 60
             risk_factors.append(("Mentiune insolventa gasita", "HIGH"))
 
+    # R7 E12: Penalizare insolventa BPI (buletinul.ro)
+    bpi_field = risk_data.get("bpi_insolventa", {})
+    bpi_val = bpi_field.get("value", bpi_field) if isinstance(bpi_field, dict) else {}
+    if isinstance(bpi_val, dict) and bpi_val.get("found"):
+        jur_score -= 40
+        bpi_status = bpi_val.get("status", "insolventa")
+        risk_factors.append((f"Firma in procedura insolventa BPI ({bpi_status})", "CRITICAL"))
+
     litigation = risk_data.get("litigation", {})
     if isinstance(litigation, dict):
         val = litigation.get("value", {})
@@ -315,6 +323,16 @@ def calculate_risk_score(verified: dict) -> dict:
     if isinstance(split_tva, dict) and split_tva.get("value"):
         fisc_score -= 15
         risk_factors.append(("Split TVA activ", "LOW"))
+
+    # R7 E12: Penalizare risc fiscal derivat
+    risc_fisc_field = risk_data.get("risc_fiscal", {})
+    risc_fisc_val = risc_fisc_field.get("value", risc_fisc_field) if isinstance(risc_fisc_field, dict) else {}
+    if isinstance(risc_fisc_val, dict) and risc_fisc_val.get("risc_fiscal"):
+        tip = risc_fisc_val.get("tip_risc", "nespecificat")
+        # Avoid double-counting inactiv (already penalized above)
+        if "inactiv" not in tip.lower():
+            fisc_score -= 15
+            risk_factors.append((f"Risc fiscal: {tip}", "HIGH"))
 
     dimensions["fiscal"] = {"score": max(0, min(100, fisc_score)), "weight": 15}
 

@@ -173,6 +173,58 @@ def generate_pdf(report_sections: dict, meta: dict, output_path: str, verified_d
                 pdf.set_font("Helvetica", "", 10)
                 pdf.set_text_color(40, 40, 40)
 
+    # E6: Financial Ratios Table
+    ratios = verified_data.get("risk_score", {}).get("financial_ratios", [])
+    if ratios:
+        pdf.add_page()
+        pdf.start_section("Ratii Financiare", level=0)
+        pdf.set_font("Helvetica", "B", 16)
+        pdf.set_text_color(99, 102, 241)
+        pdf.cell(0, 12, "Ratii Financiare", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_draw_color(99, 102, 241)
+        pdf.line(10, pdf.get_y(), 80, pdf.get_y())
+        pdf.ln(6)
+
+        # Table header
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_fill_color(99, 102, 241)
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(55, 7, "Indicator", border=1, fill=True)
+        pdf.cell(30, 7, "Valoare", border=1, align="C", fill=True)
+        pdf.cell(20, 7, "Unitate", border=1, align="C", fill=True)
+        pdf.cell(75, 7, "Interpretare", border=1, align="C", fill=True, new_x="LMARGIN", new_y="NEXT")
+
+        # Rows
+        pdf.set_font("Helvetica", "", 9)
+        for ratio in ratios:
+            name = _sanitize(str(ratio.get("name", "")))
+            val = ratio.get("value", 0)
+            unit = ratio.get("unit", "")
+            interp = _sanitize(str(ratio.get("interpretation", "")))
+
+            # Value formatting
+            if unit == "RON":
+                val_str = f"{val:,.0f}"
+            else:
+                val_str = f"{val}"
+
+            # Color-code interpretation
+            if interp in ("Excelent", "Bun", "Solid", "Conservator"):
+                pdf.set_text_color(34, 197, 94)
+            elif interp in ("Moderat", "Fragil"):
+                pdf.set_text_color(234, 179, 8)
+            elif interp in ("Slab", "Negativ", "Ridicat", "Periculos", "Subcapitalizat", "Pierdere"):
+                pdf.set_text_color(239, 68, 68)
+            else:
+                pdf.set_text_color(40, 40, 40)
+
+            pdf.cell(55, 6, name, border=1)
+            pdf.cell(30, 6, val_str, border=1, align="R")
+            pdf.cell(20, 6, unit, border=1, align="C")
+            pdf.cell(75, 6, interp, border=1, align="C", new_x="LMARGIN", new_y="NEXT")
+
+        pdf.set_text_color(40, 40, 40)
+
     # B15: Due Diligence Checklist from verified_data
     due_diligence = verified_data.get("due_diligence", {})
     dd_checklist = []

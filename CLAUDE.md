@@ -38,12 +38,13 @@ Sistem local de Business Intelligence care ruleaza pe Windows 10. Extrage automa
 - **Faza 11 (R4):** COMPLETATA — 27 bug fixes: B1-B27 (6 CRIT + 13 HIGH + 8 MED) — bilant crash, schema mismatch, CAEN chain, synthesis quality, reports data, cache race, delta dimensions
 - **Faza 12 (R5):** COMPLETATA — 25 deep research fixes: C1-C25 (4 CRIT + 16 HIGH + 5 MED) — delta dead, SEAP bonus, TOC accuracy, settings phantom, cache invalidation, batch safety, PDF/HTML fixes
 - **Faza 13 (R6):** COMPLETATA — 21 items: D1-D21 (1 CRIT + 12 HIGH + 7 MED) + 4 N-items (financial ratios, charts, exec summary, company page)
+- **Faza 14 (R7):** COMPLETATA — 15 items: E1-E13 + EP1-EP3 + ER1-ER2 — calitate rapoarte, surse noi (BPI insolventa, ANAF inactivi/risc fiscal), anti-halucination, template-uri, raport comparativ PDF, sparkline trend, Excel Trend sheet
 - **Git:** https://github.com/RolandPetrila/Sistem-Inteligent-Analize.git | 88 teste (77 pytest + 11 vitest)
 - **12 pagini frontend** (adaugat CompanyDetail /company/:id)
-- **Planificari detaliate:** ROLAND_PLANIFICARI_MODULE.md (R4 + R5 + R6 = 73 items total)
+- **Planificari detaliate:** ROLAND_PLANIFICARI_MODULE.md (R4 + R5 + R6 + R7 = 88 items total)
 - **Deep Research:** 99_Deep_Research/ (2 rapoarte complete cu roadmap)
 - **Spec complet:** SPEC_INTELLIGENCE_SYSTEM_V2.md
-- **37 REST endpoints + 1 WebSocket + 12 pagini frontend + 7 formate raport + diagnostic + audit + request tracing**
+- **38 REST endpoints + 1 WebSocket + 12 pagini frontend + 8 formate raport + diagnostic + audit + request tracing**
 
 ## Stack
 - Backend: Python 3.13 + FastAPI + SQLite (aiosqlite, WAL mode)
@@ -72,7 +73,8 @@ Sistem local de Business Intelligence care ruleaza pe Windows 10. Extrage automa
 - `backend/agents/orchestrator.py` — LangGraph state machine + timing metrics + error boundaries
 - `backend/errors.py` — Structured error codes (ErrorCode enum + RISError exception)
 - `backend/migrations/002_phase8.sql` — Phase 8 schema: monitoring_audit, score_history, compare_history
-- `backend/agents/tools/anaf_client.py` — ANAF REST API v9 (TVA, stare, adresa)
+- `backend/agents/tools/bpi_client.py` — BPI insolventa (buletinul.ro + Tavily fallback)
+- `backend/agents/tools/anaf_client.py` — ANAF REST API v9 (TVA, stare, adresa, inactivi, risc fiscal)
 - `backend/agents/tools/anaf_bilant_client.py` — ANAF Bilant API (CA, profit, angajati, multi-an)
 - `backend/agents/tools/bnr_client.py` — BNR XML cursuri valutare
 - `backend/agents/tools/tavily_client.py` — Tavily search cu quota tracking
@@ -93,6 +95,7 @@ Sistem local de Business Intelligence care ruleaza pe Windows 10. Extrage automa
 - `backend/reports/excel_generator.py` — Excel cu openpyxl (4 sheet-uri + grafice native)
 - `backend/reports/pptx_generator.py` — PowerPoint 7 slide-uri (python-pptx)
 - `backend/reports/one_pager_generator.py` — PDF executiv 1-pager (scor, checklist, riscuri, benchmark)
+- `backend/reports/compare_generator.py` — PDF comparativ 2 firme side-by-side
 - `backend/routers/compare.py` — POST /api/compare + POST /api/compare/sector
 - `backend/routers/monitoring.py` — CRUD alerte monitorizare + check-now
 - `backend/routers/batch.py` — Batch analysis CSV (upload, progress, ZIP download)

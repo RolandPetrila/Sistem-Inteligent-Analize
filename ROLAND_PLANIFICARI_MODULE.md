@@ -5,7 +5,8 @@
 > Reguli: free tier only, single user, DOAR imbunatatiri cu impact semnificativ pe calitatea functionarii.
 > R4 generat: 2026-03-22 | 27 items din 90+ findings — COMPLET IMPLEMENTAT
 > R5 generat: 2026-03-22 | 25 items din 61 findings (filtrare stricta HIGH ROI) — COMPLET IMPLEMENTAT
-> R6 generat: 2026-03-23 | 21 items din 52 findings (post R4+R5, verificat pe cod real)
+> R6 generat: 2026-03-23 | 21 items din 52 findings (post R4+R5, verificat pe cod real) — COMPLET IMPLEMENTAT
+> R7 generat: 2026-03-23 | 15 items — focus pe VALOARE CLIENT + EFICIENTA UTILIZATOR + SURSE NOI
 
 ---
 
@@ -673,6 +674,176 @@ R5→R6 Dependencies:
 ```
 
 ### Test automated (la finalul sesiunii)
+
+```bash
+cd C:\Proiecte\Sistem_Inteligent_Analize
+python -m pytest tests/ -v --tb=short
+cd frontend && npx vitest run --reporter=verbose
+```
+
+---
+
+# RUNDA 7 (R7) — CALITATE RAPOARTE & SURSE NOI
+
+> **Generat:** 2026-03-23 | **Scop:** Maximizare valoare rapoarte livrate clientilor
+> **Context:** Evaluare 4 axe: Calitate 72% | Eficienta 68% | Robustete 90% | Exploatare date 62%
+> **Focus:** DOAR imbunatatiri cu impact direct pe calitate output sau eficienta utilizator
+> **Total:** 15 items (9 HIGH + 6 MED)
+
+---
+
+## MODUL 1 — CALITATE SINTEZA AI (Prompturi + Output)
+
+> Fisiere: `backend/prompts/section_prompts.py`, `backend/agents/agent_synthesis.py`
+
+| # | Cod | Status | Descriere | Locatie | Efort | Sev |
+|---|-----|--------|-----------|---------|-------|-----|
+| 1 | E1 | [x] | **Few-shot examples in TOATE sectiunile** — competition, opportunities, swot, company_profile lipsesc exemple concrete. Adauga exemplu realist per sectiune (format identic cu cele existente din exec_summary/financial/risk/recommendations) | `section_prompts.py` SECTION_PROMPTS | 1h | HIGH |
+| 2 | E5 | [x] | **Prompt financial_analysis: ratii financiare** — promptul nu mentioneaza cele 6 ratii calculate in scoring.py (Marja Profit, ROE, ROA, D/E, Equity Ratio, CA/Angajat). Adauga in prompt: "Daca datele contin ratii financiare calculate, prezinta-le in tabel cu interpretare" | `section_prompts.py` financial_analysis prompt | 30min | HIGH |
+
+## MODUL 2 — SURSE DATE NOI
+
+> Fisiere: `backend/agents/tools/`, `backend/agents/agent_official.py`
+
+| # | Cod | Status | Descriere | Locatie | Efort | Sev |
+|---|-----|--------|-----------|---------|-------|-----|
+| 3 | EP1 | [x] | **BPI Insolventa (buletinul.ro)** — Verifica daca firma e in insolventa/faliment/dizolvare. Sursa: buletinul.ro (Buletinul Procedurilor de Insolventa). Scraping simplu cu httpx (pagina publica, fara API). Impact: CRIT pentru due diligence — clientul TREBUIE sa stie daca firma e insolventa | `tools/bpi_client.py` (NOU) + `agent_official.py` | 3h | HIGH |
+| 4 | EP2 | [x] | **Lista ANAF Contribuabili Inactivi** — ANAF publica CSV/XML cu firmele declarate inactive fiscal. Download periodic + verificare CUI la analiza. Impact: flag "INACTIV FISCAL" in raport = red flag major | `tools/anaf_inactivi_client.py` (NOU) + `agent_official.py` | 2h | HIGH |
+| 5 | EP3 | [x] | **Lista ANAF Contribuabili cu Risc Fiscal** — Similar cu inactivii, ANAF publica lista firmelor cu risc fiscal ridicat. Impact: completeza evaluarea fiscala care acum e doar TVA/split TVA | `tools/anaf_risc_client.py` (NOU) + `agent_official.py` | 2h | HIGH |
+
+## MODUL 3 — CALITATE RAPOARTE (Format + Continut)
+
+> Fisiere: `backend/reports/html_generator.py`, `backend/reports/pdf_generator.py`, `backend/reports/excel_generator.py`
+
+| # | Cod | Status | Descriere | Locatie | Efort | Sev |
+|---|-----|--------|-----------|---------|-------|-----|
+| 6 | E2 | [x] | **Trend vizual in HTML — sparkline CA multi-an** — In sectiunea Financial Analysis din HTML, adauga mini-grafic inline (CSS-only sparkline sau Chart.js mic) care arata trendul CA pe 3-5 ani direct langa text. Clientul vede trendul instant | `html_generator.py` sectiunea financial | 2h | MED |
+| 7 | E6 | [x] | **PDF: Tabel ratii financiare** — PDF-ul nu include tabelul cu cele 6 ratii (exista doar in HTML via N2). Adauga tabel formatat cu ratiile + interpretare culoare (verde/galben/rosu per valoare) | `pdf_generator.py` + `reports/generator.py` | 2h | HIGH |
+| 8 | E3 | [x] | **Excel: Sheet "Trend" dedicat** — Adauga sheet separat cu datele multi-an (CA, Profit, Angajati) + grafice native Excel (LineChart). Sheet-ul curent "Financiar" e prea dens | `excel_generator.py` | 2h | MED |
+
+## MODUL 4 — EFICIENTA UTILIZATOR
+
+> Fisiere: `frontend/src/pages/`, `backend/routers/`
+
+| # | Cod | Status | Descriere | Locatie | Efort | Sev |
+|---|-----|--------|-----------|---------|-------|-----|
+| 9 | E13 | [x] | **Quick re-analyze din ReportView** — Buton "Regenereaza raport" direct pe pagina raportului (nu doar pe CompanyDetail). Salveaza timp navigare inapoi | `ReportView.tsx` + `api.ts` | 1h | MED |
+| 10 | E4 | [x] | **Template analiza per tip client** — Preseturi salvate: "Due Diligence Partener" (nivel 3, PARTNER_RISK), "Screening Rapid" (nivel 1, CUSTOM_REPORT), "Raport Complet Vanzare" (nivel 3, FULL_COMPANY). Dropdown pe NewAnalysis | `NewAnalysis.tsx` + `models.py` | 2h | HIGH |
+| 11 | E9 | [x] | **Raport comparativ 2 firme** — Pe pagina Compare, buton "Genereaza raport comparativ PDF" care produce un singur document cu ambele firme side-by-side + concluzii. Clientii cer frecvent asta | `compare.py` + `reports/compare_generator.py` (NOU) | 4h | HIGH |
+
+## MODUL 5 — SCORING & VERIFICARE
+
+> Fisiere: `backend/agents/verification/scoring.py`, `backend/agents/agent_verification.py`
+
+| # | Cod | Status | Descriere | Locatie | Efort | Sev |
+|---|-----|--------|-----------|---------|-------|-----|
+| 12 | E12 | [x] | **Scoring: integrare surse noi** — Dupa EP1/EP2/EP3, adauga in scoring: insolventa = -40 puncte, inactiv fiscal = -30 puncte, risc fiscal = -15 puncte. Impact: scorul devine mult mai relevant | `scoring.py` dimensiunile Juridic + Fiscal | 1h | HIGH |
+| 13 | E11 | [x] | **Early Warning: insolventa associati** — Daca un asociat/administrator apare la o firma insolventa (din EP1), flaggeaza "Asociat cu istoric insolventa". Date disponibile din openapi.ro (asociati) + BPI | `agent_verification.py` early warnings | 2h | MED |
+
+## MODUL 6 — ROBUSTETE RAPOARTE
+
+> Fisiere: `backend/agents/agent_synthesis.py`, `backend/reports/generator.py`
+
+| # | Cod | Status | Descriere | Locatie | Efort | Sev |
+|---|-----|--------|-----------|---------|-------|-----|
+| 14 | ER1 | [x] | **Validare output AI: anti-halucination check** — Dupa generare sectiune, verifica ca cifrele din text (CA, profit, angajati) corespund datelor din JSON. Daca exista discrepanta >10%, re-genereaza sectiunea | `agent_synthesis.py` dupa `_generate_section` | 3h | HIGH |
+| 15 | ER2 | [x] | **Fallback text pentru sectiuni fara date** — Cand o sectiune primeste date insuficiente (<3 campuri), genereaza text standard profesional "Date insuficiente" in loc de text AI care ar putea halucinara | `agent_synthesis.py` inainte de `_generate_section` | 1h | MED |
+
+---
+
+## SUMAR R7
+
+| Prioritate | Cod | Descriere scurta | Efort | Sev |
+|------------|-----|-------------------|-------|-----|
+| **P1: IMPACT MARE + EFORT MIC** | | | | |
+| 1 | E1 | Few-shot examples toate sectiunile | 1h | HIGH |
+| 2 | E5 | Prompt ratii financiare | 30min | HIGH |
+| 3 | E12 | Scoring surse noi | 1h | HIGH |
+| 4 | ER2 | Fallback text date insuficiente | 1h | MED |
+| **P2: IMPACT MARE + EFORT MEDIU** | | | | |
+| 5 | EP1 | BPI Insolventa | 3h | HIGH |
+| 6 | EP2 | ANAF Contribuabili Inactivi | 2h | HIGH |
+| 7 | EP3 | ANAF Risc Fiscal | 2h | HIGH |
+| 8 | E6 | PDF ratii financiare | 2h | HIGH |
+| 9 | E4 | Template analiza per tip | 2h | HIGH |
+| 10 | ER1 | Anti-halucination check | 3h | HIGH |
+| **P3: IMPACT MEDIU + EFORT MIC** | | | | |
+| 11 | E13 | Quick re-analyze ReportView | 1h | MED |
+| 12 | E2 | Sparkline trend HTML | 2h | MED |
+| 13 | E3 | Excel sheet Trend | 2h | MED |
+| 14 | E11 | Early Warning associati | 2h | MED |
+| 15 | E9 | Raport comparativ PDF | 4h | HIGH |
+
+**Total estimat:** ~28.5 ore | **9 HIGH + 6 MED** | **0 duplicari cu R4/R5/R6**
+
+---
+
+## TOP 5 QUICK WINS (sub 2h, impact imediat)
+
+1. **E1** — Few-shot examples (1h) → calitate text AI creste 15-20% pe sectiunile lipsa
+2. **E5** — Prompt ratii financiare (30min) → ratiile calculate apar in text narativ
+3. **E12** — Scoring surse noi (1h) → scorul devine actionabil cu insolventa/inactivitate
+4. **ER2** — Fallback date insuficiente (1h) → elimina risc halucination pe date slabe
+5. **E13** — Quick re-analyze (1h) → economie 30s per regenerare raport
+
+---
+
+## PLAN EXECUTIE R7 (3 sesiuni)
+
+### Sesiunea 1: Calitate AI + Quick Wins (~6h)
+- E1 (few-shot), E5 (prompt ratii), ER2 (fallback), E13 (re-analyze button)
+- Test: genereaza raport FULL nivel 3 si verifica calitate text pe toate sectiunile
+
+### Sesiunea 2: Surse Noi + Scoring (~9h)
+- EP1 (BPI), EP2 (ANAF inactivi), EP3 (ANAF risc fiscal), E12 (scoring update)
+- E11 (early warning associati)
+- Test: analiza firma cunoscuta insolventa + firma activa → verifica flag-uri
+
+### Sesiunea 3: Rapoarte + Anti-halucination (~8h)
+- E6 (PDF ratii), E2 (sparkline), E3 (Excel trend), E4 (template-uri)
+- ER1 (anti-halucination check), E9 (raport comparativ)
+- Test: genereaza toate formatele + compara 2 firme
+
+---
+
+## DEPENDENTE CROSS-MODULE
+
+```
+EP1 + EP2 + EP3 ──→ E12 (scoring trebuie actualizat DUPA sursele noi)
+EP1 ──→ E11 (early warning associati depinde de BPI)
+E5 ──→ E6 (PDF ratii depinde de prompt care le mentioneaza)
+E1 ──→ ER1 (anti-halucination e mai eficient cu few-shot bune)
+```
+
+## PROTOCOL TEST R7
+
+### Test rapid per cerinta (obligatoriu)
+
+```
+1. Porneste RIS: dublu-click START_RIS.vbs
+2. Deschide http://localhost:5173/new-analysis
+3. CUI test: 26313362 (MOSSLEIN S.R.L.) — activa, cu date
+4. CUI test insolventa: [gasi CUI firma insolventa pentru test EP1]
+5. Tip: FULL_COMPANY_PROFILE | Nivel: COMPLET (3)
+6. Verifica raportul HTML:
+   [ ] Toate sectiunile au text profesional (E1 few-shot)
+   [ ] Ratii financiare mentionate in analiza (E5)
+   [ ] Flag insolventa/inactivitate daca e cazul (EP1/EP2/EP3)
+   [ ] Early Warning associati prezent (E11)
+7. Verifica PDF:
+   [ ] Tabel ratii financiare prezent (E6)
+   [ ] Nu exista cifre inventate (ER1)
+8. Verifica Excel:
+   [ ] Sheet "Trend" cu grafic (E3)
+9. Verifica scoring:
+   [ ] Penalizari insolventa/inactivitate aplicate (E12)
+   [ ] Fallback text pe date insuficiente (ER2)
+10. Verifica frontend:
+   [ ] Buton re-analyze pe ReportView (E13)
+   [ ] Template-uri pe NewAnalysis (E4)
+```
+
+### Test automated (la finalul sesiunii R7)
 
 ```bash
 cd C:\Proiecte\Sistem_Inteligent_Analize

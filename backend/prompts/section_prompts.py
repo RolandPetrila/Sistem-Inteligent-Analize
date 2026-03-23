@@ -25,7 +25,13 @@ SECTION_PROMPTS = {
             "Descrie firma pe baza datelor oficiale ANAF/ONRC.\n"
             "Include: denumire, CUI, CAEN, data infiintare, asociati, administrator, "
             "capital social, sediu, puncte de lucru.\n"
-            "Marcheaza fiecare camp cu eticheta trust corespunzatoare."
+            "Marcheaza fiecare camp cu eticheta trust corespunzatoare.\n\n"
+            "EXEMPLU FRAGMENT (adapteaza la datele reale):\n"
+            "\"SC EXEMPLU S.R.L. (CUI 12345678), infiintata la 15.03.2010, cu sediul in Bucuresti, Sector 3. "
+            "CAEN principal: 4120 — Lucrari de constructii a cladirilor rezidentiale si nerezidentiale. "
+            "Capital social: 10,000 RON. Administrator: Ion Popescu (din 2010). "
+            "Asociati: Ion Popescu (60%), Maria Popescu (40%). Puncte de lucru: 2 (Ilfov, Constanta). "
+            "[Sursa: openapi.ro | Trust: OFICIAL]\""
         ),
         "word_count": {"1": 200, "2": 400, "3": 600},
     },
@@ -36,7 +42,11 @@ SECTION_PROMPTS = {
             "Daca ai cifra de afaceri multi-an: trend si interpretare.\n"
             "Daca ai doar datorii ANAF: focuseaza pe solvabilitate.\n"
             "Daca datele sunt limitate: spune EXPLICIT ce lipseste si de ce.\n"
-            "Include cursul BNR EUR/RON daca e relevant.\n\n"
+            "Include cursul BNR EUR/RON daca e relevant.\n"
+            "Daca datele contin ratii financiare calculate (financial_ratios), prezinta-le intr-un tabel:\n"
+            "| Ratio | Valoare | Interpretare |\n"
+            "Ratiile standard: Marja Profit Net, ROE, ROA, Datorii/Capital, Rata Capitalizare, CA/Angajat.\n"
+            "Interpreteaza fiecare valoare in contextul sectorului CAEN al firmei.\n\n"
             "EXEMPLU FRAGMENT:\n"
             "\"Evolutia cifrei de afaceri in ultimii 3 ani: 2022: 1.8M RON | 2023: 2.1M RON (+16%) "
             "| 2024: 2.3M RON (+9.5%). Profitul net a crescut de la 120K la 180K RON, cu o marja "
@@ -68,7 +78,14 @@ SECTION_PROMPTS = {
             "Pozitionarea firmei analizate vs competitie: puncte tari/slabe relative.\n"
             "IMPORTANT: Daca nu ai date suficiente despre competitori, scrie explicit:\n"
             "'Date insuficiente pentru analiza competitiei. Nu au fost identificati competitori '\n"
-            "'in sursele consultate.' NU INVENTA nume de firme, CUI-uri sau cifre.\n"
+            "'in sursele consultate.' NU INVENTA nume de firme, CUI-uri sau cifre.\n\n"
+            "EXEMPLU FRAGMENT (adapteaza la datele reale):\n"
+            "\"| Nr | Competitor | CUI | CAEN | Judet | CA estimata |\n"
+            "|---|---|---|---|---|---|\n"
+            "| 1 | ALFA CONSTRUCT S.R.L. | 87654321 | 4120 | Bucuresti | ~3.5M RON |\n"
+            "| 2 | BETA BUILDINGS S.R.L. | 11223344 | 4120 | Ilfov | ~1.8M RON |\n"
+            "Pozitionare: Firma analizata se situeaza pe locul 2 din 3 competitori identificati ca dimensiune CA. "
+            "Punct forte relativ: marja profit superioara (+2.3pp vs media). Punct slab: numar angajati inferior.\""
         ),
         "word_count": {"1": 150, "2": 500, "3": 1000},
     },
@@ -80,7 +97,12 @@ SECTION_PROMPTS = {
             "Prioritizeaza dupa: urgenta (deadline) > valoare > grad potrivire.\n"
             "IMPORTANT: Prezinta DOAR oportunitati care apar in datele furnizate (SEAP, web).\n"
             "Daca nu exista oportunitati in date, scrie: 'Nu au fost identificate oportunitati '\n"
-            "'concrete in sursele consultate.' NU INVENTA licitatii, fonduri sau proiecte.\n"
+            "'concrete in sursele consultate.' NU INVENTA licitatii, fonduri sau proiecte.\n\n"
+            "EXEMPLU FRAGMENT (adapteaza la datele reale):\n"
+            "\"1. LICITATIE SEAP: 'Reabilitare scoala nr. 5 Sector 2' — Valoare estimata: 1.2M RON. "
+            "Deadline depunere: 15.04.2025. Autoritate: Primaria Sector 2. Eligibilitate: CAEN 4120, experienta similara.\n"
+            "2. FOND EUROPEAN: PNRR Componenta C5 — renovare energetica cladiri publice. "
+            "Buget disponibil: 500M EUR national. Eligibilitate: firme constructii cu min 3 ani experienta.\""
         ),
         "word_count": {"1": 150, "2": 400, "3": 800},
     },
@@ -92,7 +114,12 @@ SECTION_PROMPTS = {
             "Strengths/Weaknesses: din date interne (financiar, profil, online).\n"
             "Opportunities/Threats: din date externe (piata, competitie, reglementari).\n"
             "IMPORTANT: Fiecare punct SWOT trebuie sa fie justificat de o sursa din date.\n"
-            "Daca nu ai date pentru un cadran, scrie: '[Date insuficiente pentru acest cadran].'\n"
+            "Daca nu ai date pentru un cadran, scrie: '[Date insuficiente pentru acest cadran].'\n\n"
+            "EXEMPLU FRAGMENT (adapteaza la datele reale):\n"
+            "\"STRENGTHS: Marja profit 7.8% peste media sector 5.2% (Sursa: ANAF Bilant 2024) | Experienta 14 ani in piata\n"
+            "WEAKNESSES: Dependenta client major 45% din CA (Sursa: analiza portofoliu) | Capital social minim 10K RON\n"
+            "OPPORTUNITIES: 3 licitatii SEAP active in CAEN 4120, val. totala 4.5M RON (Sursa: e-licitatie.ro)\n"
+            "THREATS: Concurenta intensa — 12 firme CAEN 4120 in aceeasi zona (Sursa: listafirme.ro)\""
         ),
         "word_count": {"1": 0, "2": 300, "3": 500},
     },

@@ -21,6 +21,15 @@ import type { AnalysisTypeInfo } from "@/lib/types";
 import { REPORT_LEVEL_LABELS } from "@/lib/constants";
 import ChatInput from "@/components/ChatInput";
 
+// E4: Quick analysis templates
+const ANALYSIS_TEMPLATES = [
+  { name: "Due Diligence Partener", type: "PARTNER_RISK_ASSESSMENT", level: 3, description: "Verificare completa partener de afaceri" },
+  { name: "Screening Rapid", type: "CUSTOM_REPORT", level: 1, description: "Verificare rapida, date de baza" },
+  { name: "Raport Complet Vanzare", type: "FULL_COMPANY_PROFILE", level: 3, description: "Raport complet pentru prezentare client" },
+  { name: "Analiza Competitie", type: "COMPETITION_ANALYSIS", level: 2, description: "Focus pe competitori si pozitionare" },
+  { name: "Oportunitati Licitatii", type: "TENDER_OPPORTUNITIES", level: 2, description: "Licitatii SEAP relevante" },
+];
+
 const ICONS: Record<string, React.ElementType> = {
   Building2,
   Swords,
@@ -144,6 +153,34 @@ export default function NewAnalysis() {
             }
           }}
         />
+      )}
+
+      {/* E4: Quick Templates */}
+      {step === "type" && types.length > 0 && (
+        <div>
+          <h3 className="text-xs text-gray-500 uppercase tracking-wider mb-2">Template rapid</h3>
+          <div className="flex flex-wrap gap-2 mb-6">
+            {ANALYSIS_TEMPLATES.map((tmpl) => (
+              <button
+                key={tmpl.name}
+                onClick={() => {
+                  const found = types.find((t) => t.type === tmpl.type);
+                  if (found) {
+                    setSelected(found);
+                    setLevel(tmpl.level);
+                    setAnswers({});
+                    setFormErrors({});
+                    setStep(found.questions.length > 0 ? "questions" : "level");
+                  }
+                }}
+                className="px-3 py-1.5 text-xs rounded-lg bg-dark-surface border border-dark-border text-gray-400 hover:border-accent-primary/50 hover:text-accent-secondary transition-all"
+                title={tmpl.description}
+              >
+                {tmpl.name}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Step: Select Type */}

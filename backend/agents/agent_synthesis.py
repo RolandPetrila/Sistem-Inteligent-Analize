@@ -50,6 +50,21 @@ class SynthesisAgent(BaseAgent):
             title = section["title"]
             word_target = section.get("word_count", 300)
 
+            # ER2: Skip AI generation if section has insufficient data
+            if not self._has_sufficient_data(key, verified_data):
+                logger.warning(f"[synthesis] Section {key}: insufficient data, using fallback")
+                report_sections[key] = {
+                    "title": title,
+                    "content": (
+                        f"Sectiunea '{title}' nu a putut fi generata din cauza datelor insuficiente "
+                        f"disponibile in sursele publice consultate. Pentru o analiza completa, "
+                        f"sunt necesare date suplimentare care nu au fost identificate in sursele accesate. "
+                        f"Se recomanda obtinerea acestor informatii direct de la companie."
+                    ),
+                    "word_count": 0,
+                }
+                continue
+
             # 8C: Provider routing per section type (overrides simple word-based routing)
             route = section.get("route_preference", "quality")
             if word_target <= 200:
@@ -108,6 +123,12 @@ class SynthesisAgent(BaseAgent):
 
             # 10B M4.1: Output Validation — check for invented data, impossible stats
             text = self._validate_output(text, verified_data, section)
+
+            # ER1: Verify numbers in generated text against verified_data
+            is_ok, discrepancies = self._verify_numbers_in_text(text, verified_data, key)
+            if not is_ok and len(discrepancies) > 2:
+                logger.warning(f"[synthesis] Section {key}: {len(discrepancies)} number discrepancies, adding note")
+                text += "\n\n[Nota: Verificati cifrele din aceasta sectiune cu sursele primare.]"
 
             report_sections[key] = {
                 "title": title,
@@ -531,6 +552,96 @@ class SynthesisAgent(BaseAgent):
 
 
     # ── 10F M4.2: Structured Degradation 3-Tier ──────────────────────────────
+    def _verify_numbers_in_text(self, text: str, verified_data: dict, section_key: str) -> tuple[bool, list[str]]:
+        """ER1: Verify numbers in AI-generated text against verified_data.
+        Returns (is_ok, list_of_discrepancies)."""
+        if not text:
+            return True, []
+
+        # Extract numbers with units from text
+        pattern = r'(\d[\d.,]*)\s*(RON|EUR|lei|mii|mil|M|K|%)'
+        matches = re.findall(pattern, text)
+        if not matches:
+            return True, []
+
+        # Build set of known numbers from verified_data
+        known_numbers = set()
+        def _collect_numbers(obj, depth=0):
+            if depth > 4:
+                return
+            if isinstance(obj, (int, float)) and obj != 0:
+                known_numbers.add(abs(obj))
+            elif isinstance(obj, dict):
+                for v in obj.values():
+                    _collect_numbers(v, depth + 1)
+            elif isinstance(obj, list):
+                for v in obj[:20]:
+                    _collect_numbers(v, depth + 1)
+        _collect_numbers(verified_data)
+
+        discrepancies = []
+        for num_str, unit in matches:
+            try:
+                num = float(num_str.replace(",", "").replace(".", ""))
+            except ValueError:
+                continue
+            # Skip small numbers (<100) and calendar years (2014-2030)
+            if num < 100 or 2014 <= num <= 2030:
+                continue
+            # Check if number exists in known data (within +-10%)
+            found = any(
+                abs(num - known) / max(known, 1) < 0.10
+                for known in known_numbers if known > 0
+            )
+            if not found:
+                discrepancies.append(f"{num_str} {unit}")
+
+        is_ok = len(discrepancies) <= 2
+        return is_ok, discrepancies
+
+    def _has_sufficient_data(self, section_key: str, verified_data: dict) -> bool:
+        """ER2: Check if section has enough data to generate meaningful content."""
+        if section_key in ("executive_summary", "risk_assessment", "swot", "recommendations"):
+            return True  # These can always generate from whatever data exists
+
+        if section_key == "financial_analysis":
+            fin = verified_data.get("financial", {})
+            non_null = 0
+            for k in ("cifra_afaceri", "profit_net", "numar_angajati", "capitaluri_proprii"):
+                field = fin.get(k, {})
+                if isinstance(field, dict) and field.get("value") is not None:
+                    non_null += 1
+            return non_null >= 2
+
+        if section_key == "competition":
+            web = verified_data.get("web_presence", {})
+            if isinstance(web, dict):
+                comps = web.get("competitors", {})
+                if isinstance(comps, dict) and len(comps.get("results", [])) >= 1:
+                    return True
+            return False
+
+        if section_key == "opportunities":
+            market = verified_data.get("market", {})
+            if isinstance(market, dict):
+                seap = market.get("seap", {})
+                if isinstance(seap, dict) and seap.get("total_contracts", 0) > 0:
+                    return True
+            web = verified_data.get("web_presence", {})
+            if isinstance(web, dict) and web.get("opportunities"):
+                return True
+            return False
+
+        if section_key == "company_profile":
+            company = verified_data.get("company", {})
+            non_null = 0
+            for field in company.values():
+                if isinstance(field, dict) and field.get("value") is not None:
+                    non_null += 1
+            return non_null >= 3
+
+        return True  # Default: allow generation
+
     def _degraded_fallback(self, section: dict, verified_data: dict) -> str:
         """Fallback in 3 trepte cand TOTI providerii esueaza:
         Tier 1 = narativ (deja incercat si esuat)

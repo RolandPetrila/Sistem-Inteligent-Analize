@@ -27,6 +27,7 @@ SOURCE_LEVELS = {
     "SEAP": 1,
     "BNR": 1,
     "portal.just.ro": 1,
+    "BPI (buletinul.ro)": 2,
     "data.gov.ro": 1,
     # Nivel 2 — VERIFICAT
     "listafirme.ro": 2,
@@ -401,6 +402,22 @@ class VerificationAgent(BaseAgent):
         if anaf.get("found"):
             risk["anaf_inactive"] = self._make_field(
                 anaf.get("inactiv", False), "ANAF"
+            )
+
+        # EP1/E11: BPI insolventa
+        bpi = official.get("bpi_insolventa", {})
+        if isinstance(bpi, dict):
+            risk["bpi_insolventa"] = self._make_field(
+                bpi, "BPI (buletinul.ro)",
+                f"Status: {bpi.get('status', 'N/A')}" if bpi.get("found") else "Nicio procedura gasita",
+            )
+
+        # EP3: Risc fiscal derivat
+        risc_fiscal = official.get("risc_fiscal", {})
+        if isinstance(risc_fiscal, dict):
+            risk["risc_fiscal"] = self._make_field(
+                risc_fiscal, "ANAF",
+                risc_fiscal.get("tip_risc", ""),
             )
 
         return risk
@@ -818,6 +835,27 @@ class VerificationAgent(BaseAgent):
                         "detail": f"Angajati: {int(ang_prev)} ({prev_year}) -> {int(ang_curr)} ({curr_year}), scadere {abs(change_pct):.0f}%",
                         "years": f"{prev_year}-{curr_year}",
                     })
+
+        # E11: BPI insolventa warning
+        bpi = official.get("bpi_insolventa", {})
+        if isinstance(bpi, dict) and bpi.get("found"):
+            bpi_status = bpi.get("status", "insolventa")
+            warnings.append({
+                "signal": "Firma in procedura de insolventa",
+                "severity": "CRITICAL",
+                "detail": f"BPI: {bpi.get('details', bpi_status)}",
+                "confidence": 95,
+            })
+
+        # E11: ANAF inactiv warning
+        anaf_inactiv = official.get("anaf_inactiv", {})
+        if isinstance(anaf_inactiv, dict) and anaf_inactiv.get("inactiv"):
+            warnings.append({
+                "signal": "Contribuabil inactiv ANAF",
+                "severity": "CRITICAL",
+                "detail": f"Data inactivare: {anaf_inactiv.get('data_inactivare', 'N/A')}",
+                "confidence": 99,
+            })
 
         if warnings:
             logger.warning(f"[verification] Early warnings: {len(warnings)} semnale detectate")

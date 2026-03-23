@@ -144,6 +144,41 @@ def _chart_radar(canvas_id: str, title: str, labels: list, values: list) -> str:
     </div>'''
 
 
+def _build_sparkline_html(verified_data: dict) -> str:
+    """E2: Sparkline trend CA — mini Chart.js line chart."""
+    financial = verified_data.get("financial", {})
+    trend_field = financial.get("trend_financiar", {})
+    trend_val = trend_field.get("value") if isinstance(trend_field, dict) else None
+    if not isinstance(trend_val, dict):
+        return ""
+
+    ca_data = trend_val.get("cifra_afaceri_neta", {})
+    if not ca_data or not ca_data.get("values") or len(ca_data["values"]) < 2:
+        return ""
+
+    labels = json_lib.dumps([str(v["year"]) for v in ca_data["values"]])
+    values = json_lib.dumps([v["value"] for v in ca_data["values"]])
+    growth = ca_data.get("growth_percent")
+    growth_str = f' (<span style="color:{("#22c55e" if growth > 0 else "#ef4444")}">{("+" if growth > 0 else "")}{growth:.1f}%</span>)' if growth is not None else ""
+
+    return f'''
+    <section id="sparkline" class="report-section">
+        <h2>Trend Cifra de Afaceri{growth_str}</h2>
+        <div style="background:#16213e;border-radius:12px;padding:16px;max-width:450px">
+            <canvas id="sparkCA" height="100"></canvas>
+            <script>
+            new Chart(document.getElementById('sparkCA'),{{
+                type:'line',
+                data:{{labels:{labels},datasets:[{{data:{values},
+                    borderColor:'#6366f1',backgroundColor:'#6366f120',fill:true,tension:0.3,pointRadius:3,pointBackgroundColor:'#a5b4fc'}}]}},
+                options:{{responsive:true,plugins:{{legend:{{display:false}}}},
+                    scales:{{y:{{ticks:{{color:'#94a3b8'}},grid:{{color:'#2a3a5c'}}}},x:{{ticks:{{color:'#94a3b8'}},grid:{{display:false}}}}}}}}
+            }});
+            </script>
+        </div>
+    </section>'''
+
+
 def _build_executive_summary(verified_data: dict, meta: dict) -> str:
     """N3: Executive Summary — 3 lines with key KPIs at the top of the report."""
     company = verified_data.get("company", {})
@@ -268,6 +303,9 @@ def generate_html(report_sections: dict, meta: dict, verified_data: dict, output
     # N1: Financial Ratios
     risk_score_obj = verified_data.get("risk_score", {})
     financial_ratios_html = _build_financial_ratios_html(risk_score_obj)
+
+    # E2: Sparkline trend CA (mini line chart)
+    sparkline_html = _build_sparkline_html(verified_data)
 
     # Build sections HTML
     nav_items = '<a href="#ratios" class="nav-link">Indicatori</a>\n<a href="#charts" class="nav-link">Grafice</a>\n'
@@ -421,6 +459,7 @@ body{{font-family:'Segoe UI',system-ui,sans-serif;background:#1a1a2e;color:#e2e8
     <nav class="nav">{nav_items}</nav>
     {exec_summary_html}
     {financial_ratios_html}
+    {sparkline_html}
     {charts_html}
     {sections_html}
     {early_warnings_html}
