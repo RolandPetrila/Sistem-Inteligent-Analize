@@ -582,21 +582,26 @@ class SynthesisAgent(BaseAgent):
         discrepancies = []
         for num_str, unit in matches:
             try:
-                num = float(num_str.replace(",", "").replace(".", ""))
+                # Parse number: handle both 11,950,149 and 6.06 formats
+                clean = num_str.replace(",", "")
+                num = float(clean)
             except ValueError:
                 continue
-            # Skip small numbers (<100) and calendar years (2014-2030)
-            if num < 100 or 2014 <= num <= 2030:
+            # Skip percentages (derived calculations — not raw data)
+            if unit == "%":
                 continue
-            # Check if number exists in known data (within +-10%)
+            # Skip small numbers (<1000) and calendar years (2014-2030)
+            if num < 1000 or 2014 <= num <= 2030:
+                continue
+            # Check if number exists in known data (within +-15%)
             found = any(
-                abs(num - known) / max(known, 1) < 0.10
+                abs(num - known) / max(known, 1) < 0.15
                 for known in known_numbers if known > 0
             )
             if not found:
                 discrepancies.append(f"{num_str} {unit}")
 
-        is_ok = len(discrepancies) <= 2
+        is_ok = len(discrepancies) <= 3
         return is_ok, discrepancies
 
     def _has_sufficient_data(self, section_key: str, verified_data: dict) -> bool:

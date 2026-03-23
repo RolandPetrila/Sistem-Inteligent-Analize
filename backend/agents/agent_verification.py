@@ -242,7 +242,7 @@ class VerificationAgent(BaseAgent):
             if isinstance(bilant_data, dict):
                 for yr in sorted(bilant_data.keys(), reverse=True):
                     yr_data = bilant_data.get(yr, {})
-                    if isinstance(yr_data, dict) and yr_data.get("caen_code") and yr_data["caen_code"] != 0:
+                    if isinstance(yr_data, dict) and yr_data.get("caen_code") and yr_data["caen_code"] != 0 and str(yr_data["caen_code"]).strip() != "0":
                         bilant_caen = str(yr_data["caen_code"])
                         bilant_caen_desc = yr_data.get("caen_description", "")
                         bilant_caen_year = yr

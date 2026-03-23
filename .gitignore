@@ -50,3 +50,10 @@ frontend/.pytest_cache/
 # Temporary/stray files (not part of project)
 Club_82*.html
 compass_artifact_*
+
+# Test reports folder (local testing, not tracked)
+Testari_Analize_Sistem/
+
+# Executor instructions (session-specific)
+ROLAND_R7_EXECUTOR.md
+ROLAND_UPDATE_FULL.md

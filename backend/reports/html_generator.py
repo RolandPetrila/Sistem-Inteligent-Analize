@@ -30,8 +30,8 @@ def _render_content(content: str) -> str:
             in_list = False
         if not line:
             lines.append("<br>")
-        elif line.startswith("## ") or line.startswith("**"):
-            clean = line.replace("**", "").replace("## ", "")
+        elif line.startswith("### ") or line.startswith("## ") or line.startswith("**"):
+            clean = line.replace("**", "").replace("### ", "").replace("## ", "")
             lines.append(f'<h3 class="subsection">{_escape(clean)}</h3>')
         elif is_list_item:
             if not in_list:
