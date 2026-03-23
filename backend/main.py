@@ -16,6 +16,19 @@ from backend.database import db
 from backend import http_client
 from backend.routers import jobs, reports, companies, analysis, settings as settings_router, compare, monitoring, batch
 
+# Runtime log — captures startup, shutdown, 500 errors (not per-job)
+from pathlib import Path as _Path
+_LOGS_DIR = _Path("logs")
+_LOGS_DIR.mkdir(exist_ok=True)
+logger.add(
+    str(_LOGS_DIR / "ris_runtime.log"),
+    format="[{time:YYYY-MM-DD HH:mm:ss}] {level: <8} | {message}",
+    level="WARNING",
+    rotation="5 MB",
+    retention="7 days",
+    encoding="utf-8",
+)
+
 
 # --- WebSocket connection manager ---
 

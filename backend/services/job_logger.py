@@ -22,6 +22,9 @@ from loguru import logger
 LOGS_DIR = Path("logs")
 LOGS_DIR.mkdir(exist_ok=True)
 
+# Consolidated summary log — one line per analysis, readable at session start
+SUMMARY_LOG = LOGS_DIR / "ris_summary.log"
+
 # Tracking: job_id -> loguru sink_id
 _active_sinks: dict[str, int] = {}
 
@@ -228,6 +231,43 @@ def finish_job_log(job_id: str, success: bool = True, error: str = "",
     jl.info("=" * 70)
     jl.info(f"  Log saved to: {_get_log_path(job_id)}")
     jl.info("=" * 70)
+
+    # Append to consolidated summary (one-liner per analysis, for session review)
+    try:
+        cui_val = ""
+        company_val = ""
+        # Try to extract from job log header events
+        log_path = _get_log_path(job_id)
+        if log_path.exists():
+            with open(log_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if "CUI:" in line:
+                        cui_val = line.split("CUI:")[-1].strip()
+                    if "Company:" in line:
+                        company_val = line.split("Company:")[-1].strip()
+                    if company_val and cui_val:
+                        break
+
+        status_str = "DONE" if success else "FAILED"
+        fail_names = ", ".join(fs["source"] for fs in fail_sources) if fail_sources else "none"
+        formats_str = ", ".join(report_formats) if report_formats else "none"
+        ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+        summary_line = (
+            f"[{ts}] CUI={cui_val} | {company_val} | {status_str} | {elapsed:.0f}s | "
+            f"Score={risk_score}/100 | Completeness={completeness_score}% | "
+            f"Sources: {len(ok_sources)} OK, {len(fail_sources)} FAIL"
+        )
+        if fail_sources:
+            summary_line += f" ({fail_names})"
+        summary_line += f" | Formats: {formats_str}"
+        if error:
+            summary_line += f" | Error: {error[:100]}"
+
+        with open(SUMMARY_LOG, "a", encoding="utf-8") as sf:
+            sf.write(summary_line + "\n")
+    except Exception:
+        pass  # Summary log failure should never block job completion
 
     # Cleanup
     sink_id = _active_sinks.pop(job_id, None)

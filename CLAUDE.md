@@ -40,12 +40,27 @@ Sistem local de Business Intelligence care ruleaza pe Windows 10. Extrage automa
 - **Faza 13 (R6):** COMPLETATA — 21 items: D1-D21 (1 CRIT + 12 HIGH + 7 MED) + 4 N-items (financial ratios, charts, exec summary, company page)
 - **Faza 14 (R7):** COMPLETATA — 15 items: E1-E13 + EP1-EP3 + ER1-ER2 — calitate rapoarte, surse noi (BPI insolventa, ANAF inactivi/risc fiscal), anti-halucination, template-uri, raport comparativ PDF, sparkline trend, Excel Trend sheet
 - **Faza 15 (R8):** COMPLETATA — 21 items: F1-F21 (3 CRIT + 9 HIGH + 8 MED + 1 LOW) — WS bug fix, HTML tables/bold/numbered lists, version unify, PRAGMA optimize, dead deps cleanup, silent except→logger.debug, anti-hallucination skip, DRY providers, split verification (1248→982 LOC), BPI robust, compare PDF narrative, teste html/orchestrator/pdf, PDF markdown tables
+- **Feedback Loop:** ACTIV — RIS_TEST.bat, logs/ris_summary.log (per-analiza), logs/ris_runtime.log (erori), ISSUES.md (manual), session startup protocol
 - **Git:** https://github.com/RolandPetrila/Sistem-Inteligent-Analize.git | 121 teste (110 pytest + 11 vitest)
 - **12 pagini frontend** (adaugat CompanyDetail /company/:id)
 - **Planificari detaliate:** ROLAND_PLANIFICARI_MODULE.md (R4 + R5 + R6 + R7 = 88 items total)
 - **Deep Research:** 99_Deep_Research/ (2 rapoarte complete cu roadmap)
 - **Spec complet:** SPEC_INTELLIGENCE_SYSTEM_V2.md
 - **38 REST endpoints + 1 WebSocket + 12 pagini frontend + 8 formate raport + diagnostic + audit + request tracing**
+
+## Feedback Loop (Session Protocol)
+La FIECARE sesiune noua, Claude citeste automat:
+1. `logs/ris_summary.log` — sumar per-analiza (CUI, status, score, erori)
+2. `logs/ris_runtime.log` — erori de startup/runtime (WARNING+)
+3. `ISSUES.md` — probleme raportate manual de utilizator
+4. `TEST_RESULTS.log` — ultimul run RIS_TEST.bat (pytest + vitest)
+
+Fisiere feedback loop:
+- `RIS_TEST.bat` — dublu-click: ruleaza toate testele, salveaza in TEST_RESULTS.log
+- `ISSUES.md` — utilizatorul noteaza minim: "ce am facut + ce s-a intamplat"
+- `backend/services/job_logger.py` — logging automat per-job + summary consolidat
+- `logs/ris_summary.log` — 1 linie per analiza (append automat la fiecare job finalizat)
+- `logs/ris_runtime.log` — erori WARNING+ din backend (rotatie 5MB, retentie 7 zile)
 
 ## Stack
 - Backend: Python 3.13 + FastAPI + SQLite (aiosqlite, WAL mode)

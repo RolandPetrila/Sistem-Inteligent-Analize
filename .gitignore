@@ -57,3 +57,6 @@ Testari_Analize_Sistem/
 # Executor instructions (session-specific)
 ROLAND_R7_EXECUTOR.md
 ROLAND_UPDATE_FULL.md
+
+# Test runner output (generated, not tracked)
+TEST_RESULTS.log
