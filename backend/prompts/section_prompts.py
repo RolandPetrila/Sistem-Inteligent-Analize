@@ -70,7 +70,7 @@ SECTION_PROMPTS = {
             "'Date insuficiente pentru analiza competitiei. Nu au fost identificati competitori '\n"
             "'in sursele consultate.' NU INVENTA nume de firme, CUI-uri sau cifre.\n"
         ),
-        "word_count": {"1": 0, "2": 500, "3": 1000},
+        "word_count": {"1": 150, "2": 500, "3": 1000},
     },
     "opportunities": {
         "title": "Oportunitati",
@@ -82,7 +82,7 @@ SECTION_PROMPTS = {
             "Daca nu exista oportunitati in date, scrie: 'Nu au fost identificate oportunitati '\n"
             "'concrete in sursele consultate.' NU INVENTA licitatii, fonduri sau proiecte.\n"
         ),
-        "word_count": {"1": 0, "2": 400, "3": 800},
+        "word_count": {"1": 150, "2": 400, "3": 800},
     },
     "swot": {
         "title": "Analiza SWOT",

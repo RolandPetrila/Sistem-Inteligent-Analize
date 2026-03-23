@@ -426,4 +426,52 @@ def generate_excel(report_sections: dict, meta: dict, verified_data: dict, outpu
     ws5.column_dimensions["B"].width = 16
     ws5.column_dimensions["C"].width = 45
 
+    # --- D14: Sheet 6 — Due Diligence Checklist ---
+    due_diligence = verified_data.get("due_diligence", {})
+    dd_checklist = []
+    if isinstance(due_diligence, dict):
+        dd_checklist = due_diligence.get("checklist", [])
+    elif isinstance(due_diligence, list):
+        dd_checklist = due_diligence
+
+    if dd_checklist:
+        ws6 = wb.create_sheet("Due Diligence")
+        ws6.cell(row=1, column=1, value="Due Diligence Checklist")
+        ws6.cell(row=1, column=1).font = TITLE_FONT
+        ws6.merge_cells("A1:D1")
+
+        dd_row = 3
+        headers = ["Verificare", "Status", "Severitate", "Sursa"]
+        for col_idx, h in enumerate(headers, 1):
+            ws6.cell(row=dd_row, column=col_idx, value=h)
+        _style_header_row(ws6, dd_row, len(headers))
+        dd_row += 1
+
+        STATUS_FILL = {
+            "DA": PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid"),
+            "NU": PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid"),
+            "INDISPONIBIL": PatternFill(start_color="F3F4F6", end_color="F3F4F6", fill_type="solid"),
+        }
+        for item in dd_checklist:
+            ws6.cell(row=dd_row, column=1, value=item.get("name", ""))
+            _style_data_cell(ws6.cell(row=dd_row, column=1))
+            status = item.get("status", "")
+            status_cell = ws6.cell(row=dd_row, column=2, value=status)
+            _style_data_cell(status_cell)
+            status_cell.fill = STATUS_FILL.get(status, PatternFill())
+            if status == "DA":
+                status_cell.font = Font(bold=True, color="16a34a")
+            elif status == "NU":
+                status_cell.font = Font(bold=True, color="dc2626")
+            ws6.cell(row=dd_row, column=3, value=item.get("severity", ""))
+            _style_data_cell(ws6.cell(row=dd_row, column=3))
+            ws6.cell(row=dd_row, column=4, value=item.get("source", ""))
+            _style_data_cell(ws6.cell(row=dd_row, column=4))
+            dd_row += 1
+
+        ws6.column_dimensions["A"].width = 35
+        ws6.column_dimensions["B"].width = 16
+        ws6.column_dimensions["C"].width = 14
+        ws6.column_dimensions["D"].width = 16
+
     wb.save(output_path)

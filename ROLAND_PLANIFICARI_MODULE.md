@@ -476,8 +476,8 @@ R4→R5 Dependencies:
 | 1 | D1 | [x] **SEAP EUR rate hardcoded 5.0** — fix: param eur_ron_rate, fallback 4.97 | seap_client.py:118 | M | HIGH |
 | 2 | D2 | [x] **ANAF Bilant JSON parse fara try/except** — fix: try/except around response.json() | anaf_bilant_client.py:49-55 | S | HIGH |
 | 3 | D3 | [x] **OpenAPI.ro JSON parse fara try/except** — fix: try/except around response.json() | openapi_client.py:45 | S | HIGH |
-| 4 | D4 | [ ] **BNR XML namespace posibil incorect** — fix: verifica cu BNR XML real, fallback pe `{uri}Body` notation | bnr_client.py:34 | S | MED |
-| 5 | D5 | [ ] **INS TEMPO filter pierde float values** — `str(v).isdigit()` skip "123.5" → fix: `int(float(val))` | caen_context.py:296-302 | S | MED |
+| 4 | D4 | [x] **BNR XML namespace posibil incorect** — fix: verifica cu BNR XML real, fallback pe `{uri}Body` notation | bnr_client.py:34 | S | MED |
+| 5 | D5 | [x] **INS TEMPO filter pierde float values** — `str(v).isdigit()` skip "123.5" → fix: `int(float(val))` | caen_context.py:296-302 | S | MED |
 
 ---
 
@@ -500,7 +500,7 @@ R4→R5 Dependencies:
 | 7 | D7 | [x] **Groq _PROVIDER_MAX_CONTEXT = 6000** — fix: 131000 (Llama 4 Scout actual context) | agent_synthesis.py:756 | S | HIGH |
 | 8 | D8 | [x] **Gemini JSON limit 80K chars** — fix: 400000 chars + token budget 1M | agent_synthesis.py:144 | S | HIGH |
 | 9 | D9 | [x] **Hallucination regex `\d{4,}%` detecteaza "2024%" ca suspect** — fix: exclude `20\d{2}%` pattern | agent_synthesis.py:266 | S | HIGH |
-| 10 | D10 | [ ] **Prompt word_count=0 Level 1 skip competition+opportunities** — raport RAPID nu contine competitori/oportunitati. Fix: minim 150 cuvinte | section_prompts.py:73,82 | S | MED |
+| 10 | D10 | [x] **Prompt word_count=0 Level 1 skip competition+opportunities** — raport RAPID nu contine competitori/oportunitati. Fix: minim 150 cuvinte | section_prompts.py:73,82 | S | MED |
 
 ---
 
@@ -513,7 +513,7 @@ R4→R5 Dependencies:
 | 11 | D11 | [x] **Early Warnings absent din HTML report** — fix: "Semnale de Avertizare" section with severity colors + confidence | html_generator.py | M | HIGH |
 | 12 | D12 | [x] **Excel KPI sheet fara scor pe dimensiuni** — fix: scoring dimensions section with color + confidence + total | excel_generator.py:276+ | M | HIGH |
 | 13 | D13 | [x] **PPTX risk_score None → crash AttributeError** — fix: `risk_score = ... or {}` | pptx_generator.py:152 | S | HIGH |
-| 14 | D14 | [ ] **Due Diligence checklist absent din Excel** — PDF/DOCX il au, Excel NU. Fix: Sheet 6 "Due Diligence" cu checklist DA/NU | excel_generator.py | M | MED |
+| 14 | D14 | [x] **Due Diligence checklist absent din Excel** — PDF/DOCX il au, Excel NU. Fix: Sheet 6 "Due Diligence" cu checklist DA/NU | excel_generator.py | M | MED |
 
 ---
 
@@ -521,7 +521,7 @@ R4→R5 Dependencies:
 
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
-| 15 | D15 | [ ] **Batch CSV summary fara CAEN description** — coloana "CAEN" are doar cod, nu descriere sector. Fix: adauga coloana CAEN_Descriere | batch.py:268-305 | S | MED |
+| 15 | D15 | [x] **Batch CSV summary fara CAEN description** — coloana "CAEN" are doar cod, nu descriere sector. Fix: adauga coloana CAEN_Descriere | batch.py:268-305 | S | MED |
 
 ---
 
@@ -550,7 +550,7 @@ R4→R5 Dependencies:
 
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
-| 19 | D19 | [ ] **Config secret key hardcoded "change-me-to-random-string"** — orice deploy fara .env = secret public. Fix: generate random key on startup daca nu e setat, log warning | config.py:35 | S | MED |
+| 19 | D19 | [x] **Config secret key hardcoded "change-me-to-random-string"** — orice deploy fara .env = secret public. Fix: generate random key on startup daca nu e setat, log warning | config.py:35 | S | MED |
 
 ---
 
@@ -561,7 +561,7 @@ R4→R5 Dependencies:
 | # | Cod | Ce rezolva concret | Locatie | Efort | Sev |
 |---|-----|-------------------|---------|-------|-----|
 | 20 | D20 | [x] **WebSocket reconnect setTimeout fara cleanup** — fix: reconnectTimeoutRef + clearTimeout on unmount | useWebSocket.ts:57 | S | HIGH |
-| 21 | D21 | [ ] **429 Rate Limit: toast "reincercati" dar nu reexecuta automat** — ApiError cu retryAfter dar nicio logica de auto-retry. Fix: retry wrapper cu exponential backoff in api.ts | api.ts:10-16 | M | MED |
+| 21 | D21 | [x] **429 Rate Limit: toast "reincercati" dar nu reexecuta automat** — ApiError cu retryAfter dar nicio logica de auto-retry. Fix: retry wrapper cu exponential backoff in api.ts | api.ts:10-16 | M | MED |
 
 ---
 

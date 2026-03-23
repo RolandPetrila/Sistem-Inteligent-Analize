@@ -1,5 +1,12 @@
+import secrets as _secrets
+
 from pydantic_settings import BaseSettings
 from pathlib import Path
+
+
+def _default_secret_key() -> str:
+    """D19: Generate random secret key if not set in .env."""
+    return _secrets.token_urlsafe(32)
 
 
 class Settings(BaseSettings):
@@ -31,8 +38,8 @@ class Settings(BaseSettings):
     # API Key (optional — if set, all /api/ endpoints require X-RIS-Key header)
     ris_api_key: str = ""
 
-    # App
-    app_secret_key: str = "change-me-to-random-string"
+    # App — D19: auto-generate random key if not explicitly set
+    app_secret_key: str = ""
     database_path: str = "./data/ris.db"
     checkpoint_db_path: str = "./data/checkpoints.db"
     outputs_dir: str = "./outputs/"
@@ -49,6 +56,17 @@ class Settings(BaseSettings):
         "env_file": ".env",
         "env_file_encoding": "utf-8",
     }
+
+    def model_post_init(self, __context) -> None:
+        # D19: Auto-generate secret key if not set or still default
+        if not self.app_secret_key or self.app_secret_key == "change-me-to-random-string":
+            import sys
+            self.app_secret_key = _default_secret_key()
+            print(
+                "[WARNING] APP_SECRET_KEY nu e setat in .env — s-a generat automat. "
+                "Setati APP_SECRET_KEY in .env pentru persistenta intre restart-uri.",
+                file=sys.stderr,
+            )
 
     @property
     def db_path(self) -> Path:

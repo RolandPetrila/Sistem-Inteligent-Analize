@@ -30,19 +30,35 @@ async def get_exchange_rates() -> dict:
 
     root = ElementTree.fromstring(response.text)
 
-    # Gaseste data cursului
+    # D4 fix: Try namespace-aware first, fallback to auto-detect namespace
     body = root.find("bnr:Body", BNR_NS)
     if body is None:
-        return {"error": "BNR XML format unexpected", "rates": {}}
+        # Fallback: extract namespace from root tag and retry
+        tag = root.tag
+        if "{" in tag:
+            ns_uri = tag.split("}")[0].lstrip("{")
+            body = root.find(f"{{{ns_uri}}}Body")
+        if body is None:
+            return {"error": "BNR XML format unexpected", "rates": {}}
 
     cube = body.find("bnr:Cube", BNR_NS)
+    if cube is None:
+        # D4 fallback: try with extracted namespace
+        for child in body:
+            if child.tag.endswith("Cube") and child.get("date"):
+                cube = child
+                break
     if cube is None:
         return {"error": "BNR Cube not found", "rates": {}}
 
     rate_date = cube.get("date", str(date.today()))
 
     rates = {"RON": 1.0}
-    for rate_elem in cube.findall("bnr:Rate", BNR_NS):
+    # D4 fix: Try namespaced first, fallback to iterating children
+    rate_elems = cube.findall("bnr:Rate", BNR_NS)
+    if not rate_elems:
+        rate_elems = [c for c in cube if c.tag.endswith("Rate")]
+    for rate_elem in rate_elems:
         currency = rate_elem.get("currency", "")
         multiplier = int(rate_elem.get("multiplier", "1"))
         try:

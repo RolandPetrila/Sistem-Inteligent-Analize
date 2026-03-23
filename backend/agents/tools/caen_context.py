@@ -293,11 +293,15 @@ async def _fetch_ins_tempo_firms(caen_code: str) -> int | None:
             values = data["result"]
             if isinstance(values, list) and values:
                 # Sumam valorile pentru toate judetele
-                total = sum(
-                    int(v.get("value", 0))
-                    for v in values
-                    if v.get("value") and str(v["value"]).isdigit()
-                )
+                # D5 fix: Accept float values too (e.g. "123.5")
+                total = 0
+                for v in values:
+                    raw = v.get("value")
+                    if raw is not None:
+                        try:
+                            total += int(float(raw))
+                        except (ValueError, TypeError):
+                            pass
                 if total > 0:
                     return total
 

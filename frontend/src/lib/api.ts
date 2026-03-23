@@ -1,18 +1,31 @@
 const BASE = "/api";
 
-// 9C: Enhanced error handling with error codes + 429 retry
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+// D21: Auto-retry with exponential backoff for 429 and transient errors
+async function request<T>(path: string, options?: RequestInit, _attempt = 0): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { "Content-Type": "application/json", ...options?.headers },
     ...options,
   });
 
-  // 9C: Rate limit 429 handler — auto-retry after Retry-After
+  // D21: Auto-retry on 429 (rate limit) — up to 2 retries with backoff
+  if (res.status === 429 && _attempt < 2) {
+    const retryAfter = parseInt(res.headers.get("Retry-After") || "3", 10);
+    const delay = Math.min(retryAfter * 1000, 10_000);
+    await new Promise((r) => setTimeout(r, delay));
+    return request<T>(path, options, _attempt + 1);
+  }
+
   if (res.status === 429) {
     const retryAfter = parseInt(res.headers.get("Retry-After") || "5", 10);
     const err = await res.json().catch(() => ({}));
     const code = err.error_code || "RATE_LIMITED";
     throw new ApiError(`Prea multe cereri. Reincercati in ${retryAfter}s.`, code, res.status, retryAfter);
+  }
+
+  // D21: Auto-retry on 503 (service unavailable) — 1 retry after 2s
+  if (res.status === 503 && _attempt < 1) {
+    await new Promise((r) => setTimeout(r, 2000));
+    return request<T>(path, options, _attempt + 1);
   }
 
   if (!res.ok) {

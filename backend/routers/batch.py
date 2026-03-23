@@ -272,7 +272,7 @@ async def _extract_batch_summary_row(result: dict) -> list:
     error = result.get("error", "")
 
     if status != "OK":
-        return [cui, "", "", "", "", "", "", "", status, error]
+        return [cui, "", "", "", "", "", "", "", "", status, error]
 
     try:
         report = await db.fetch_one(
@@ -280,7 +280,7 @@ async def _extract_batch_summary_row(result: dict) -> list:
             (result["job_id"],),
         )
         if not report or not report["full_data"]:
-            return [cui, "", "", "", "", "", "", "", status, ""]
+            return [cui, "", "", "", "", "", "", "", "", status, ""]
 
         data = json.loads(report["full_data"])
         company = data.get("company", {})
@@ -293,6 +293,8 @@ async def _extract_batch_summary_row(result: dict) -> list:
 
         denumire = _v(company.get("denumire", {}))
         caen = _v(company.get("caen_code", {}))
+        # D15 fix: Include CAEN description
+        caen_desc = _v(company.get("caen_description", {}))
         ca = _v(financial.get("cifra_afaceri", {}))
         pn = _v(financial.get("profit_net", {}))
         ang = _v(financial.get("numar_angajati", {}))
@@ -300,9 +302,9 @@ async def _extract_batch_summary_row(result: dict) -> list:
         score = risk.get("numeric_score", "")
         color = risk.get("score", "")
 
-        return [cui, denumire, caen, ca, pn, ang, score, color, status, ""]
+        return [cui, denumire, caen, caen_desc, ca, pn, ang, score, color, status, ""]
     except Exception:
-        return [cui, "", "", "", "", "", "", "", status, ""]
+        return [cui, "", "", "", "", "", "", "", "", status, ""]
 
 
 async def _analyze_one_cui(
@@ -465,7 +467,8 @@ async def _run_batch_inner(
         # 8D: Rich Summary CSV — include CA, profit, risk score, CAEN
         summary = io.StringIO()
         writer = csv.writer(summary)
-        writer.writerow(["CUI", "Denumire", "CAEN", "CA", "Profit Net", "Angajati",
+        # D15 fix: Added CAEN Descriere column
+        writer.writerow(["CUI", "Denumire", "CAEN", "CAEN Descriere", "CA", "Profit Net", "Angajati",
                          "Scor Risc", "Culoare Risc", "Status", "Error"])
         for r in results:
             # Extract data from sub-job report if available
