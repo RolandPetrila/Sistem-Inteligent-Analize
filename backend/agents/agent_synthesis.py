@@ -487,7 +487,7 @@ class SynthesisAgent(BaseAgent):
             logger.debug("[synthesis] Trying Gemini Flash API...")
             url = (
                 f"https://generativelanguage.googleapis.com/v1beta/models/"
-                f"gemini-2.5-flash-preview-05-20:generateContent?key={settings.google_ai_api_key}"
+                f"gemini-2.5-flash:generateContent?key={settings.google_ai_api_key}"
             )
             payload = {
                 "contents": [{"parts": [{"text": prompt}]}],
