@@ -297,9 +297,28 @@ class SynthesisAgent(BaseAgent):
         if input_cui:
             invented_cuis = re.findall(r'\bCUI\s*:?\s*(\d{6,10})\b', text)
             for found_cui in invented_cuis:
-                if found_cui != input_cui and found_cui not in text[:50]:  # allow header mentions
+                if found_cui != input_cui:
                     logger.warning(f"[synthesis] Stripping invented CUI: {found_cui} (expected {input_cui})")
                     text = text.replace(found_cui, input_cui)
+
+        # AH-04: Detect invented competitor names in competition section
+        if section.get("key") == "competition":
+            web = verified_data.get("web_presence", {})
+            known_names = set()
+            if isinstance(web, dict):
+                comps = web.get("competitors", {})
+                if isinstance(comps, dict):
+                    for r in comps.get("results", []):
+                        name = r.get("name", "") or r.get("title", "")
+                        if name:
+                            known_names.add(name.lower().strip())
+            if known_names:
+                # Find quoted company names in text that aren't known
+                quoted = re.findall(r'"([A-Z][A-Za-z\s&.\-]+(?:S\.?R\.?L\.?|S\.?A\.?))"', text)
+                for name in quoted:
+                    if name.lower().strip() not in known_names and name.lower() != input_name.lower():
+                        logger.warning(f"[synthesis] Unverified competitor: '{name}' — marking")
+                        text = text.replace(f'"{name}"', f'"{name}" [NEVERIFICAT]')
 
         # Word count check
         word_count = len(text.split())
@@ -502,8 +521,9 @@ class SynthesisAgent(BaseAgent):
         if not text:
             return True, []
 
-        # F10: Skip sections with computed/derived numbers (ratios, SWOT, recommendations)
-        skip_sections = {"financial_analysis", "swot_analysis", "recommendations", "opportunities"}
+        # F10: Skip sections with computed/derived numbers (SWOT, recommendations)
+        # AH-01: financial_analysis NO LONGER skipped — ratios must be validated
+        skip_sections = {"swot_analysis", "recommendations", "opportunities"}
         if section_key in skip_sections:
             return True, []
 
@@ -554,9 +574,17 @@ class SynthesisAgent(BaseAgent):
         return is_ok, discrepancies
 
     def _has_sufficient_data(self, section_key: str, verified_data: dict) -> bool:
-        """ER2: Check if section has enough data to generate meaningful content."""
+        """ER2: Check if section has enough data to generate meaningful content.
+        AH-02: executive_summary/recommendations blocked if completeness < 30%."""
+        # AH-02: Check overall completeness score — if very low, block even meta sections
+        completeness = verified_data.get("completeness", {})
+        completeness_score = completeness.get("score", 100) if isinstance(completeness, dict) else 100
+
         if section_key in ("executive_summary", "risk_assessment", "swot", "recommendations"):
-            return True  # These can always generate from whatever data exists
+            if completeness_score < 30:
+                logger.warning(f"[synthesis] {section_key}: completeness={completeness_score}% < 30% — blocking generation")
+                return False
+            return True
 
         if section_key == "financial_analysis":
             fin = verified_data.get("financial", {})
@@ -603,7 +631,11 @@ class SynthesisAgent(BaseAgent):
         Tier 3 = raw JSON extract daca nici bullet-points nu sunt posibile."""
         key = section["key"]
         title = section["title"]
-        logger.warning(f"[synthesis] All providers failed for '{key}' — applying degraded fallback")
+        # SYNTH-02: Log which providers were attempted (all 5 must have failed to reach here)
+        providers_attempted = ["Claude CLI", "Gemini", "Groq", "Mistral", "Cerebras"]
+        logger.warning(
+            f"[synthesis] ALL providers failed for '{key}': {', '.join(providers_attempted)}"
+        )
 
         # --- Tier 2: bullet-point facts from verified_data ---
         bullets = self._extract_bullets_for_section(key, verified_data)

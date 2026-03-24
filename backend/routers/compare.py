@@ -268,7 +268,8 @@ async def compare_report_pdf(data: CompareReportRequest):
 
     output_dir = os.path.join("outputs", "compare")
     os.makedirs(output_dir, exist_ok=True)
-    filename = f"comparativ_{data.cui_1}_{data.cui_2}.pdf"
+    import uuid
+    filename = f"comparativ_{data.cui_1}_{data.cui_2}_{uuid.uuid4().hex[:8]}.pdf"
     output_path = os.path.join(output_dir, filename)
 
     generate_compare_pdf(companies[0], companies[1], output_path)

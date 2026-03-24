@@ -44,7 +44,8 @@ def _render_content(content: str) -> str:
         is_ul_item = line.startswith("- ") or line.startswith("* ")
         is_ol_item = bool(re.match(r'^\d+\.\s', line))
         is_table_row = line.startswith("|") and line.endswith("|") and line.count("|") >= 3
-        is_table_sep = bool(re.match(r'^\|[\s\-:|]+\|$', line))
+        # HTML-05: Require at least one '-' per column to be a valid separator
+        is_table_sep = bool(re.match(r'^\|(\s*:?-+:?\s*\|)+$', line))
 
         # Close open lists/table when transitioning
         if in_ul and not is_ul_item:
@@ -62,7 +63,10 @@ def _render_content(content: str) -> str:
         if not line:
             lines.append("<br>")
         elif is_table_sep:
-            table_header = True
+            # HTML-01: Header separator valid only right after first row
+            # (separator after 2+ data rows = misplaced, ignore header flag)
+            if len(table_rows) <= 1:
+                table_header = True
         elif is_table_row:
             cells = [c.strip() for c in line.strip("|").split("|")]
             if not in_table:
@@ -101,6 +105,10 @@ def _build_table(rows: list[list[str]], has_header: bool) -> str:
     """F2: Build HTML <table> from parsed markdown table rows."""
     if not rows:
         return ""
+    # HTML-03: Normalize column count — pad short rows with empty cells
+    max_cols = max(len(r) for r in rows)
+    rows = [r + [""] * (max_cols - len(r)) for r in rows]
+
     html_parts = ['<table class="ris-table">']
     start = 0
     if has_header and len(rows) >= 1:
@@ -501,7 +509,7 @@ body{{font-family:'Segoe UI',system-ui,sans-serif;background:#1a1a2e;color:#e2e8
 .trust-verificat{{color:#0066CC;font-weight:600}}
 .trust-estimat{{color:#FF8800;font-weight:600}}
 .trust-indisponibil{{color:#888;font-weight:600}}
-.ris-table{{width:100%;border-collapse:collapse;margin:16px 0;font-size:0.9em}}
+.ris-table{{width:100%;border-collapse:collapse;margin:16px 0;font-size:0.9em;table-layout:fixed}}
 .ris-table th{{background:#1e293b;color:#a5b4fc;padding:10px 12px;text-align:left;border-bottom:2px solid #6366f140;font-weight:600}}
 .ris-table td{{padding:8px 12px;border-bottom:1px solid #2a3a5c;color:#cbd5e1}}
 .ris-table tbody tr:hover{{background:#16213e80}}

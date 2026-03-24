@@ -82,7 +82,7 @@ async def run_official(state: AnalysisState) -> dict:
         elapsed = time.time() - t0
         logger.error(f"[orchestrator] Agent 1 (Official) CRITICAL error boundary: {e} ({elapsed:.1f}s)")
         result = {
-            "official_data": {"error": str(e), "timestamp": __import__("datetime").datetime.utcnow().isoformat()},
+            "official_data": {"error": str(e), "timestamp": __import__("datetime").datetime.now(__import__("datetime").UTC).isoformat()},
             "sources": [],
             "errors": [{"agent": "official", "error": str(e)}],
         }

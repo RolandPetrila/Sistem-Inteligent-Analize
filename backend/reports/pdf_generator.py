@@ -34,7 +34,10 @@ def _sanitize(text: str) -> str:
 
 
 def _render_pdf_table(pdf, rows: list[list[str]], has_header: bool):
-    """F21: Render a markdown table as fpdf2 cells."""
+    """F21: Render a markdown table as fpdf2 cells.
+    PDF-01/PDF-02: Use multi_cell for long text, warn on truncation."""
+    from loguru import logger
+
     if not rows:
         return
     num_cols = max(len(r) for r in rows)
@@ -42,16 +45,20 @@ def _render_pdf_table(pdf, rows: list[list[str]], has_header: bool):
         return
     # Calculate column widths proportionally (total usable width ~190mm)
     col_width = 190 / num_cols
+    # PDF-01: Max chars per cell based on column width (approx 2.5 chars per mm)
+    max_chars = max(int(col_width * 2.5), 20)
 
     start = 0
     if has_header and len(rows) >= 1:
-        # Header row
         pdf.set_font("Helvetica", "B", 9)
         pdf.set_fill_color(99, 102, 241)
         pdf.set_text_color(255, 255, 255)
         for j, cell in enumerate(rows[0]):
-            border = 1
-            pdf.cell(col_width, 7, _sanitize(cell[:40]), border=border, fill=True,
+            sanitized = _sanitize(cell)
+            if len(sanitized) > max_chars:
+                logger.debug(f"PDF table header cell truncated: '{sanitized[:30]}...' ({len(sanitized)} > {max_chars})")
+                sanitized = sanitized[:max_chars - 1] + "\u2026"
+            pdf.cell(col_width, 7, sanitized, border=1, fill=True,
                      align="C" if j > 0 else "L")
         pdf.ln()
         start = 1
@@ -60,10 +67,14 @@ def _render_pdf_table(pdf, rows: list[list[str]], has_header: bool):
     pdf.set_text_color(40, 40, 40)
     for row in rows[start:]:
         for j, cell in enumerate(row):
-            pdf.cell(col_width, 6, _sanitize(cell[:50]), border=1,
+            sanitized = _sanitize(cell)
+            if len(sanitized) > max_chars:
+                logger.debug(f"PDF table cell truncated: '{sanitized[:30]}...' ({len(sanitized)} > {max_chars})")
+                sanitized = sanitized[:max_chars - 1] + "\u2026"
+            pdf.cell(col_width, 6, sanitized, border=1,
                      align="C" if j > 0 else "L")
         pdf.ln()
-    pdf.ln(2)
+    pdf.ln(4)  # PDF-04: Increased spacing after table
     pdf.set_font("Helvetica", "", 10)
 
 

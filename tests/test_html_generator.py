@@ -102,3 +102,55 @@ class TestBuildTable:
 
     def test_empty_rows(self):
         assert _build_table([], has_header=False) == ""
+
+    def test_column_count_normalization(self):
+        """HTML-03: Short rows padded to max column count."""
+        rows = [["A", "B", "C"], ["1", "2"]]
+        result = _build_table(rows, has_header=True)
+        # Row 2 should be padded to 3 cells
+        assert result.count("<td>") >= 3
+
+
+class TestRenderEdgeCases:
+    """TEST-03: Edge case tests for _render_content."""
+
+    def test_separator_after_data_rows(self):
+        """HTML-01: Separator after data rows should not set header flag."""
+        content = "| A | B |\n| 1 | 2 |\n|---|---|\n| 3 | 4 |"
+        result = _render_content(content)
+        assert "<table" in result
+        # Should NOT have a header (separator was after data)
+        assert "<thead>" not in result
+
+    def test_xss_in_table_cell(self):
+        """HTML-02: Script tags in table cells must be escaped."""
+        content = "| Header |\n|---|\n| <script>alert(1)</script> |"
+        result = _render_content(content)
+        assert "<script>" not in result
+        assert "&lt;script&gt;" in result
+
+    def test_xss_in_paragraph(self):
+        """HTML-02: HTML tags in paragraphs must be escaped (no raw tags)."""
+        result = _render_content('<img src=x onerror="alert(1)">')
+        # The important thing: <img is escaped so browser won't execute it
+        assert "&lt;img" in result
+        assert "<img " not in result  # no raw img tag
+
+    def test_valid_separator_requires_dashes(self):
+        """HTML-05: Separator must have dashes, not just pipes and spaces."""
+        content = "| A | B |\n|   |   |\n| 1 | 2 |"
+        result = _render_content(content)
+        # |   |   | should NOT be treated as separator
+        # It should be rendered as data row
+        assert "<td>" in result
+
+    def test_empty_table(self):
+        """Empty table rows produce no output."""
+        assert _build_table([], has_header=True) == ""
+
+    def test_single_row_no_header(self):
+        """Single row table without separator has no header."""
+        content = "| A | B |"
+        result = _render_content(content)
+        assert "<table" in result
+        assert "<thead>" not in result

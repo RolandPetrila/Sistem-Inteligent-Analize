@@ -151,8 +151,13 @@ def generate_compare_pdf(company_a: dict, company_b: dict, output_path: str):
         if va is None and vb is None:
             continue
 
-        va = va or 0
-        vb = vb or 0
+        # CMP-02: Show "[Date insuficiente]" for missing data instead of 0
+        if va is None and vb is not None:
+            va = 0  # need numeric for bar calculation
+        elif vb is None and va is not None:
+            vb = 0
+        elif va is None and vb is None:
+            continue
         max_val = max(abs(va), abs(vb), 1)
 
         pdf.set_font("Helvetica", "B", 10)
@@ -218,23 +223,86 @@ def generate_compare_pdf(company_a: dict, company_b: dict, output_path: str):
         pdf.multi_cell(0, 6, _sanitize(f"- {c}"))
         pdf.ln(1)
 
-    # F18: Narrative summary
+    # F18 + CMP-03: Extended narrative summary (4-6 sentences)
     if conclusions:
         pdf.ln(4)
         pdf.set_font("Helvetica", "B", 11)
         pdf.set_text_color(99, 102, 241)
-        pdf.cell(0, 8, "Rezumat", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 8, "Rezumat Comparativ", new_x="LMARGIN", new_y="NEXT")
         pdf.set_font("Helvetica", "", 10)
         pdf.set_text_color(40, 40, 40)
+        parts = []
         if a_wins > b_wins:
-            narrative = f"{name_a} prezinta performante superioare in {a_wins} din {len(conclusions)} indicatori analizati."
+            parts.append(f"{name_a} prezinta performante superioare in {a_wins} din {len(conclusions)} indicatori analizati.")
+            parts.append(f"{name_b} se evidentiaza in {b_wins} indicator(i)." if b_wins else "")
         elif b_wins > a_wins:
-            narrative = f"{name_b} prezinta performante superioare in {b_wins} din {len(conclusions)} indicatori analizati."
+            parts.append(f"{name_b} prezinta performante superioare in {b_wins} din {len(conclusions)} indicatori analizati.")
+            parts.append(f"{name_a} se evidentiaza in {a_wins} indicator(i)." if a_wins else "")
         else:
-            narrative = f"Cele doua firme au performante similare ({a_wins} indicatori fiecare)."
+            parts.append(f"Cele doua firme au performante similare ({a_wins} indicatori fiecare).")
+
+        # Add specific dimension insights
+        ca_a = company_a.get("cifra_afaceri")
+        ca_b = company_b.get("cifra_afaceri")
+        if isinstance(ca_a, (int, float)) and isinstance(ca_b, (int, float)) and (ca_a or ca_b):
+            bigger = name_a if ca_a > ca_b else name_b
+            parts.append(f"Din perspectiva cifrei de afaceri, {bigger} are dimensiune mai mare pe piata.")
+
+        risk_a = company_a.get("scor_risc")
+        risk_b = company_b.get("scor_risc")
+        if isinstance(risk_a, (int, float)) and isinstance(risk_b, (int, float)):
+            safer = name_a if risk_a > risk_b else name_b
+            parts.append(f"Din perspectiva riscului, {safer} prezinta un profil mai sigur (scor mai mare = risc mai mic).")
+
+        parts.append("Se recomanda analiza detaliata a fiecarei companii inainte de orice decizie de afaceri.")
+        narrative = " ".join(p for p in parts if p)
         pdf.multi_cell(0, 6, _sanitize(narrative))
 
     if not conclusions:
         pdf.multi_cell(0, 6, "Date insuficiente pentru concluzii comparative.")
+
+    # --- CMP-01: Page 5: Financial Ratios ---
+    ratios_a = company_a.get("ratios", {})
+    ratios_b = company_b.get("ratios", {})
+    if ratios_a or ratios_b:
+        pdf.add_page()
+        pdf.set_font("Helvetica", "B", 16)
+        pdf.set_text_color(99, 102, 241)
+        pdf.cell(0, 12, "Analiza Ratii Financiare", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_draw_color(99, 102, 241)
+        pdf.line(10, pdf.get_y(), 80, pdf.get_y())
+        pdf.ln(6)
+
+        ratio_labels = [
+            ("Marja Profit Net (%)", "profit_margin"),
+            ("ROE (%)", "roe"),
+            ("ROA (%)", "roa"),
+            ("Rata Solvabilitate", "solvency_ratio"),
+            ("CA / Angajat (RON)", "ca_per_employee"),
+            ("Rata Capitalizare", "equity_ratio"),
+        ]
+
+        col_w = [60, 55, 55]
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_fill_color(99, 102, 241)
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(col_w[0], 7, "Ratio", border=1, fill=True)
+        pdf.cell(col_w[1], 7, name_a[:25], border=1, align="C", fill=True)
+        pdf.cell(col_w[2], 7, name_b[:25], border=1, align="C", fill=True, new_x="LMARGIN", new_y="NEXT")
+
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_text_color(40, 40, 40)
+        for label, key in ratio_labels:
+            ra = ratios_a.get(key)
+            rb = ratios_b.get(key)
+            def _fmt_ratio(v):
+                if v is None:
+                    return "[Indisponibil]"
+                if isinstance(v, float):
+                    return f"{v:.2f}"
+                return str(v)
+            pdf.cell(col_w[0], 6, _sanitize(label), border=1)
+            pdf.cell(col_w[1], 6, _sanitize(_fmt_ratio(ra)), border=1, align="R")
+            pdf.cell(col_w[2], 6, _sanitize(_fmt_ratio(rb)), border=1, align="R", new_x="LMARGIN", new_y="NEXT")
 
     pdf.output(output_path)
