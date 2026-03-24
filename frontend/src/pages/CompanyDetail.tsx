@@ -14,6 +14,7 @@ import {
 import clsx from "clsx";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
+import { logAction } from "@/lib/logger";
 import { ANALYSIS_TYPE_LABELS } from "@/lib/constants";
 
 interface CompanyReport {
@@ -67,7 +68,10 @@ export default function CompanyDetail() {
     if (!id) return;
     api
       .getCompany(id)
-      .then((c) => setCompany(c as unknown as CompanyFull))
+      .then((c) => {
+        setCompany(c as unknown as CompanyFull);
+        logAction("CompanyDetail", "open", { companyId: id, name: (c as unknown as CompanyFull).name });
+      })
       .catch(() => toast("Eroare la incarcarea companiei", "error"))
       .finally(() => setLoading(false));
   }, [id]);

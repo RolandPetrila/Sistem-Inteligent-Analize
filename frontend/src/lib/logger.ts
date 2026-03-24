@@ -69,6 +69,31 @@ function _sendSessionStart(): void {
   });
 }
 
+// --- Componenta 1b (G3): Console.warn/error interception ---
+
+function _setupConsoleInterception(): void {
+  const origWarn = console.warn;
+  const origError = console.error;
+
+  console.warn = (...args: unknown[]) => {
+    origWarn.apply(console, args);
+    const msg = args.map(String).join(" ").slice(0, 200);
+    // Skip React internal noise (StrictMode double-renders)
+    if (!msg.includes("findDOMNode") && !msg.includes("UNSAFE_")) {
+      _enqueue({ ts: _now(), level: "CONSOLE", page: _currentPage, message: `WARN: ${msg}` });
+    }
+  };
+
+  console.error = (...args: unknown[]) => {
+    origError.apply(console, args);
+    const msg = args.map(String).join(" ").slice(0, 200);
+    // Skip errors already captured by window.onerror
+    if (!msg.includes("The above error occurred")) {
+      _enqueue({ ts: _now(), level: "CONSOLE", page: _currentPage, message: `ERROR: ${msg}` });
+    }
+  };
+}
+
 // --- Componenta 1: Error Capture ---
 
 function _setupErrorHandlers(): void {
@@ -104,6 +129,7 @@ function _setupErrorHandlers(): void {
 /** Initialize logger — call once in main.tsx */
 export function initLogger(): void {
   _setupErrorHandlers();
+  _setupConsoleInterception();
   _sendSessionStart();
   _timer = setInterval(_flush, BATCH_INTERVAL);
 
@@ -236,4 +262,25 @@ export function validateCompareData(
   if (!d.company_b) issues.push("company_b missing");
   if (!d.comparison) issues.push("comparison data missing");
   return issues;
+}
+
+/** G5: Get recent log entries as text (for copy-to-clipboard button) */
+export function getLogBuffer(): string {
+  return _queue
+    .map((e) => `[${e.ts}] ${e.level.padEnd(8)} | ${e.page} | ${e.message}${e.details ? ` | ${e.details}` : ""}`)
+    .join("\n");
+}
+
+/** G4: WebSocket event logging */
+export function logWs(
+  jobId: string,
+  event: string,
+  details?: string,
+): void {
+  _enqueue({
+    ts: _now(),
+    level: "WS",
+    page: _currentPage,
+    message: `${event} | job=${jobId}${details ? ` | ${details}` : ""}`,
+  });
 }

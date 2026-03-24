@@ -41,7 +41,7 @@ export default function Dashboard() {
     Promise.all([
       api.getStats(),
       api.listJobs({ limit: 5 }),
-      fetch("/api/settings").then(r => r.json()).catch(() => null),
+      api.getSettings().catch(() => null),
       api.healthDeep().catch(() => null),
     ])
       .then(([s, j, settings, health]) => {
@@ -344,8 +344,7 @@ function TrendChart() {
   const [trend, setTrend] = useState<{ month: string; count: number }[]>([]);
 
   useEffect(() => {
-    fetch("/api/stats/trend")
-      .then((r) => r.json())
+    api.getStatsTrend()
       .then((data) => setTrend(data.trend || []))
       .catch(() => { /* trend chart optional — fail silently */ });
   }, []);

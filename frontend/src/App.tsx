@@ -1,6 +1,7 @@
-import { lazy, Suspense } from "react";
-import { Routes, Route, Link } from "react-router-dom";
+import { lazy, Suspense, useEffect } from "react";
+import { Routes, Route, Link, useLocation } from "react-router-dom";
 import Layout from "./components/Layout";
+import { setPage } from "./lib/logger";
 
 // Lazy-loaded pages for code splitting
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -35,9 +36,20 @@ function NotFound() {
   );
 }
 
+function RouteTracker() {
+  const location = useLocation();
+  useEffect(() => {
+    // G8: Auto-log every route change as safety net
+    const page = location.pathname.split("/").filter(Boolean)[0] || "Dashboard";
+    setPage(page);
+  }, [location.pathname]);
+  return null;
+}
+
 export default function App() {
   return (
     <Suspense fallback={<PageLoader />}>
+      <RouteTracker />
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />

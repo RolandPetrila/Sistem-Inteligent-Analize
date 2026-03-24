@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Plus, Trash2, Search, ArrowUpDown, CheckCircle, XCircle, Download } from "lucide-react";
 import { validateCUI } from "@/lib/cui-validator";
 import { logAction } from "@/lib/logger";
+import { api } from "@/lib/api";
 import clsx from "clsx";
 
 interface CompanyResult {
@@ -70,16 +71,7 @@ export default function CompareCompanies() {
     setError(null);
     logAction("Compare", "start", { cuis: valid });
     try {
-      const res = await fetch("/api/compare", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cui_list: valid }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
+      const data = await api.compareCompanies(valid) as CompareResult;
       setResult(data);
       logAction("Compare", "done", { companies: data.companies?.length });
     } catch (e: unknown) {
@@ -182,16 +174,8 @@ export default function CompareCompanies() {
               <button
                 onClick={async () => {
                   try {
-                    const res = await fetch("/api/compare/report", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        cui_1: result.companies[0].cui,
-                        cui_2: result.companies[1].cui,
-                      }),
-                    });
-                    if (!res.ok) throw new Error("PDF generation failed");
-                    const blob = await res.blob();
+                    logAction("Compare", "downloadPDF", { cui1: result.companies[0].cui, cui2: result.companies[1].cui });
+                    const blob = await api.compareReport(result.companies[0].cui, result.companies[1].cui);
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement("a");
                     a.href = url;

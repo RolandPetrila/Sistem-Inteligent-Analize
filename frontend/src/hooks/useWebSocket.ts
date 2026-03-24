@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from "react";
 import type { WSMessage } from "@/lib/types";
+import { logWs } from "@/lib/logger";
 
 const RECONNECT_DELAYS = [2000, 5000, 10000, 30000];
 const PING_INTERVAL = 30000;
@@ -28,6 +29,7 @@ export function useWebSocket(
 
     ws.onopen = () => {
       retryCountRef.current = 0;
+      logWs(jobId, "connected");
       // Start ping
       pingIntervalRef.current = window.setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
@@ -55,11 +57,15 @@ export function useWebSocket(
       if (enabled && retryCountRef.current < RECONNECT_DELAYS.length) {
         const delay = RECONNECT_DELAYS[retryCountRef.current];
         retryCountRef.current++;
+        logWs(jobId, "disconnected", `retry ${retryCountRef.current} in ${delay}ms`);
         reconnectTimeoutRef.current = window.setTimeout(connect, delay);
+      } else {
+        logWs(jobId, "closed");
       }
     };
 
     ws.onerror = () => {
+      logWs(jobId, "error");
       ws.close();
     };
   }, [jobId, enabled]);

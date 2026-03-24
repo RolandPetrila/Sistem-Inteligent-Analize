@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { Upload, Download, Loader2, CheckCircle, XCircle } from "lucide-react";
 import clsx from "clsx";
 import { useToast } from "@/components/Toast";
+import { api } from "@/lib/api";
+import { logAction } from "@/lib/logger";
 
 interface BatchStatus {
   batch_id: string;
@@ -32,25 +34,10 @@ export default function BatchAnalysis() {
   const handleUpload = async () => {
     if (!file) return;
     setSubmitting(true);
-
-    const formData = new FormData();
-    formData.append("file", file);
+    logAction("BatchAnalysis", "upload", { fileName: file.name, size: file.size });
 
     try {
-      // C15 fix: Use FULL_COMPANY_PROFILE to match backend routing (enables Agent 3 for Market/SEAP)
-      const res = await fetch("/api/batch?analysis_type=FULL_COMPANY_PROFILE&report_level=2", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        toast(err.detail || "Eroare la upload", "error");
-        setSubmitting(false);
-        return;
-      }
-
-      const data = await res.json();
+      const data = await api.uploadBatch(file);
       toast(`Batch pornit: ${data.total_cuis} firme`, "success");
 
       // Start polling (C23 fix: use ref for cleanup on unmount)
@@ -58,8 +45,7 @@ export default function BatchAnalysis() {
       if (intervalRef.current) clearInterval(intervalRef.current);
       const interval = setInterval(async () => {
         try {
-          const statusRes = await fetch(`/api/batch/${data.batch_id}`);
-          const status: BatchStatus = await statusRes.json();
+          const status = await api.getBatchStatus(data.batch_id) as unknown as BatchStatus;
           setBatch(status);
 
           if (status.status === "DONE" || status.status === "FAILED") {

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { FileText, Eye, ChevronLeft, ChevronRight } from "lucide-react";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
+import { logAction } from "@/lib/logger";
 import type { Report } from "@/lib/types";
 import { ANALYSIS_TYPE_LABELS } from "@/lib/constants";
 import clsx from "clsx";
@@ -23,6 +24,7 @@ export default function ReportsList() {
       .then((res) => {
         setReports(res.reports);
         setTotal(res.total);
+        logAction("ReportsList", "loaded", { total: res.total, page: pageNum });
       })
       .catch(() => toast("Eroare la incarcarea rapoartelor", "error"))
       .finally(() => setLoading(false));

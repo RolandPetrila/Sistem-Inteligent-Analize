@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Bell, BellOff, Trash2, RefreshCw, Plus } from "lucide-react";
 import clsx from "clsx";
 import { useToast } from "@/components/Toast";
+import { api } from "@/lib/api";
+import { logAction } from "@/lib/logger";
 
 interface MonitoringAlert {
   id: string;
@@ -32,11 +34,12 @@ export default function Monitoring() {
   const loadData = async () => {
     try {
       const [alertsRes, companiesRes] = await Promise.all([
-        fetch("/api/monitoring").then((r) => r.json()),
-        fetch("/api/companies?limit=100").then((r) => r.json()),
+        api.listMonitoring(),
+        api.listCompanies({ limit: 100 }),
       ]);
-      setAlerts(alertsRes.alerts || []);
-      setCompanies(companiesRes.companies || []);
+      setAlerts((alertsRes as { alerts: MonitoringAlert[] }).alerts || []);
+      setCompanies((companiesRes.companies || []) as unknown as CompanyOption[]);
+      logAction("Monitoring", "loaded", { alerts: (alertsRes as { alerts: unknown[] }).alerts?.length });
     } catch {
       toast("Eroare la incarcarea datelor de monitorizare", "error");
     } finally {
@@ -48,12 +51,9 @@ export default function Monitoring() {
 
   const addAlert = async () => {
     if (!selectedCompany) return;
+    logAction("Monitoring", "addAlert", { companyId: selectedCompany });
     try {
-      await fetch("/api/monitoring", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company_id: selectedCompany }),
-      });
+      await api.createMonitoring({ company_id: selectedCompany });
       setSelectedCompany("");
       loadData();
     } catch { toast("Eroare la adaugarea alertei", "error"); }
@@ -62,16 +62,15 @@ export default function Monitoring() {
   // C25 fix: Add try/catch to toggle and delete
   const toggleAlert = async (id: string) => {
     try {
-      const res = await fetch(`/api/monitoring/${id}/toggle`, { method: "PUT" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await api.toggleMonitoring(id);
       loadData();
     } catch { toast("Eroare la schimbarea starii alertei", "error"); }
   };
 
   const deleteAlert = async (id: string) => {
+    logAction("Monitoring", "deleteAlert", { alertId: id });
     try {
-      const res = await fetch(`/api/monitoring/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await api.deleteMonitoring(id);
       loadData();
       toast("Alerta stearsa", "success");
     } catch { toast("Eroare la stergerea alertei", "error"); }
@@ -79,9 +78,9 @@ export default function Monitoring() {
 
   const checkNow = async () => {
     setChecking(true);
+    logAction("Monitoring", "checkNow");
     try {
-      const res = await fetch("/api/monitoring/check-now", { method: "POST" });
-      const data = await res.json();
+      const data = await api.checkMonitoringNow() as { checked: number; alerts_triggered: number };
       toast(`Verificare completa: ${data.checked} firme, ${data.alerts_triggered} alerte`, "success");
       loadData();
     } catch { toast("Eroare la verificarea monitorizarii", "error"); }

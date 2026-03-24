@@ -11,9 +11,12 @@ import {
   Cpu,
   Eye,
   EyeOff,
+  Copy,
 } from "lucide-react";
 import clsx from "clsx";
 import { useToast } from "@/components/Toast";
+import { api } from "@/lib/api";
+import { logAction, getLogBuffer } from "@/lib/logger";
 
 interface SettingsData {
   fields: Record<string, string>;
@@ -51,11 +54,11 @@ export default function Settings() {
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    fetch("/api/settings")
-      .then((r) => r.json())
-      .then((d: SettingsData) => {
-        setData(d);
-        setFields(d.fields);
+    api.getSettings()
+      .then((d) => {
+        setData(d as unknown as SettingsData);
+        setFields((d as unknown as SettingsData).fields);
+        logAction("Settings", "loaded");
       })
       .catch(() => toast("Eroare la incarcarea setarilor", "error"));
   }, []);
@@ -63,13 +66,9 @@ export default function Settings() {
   const handleSave = async () => {
     setSaving(true);
     setSaved(false);
+    logAction("Settings", "save");
     try {
-      const res = await fetch("/api/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fields }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await api.updateSettings(fields);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch {
@@ -81,9 +80,9 @@ export default function Settings() {
 
   const handleTestTelegram = async () => {
     setTestResult(null);
+    logAction("Settings", "testTelegram");
     try {
-      const res = await fetch("/api/settings/test-telegram", { method: "POST" });
-      const d = await res.json();
+      const d = await api.testTelegram();
       setTestResult(d.success ? "Mesaj trimis cu succes!" : "Trimitere esuata");
     } catch {
       setTestResult("Eroare conexiune");
@@ -235,6 +234,33 @@ export default function Settings() {
           </div>
         </div>
       )}
+
+      {/* G5: Buton copiaza loguri frontend */}
+      <div className="card">
+        <h3 className="text-sm font-semibold text-gray-400 uppercase mb-3">
+          Diagnostice
+        </h3>
+        <button
+          onClick={() => {
+            const logs = getLogBuffer();
+            if (logs) {
+              navigator.clipboard.writeText(logs).then(
+                () => toast("Loguri copiate in clipboard!", "success"),
+                () => toast("Nu s-au putut copia logurile", "error"),
+              );
+            } else {
+              toast("Nu exista loguri in aceasta sesiune", "info");
+            }
+          }}
+          className="btn-secondary flex items-center gap-2 text-sm"
+        >
+          <Copy className="w-4 h-4" />
+          Copiaza loguri sesiune
+        </button>
+        <p className="text-xs text-gray-600 mt-2">
+          Copiaza logurile din sesiunea curenta in clipboard. Utile pentru depanare.
+        </p>
+      </div>
     </div>
   );
 }

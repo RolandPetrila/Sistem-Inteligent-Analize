@@ -229,4 +229,42 @@ export const api = {
 
   // Health deep
   healthDeep: () => request<Record<string, unknown>>("/health/deep"),
+
+  // Batch upload (FormData — not JSON, needs custom fetch with logging)
+  uploadBatch: async (file: File, analysisType = "FULL_COMPANY_PROFILE", reportLevel = 2) => {
+    const start = performance.now();
+    const res = await fetch(`${BASE}/batch?analysis_type=${analysisType}&report_level=${reportLevel}`, {
+      method: "POST",
+      body: (() => { const fd = new FormData(); fd.append("file", file); return fd; })(),
+    });
+    const ms = Math.round(performance.now() - start);
+    if (!res.ok) {
+      logApi("POST", "/batch", res.status, ms, "Upload failed");
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new ApiError(err.detail || `HTTP ${res.status}`, "", res.status);
+    }
+    logApi("POST", "/batch", res.status, ms);
+    return res.json() as Promise<{ batch_id: string; total_cuis: number }>;
+  },
+
+  // Compare report PDF download (binary response)
+  compareReport: async (cui1: string, cui2: string) => {
+    const start = performance.now();
+    const res = await fetch(`${BASE}/compare/report`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cui_1: cui1, cui_2: cui2 }),
+    });
+    const ms = Math.round(performance.now() - start);
+    if (!res.ok) {
+      logApi("POST", "/compare/report", res.status, ms, "PDF generation failed");
+      throw new ApiError("PDF generation failed", "", res.status);
+    }
+    logApi("POST", "/compare/report", res.status, ms);
+    return res.blob();
+  },
+
+  // Monitoring toggle
+  toggleMonitoring: (id: string) =>
+    request<unknown>(`/monitoring/${id}/toggle`, { method: "PUT" }),
 };

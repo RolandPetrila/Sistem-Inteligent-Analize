@@ -12,6 +12,7 @@ import {
 import clsx from "clsx";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
+import { logAction } from "@/lib/logger";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import type { Job, WSMessage } from "@/lib/types";
 import { ANALYSIS_TYPE_LABELS } from "@/lib/constants";
@@ -26,6 +27,7 @@ export default function AnalysisProgress() {
   // Load job on mount
   useEffect(() => {
     if (!id) return;
+    logAction("AnalysisProgress", "open", { jobId: id });
     api.getJob(id).then(setJob).catch(() => toast("Eroare la incarcarea jobului", "error"));
   }, [id]);
 
@@ -63,6 +65,7 @@ export default function AnalysisProgress() {
         prev ? { ...prev, status: "DONE", progress_percent: 100 } : prev
       );
       if (msg.report_id) setReportId(msg.report_id);
+      logAction("AnalysisProgress", "complete", { jobId: id, reportId: msg.report_id, formats: msg.formats });
       setLogs((prev) => [
         ...prev,
         { text: `Analiza finalizata! Formate: ${(msg.formats || []).join(", ").toUpperCase() || "N/A"}`, type: "success" },
@@ -74,6 +77,7 @@ export default function AnalysisProgress() {
           ? { ...prev, status: "FAILED", error_message: msg.error || null }
           : prev
       );
+      logAction("AnalysisProgress", "failed", { jobId: id, error: msg.error });
       setLogs((prev) => [
         ...prev,
         { text: msg.error || "Eroare fatala", type: "error" },

@@ -3,6 +3,7 @@ import { Building2, Download, Search, ChevronLeft, ChevronRight } from "lucide-r
 import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
+import { logAction } from "@/lib/logger";
 import { useDebounce } from "@/hooks/useDebounce";
 import type { Company } from "@/lib/types";
 
@@ -26,6 +27,7 @@ export default function Companies() {
       .then((res) => {
         setCompanies(res.companies);
         setTotal(res.total);
+        logAction("Companies", "loaded", { total: res.total });
       })
       .catch(() => toast("Eroare la incarcarea companiilor", "error"))
       .finally(() => setLoading(false));
