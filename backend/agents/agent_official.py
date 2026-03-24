@@ -5,7 +5,7 @@ Output: JSON structurat cu toate campurile + sursa + timestamp
 """
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, date, UTC
 
 from loguru import logger
 
@@ -43,7 +43,7 @@ class OfficialAgent(BaseAgent):
 
         sources: list[SourceResult] = []
         official_data: dict = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "cui_input": cui,
         }
 
@@ -309,7 +309,7 @@ class OfficialAgent(BaseAgent):
             bilant_years = list(official_data["financial_official"].get("data", {}).keys()) if isinstance(official_data["financial_official"].get("data"), dict) else []
             if bilant_years:
                 latest_year = max(int(y) for y in bilant_years if str(y).isdigit())
-                age_years = datetime.utcnow().year - latest_year
+                age_years = datetime.now(UTC).year - latest_year
                 data_freshness["anaf_bilant"] = {"latest_year": latest_year, "data_age_years": age_years, "fresh": age_years <= 1}
         if official_data.get("anaf", {}).get("found"):
             data_freshness["anaf_fiscal"] = {"data_age_years": 0, "fresh": True, "note": "real-time API"}
@@ -432,7 +432,7 @@ class OfficialAgent(BaseAgent):
         )
 
     async def _fetch_bnr(self) -> dict:
-        from datetime import date
+        from datetime import date, UTC
         cache_key = cache_service.make_cache_key("bnr", str(date.today()))
         return await cache_service.get_or_fetch(
             key=cache_key,

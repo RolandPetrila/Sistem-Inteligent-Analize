@@ -6,7 +6,7 @@ Lazy imports: fpdf2/openpyxl/pptx/docx se importeaza DOAR cand genereaza efectiv
 
 import zipfile
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, date, UTC
 
 from loguru import logger
 
@@ -50,7 +50,7 @@ async def generate_all_reports(
         "company_name": company_name or "N/A",
         "report_level": report_level,
         "analysis_type": analysis_type,
-        "generated_at": datetime.utcnow().strftime("%d.%m.%Y %H:%M"),
+        "generated_at": datetime.now(UTC).strftime("%d.%m.%Y %H:%M"),
         "risk_score": risk_score.get("score", "N/A"),
         "numeric_score": risk_score.get("numeric_score"),
         "risk_recommendation": risk_score.get("recommendation", ""),
@@ -141,7 +141,7 @@ async def generate_all_reports(
                 cui_part = cui_field.get("value", "")
             elif isinstance(cui_field, str):
                 cui_part = cui_field
-            date_part = datetime.utcnow().strftime("%Y-%m-%d")
+            date_part = datetime.now(UTC).strftime("%Y-%m-%d")
             zip_name = f"raport_{cui_part}_{date_part}.zip" if cui_part else f"raport_{date_part}.zip"
             zip_path = output_dir / zip_name
             with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:

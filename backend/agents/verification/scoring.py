@@ -2,10 +2,47 @@
 Risk scoring logic — 6 dimensiuni ponderate, scor 0-100.
 Phase 8B: Trend scoring, solvency ratio, volatility index, age-adjusted.
 Phase 9B: Cash flow proxy, anomaly feedback, confidence scoring.
+SCORE-01/02 (R10): Modularized into sub-functions + extracted constants.
 """
 import math
 from datetime import date
 from loguru import logger
+
+
+# SCORE-02: Scoring constants — extracted from magic numbers
+DIMENSION_WEIGHTS = {
+    "financiar": 30,
+    "juridic": 20,
+    "fiscal": 15,
+    "operational": 15,
+    "reputational": 10,
+    "piata": 10,
+}
+
+SCORING_THRESHOLDS = {
+    "ca_excellent": 10_000_000,
+    "ca_good": 1_000_000,
+    "ca_ok": 100_000,
+    "growth_excellent": 50,
+    "growth_good": 20,
+    "growth_decline_critical": -30,
+    "growth_decline_moderate": -10,
+    "volatility_high": 0.5,
+    "volatility_very_high": 0.8,
+    "solvency_strong": 0.5,
+    "solvency_weak": 0.2,
+    "age_startup_years": 3,
+    "age_established_years": 10,
+    "angajati_micro": 3,
+    "angajati_small": 10,
+    "angajati_medium": 50,
+}
+
+COLOR_MAP = {
+    "Verde": 70,   # score >= 70
+    "Galben": 40,  # score >= 40
+    "Rosu": 0,     # score < 40
+}
 
 
 def _calculate_financial_ratios(financial: dict) -> list[dict]:

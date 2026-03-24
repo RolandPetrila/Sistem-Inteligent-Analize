@@ -6,7 +6,7 @@ Porneste LangGraph, broadcast progress via WebSocket, update DB.
 import asyncio
 import json
 import ctypes
-from datetime import datetime
+from datetime import datetime, date, UTC
 
 from loguru import logger
 
@@ -104,7 +104,7 @@ async def run_analysis_job(job_id: str, ws_manager=None):
     prevent_sleep()
 
     # Update status
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(UTC).isoformat()
     await db.execute(
         "UPDATE jobs SET status = 'RUNNING', started_at = ?, current_step = ? WHERE id = ?",
         (now, "Initializare agenti...", job_id),
@@ -305,7 +305,7 @@ async def run_analysis_job(job_id: str, ws_manager=None):
 
         # Log report generation
         log_report_generation(job_id, formats_available, int(
-            (datetime.utcnow() - datetime.fromisoformat(now)).total_seconds() * 1000
+            (datetime.now(UTC) - datetime.fromisoformat(now)).total_seconds() * 1000
         ))
 
         # Finish job log
@@ -318,7 +318,7 @@ async def run_analysis_job(job_id: str, ws_manager=None):
         )
 
         # Notificari
-        elapsed = (datetime.utcnow() - datetime.fromisoformat(now)).total_seconds()
+        elapsed = (datetime.now(UTC) - datetime.fromisoformat(now)).total_seconds()
         await notify_job_complete(
             job_id=job_id,
             analysis_type=analysis_type,

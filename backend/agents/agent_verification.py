@@ -10,7 +10,7 @@ Reguli:
 5. Deduplicare cu cross-validation
 """
 
-from datetime import datetime
+from datetime import datetime, date, UTC
 
 from loguru import logger
 
@@ -64,7 +64,7 @@ class VerificationAgent(BaseAgent):
         market = state.get("market_data") or {}
 
         verified: dict = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "verification_version": "1.0",
         }
 
@@ -152,7 +152,7 @@ class VerificationAgent(BaseAgent):
             "value": value,
             "trust": self._trust_label(source),
             "source": source,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
         if note:
             field["note"] = note
@@ -623,9 +623,6 @@ class VerificationAgent(BaseAgent):
         from backend.agents.verification.scoring import calculate_risk_score
         return calculate_risk_score(verified)
 
-    # SPLIT-02: Dead code _calculate_risk_score_ORIGINAL_REMOVED deleted (169 LOC)
-    # Logic lives in backend/agents/verification/scoring.py
-
     def _detect_anomalies(self, official: dict, verified: dict) -> list[dict]:
         """
         Detecteaza pattern-uri suspecte / firme fantoma.
@@ -684,7 +681,7 @@ class VerificationAgent(BaseAgent):
         # Regula 5: Firma foarte noua + CA mare
         if data_inreg:
             try:
-                from datetime import datetime
+                from datetime import datetime, date, UTC
                 inreg_date = datetime.strptime(data_inreg.split(" ")[-1] if " " in data_inreg else data_inreg, "%d.%m.%Y")
                 age_years = (datetime.now() - inreg_date).days / 365.25
                 if age_years < 1 and ca is not None and ca > 500_000:

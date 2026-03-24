@@ -41,8 +41,9 @@ Sistem local de Business Intelligence care ruleaza pe Windows 10. Extrage automa
 - **Faza 14 (R7):** COMPLETATA — 15 items: E1-E13 + EP1-EP3 + ER1-ER2 — calitate rapoarte, surse noi (BPI insolventa, ANAF inactivi/risc fiscal), anti-halucination, template-uri, raport comparativ PDF, sparkline trend, Excel Trend sheet
 - **Faza 15 (R8):** COMPLETATA — 21 items: F1-F21 (3 CRIT + 9 HIGH + 8 MED + 1 LOW) — WS bug fix, HTML tables/bold/numbered lists, version unify, PRAGMA optimize, dead deps cleanup, silent except→logger.debug, anti-hallucination skip, DRY providers, split verification (1248→982 LOC), BPI robust, compare PDF narrative, teste html/orchestrator/pdf, PDF markdown tables
 - **Faza 16 (R9):** COMPLETATA — 41 items in 5 BLOC-uri: BPI false positive fix + 11 teste, anti-hallucination hardening (completeness gate, prompt, competitor detection) + 14 teste, HTML/PDF edge cases (separator, XSS, column norm, truncation) + 7 teste, Compare PDF ratii financiare + narrative, dead code cleanup + scoring tests + datetime migration
+- **Faza 17 (R10):** COMPLETATA — Audit Full 90/100 + R10 unificat: unused deps removed (python-dotenv, jinja2), ALL datetime.utcnow migrated (29 locations, 0 warnings), WS auth token, scoring constants extracted, README.md, 15 router tests, comment cleanup, DB except fix
 - **Feedback Loop:** ACTIV — RIS_TEST.bat, logs/ris_summary.log, ris_runtime.log, ris_frontend.log (5 componente), ISSUES.md, session startup protocol, G1-G8 complete
-- **Git:** https://github.com/RolandPetrila/Sistem-Inteligent-Analize.git | 167 teste (156 pytest + 11 vitest)
+- **Git:** https://github.com/RolandPetrila/Sistem-Inteligent-Analize.git | 182 teste (171 pytest + 11 vitest)
 - **12 pagini frontend** (adaugat CompanyDetail /company/:id)
 - **Planificari detaliate:** ROLAND_PLANIFICARI_MODULE.md (R4 + R5 + R6 + R7 = 88 items total)
 - **Deep Research:** 99_Deep_Research/ (2 rapoarte complete cu roadmap)

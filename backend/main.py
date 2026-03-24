@@ -452,6 +452,13 @@ async def get_stats_trend():
 
 @app.websocket("/ws/jobs/{job_id}")
 async def websocket_job_progress(websocket: WebSocket, job_id: str):
+    # SEC-01: Validate API key on WebSocket upgrade if configured
+    if settings.ris_api_key:
+        token = websocket.query_params.get("token", "")
+        if token != settings.ris_api_key:
+            await websocket.close(code=4001, reason="Unauthorized")
+            return
+
     await ws_manager.connect(job_id, websocket)
     try:
         # Send current state on connect

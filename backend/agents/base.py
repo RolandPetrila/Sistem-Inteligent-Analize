@@ -1,6 +1,6 @@
 import asyncio
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, date, UTC
 
 from loguru import logger
 
@@ -21,19 +21,19 @@ class BaseAgent(ABC):
     async def run(self, state: AnalysisState) -> dict:
         """Execute with timeout, error handling, and logging."""
         logger.info(f"[{self.name}] Starting...")
-        start = datetime.utcnow()
+        start = datetime.now(UTC)
 
         try:
             result = await asyncio.wait_for(
                 self.execute(state),
                 timeout=self.total_timeout,
             )
-            elapsed = (datetime.utcnow() - start).total_seconds()
+            elapsed = (datetime.now(UTC) - start).total_seconds()
             logger.info(f"[{self.name}] Completed in {elapsed:.1f}s")
             return result
 
         except asyncio.TimeoutError:
-            elapsed = (datetime.utcnow() - start).total_seconds()
+            elapsed = (datetime.now(UTC) - start).total_seconds()
             logger.error(f"[{self.name}] Timeout after {elapsed:.1f}s")
             return {
                 "errors": [AgentError(
@@ -44,7 +44,7 @@ class BaseAgent(ABC):
             }
 
         except Exception as e:
-            elapsed = (datetime.utcnow() - start).total_seconds()
+            elapsed = (datetime.now(UTC) - start).total_seconds()
             logger.error(f"[{self.name}] Error after {elapsed:.1f}s: {e}")
             return {
                 "errors": [AgentError(
@@ -62,11 +62,11 @@ class BaseAgent(ABC):
     ) -> SourceResult:
         """Execute an async callable with retry logic. Returns SourceResult."""
         for attempt in range(self.max_retries):
-            start_ms = datetime.utcnow()
+            start_ms = datetime.now(UTC)
             try:
                 data = await coro_factory()
                 elapsed_ms = int(
-                    (datetime.utcnow() - start_ms).total_seconds() * 1000
+                    (datetime.now(UTC) - start_ms).total_seconds() * 1000
                 )
                 # Determina daca datele sunt reale (nu doar un dict cu eroare)
                 has_real_data = bool(data)
@@ -86,7 +86,7 @@ class BaseAgent(ABC):
                 )
             except Exception as e:
                 elapsed_ms = int(
-                    (datetime.utcnow() - start_ms).total_seconds() * 1000
+                    (datetime.now(UTC) - start_ms).total_seconds() * 1000
                 )
                 if attempt < self.max_retries - 1:
                     delay = self.retry_backoff[min(attempt, len(self.retry_backoff) - 1)]

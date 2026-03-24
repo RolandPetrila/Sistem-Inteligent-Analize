@@ -9,7 +9,7 @@ import io
 import json
 import uuid
 import zipfile
-from datetime import datetime
+from datetime import datetime, date, UTC
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
@@ -107,7 +107,7 @@ async def create_batch(
         raise HTTPException(status_code=400, detail="Maximum 50 CUI-uri per batch")
 
     # B21 fix: Auto-timeout stuck batches (RUNNING > 4 hours) before checking limit
-    four_hours_ago = (datetime.utcnow().timestamp() - 4 * 3600)
+    four_hours_ago = (datetime.now(UTC).timestamp() - 4 * 3600)
     stuck = await db.fetch_all(
         "SELECT id FROM jobs WHERE type LIKE 'BATCH_%' AND status = 'RUNNING' AND started_at IS NOT NULL"
     )
@@ -133,7 +133,7 @@ async def create_batch(
         raise HTTPException(status_code=429, detail="Maximum 2 batch-uri active simultan. Asteapta finalizarea.")
 
     batch_id = str(uuid.uuid4())
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(UTC).isoformat()
 
     # Salveaza batch in DB cu progress initial
     input_data = {
@@ -319,7 +319,7 @@ async def _analyze_one_cui(
 
     async with sem:
         sub_job_id = str(uuid.uuid4())
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(UTC).isoformat()
         input_params = {"cui": cui, "refresh": refresh}  # 10F M8.5: Fresh Data Option
 
         await db.execute(
@@ -366,7 +366,7 @@ async def _run_batch(
         logger.error(f"[batch] {batch_id[:8]}: Top-level error: {e}")
         await db.execute(
             "UPDATE jobs SET status = 'ERROR', error_message = ?, completed_at = ? WHERE id = ?",
-            (f"Eroare neasteptata: {str(e)[:200]}", datetime.utcnow().isoformat(), batch_id),
+            (f"Eroare neasteptata: {str(e)[:200]}", datetime.now(UTC).isoformat(), batch_id),
         )
 
 
@@ -385,7 +385,7 @@ async def _run_batch_inner(
 
     await db.execute(
         "UPDATE jobs SET status = 'RUNNING', started_at = ? WHERE id = ?",
-        (datetime.utcnow().isoformat(), batch_id),
+        (datetime.now(UTC).isoformat(), batch_id),
     )
 
     # C14 fix: Load existing results from progress (for resume scenarios)
@@ -488,7 +488,7 @@ async def _run_batch_inner(
     await db.execute(
         "UPDATE jobs SET status = 'DONE', progress_percent = 100, "
         "current_step = ?, completed_at = ? WHERE id = ?",
-        (f"Batch complet: {completed} OK, {failed} erori din {total}", datetime.utcnow().isoformat(), batch_id),
+        (f"Batch complet: {completed} OK, {failed} erori din {total}", datetime.now(UTC).isoformat(), batch_id),
     )
 
     if ws_manager:

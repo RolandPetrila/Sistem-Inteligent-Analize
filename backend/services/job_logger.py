@@ -15,7 +15,7 @@ Log-urile pot fi citite cu orice text editor din: logs/job_{id}.log
 
 import sys
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, UTC
 
 from loguru import logger
 
@@ -55,7 +55,7 @@ def start_job_log(job_id: str, analysis_type: str = "", cui: str = "", company_n
     Adauga un sink loguru care filtreaza doar mesajele pentru acest job.
     """
     log_path = _get_log_path(job_id)
-    _job_start_times[job_id] = datetime.utcnow()
+    _job_start_times[job_id] = datetime.now(UTC)
     _job_events[job_id] = []
 
     # Adauga sink loguru care captureaza TOATE mesajele (vom filtra per job in cod)
@@ -187,7 +187,7 @@ def _track_event(job_id: str, source: str, status: str, elapsed_ms: int, error: 
             "status": status,
             "elapsed_ms": elapsed_ms,
             "error": error,
-            "time": datetime.utcnow().isoformat(),
+            "time": datetime.now(UTC).isoformat(),
         })
 
 
@@ -200,7 +200,7 @@ def finish_job_log(job_id: str, success: bool = True, error: str = "",
     """
     jl = get_job_logger(job_id)
     start = _job_start_times.get(job_id)
-    elapsed = (datetime.utcnow() - start).total_seconds() if start else 0
+    elapsed = (datetime.now(UTC) - start).total_seconds() if start else 0
     events = _job_events.get(job_id, [])
 
     # Rezumat surse
@@ -251,7 +251,7 @@ def finish_job_log(job_id: str, success: bool = True, error: str = "",
         status_str = "DONE" if success else "FAILED"
         fail_names = ", ".join(fs["source"] for fs in fail_sources) if fail_sources else "none"
         formats_str = ", ".join(report_formats) if report_formats else "none"
-        ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        ts = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
 
         summary_line = (
             f"[{ts}] CUI={cui_val} | {company_val} | {status_str} | {elapsed:.0f}s | "

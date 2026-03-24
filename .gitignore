@@ -60,3 +60,4 @@ ROLAND_UPDATE_FULL.md
 
 # Test runner output (generated, not tracked)
 TEST_RESULTS.log
+*.tsbuildinfo

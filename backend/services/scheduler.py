@@ -5,7 +5,7 @@ Foloseste asyncio.create_task cu sleep loop (lightweight, fara dependinte extern
 """
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, date, UTC
 
 from loguru import logger
 
@@ -40,7 +40,7 @@ async def _save_checkpoint(key: str, status: str = "OK"):
     """Persist last_run timestamp to DB."""
     try:
         from backend.database import db
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(UTC).isoformat()
         await db.execute(
             "INSERT OR REPLACE INTO scheduler_state (key, last_run, run_count, last_status) "
             "VALUES (?, ?, COALESCE((SELECT run_count FROM scheduler_state WHERE key = ?), 0) + 1, ?)",
@@ -82,7 +82,7 @@ async def _scheduler_loop():
     await asyncio.sleep(30)
 
     while _running:
-        now = datetime.utcnow().timestamp()
+        now = datetime.now(UTC).timestamp()
 
         # Monitoring check
         if now - last_monitoring >= MONITORING_INTERVAL:

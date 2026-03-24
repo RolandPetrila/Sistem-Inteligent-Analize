@@ -65,8 +65,8 @@ class Database:
             await self.db.execute("ALTER TABLE data_cache ADD COLUMN schema_version INTEGER DEFAULT 1")
             await self.db.commit()
             logger.info("Migration: added schema_version to data_cache")
-        except Exception:
-            pass  # Column already exists
+        except Exception as e:
+            logger.debug(f"Migration column check (expected if exists): {e}")
         logger.info(f"Migrations complete ({len(migration_files)} files)")
 
 

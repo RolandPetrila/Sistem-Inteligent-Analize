@@ -1,7 +1,7 @@
 import asyncio
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, date, UTC
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
@@ -32,7 +32,7 @@ async def get_latest_diagnostics():
 @router.post("", response_model=JobResponse, dependencies=[Depends(rate_limit_jobs)])
 async def create_job(data: JobCreate):
     job_id = str(uuid.uuid4())
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(UTC).isoformat()
 
     await db.execute(
         """INSERT INTO jobs (id, type, status, input_data, report_level, created_at)
