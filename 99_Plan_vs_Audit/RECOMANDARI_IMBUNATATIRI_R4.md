@@ -79,7 +79,7 @@ FAZA 7 (3-7z):   AI API NOI — Jina Reader, DeepSeek R1, Cohere RAG, Perplexity
 ---
 
 ### F0.1 Fix API key Gemini in log-uri (plaintext leak)
-**Status:** `[ ]`
+**Status:** `[x]` IMPLEMENTAT 2026-04-06
 **Fisier:** `backend/agents/agent_synthesis.py:532-534`
 **Severitate:** CRITICA — SECURITY
 **Descriere:** Cand Gemini returneaza eroare HTTP, exceptia httpx include URL-ul cu `?key=AIzaSy...` care se scrie in `logs/ris_runtime.log` vizibil.
@@ -125,7 +125,7 @@ git push origin main
 ---
 
 ### F0.3 Fix global exception handler — adauga traceback logging
-**Status:** `[ ]`
+**Status:** `[x]` IMPLEMENTAT 2026-04-06
 **Fisier:** `backend/main.py:266`
 **Descriere:** `logger.error(...)` nu include traceback → erori ca `'int' object has no attribute 'value'` (3x aparute azi) imposibil de diagnosticat.
 **Implementare:**
@@ -173,7 +173,7 @@ npm run build
 ---
 
 ### F1.3 Extrage magic numbers in config.py
-**Status:** `[ ]`
+**Status:** `[x]` IMPLEMENTAT 2026-04-06
 **Fisiere:** `backend/config.py`, `backend/routers/batch.py`, `backend/routers/compare.py`, `backend/agents/orchestrator.py`
 **Implementare:** Adauga in `Settings` din `config.py`:
 ```python
@@ -208,7 +208,7 @@ rows = await db.fetch_all("""
 ---
 
 ### F1.5 DRY safe_json_loads utility
-**Status:** `[ ]`
+**Status:** `[x]` IMPLEMENTAT 2026-04-06
 **Fisiere:** `backend/utils.py` (nou), `backend/routers/jobs.py`
 **Implementare:** Creeaza `backend/utils.py`:
 ```python
@@ -231,7 +231,7 @@ Inlocuieste cele 4 locatii duplicate din `jobs.py`.
 ---
 
 ### F1.6 Fix .gitignore + .gitattributes (AUDIT R14)
-**Status:** `[ ]`
+**Status:** `[x]` IMPLEMENTAT 2026-04-06
 **Fisiere:** `.gitignore`, `.gitattributes` (nou)
 **Descriere:** node_modules/ la root neignorat, stray files, CRLF/LF warnings pe 16+ fisiere.
 **Implementare:**
@@ -260,7 +260,7 @@ git rm --cached frontend/tsconfig.tsbuildinfo
 ---
 
 ### F1.7 Fix Pydantic version pin + remove date-fns
-**Status:** `[ ]`
+**Status:** `[x]` IMPLEMENTAT 2026-04-06
 **Fisiere:** `requirements.txt`, `frontend/package.json`
 **Descriere:** Pydantic pinned 2.9.2 dar instalat 2.12.5. date-fns listat dar nefolosit (+35KB bundle).
 **Implementare:**
@@ -284,7 +284,7 @@ npm run build  # verifica ca bundle-ul scade
 ---
 
 ### F2.1 Upgrade Pydantic 2.9.2 → 2.12.5
-**Status:** `[ ]`
+**Status:** `[x]` IMPLEMENTAT 2026-04-06
 **Fisier:** `requirements.txt`
 **Implementare:**
 ```bash
@@ -392,7 +392,7 @@ Converteste fetch-urile din: `Dashboard`, `Companies`, `ReportsList` la `useQuer
 ---
 
 ### F3.4 Fix pytest asyncio deprecation warning
-**Status:** `[ ]`
+**Status:** `[x]` IMPLEMENTAT 2026-04-06
 **Fisier:** `pyproject.toml` (nou sau existent)
 **Implementare:**
 ```toml
@@ -431,7 +431,7 @@ asyncio_default_fixture_loop_scope = "function"
 ---
 
 ### F5.1 Fix N+1 queries — company detail + report listing
-**Status:** `[ ]`
+**Status:** `[x]` IMPLEMENTAT 2026-04-06
 **Fisiere:** `backend/routers/companies.py:171-195`, `backend/routers/reports.py:45-65`
 
 **A) Company detail — 3 queries sequentiale → parallel:**
@@ -473,7 +473,7 @@ await db.execute(f"INSERT INTO report_sources ... VALUES {placeholders}", flat_v
 ---
 
 ### F5.3 Cache TTL optimizare
-**Status:** `[ ]`
+**Status:** `[x]` IMPLEMENTAT 2026-04-06
 **Fisier:** `backend/services/cache_service.py:74-84`
 **Implementare:**
 ```python
@@ -503,7 +503,7 @@ TTL_HOURS = {
 ---
 
 ### F5.5 Adauga index-uri composite DB
-**Status:** `[ ]`
+**Status:** `[x]` IMPLEMENTAT 2026-04-06
 **Fisier:** `backend/migrations/` — fisier nou migration
 **Implementare:**
 ```sql
@@ -556,7 +556,7 @@ async def get_report_file_path(report_id: str, format: str) -> Path: ...
 ---
 
 ### F6.3 DRY report generator — extract _generate_format helper
-**Status:** `[ ]`
+**Status:** `[x]` IMPLEMENTAT 2026-04-06
 **Fisier:** `backend/reports/generator.py:60-130`
 **Descriere:** Acelasi pattern try-except repetat de 7 ori (PDF, DOCX, HTML, Excel, PPTX, 1-Pager, ZIP).
 **Implementare:**
@@ -583,7 +583,7 @@ async def _generate_format(name: str, generator_fn, *args) -> str | None:
 ---
 
 ### F6.5 CSP fara unsafe-inline pe script-src
-**Status:** `[ ]`
+**Status:** `[x]` IMPLEMENTAT 2026-04-06
 **Fisier:** `backend/main.py:189`
 **Implementare:**
 ```python
