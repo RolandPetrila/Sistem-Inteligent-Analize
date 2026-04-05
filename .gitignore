@@ -29,6 +29,7 @@ venv/
 # Node
 frontend/node_modules/
 frontend/dist/
+node_modules/
 
 # IDE
 .vscode/
@@ -52,6 +53,9 @@ frontend/.pytest_cache/
 # Temporary/stray files (not part of project)
 Club_82*.html
 compass_artifact_*
+info.md
+frontend/*.txt
+CheckPoint/
 
 # Test reports folder (local testing, not tracked)
 Testari_Analize_Sistem/

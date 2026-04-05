@@ -433,6 +433,18 @@ class SynthesisAgent(BaseAgent):
             "model": "qwen-3-235b-a22b-instruct-2507",
             "api_key_attr": "cerebras_api_key",
         },
+        # F7.2: DeepSeek R1 — financial reasoning specialist
+        "deepseek": {
+            "url": "https://api.deepseek.com/chat/completions",
+            "model": "deepseek-reasoner",
+            "api_key_attr": "deepseek_api_key",
+        },
+        # F7.6: OpenRouter — unified gateway (free models available)
+        "openrouter": {
+            "url": "https://openrouter.ai/api/v1/chat/completions",
+            "model": "deepseek/deepseek-r1:free",
+            "api_key_attr": "openrouter_api_key",
+        },
     }
 
     async def _generate_with_openai_compat(self, prompt: str, provider: str) -> str | None:
@@ -491,6 +503,55 @@ class SynthesisAgent(BaseAgent):
     async def _generate_with_cerebras(self, prompt: str) -> str | None:
         return await self._generate_with_openai_compat(prompt, "cerebras")
 
+    async def _generate_with_deepseek(self, prompt: str) -> str | None:
+        """F7.2: DeepSeek R1 — strips <think> reasoning block before returning."""
+        result = await self._generate_with_openai_compat(prompt, "deepseek")
+        if result:
+            # R1 wraps chain-of-thought in <think>...</think> — strip for clean output
+            result = re.sub(r"<think>.*?</think>", "", result, flags=re.DOTALL).strip()
+        return result or None
+
+    async def _generate_with_openrouter(self, prompt: str) -> str | None:
+        """F7.6: OpenRouter gateway — adds required headers for routing."""
+        if is_provider_circuit_open("openrouter"):
+            return None
+        cfg = self._PROVIDERS["openrouter"]
+        api_key = getattr(settings, cfg["api_key_attr"], "")
+        if not api_key:
+            return None
+        try:
+            client = get_client()
+            response = await client.post(
+                cfg["url"],
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "HTTP-Referer": "http://localhost:8001",
+                    "X-Title": "RIS - Roland Intelligence System",
+                },
+                json={
+                    "model": cfg["model"],
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.3,
+                    "max_tokens": 4096,
+                },
+                timeout=90,
+            )
+            response.raise_for_status()
+            data = response.json()
+            choices = data.get("choices", [])
+            if choices:
+                text = choices[0].get("message", {}).get("content", "").strip()
+                if text:
+                    logger.debug(f"[synthesis] OpenRouter OK: {len(text.split())} words")
+                    reset_provider_circuit("openrouter")
+                    return text
+            record_provider_failure("openrouter")
+            return None
+        except Exception as e:
+            logger.warning(f"[synthesis] OpenRouter error: {e}")
+            record_provider_failure("openrouter")
+            return None
+
     async def _generate_with_gemini(self, prompt: str) -> str | None:
         """Gemini uses a different API format (not OpenAI-compatible)."""
         # R2 Fix #2: Circuit breaker for Gemini
@@ -530,7 +591,9 @@ class SynthesisAgent(BaseAgent):
             record_provider_failure("gemini")
             return None
         except Exception as e:
-            logger.warning(f"[synthesis] Gemini error: {e}")
+            import re as _re
+            err_msg = _re.sub(r'key=[A-Za-z0-9_\-]+', 'key=***REDACTED***', str(e))
+            logger.warning(f"[synthesis] Gemini error: {err_msg}")
             record_provider_failure("gemini")
             return None
 
@@ -545,6 +608,8 @@ class SynthesisAgent(BaseAgent):
             "gemini": self._generate_with_gemini,
             "mistral": self._generate_with_mistral,
             "cerebras": self._generate_with_cerebras,
+            "deepseek": self._generate_with_deepseek,      # F7.2
+            "openrouter": self._generate_with_openrouter,  # F7.6
         }
 
         # Filter out providers with open circuit breakers

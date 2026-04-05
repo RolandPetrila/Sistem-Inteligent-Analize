@@ -174,18 +174,19 @@ async def get_company(company_id: str):
     if not row:
         raise HTTPException(status_code=404, detail="Company not found")
 
-    # Get reports for this company
-    reports = await db.fetch_all(
-        "SELECT id, report_type, report_level, title, summary, risk_score, created_at "
-        "FROM reports WHERE company_id = ? ORDER BY created_at DESC",
-        (company_id,),
-    )
-
-    # N4: Get score history for trend display
-    score_history = await db.fetch_all(
-        "SELECT numeric_score, dimensions, recorded_at "
-        "FROM score_history WHERE company_id = ? ORDER BY recorded_at DESC LIMIT 10",
-        (company_id,),
+    # F5.1: Parallel queries — reports + score_history în paralel
+    import asyncio as _asyncio
+    reports, score_history = await _asyncio.gather(
+        db.fetch_all(
+            "SELECT id, report_type, report_level, title, summary, risk_score, created_at "
+            "FROM reports WHERE company_id = ? ORDER BY created_at DESC",
+            (company_id,),
+        ),
+        db.fetch_all(
+            "SELECT numeric_score, dimensions, recorded_at "
+            "FROM score_history WHERE company_id = ? ORDER BY recorded_at DESC LIMIT 10",
+            (company_id,),
+        ),
     )
 
     return {

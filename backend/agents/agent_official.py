@@ -17,6 +17,9 @@ from backend.agents.tools.bpi_client import check_insolvency
 from backend.agents.tools.cui_validator import validate_cui
 from backend.agents.tools.openapi_client import get_company_onrc
 from backend.agents.tools.caen_context import get_caen_context
+from backend.agents.tools.jina_client import enrich_tavily_results
+from backend.agents.tools.brave_client import search_company_reputation as brave_search
+from backend.agents.tools.brave_client import is_available as brave_available
 from backend.services import cache_service
 from backend.services.job_logger import (
     get_job_logger, log_agent_start, log_agent_end, log_source_result,
@@ -255,6 +258,27 @@ class OfficialAgent(BaseAgent):
                 results = data.get("results", [])
                 if isinstance(results, list):
                     tavily_results.extend(results[:3])
+
+        # F7.4: Brave Search — reputation search with independent index (complement to Tavily)
+        if brave_available() and (company_name or cui_clean):
+            try:
+                brave = await brave_search(company_name or "", cui_clean or cui)
+                if brave:
+                    official_data["brave_reputation"] = brave
+                    log_source_result(job_id, "Brave Search", True, 0,
+                        [f"results={len(brave.get('results', []))}"])
+            except Exception as e:
+                logger.debug(f"[official] Brave search failed: {e}")
+
+        # F7.1: Enrich top Tavily results with clean Markdown via Jina Reader
+        if tavily_results:
+            try:
+                tavily_results = await enrich_tavily_results(tavily_results, max_urls=3)
+                jina_enriched = sum(1 for r in tavily_results if r.get("content_source") == "jina_reader")
+                if jina_enriched:
+                    logger.debug(f"[official] Jina Reader enriched {jina_enriched} results")
+            except Exception as e:
+                logger.debug(f"[official] Jina enrichment skipped: {e}")
 
         if tavily_results:
             classified = self._classify_tavily_results(tavily_results, company_name or cui)

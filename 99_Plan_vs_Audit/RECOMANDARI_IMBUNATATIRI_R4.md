@@ -1,5 +1,5 @@
 # RECOMANDARI IMBUNATATIRI R4 — RIS
-**Data creare:** 2026-04-05 | **Ultima actualizare:** 2026-04-05 | **Versiune:** 4.1
+**Data creare:** 2026-04-05 | **Ultima actualizare:** 2026-04-05 | **Versiune:** 4.2
 **Context:** post-R13 (39 items implementate) + Audit /audit R14
 **Metoda:** /improve complet + /audit standard (12 domenii, 4 agenti paraleli)
 
@@ -64,6 +64,7 @@ FAZA 3 (2-4z):   CALITATE & TESTARE — teste frontend + backend + TanStack
 FAZA 4 (3-5z):   FEATURES STRATEGICE — NLQ chatbot
 FAZA 5 (1-2z):   AUDIT R14 HIGH — traceback, N+1 queries, docs, performance
 FAZA 6 (2-4z):   AUDIT R14 MEDIUM — teste coverage, refactor god functions
+FAZA 7 (3-7z):   AI API NOI — Jina Reader, DeepSeek R1, Cohere RAG, Perplexity, Mistral OCR
 ```
 
 **Regula:** Ruleaza `python -m pytest tests/ -q` dupa fiecare FAZA inainte de a trece la urmatoarea.
@@ -618,6 +619,388 @@ async def _generate_format(name: str, generator_fn, *args) -> str | None:
 
 ---
 
+---
+
+# FAZA 7 — AI API NOI (din TOP20 2026)
+> Extinde capacitatile AI ale sistemului cu API-uri gratuite/freemium ce aduc valoare reala pentru RIS.
+> Sursa: `99_Plan_vs_Audit/TOP20_AI_API_GRATUITE_2026.md`
+
+---
+
+### F7.1 Jina Reader — Scraping curat pentru date reputationale
+**Status:** `[x]` IMPLEMENTAT 2026-04-06
+**Fisier:** `backend/agents/tools/` (fisier nou: `jina_client.py`) + `agent_official.py`
+**Prioritate:** IMPLEMENTEAZA IMEDIAT
+**Efort:** 2-3h
+**Ce aduce:** Inlocuieste httpx raw scraping cu output Markdown curat, elimina HTML boilerplate, reduce hallucination la sinteza reputationala.
+**Implementare:**
+```python
+# backend/agents/tools/jina_client.py
+import httpx
+
+JINA_BASE = "https://r.jina.ai/"
+
+async def fetch_clean_content(url: str, timeout: int = 15) -> str | None:
+    """Fetch URL via Jina Reader — returneaza Markdown curat, fara HTML."""
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.get(
+                f"{JINA_BASE}{url}",
+                headers={"Accept": "text/markdown", "X-With-Links-Summary": "true"}
+            )
+            resp.raise_for_status()
+            return resp.text
+    except Exception as e:
+        logger.debug(f"[jina] fetch failed for {url}: {e}")
+        return None
+```
+```python
+# In agent_official.py, inlocuieste fetch-ul Tavily raw cu Jina pentru URL-uri specifice:
+# Dupa ce Tavily returneaza rezultate, pentru primele 3 URL-uri:
+clean_content = await fetch_clean_content(result["url"])
+if clean_content:
+    result["content"] = clean_content[:3000]  # mai curat decat HTML raw
+```
+**Risc:** LOW — Jina e proxy extern, fallback la continut Tavily original daca esueaza.
+**API key:** Nu necesita pentru uz public. Pro: 1M tokens/zi cu key gratuit.
+**Obtinere key (optional, pentru rate limit mai mare):**
+```
+1. Mergi la: https://jina.ai/reader/
+2. Click "Get API Key" (sus dreapta)
+3. Inregistrare cu email / Google
+4. Copiaza token-ul din dashboard
+5. Adauga in .env: JINA_API_KEY=jina_...
+   (fara key functioneaza, dar cu key ai 1M tokens/zi garantat)
+```
+
+---
+
+### F7.2 DeepSeek R1 — Reasoning financiar specialist
+**Status:** `[~]` COD IMPLEMENTAT — asteapta DEEPSEEK_API_KEY in .env
+**Fisier:** `backend/agents/agent_synthesis.py` + `backend/config.py`
+**Prioritate:** IMPLEMENTEAZA IMEDIAT
+**Efort:** 3-4h
+**Ce aduce:** Chain-of-thought vizibil pentru analiza financiara. DeepSeek R1 rationalizeaza explicit: "Cifra de afaceri a scazut 23% dar profitul a crescut — posibil restructurare sau imbunatatire marje." Calitate analitica superioara Groq/Mistral pe date numerice.
+**Implementare:**
+```python
+# backend/config.py — adauga:
+DEEPSEEK_API_KEY: str = ""  # din .env
+
+# backend/agents/agent_synthesis.py — adauga provider nou in fallback chain:
+async def _call_deepseek_r1(self, prompt: str, max_tokens: int = 4000) -> str | None:
+    """DeepSeek R1 via OpenAI-compatible API — specialist financiar."""
+    if not settings.DEEPSEEK_API_KEY:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                "https://api.deepseek.com/chat/completions",
+                headers={"Authorization": f"Bearer {settings.DEEPSEEK_API_KEY}"},
+                json={
+                    "model": "deepseek-reasoner",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": max_tokens,
+                    "stream": False
+                }
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            # DeepSeek R1 returneaza si reasoning_content separat
+            return data["choices"][0]["message"]["content"]
+    except Exception as e:
+        logger.debug(f"[deepseek-r1] error: {e}")
+        record_provider_failure("deepseek")
+        return None
+```
+```python
+# Integreaza in fallback chain dupa Groq, inainte de Gemini:
+# Claude → Groq → DeepSeek R1 → Gemini → Cerebras → Mistral
+# DeepSeek R1 e optim pentru sectiunile: "analiza_financiara", "riscuri", "recomandari"
+PROVIDER_ROUTING = {
+    "analiza_financiara": ["claude", "deepseek", "groq"],
+    "reputatie": ["groq", "gemini"],
+    "sumar_executiv": ["claude", "groq"],
+}
+```
+**Risc:** MEDIUM — API key nou in .env, fallback automat daca lipseste.
+**Obtinere key:**
+```
+1. Mergi la: https://platform.deepseek.com/
+2. Click "Sign Up" → inregistrare cu email
+3. Verifica email-ul (link confirmare)
+4. Du-te la: https://platform.deepseek.com/api_keys
+5. Click "Create new API key" → da-i un nume (ex: "RIS")
+6. Copiaza cheia (se afiseaza o singura data!)
+7. Adauga in .env: DEEPSEEK_API_KEY=sk-...
+BONUS: $2 credit gratuit la cont nou (suficient pt ~3000 analize cu R1)
+PRET: R1 = $0.55/1M tokens input | $2.19/1M tokens output
+```
+
+---
+
+### F7.3 Cohere Embed 4 + Rerank 3.5 — Semantic search companii similare
+**Status:** `[ ]`
+**Fisier:** `backend/services/` (fisier nou: `semantic_service.py`) + `backend/routers/companies.py`
+**Prioritate:** PLANIFICA (1-2 zile)
+**Efort:** 1-2 zile
+**Ce aduce:** Cautare semantica in baza de date locala de companii. Exemplu: cauta "constructii drumuri" → gaseste firme cu CAEN 4211, 4212 chiar daca nu au exact aceste cuvinte. Functia "companii similare" din CompanyDetail devine inteligenta.
+**Implementare:**
+```python
+# backend/services/semantic_service.py
+import cohere
+import numpy as np
+from backend.config import settings
+
+co = cohere.ClientV2(settings.COHERE_API_KEY)
+
+async def embed_company_profile(company_data: dict) -> list[float]:
+    """Genereaza embedding pentru profilul unei companii."""
+    text = f"{company_data.get('name', '')} {company_data.get('caen_desc', '')} "
+           f"CA: {company_data.get('revenue', 0)} angajati: {company_data.get('employees', 0)}"
+    resp = co.embed(
+        texts=[text],
+        model="embed-v4.0",
+        input_type="search_document",
+        embedding_types=["float"]
+    )
+    return resp.embeddings.float[0]
+
+async def find_similar_companies(query: str, top_n: int = 5) -> list[dict]:
+    """Cauta companii similare semantic in DB."""
+    # Embed query
+    q_resp = co.embed(
+        texts=[query], model="embed-v4.0",
+        input_type="search_query", embedding_types=["float"]
+    )
+    q_vec = np.array(q_resp.embeddings.float[0])
+    # Compara cu embeddings stocate in DB (coloana embedding BLOB)
+    # ... cosine similarity ...
+    pass
+```
+```sql
+-- Adauga in migration noua (006_embeddings.sql):
+ALTER TABLE companies ADD COLUMN embedding BLOB;
+```
+**Risc:** MEDIUM — necesita migrare DB + stocare embeddings la prima analiza. Rollback: coloana nullable.
+**Obtinere key:**
+```
+1. Mergi la: https://dashboard.cohere.com/
+2. Click "Sign Up" → inregistrare cu email sau Google
+3. In dashboard → stanga jos → "API Keys"
+4. Click "New Trial key" (sau "Production key" dupa upgrade)
+5. Copiaza cheia
+6. Adauga in .env: COHERE_API_KEY=...
+TRIAL GRATUIT: 1000 API calls/luna, embed-v4.0 si rerank-v3.5 incluse
+PRET PRODUCTION: Embed = $0.10/1M tokens | Rerank = $2/1000 req
+pip install cohere numpy  (adauga in requirements.txt)
+```
+
+---
+
+### F7.4 Brave Search — Reputatie web cu index independent
+**Status:** `[~]` COD IMPLEMENTAT — asteapta BRAVE_API_KEY in .env
+**Fisier:** `backend/agents/tools/brave_client.py` + `agent_official.py`
+**Prioritate:** IMPLEMENTEAZA IMEDIAT (100% gratuit)
+**Efort:** 1h (cod facut, doar key lipseste)
+**Ce aduce:** Al doilea motor de cautare independent pe langa Tavily. Index propriu Brave (nu Google/Bing) — gaseste stiri, litigii, reputatie din surse diferite. Complement direct la Tavily.
+**NOTA CORECTATA:** Perplexity API nu are free tier — necesita plata. Brave = 2000 req/luna 100% gratuit, fara card.
+**Implementare:** `backend/agents/tools/brave_client.py` (deja creat)
+```python
+# Integrat in agent_official.py:
+# brave_search(company_name, cui_clean) → official_data["brave_reputation"]
+# Doua query-uri per firma: "{name} litigii insolventa" + "{name} CUI {cui} reputatie"
+# Rezultate: title, url, description, age — structurate pentru sinteza AI
+```
+**Risc:** LOW — optional, fallback automat daca BRAVE_API_KEY lipseste, zero impact pe flux.
+**Obtinere key:**
+```
+1. Mergi la: https://api.search.brave.com/register
+2. Click "Sign Up" → inregistrare cu email (simplu, fara card)
+3. Alege planul "Free" (2000 req/luna)
+4. In dashboard → "API Keys" → copiaza cheia
+5. Adauga in .env: BRAVE_API_KEY=BSA...
+GRATUIT: 2000 req/luna permanent, fara card
+PRET dupa: $3/1000 req (daca depasesti)
+AVANTAJ: Index propriu Brave ≠ Google → rezultate complementare Tavily
+```
+
+---
+
+### F7.5 Mistral OCR — Procesare documente scanate
+**Status:** `[ ]`
+**Fisier:** `backend/routers/` (endpoint nou: `POST /api/documents/ocr`) + serviciu nou
+**Prioritate:** VIITOR (low urgency)
+**Efort:** 2-3h implementare, valoare mare pe termen lung
+**Ce aduce:** Permite upload PDF scanat (bilant, contract, act constitutiv) → extrage text structurat → trimite la sinteza. Deschide use-case noi: due diligence pe documente primite de la client.
+**Implementare:**
+```python
+# backend/routers/documents.py (fisier nou)
+from fastapi import APIRouter, UploadFile, File
+import base64
+import httpx
+from backend.config import settings
+
+router = APIRouter(prefix="/api/documents", tags=["documents"])
+
+@router.post("/ocr")
+async def ocr_document(file: UploadFile = File(...)):
+    """Proceseaza PDF/imagine scanata via Mistral OCR."""
+    if not settings.MISTRAL_API_KEY:
+        raise HTTPException(503, "Mistral OCR not configured")
+    content = await file.read()
+    b64 = base64.b64encode(content).decode()
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(
+            "https://api.mistral.ai/v1/ocr",
+            headers={"Authorization": f"Bearer {settings.MISTRAL_API_KEY}"},
+            json={
+                "model": "mistral-ocr-latest",
+                "document": {"type": "document_url",
+                             "document_url": f"data:{file.content_type};base64,{b64}"}
+            }
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    extracted_text = "\n".join(p["markdown"] for p in data.get("pages", []))
+    return {"text": extracted_text, "pages": len(data.get("pages", []))}
+```
+**Risc:** LOW — endpoint separat, nu afecteaza fluxul existent. Mistral API key deja in .env.
+**Obtinere key:**
+```
+ATENTIE: Daca ai deja MISTRAL_API_KEY in .env (pentru Mistral Small 3), 
+OCR-ul functioneaza cu ACEEASI cheie — nu mai trebuie alta!
+
+Daca nu ai cheie Mistral:
+1. Mergi la: https://console.mistral.ai/
+2. Sign Up cu email sau Google
+3. Stanga → "API Keys" → "Create new key"
+4. Copiaza cheia
+5. Adauga in .env: MISTRAL_API_KEY=...
+GRATUIT: Tier free include acces la modele (inclusiv OCR in beta)
+PRET OCR: ~$1/1000 pagini (dupa free tier)
+```
+
+---
+
+### F7.6 OpenRouter — Gateway unificat AI (optional)
+**Status:** `[~]` COD IMPLEMENTAT — asteapta OPENROUTER_API_KEY in .env
+**Fisier:** `backend/agents/agent_synthesis.py` + `backend/config.py`
+**Prioritate:** OPTIONAL
+**Efort:** 2-3h
+**Ce aduce:** Un singur endpoint pentru toti providerii AI. Simplifica fallback chain, permite A/B testing modele, monitoring centralizat cost/token. Util daca adaugi multi provideri noi (F7.2 DeepSeek etc.).
+**Implementare:**
+```python
+# backend/agents/agent_synthesis.py — adauga metoda OpenRouter:
+async def _call_openrouter(self, prompt: str, model: str = "deepseek/deepseek-r1", 
+                            max_tokens: int = 4000) -> str | None:
+    """OpenRouter gateway — acces unificat la 100+ modele."""
+    if not settings.OPENROUTER_API_KEY:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+                    "HTTP-Referer": "http://localhost:8001",
+                    "X-Title": "RIS - Roland Intelligence System"
+                },
+                json={
+                    "model": model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": max_tokens
+                }
+            )
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"]
+    except Exception as e:
+        logger.debug(f"[openrouter:{model}] error: {e}")
+        return None
+```
+**Risc:** LOW — optional, nu inlocuieste providerii existenti, adauga o optiune.
+**Obtinere key:**
+```
+1. Mergi la: https://openrouter.ai/
+2. Click "Sign In" → cont cu email sau Google
+3. Stanga → "Keys" → "Create Key"
+4. Da-i un nume (ex: "RIS-local") → Create
+5. Copiaza cheia (format: sk-or-v1-...)
+6. Adauga in .env: OPENROUTER_API_KEY=sk-or-v1-...
+BONUS: $1 credit gratuit la cont nou
+AVANTAJ: Acces la 100+ modele prin un singur endpoint OpenAI-compatible
+MODELE GRATUITE pe OpenRouter: DeepSeek R1, Llama 4, Qwen 3 si altele
+```
+
+---
+
+### F7.7 xAI Grok — Date real-time X/Twitter (conditional)
+**Status:** `[~]` COD IMPLEMENTAT — asteapta XAI_API_KEY in .env (verifica data sharing TOS!)
+**Fisier:** `backend/agents/tools/` (fisier nou: `grok_client.py`)
+**Prioritate:** DACA ACCEPTI DATA SHARING cu xAI
+**Efort:** 2-3h
+**Ce aduce:** Acces la date X/Twitter in timp real despre companie. Stiri recente, sentimentul pietei, anunturi CEO. $175 credite gratuite/luna (primul user).
+**Conditie:** Datele tale (prompts) pot fi folosite pentru training xAI. Acceptabil pt date publice de companii, nu pt date sensibile.
+**Implementare:**
+```python
+# backend/agents/tools/grok_client.py
+import httpx
+from backend.config import settings
+
+async def search_company_social(company_name: str) -> str | None:
+    """Cauta mentiuni recente pe X/Twitter via Grok Live Search."""
+    if not settings.XAI_API_KEY:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                "https://api.x.ai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {settings.XAI_API_KEY}"},
+                json={
+                    "model": "grok-3",
+                    "messages": [{"role": "user",
+                                  "content": f"Ce se discuta recent pe X despre firma {company_name}? "
+                                             f"Stiri, controverse, anunturi. Ultimele 30 zile."}],
+                    "search_parameters": {"mode": "on", "sources": [{"type": "x"}]}
+                }
+            )
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"]
+    except Exception as e:
+        logger.debug(f"[grok] search failed: {e}")
+        return None
+```
+**Risc:** MEDIUM — data sharing cu xAI. Acceptable pt date publice ANAF/ONRC, NU pt rapoarte interne.
+**Obtinere key:**
+```
+1. Mergi la: https://console.x.ai/
+2. Sign In cu contul X (Twitter) — obligatoriu
+3. Accepta Terms of Service (CITESTE sectiunea despre data sharing!)
+4. Stanga → "API Keys" → "Create API Key"
+5. Copiaza cheia (format: xai-...)
+6. Adauga in .env: XAI_API_KEY=xai-...
+BONUS: $25 credite gratuite/luna (primii utilizatori, verifica disponibilitate)
+PRET: Grok-3 = $3/1M tokens input | $15/1M tokens output
+ATENTIE: Prompts-urile pot fi folosite pt training xAI daca nu esti pe plan Enterprise
+```
+
+---
+
+## SUMAR FAZA 7
+
+| Item | API | Efort | Prioritate | Impact |
+|------|-----|-------|-----------|--------|
+| F7.1 | Jina Reader | 2-3h | ACUM | Calitate date web |
+| F7.2 | DeepSeek R1 | 3-4h | ACUM | Analiza financiara |
+| F7.3 | Cohere RAG | 1-2z | PLANIFICA | Cautare semantica |
+| F7.4 | Brave Search | 1h | ACUM (100% gratuit) | Reputatie web independent |
+| F7.5 | Mistral OCR | 2-3h | VIITOR | Documente scanate |
+| F7.6 | OpenRouter | 2-3h | OPTIONAL | Gateway unificat |
+| F7.7 | xAI Grok | 2-3h | CONDITIONAL | Social media |
+
+**Ordine recomandata executie F7:** F7.1 → F7.2 → F7.4 → F7.3 → F7.5 → F7.6 → F7.7
+
+---
+
 # CHECKLIST FINAL POST-EXECUTIE (per faza)
 
 > Bifeaza dupa finalizarea fiecarei faze:
@@ -643,5 +1026,5 @@ async def _generate_format(name: str, generator_fn, *args) -> str | None:
 
 ---
 
-*Generat automat dupa /audit standard 12 domenii — 2026-04-05*
-*Scor curent: 82/100 | Target: 90/100 dupa Faza 0-5*
+*Generat automat dupa /audit standard 12 domenii — 2026-04-05 | Actualizat cu Faza 7 (TOP20 AI API) 2026-04-05*
+*Scor curent: 82/100 | Target: 90/100 dupa Faza 0-5 | Faza 7 = upgrade calitativ AI*

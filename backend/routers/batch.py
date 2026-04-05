@@ -25,7 +25,7 @@ from backend.errors import RISError, ErrorCode
 router = APIRouter()
 
 # 10F M8.3: Parallel Analysis — max CUI-uri procesate simultan intr-un batch
-MAX_PARALLEL_BATCH = 2
+MAX_PARALLEL_BATCH = settings.batch_max_parallel
 
 
 async def _get_batch_progress(batch_id: str) -> dict:
@@ -104,11 +104,11 @@ async def create_batch(
             seen[cui] = True
     cuis = list(seen.keys())
 
-    if len(cuis) > 50:
-        raise HTTPException(status_code=400, detail="Maximum 50 CUI-uri per batch")
+    if len(cuis) > settings.batch_max_cuis:
+        raise HTTPException(status_code=400, detail=f"Maximum {settings.batch_max_cuis} CUI-uri per batch")
 
-    # B21 fix: Auto-timeout stuck batches (RUNNING > 4 hours) before checking limit
-    four_hours_ago = (datetime.now(UTC).timestamp() - 4 * 3600)
+    # B21 fix: Auto-timeout stuck batches (RUNNING > batch_timeout_hours) before checking limit
+    four_hours_ago = (datetime.now(UTC).timestamp() - settings.batch_timeout_hours * 3600)
     stuck = await db.fetch_all(
         "SELECT id FROM jobs WHERE type LIKE 'BATCH_%' AND status = 'RUNNING' AND started_at IS NOT NULL"
     )

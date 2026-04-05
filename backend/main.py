@@ -186,7 +186,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline'; "
+            "script-src 'self'; "  # F6.5: removed 'unsafe-inline'
             "style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data: blob:; "
             "connect-src 'self' ws: wss:; "
@@ -263,7 +263,7 @@ async def ris_error_handler(request: Request, exc: RISError):
 async def global_exception_handler(request: Request, exc: Exception):
     """10F M11.2: Error Message Sanitization — never expose stack traces."""
     request_id = getattr(request.state, 'request_id', 'unknown')
-    logger.error(f"Unhandled error [req={request_id}]: {type(exc).__name__}: {exc}")
+    logger.exception(f"Unhandled error [req={request_id}]: {type(exc).__name__}: {exc}")
     return JSONResponse(
         status_code=500,
         content={

@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse
 from loguru import logger
 from pydantic import BaseModel
 
+from backend.config import settings
 from backend.agents.tools.anaf_client import get_anaf_data
 from backend.agents.tools.anaf_bilant_client import get_bilant
 from backend.agents.tools.cui_validator import validate_cui
@@ -61,7 +62,7 @@ async def compare_companies(data: CompareRequest):
                 anaf = {}
                 company["error_anaf"] = str(e)
             # C17 fix: Only sleep on cache miss (rate limit), not on hit
-            await asyncio.sleep(2)  # rate limit: doar la fetch real, nu la cache hit
+            await asyncio.sleep(settings.compare_rate_delay_s)  # rate limit: doar la fetch real, nu la cache hit
 
         if anaf and anaf.get("found"):
             company["denumire"] = anaf.get("denumire", "N/A")
@@ -85,7 +86,7 @@ async def compare_companies(data: CompareRequest):
                 logger.warning(f"[compare] bilant fetch: {e}")
                 bilant = {}
             # C17 fix: Only sleep on cache miss (rate limit), not on hit
-            await asyncio.sleep(2)  # rate limit: doar la fetch real, nu la cache hit
+            await asyncio.sleep(settings.compare_rate_delay_s)  # rate limit: doar la fetch real, nu la cache hit
 
         if bilant and bilant.get("found"):
             company["cifra_afaceri"] = bilant.get("cifra_afaceri_neta")

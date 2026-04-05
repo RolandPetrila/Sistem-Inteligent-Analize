@@ -28,6 +28,14 @@ class Settings(BaseSettings):
     tavily_monthly_quota: int = 1000
     tavily_warn_at: int = 800
 
+    # F7 — AI API Extensions
+    jina_api_key: str = ""           # https://jina.ai/reader/ (optional, free without key)
+    deepseek_api_key: str = ""       # https://platform.deepseek.com/api_keys
+    cohere_api_key: str = ""         # https://dashboard.cohere.com/
+    brave_api_key: str = ""           # https://api.search.brave.com/register (2000 req/luna gratuit)
+    xai_api_key: str = ""            # https://console.x.ai/
+    openrouter_api_key: str = ""     # https://openrouter.ai/
+
     # Notifications
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
@@ -52,6 +60,15 @@ class Settings(BaseSettings):
     max_concurrent_jobs: int = 2
     request_delay_gov: int = 2
     request_delay_web: int = 3
+
+    # Batch processing
+    batch_max_parallel: int = 2
+    batch_max_cuis: int = 50
+    batch_timeout_hours: int = 4
+
+    # Compare & dedup
+    compare_rate_delay_s: int = 2
+    dedup_cleanup_s: int = 600
 
     model_config = {
         "env_file": ".env",

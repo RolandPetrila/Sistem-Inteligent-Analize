@@ -58,9 +58,10 @@ def complete_in_flight(cui: str, result: dict):
     _in_flight_results[cui] = result
     if cui in _in_flight:
         _in_flight[cui].set()
-    # Async cleanup after 10 min (jobs run 2-5 min, buffer for late joiners)
+    # Async cleanup after dedup_cleanup_s seconds (buffer for late joiners)
     async def _cleanup():
-        await asyncio.sleep(600)
+        from backend.config import settings as _s
+        await asyncio.sleep(_s.dedup_cleanup_s)
         _in_flight.pop(cui, None)
         _in_flight_results.pop(cui, None)
     try:

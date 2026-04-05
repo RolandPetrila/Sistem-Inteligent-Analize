@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
 
 from backend.database import db
+from backend.utils import safe_json_loads
 from backend.rate_limiter import rate_limit_jobs
 from backend.models import (
     JobCreate, JobResponse, JobListResponse, JobStatus
@@ -93,12 +94,7 @@ async def list_jobs(
 
     jobs = []
     for row in rows:
-        input_data = None
-        if row["input_data"]:
-            try:
-                input_data = json.loads(row["input_data"])
-            except (json.JSONDecodeError, TypeError):
-                input_data = None
+        input_data = safe_json_loads(row["input_data"])
         jobs.append(
             JobResponse(
                 id=row["id"],
@@ -123,12 +119,7 @@ async def get_job(job_id: str):
     if not row:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    input_data = None
-    if row["input_data"]:
-        try:
-            input_data = json.loads(row["input_data"])
-        except (json.JSONDecodeError, TypeError):
-            input_data = None
+    input_data = safe_json_loads(row["input_data"])
 
     return JobResponse(
         id=row["id"],
@@ -177,8 +168,8 @@ async def get_job_diagnostics(job_id: str):
     diagnostics = {"job_id": job_id, "status": row["status"]}
 
     if report and report["full_data"]:
-        try:
-            full = json.loads(report["full_data"])
+        full = safe_json_loads(report["full_data"])
+        if full:
             diagnostics["completeness"] = full.get("completeness", {})
             diagnostics["risk_score"] = full.get("risk_score", {})
 
@@ -190,7 +181,7 @@ async def get_job_diagnostics(job_id: str):
                     diagnostics["source_diagnostics"] = diag["value"]
                 elif isinstance(diag, dict):
                     diagnostics["source_diagnostics"] = diag
-        except (json.JSONDecodeError, TypeError):
+        else:
             diagnostics["parse_error"] = "Could not parse report data"
 
     # Check for job log file (path traversal protection via _safe_log_path)
@@ -218,12 +209,7 @@ async def retry_single_source(job_id: str, source: str):
     if not row:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    input_data = {}
-    if row["input_data"]:
-        try:
-            input_data = json.loads(row["input_data"])
-        except (json.JSONDecodeError, TypeError):
-            pass
+    input_data = safe_json_loads(row["input_data"])
 
     cui = input_data.get("cui", "").strip().replace("RO", "").replace("ro", "")
 

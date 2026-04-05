@@ -75,9 +75,9 @@ _l1 = _L1Cache()
 TTL_HOURS = {
     "anaf": 12,
     "onrc": 168,       # 7 zile
-    "seap_active": 2,
+    "seap_active": 24,     # F5.3: 2h → 24h (reduce API calls pt analize repetate)
     "seap_history": 720,  # 30 zile
-    "tavily": 6,
+    "tavily": 48,          # F5.3: 6h → 48h (Tavily quota 1000/luna)
     "bnr": 24,
     "ins": 720,         # 30 zile
     "funds": 24,
