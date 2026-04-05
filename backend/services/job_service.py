@@ -31,15 +31,15 @@ def prevent_sleep():
         ctypes.windll.kernel32.SetThreadExecutionState(
             ES_CONTINUOUS | ES_SYSTEM_REQUIRED
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"[job_service] sleep prevention: {e}")
 
 
 def allow_sleep():
     try:
         ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"[job_service] sleep prevention: {e}")
 
 
 async def update_job_progress(
@@ -132,6 +132,9 @@ async def run_analysis_job(job_id: str, ws_manager=None):
             "progress": 0.0,
             "current_step": "Start",
             "agents_needed": agents_needed,
+            # FIX #5: pass ws_manager through state to avoid circular import in orchestrator
+            "_ws_manager": ws_manager,
+            "_agent_metrics": {},
         }
 
         # Construieste si executa graful
@@ -328,6 +331,21 @@ async def run_analysis_job(job_id: str, ws_manager=None):
             duration_seconds=int(elapsed),
         )
 
+        # R2 Fix #1: Create in-app notification on job complete
+        try:
+            from backend.routers.notifications import create_notification
+            _score = risk_score if verified_data else None
+            _sev = "success" if _score and _score >= 70 else "warning" if _score and _score >= 40 else "error"
+            await create_notification(
+                type="job_complete",
+                title=f"Analiza finalizata: {company_name or cui or 'N/A'}",
+                message=f"Scor risc: {_score or 'N/A'}. {len(formats_available)} formate disponibile.",
+                link=f"/report/{report_id}" if report_id else f"/analysis/{job_id}",
+                severity=_sev,
+            )
+        except Exception as notif_err:
+            logger.debug(f"Notification create failed (non-critical): {notif_err}")
+
     except Exception as e:
         logger.error(f"Job {job_id} failed: {e}")
         finish_job_log(job_id, success=False, error=str(e))
@@ -344,6 +362,19 @@ async def run_analysis_job(job_id: str, ws_manager=None):
                 "retry_available": True,
             })
         await notify_job_failed(job_id, str(e))
+
+        # R2 Fix #1: Create in-app notification on job failure
+        try:
+            from backend.routers.notifications import create_notification
+            await create_notification(
+                type="job_failed",
+                title=f"Analiza esuata: {input_params.get('cui', 'N/A')}",
+                message=str(e)[:200],
+                link=f"/analysis/{job_id}",
+                severity="error",
+            )
+        except Exception as e:
+            logger.debug(f"[job_service] notification: {e}")
 
     finally:
         allow_sleep()

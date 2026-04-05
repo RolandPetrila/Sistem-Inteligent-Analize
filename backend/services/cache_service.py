@@ -6,6 +6,7 @@ Foloseste tabelul data_cache din SQLite.
 
 import json
 import hashlib
+import threading
 from datetime import datetime
 
 from loguru import logger
@@ -29,6 +30,47 @@ def _track(source: str, hit: bool):
     _hit_miss[source]["hits" if hit else "misses"] += 1
 
 
+# --- L1 In-Memory Cache (hot data layer) ---
+from collections import OrderedDict as _LRUDict
+from time import time as _time_now
+
+
+class _L1Cache:
+    """In-memory LRU cache for hot data. Max 50 entries, TTL 5 minutes."""
+
+    def __init__(self, max_size: int = 50, ttl_seconds: int = 300):
+        self._store: _LRUDict[str, tuple[float, dict]] = _LRUDict()
+        self._max_size = max_size
+        self._ttl = ttl_seconds
+        self._lock = threading.Lock()
+
+    def get(self, key: str) -> dict | None:
+        with self._lock:
+            if key in self._store:
+                ts, value = self._store[key]
+                if _time_now() - ts < self._ttl:
+                    self._store.move_to_end(key)
+                    return value
+                del self._store[key]
+            return None
+
+    def put(self, key: str, value: dict):
+        with self._lock:
+            self._store[key] = (_time_now(), value)
+            self._store.move_to_end(key)
+            while len(self._store) > self._max_size:
+                self._store.popitem(last=False)
+
+    def invalidate(self, key: str):
+        self._store.pop(key, None)
+
+    def clear(self):
+        self._store.clear()
+
+
+_l1 = _L1Cache()
+
+
 # TTL in ore per tip sursa
 TTL_HOURS = {
     "anaf": 12,
@@ -50,6 +92,12 @@ def make_cache_key(source: str, identifier: str) -> str:
 
 async def get(key: str) -> dict | None:
     """Returneaza date din cache daca nu au expirat si au versiune curenta."""
+    # L1: Check in-memory hot cache first
+    l1_result = _l1.get(key)
+    if l1_result is not None:
+        logger.debug(f"Cache L1 HIT: {key}")
+        return l1_result
+
     row = await db.fetch_one(
         "SELECT data, schema_version FROM data_cache "
         "WHERE cache_key = ? AND expires_at > datetime('now')",
@@ -64,6 +112,7 @@ async def get(key: str) -> dict | None:
             return None
         try:
             data = json.loads(row["data"])
+            _l1.put(key, data)  # Promote to L1
             logger.debug(f"Cache HIT: {key}")
             return data
         except (json.JSONDecodeError, TypeError):
@@ -76,6 +125,7 @@ async def set(key: str, data: dict, source: str, ttl_hours: int | None = None):
     if ttl_hours is None:
         ttl_hours = TTL_HOURS.get(source, 6)
 
+    _l1.put(key, data)  # L1 first — hot cache updated immediately
     await db.execute(
         "INSERT OR REPLACE INTO data_cache (cache_key, data, source, cached_at, expires_at, schema_version) "
         "VALUES (?, ?, ?, datetime('now'), datetime('now', ? || ' hours'), ?)",
@@ -109,6 +159,7 @@ async def _enforce_size_limit():
 
 async def invalidate(pattern: str):
     """Invalideaza toate cheile care incep cu pattern."""
+    _l1.invalidate(pattern)  # L1: invalidate exact key (conservative)
     await db.execute(
         "DELETE FROM data_cache WHERE cache_key LIKE ?",
         (f"{pattern}%",),
@@ -224,4 +275,5 @@ async def invalidate_company(cui: str):
             key = make_cache_key(source, ident)
             result = await db.execute("DELETE FROM data_cache WHERE cache_key = ?", (key,))
             count += 1
+    _l1.clear()  # conservative: clear all L1 on company invalidation
     logger.info(f"Cache invalidated for CUI {cui_clean[:3]}***: checked {count} key variants")

@@ -23,6 +23,12 @@ from backend.services.job_logger import (
 )
 
 
+# --- T8: Provider Health Tracking (moved to circuit_breaker.py) ---
+from backend.agents.circuit_breaker import (  # noqa: F401 — re-export for backwards compat
+    is_provider_circuit_open, record_provider_failure, reset_provider_circuit,
+)
+
+
 # --- 10F M5.1: Request Deduplication ---
 # Track CUIs currently being analyzed to avoid duplicate work.
 _in_flight: dict[str, asyncio.Event] = {}
@@ -33,7 +39,11 @@ async def deduplicate_job(cui: str) -> dict | None:
     """10F M5.1: If same CUI is already in-flight, wait and reuse result."""
     if cui in _in_flight:
         logger.info(f"[orchestrator] Dedup: CUI {cui} already in-flight, waiting...")
-        await _in_flight[cui].wait()
+        try:
+            await asyncio.wait_for(_in_flight[cui].wait(), timeout=300)
+        except asyncio.TimeoutError:
+            logger.warning(f"[orchestrator] Dedup wait timeout 300s for {cui}, proceeding with new analysis")
+            return None
         return _in_flight_results.get(cui)
     return None
 
@@ -44,14 +54,19 @@ def register_in_flight(cui: str):
 
 
 def complete_in_flight(cui: str, result: dict):
-    """10F M5.1: Mark CUI as complete, store result, auto-cleanup after 60s."""
+    """10F M5.1: Mark CUI as complete, store result, auto-cleanup after 600s."""
     _in_flight_results[cui] = result
     if cui in _in_flight:
         _in_flight[cui].set()
-    # Auto-cleanup after 60s
-    loop = asyncio.get_event_loop()
-    loop.call_later(60, lambda: _in_flight.pop(cui, None))
-    loop.call_later(60, lambda: _in_flight_results.pop(cui, None))
+    # Async cleanup after 10 min (jobs run 2-5 min, buffer for late joiners)
+    async def _cleanup():
+        await asyncio.sleep(600)
+        _in_flight.pop(cui, None)
+        _in_flight_results.pop(cui, None)
+    try:
+        asyncio.get_event_loop().create_task(_cleanup())
+    except RuntimeError:
+        pass  # No running event loop (tests)
 
 
 # --- 10F M5.4: State Checkpoint Recovery ---
@@ -72,9 +87,21 @@ async def _save_checkpoint(job_id: str, agent_name: str, state_data: dict):
 
 # --- Node functions with timing (8D) ---
 
+async def _ws_broadcast(state: AnalysisState, message: dict):
+    """Helper: broadcast a WS message using _ws_manager from state (no circular import)."""
+    ws_manager = state.get("_ws_manager")
+    job_id = state.get("job_id", "")
+    if ws_manager and job_id:
+        try:
+            await ws_manager.broadcast(job_id, message)
+        except Exception as e:
+            logger.debug(f"[orchestrator] WS broadcast failed (non-critical): {e}")
+
+
 async def run_official(state: AnalysisState) -> dict:
     """Ruleaza Agent 1 — Date Oficiale (with timing + 9A error boundary)."""
     t0 = time.time()
+    await _ws_broadcast(state, {"type": "agent_start", "agent": "official"})
     try:
         result = await official_agent.run(state)
     except Exception as e:
@@ -92,6 +119,7 @@ async def run_official(state: AnalysisState) -> dict:
     metrics["official"] = round(elapsed, 1)
     result["_agent_metrics"] = metrics
     logger.info(f"[orchestrator] Agent 1 (Official) completed in {elapsed:.1f}s")
+    await _ws_broadcast(state, {"type": "agent_complete", "agent": "official", "duration_ms": int(elapsed * 1000)})
     await _save_checkpoint(state.get("job_id", ""), "official", result)  # 10F M5.4
     return result
 
@@ -101,6 +129,7 @@ async def run_verification(state: AnalysisState) -> dict:
     t0 = time.time()
     job_id = state.get("job_id", "")
     log_agent_start(job_id, "verification")
+    await _ws_broadcast(state, {"type": "agent_start", "agent": "verification"})
     try:
         result = await verification_agent.run(state)
     except Exception as e:
@@ -121,6 +150,7 @@ async def run_verification(state: AnalysisState) -> dict:
     log_agent_end(job_id, "verification",
         f"risk={risk.get('score', '?')}/100 | completeness={completeness.get('score', '?')}% | "
         f"gaps={completeness.get('gaps_count', '?')} | {elapsed:.1f}s")
+    await _ws_broadcast(state, {"type": "agent_complete", "agent": "verification", "duration_ms": int(elapsed * 1000)})
     await _save_checkpoint(job_id, "verification", result)  # 10F M5.4
     return result
 
@@ -154,6 +184,7 @@ async def run_synthesis(state: AnalysisState) -> dict:
         )
         state["verified_data"] = verified
 
+    await _ws_broadcast(state, {"type": "agent_start", "agent": "synthesis"})
     try:
         result = await synthesis_agent.run(state)
     except Exception as e:
@@ -170,6 +201,7 @@ async def run_synthesis(state: AnalysisState) -> dict:
     metrics["synthesis"] = round(elapsed, 1)
     result["_agent_metrics"] = metrics
     log_agent_end(job_id, "synthesis", f"{len(sections)} sections | {elapsed:.1f}s")
+    await _ws_broadcast(state, {"type": "agent_complete", "agent": "synthesis", "duration_ms": int(elapsed * 1000)})
     await _save_checkpoint(job_id, "synthesis", result)  # 10F M5.4
     return result
 
@@ -225,6 +257,7 @@ async def run_web(state: AnalysisState) -> dict:
     t0 = time.time()
     job_id = state.get("job_id", "")
     log_agent_start(job_id, "web")
+    await _ws_broadcast(state, {"type": "agent_start", "agent": "web"})
 
     params = state.get("input_params", {})
     official = state.get("official_data") or {}
@@ -285,6 +318,7 @@ async def run_web(state: AnalysisState) -> dict:
             "current_step": f"Agent 2: {len(web_data)} categorii web gasite",
             "progress": 0.40,
         }
+        await _ws_broadcast(state, {"type": "agent_complete", "agent": "web", "duration_ms": int(elapsed * 1000)})
         await _save_checkpoint(job_id, "web", web_result)  # 10F M5.4
         return web_result
 
@@ -303,6 +337,7 @@ async def run_market(state: AnalysisState) -> dict:
     t0 = time.time()
     job_id = state.get("job_id", "")
     log_agent_start(job_id, "market")
+    await _ws_broadcast(state, {"type": "agent_start", "agent": "market"})
 
     params = state.get("input_params", {})
     cui = params.get("cui", "")
@@ -333,6 +368,7 @@ async def run_market(state: AnalysisState) -> dict:
             "current_step": f"Agent 3: {total} contracte SEAP gasite",
             "progress": 0.40,
         }
+        await _ws_broadcast(state, {"type": "agent_complete", "agent": "market", "duration_ms": int(elapsed * 1000)})
         await _save_checkpoint(job_id, "market", market_result)  # 10F M5.4
         return market_result
     except Exception as e:

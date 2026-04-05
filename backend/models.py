@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
 from enum import Enum
 
@@ -186,8 +186,10 @@ ANALYSIS_TYPES_META = {
 # --- Request/Response schemas ---
 
 class JobCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     analysis_type: AnalysisType
-    report_level: ReportLevel = ReportLevel.STANDARD
+    report_level: int = Field(default=2, ge=1, le=3)
     input_params: dict = Field(default_factory=dict)
 
 

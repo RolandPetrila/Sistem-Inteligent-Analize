@@ -1,7 +1,9 @@
 import asyncio
 import json
+import re
 import uuid
 from datetime import datetime, date, UTC
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
@@ -14,6 +16,17 @@ from backend.models import (
 from backend.services.job_service import run_analysis_job
 
 router = APIRouter()
+
+
+def _safe_log_path(job_id: str) -> Path:
+    """Validate job_id and return safe log path (prevents path traversal)."""
+    if not re.match(r'^[a-f0-9\-]{36}$', job_id):
+        raise HTTPException(status_code=400, detail="Invalid job ID format")
+    log_path = (Path("logs") / f"job_{job_id}.log").resolve()
+    logs_base = Path("logs").resolve()
+    if not str(log_path).startswith(str(logs_base)):
+        raise HTTPException(status_code=403, detail="Access denied")
+    return log_path
 
 
 @router.get("/diagnostics/latest")
@@ -42,7 +55,7 @@ async def create_job(data: JobCreate):
             data.analysis_type.value,
             JobStatus.PENDING.value,
             json.dumps(data.input_params, ensure_ascii=False),
-            data.report_level.value,
+            data.report_level,
             now,
         ),
     )
@@ -50,7 +63,7 @@ async def create_job(data: JobCreate):
         id=job_id,
         type=data.analysis_type.value,
         status=JobStatus.PENDING,
-        report_level=data.report_level.value,
+        report_level=data.report_level,
         input_data=data.input_params,
         created_at=now,
     )
@@ -180,14 +193,15 @@ async def get_job_diagnostics(job_id: str):
         except (json.JSONDecodeError, TypeError):
             diagnostics["parse_error"] = "Could not parse report data"
 
-    # Check for job log file
-    import os
-    log_path = os.path.join("logs", f"job_{job_id}.log")
-    if os.path.exists(log_path):
-        diagnostics["log_file"] = log_path
+    # Check for job log file (path traversal protection via _safe_log_path)
+    try:
+        log_path = _safe_log_path(job_id)
+    except HTTPException:
+        log_path = None
+    if log_path and log_path.exists():
+        diagnostics["log_file"] = str(log_path)
         try:
-            with open(log_path, "r", encoding="utf-8") as f:
-                lines = f.readlines()
+            lines = log_path.read_text(encoding="utf-8").splitlines()
             diagnostics["log_lines"] = len(lines)
             # Last 20 lines as summary
             diagnostics["log_tail"] = [l.rstrip() for l in lines[-20:]]

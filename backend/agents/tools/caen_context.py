@@ -306,7 +306,8 @@ async def _fetch_ins_tempo_firms(caen_code: str) -> int | None:
                     return total
 
         return None
-    except Exception:
+    except Exception as e:
+        logger.warning(f"[caen] INS TEMPO fetch: {e}")
         return None
 
 

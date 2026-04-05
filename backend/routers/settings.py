@@ -3,12 +3,16 @@ Settings API — citeste/scrie variabile .env din UI.
 Cheile API sunt mascate la citire.
 """
 
+import shutil
+import time
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from loguru import logger
 from pydantic import BaseModel
 
 from backend.config import settings
+from backend.security import require_api_key
 
 router = APIRouter()
 
@@ -81,6 +85,28 @@ def _write_env(env: dict[str, str]):
     ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+MAX_ENV_BACKUPS = 5
+
+
+def _backup_env():
+    """Create a timestamped backup of .env before writing. Keep max 5 backups."""
+    if not ENV_PATH.exists():
+        return
+    try:
+        ts = int(time.time())
+        backup_path = ENV_PATH.parent / f".env.bak.{ts}"
+        shutil.copy2(str(ENV_PATH), str(backup_path))
+        logger.info(f"Settings: .env backed up to {backup_path.name}")
+
+        # Cleanup old backups — keep only the newest MAX_ENV_BACKUPS
+        backups = sorted(ENV_PATH.parent.glob(".env.bak.*"), key=lambda p: p.stat().st_mtime, reverse=True)
+        for old in backups[MAX_ENV_BACKUPS:]:
+            old.unlink()
+            logger.debug(f"Settings: removed old backup {old.name}")
+    except Exception as e:
+        logger.warning(f"Settings: .env backup failed: {e}")
+
+
 class SettingsResponse(BaseModel):
     fields: dict[str, str]
     synthesis_mode: str
@@ -96,7 +122,7 @@ class SettingsUpdate(BaseModel):
     fields: dict[str, str]
 
 
-@router.get("", response_model=SettingsResponse)
+@router.get("", response_model=SettingsResponse, dependencies=[Depends(require_api_key)])
 async def get_settings():
     """Returneaza setarile curente (chei mascate)."""
     env = _read_env()
@@ -120,7 +146,7 @@ async def get_settings():
     )
 
 
-@router.put("")
+@router.put("", dependencies=[Depends(require_api_key)])
 async def update_settings(data: SettingsUpdate):
     """Actualizeaza setarile. Campurile cu valoare goala sau masked sunt ignorate."""
     env = _read_env()
@@ -135,6 +161,7 @@ async def update_settings(data: SettingsUpdate):
             updated.append(key)
 
     if updated:
+        _backup_env()
         _write_env(env)
         # C21 fix: Reload in-memory settings from updated .env
         _reload_settings(env, updated)

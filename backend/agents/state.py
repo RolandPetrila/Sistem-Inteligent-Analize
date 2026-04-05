@@ -1,4 +1,4 @@
-from typing import TypedDict, Optional, Annotated
+from typing import TypedDict, Optional, Annotated, Any
 from operator import add
 
 
@@ -51,6 +51,13 @@ class AnalysisState(TypedDict, total=False):
 
     # Config per tip analiza
     agents_needed: list[str]
+
+    # Internal: ws_manager instance passed through state (avoids circular import from main.py)
+    # Set by job_service before graph execution; used by orchestrator nodes for agent_start/complete messages.
+    _ws_manager: Optional[Any]
+
+    # Internal: timing metrics per agent (set by orchestrator nodes)
+    _agent_metrics: Optional[dict]
 
 
 # Mapping: ce agenti trebuie per analysis_type + report_level

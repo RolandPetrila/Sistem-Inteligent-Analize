@@ -1,5 +1,6 @@
 import secrets as _secrets
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 from pathlib import Path
 
@@ -67,6 +68,16 @@ class Settings(BaseSettings):
                 "Setati APP_SECRET_KEY in .env pentru persistenta intre restart-uri.",
                 file=sys.stderr,
             )
+
+    @model_validator(mode="after")
+    def validate_critical_keys(self) -> "Settings":
+        if not self.tavily_api_key:
+            import warnings
+            warnings.warn("TAVILY_API_KEY lipseste — cautarea web va fi dezactivata", stacklevel=2)
+        if not self.groq_api_key and not self.google_ai_api_key and not getattr(self, 'anthropic_api_key', ''):
+            import warnings
+            warnings.warn("Niciun AI provider configurat (GROQ_API_KEY, GOOGLE_AI_API_KEY) — synthesis va esua", stacklevel=2)
+        return self
 
     @property
     def db_path(self) -> Path:

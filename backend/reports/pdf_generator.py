@@ -5,7 +5,9 @@ F21: Markdown table rendering via fpdf2 native cells.
 """
 
 import re
+import unicodedata
 from fpdf import FPDF
+from loguru import logger
 
 DISCLAIMER = (
     "Acest raport a fost generat automat folosind exclusiv date disponibile public "
@@ -16,20 +18,56 @@ DISCLAIMER = (
 )
 
 
+CHAR_FALLBACK = {
+    "\u0218": "S", "\u0219": "s",  # Ș, ș (Romanian)
+    "\u021a": "T", "\u021b": "t",  # Ț, ț (Romanian)
+    "\u2014": "-",                  # em dash
+    "\u2013": "-",                  # en dash
+    "\u2018": "'", "\u2019": "'",  # left/right single smart quotes
+    "\u201c": '"', "\u201d": '"',  # left/right double smart quotes
+    "\u201e": '"', "\u201f": '"',  # low-9 double quote (Romanian „)
+    "\u2026": "...",               # ellipsis
+    "\u20ac": "EUR",               # euro sign
+    "\u2022": "*",                 # bullet
+    "\u00b0": "deg",               # degree sign
+    "\u2103": "C",                 # degree Celsius
+    "\u2109": "F",                 # degree Fahrenheit
+    "\u2122": "(TM)",              # trademark
+    "\u00a9": "(C)",               # copyright
+    "\u00ae": "(R)",               # registered
+    "\u00ab": "<<", "\u00bb": ">>",  # guillemets
+    "\u2039": "<", "\u203a": ">",    # single guillemets
+    "\u2010": "-", "\u2011": "-",    # hyphen, non-breaking hyphen
+    "\u2012": "-",                   # figure dash
+    "\u2015": "--",                  # horizontal bar
+    "\u00a0": " ",                   # non-breaking space
+    "\u2002": " ", "\u2003": " ",    # en space, em space
+    "\u200b": "",                    # zero-width space
+    "\u00d7": "x",                   # multiplication sign
+    "\u00f7": "/",                   # division sign
+    "\u2264": "<=", "\u2265": ">=",  # less/greater than or equal
+    "\u2260": "!=",                  # not equal
+    "\u221e": "INF",                 # infinity
+    "\u2030": "o/oo",               # per mille
+    "\u00bc": "1/4", "\u00bd": "1/2", "\u00be": "3/4",  # fractions
+    "\u0102": "A", "\u0103": "a",  # A/a with breve (Romanian)
+    "\u00c2": "A", "\u00e2": "a",  # A/a with circumflex (latin-1 has these but just in case)
+    "\u00ce": "I", "\u00ee": "i",  # I/i with circumflex
+}
+
+
 def _sanitize(text: str) -> str:
-    """Encode text to latin-1 safe characters for Helvetica font."""
-    # Replacements for common chars outside latin-1
-    replacements = {
-        "\u0218": "S", "\u0219": "s",  # Ș, ș
-        "\u021a": "T", "\u021b": "t",  # Ț, ț
-        "\u2014": "-", "\u2013": "-",  # em dash, en dash
-        "\u2018": "'", "\u2019": "'",  # smart quotes
-        "\u201c": '"', "\u201d": '"',
-        "\u2026": "...",               # ellipsis
-    }
-    for orig, repl in replacements.items():
+    """Encode text to latin-1 safe characters for Helvetica font.
+    Uses NFKD normalization for proper diacritics decomposition, then explicit
+    fallback map for special characters that NFKD cannot handle."""
+    # Step 1: Explicit replacements for known special chars
+    for orig, repl in CHAR_FALLBACK.items():
         text = text.replace(orig, repl)
-    # Encode to latin-1, replacing any remaining unsupported chars
+    # Step 2: NFKD normalization — decomposes accented chars (e.g. e + combining accent)
+    # then strip combining marks (category M) to get ASCII base letter
+    normalized = unicodedata.normalize("NFKD", text)
+    text = "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+    # Step 3: Final encode to latin-1, replacing any remaining unsupported chars
     return text.encode("latin-1", errors="replace").decode("latin-1")
 
 
@@ -76,6 +114,54 @@ def _render_pdf_table(pdf, rows: list[list[str]], has_header: bool):
         pdf.ln()
     pdf.ln(4)  # PDF-04: Increased spacing after table
     pdf.set_font("Helvetica", "", 10)
+
+
+def _add_section_header(pdf, title: str):
+    """Render a section header: bold, accent color, underline."""
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_text_color(99, 102, 241)
+    pdf.multi_cell(0, 7, _sanitize(title), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(40, 40, 40)
+
+
+def _render_markdown_text(pdf, text: str, line_height: float = 6.0):
+    """Render text with basic markdown: **bold**, # headings, - bullets.
+    FIX #18: Helper suplimentar — nu inlocuieste procesarea existenta."""
+    lines = text.split("\n") if text else []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            pdf.ln(3)
+            continue
+
+        # H1/H2 headings
+        if stripped.startswith("## "):
+            _add_section_header(pdf, stripped[3:])
+            continue
+        elif stripped.startswith("# "):
+            _add_section_header(pdf, stripped[2:])
+            continue
+
+        # Bullet points
+        if stripped.startswith(("- ", "* ", "• ")):
+            content = stripped[2:]
+            # Strip **bold** markers (fpdf2 nu suporta inline bold)
+            content = re.sub(r'\*\*(.+?)\*\*', r'\1', content)
+            pdf.set_x(pdf.get_x() + 5)
+            try:
+                pdf.multi_cell(0, line_height, _sanitize(f"* {content}"), new_x="LMARGIN", new_y="NEXT")
+            except Exception as e:
+                logger.debug(f"[pdf] bullet render failed: {e}")
+            continue
+
+        # Normal paragraph — strip **bold** si *italic* markers
+        clean_line = re.sub(r'\*\*(.+?)\*\*', r'\1', stripped)
+        clean_line = re.sub(r'\*(.+?)\*', r'\1', clean_line)
+        try:
+            pdf.multi_cell(0, line_height, _sanitize(clean_line), new_x="LMARGIN", new_y="NEXT")
+        except Exception as e:
+            logger.debug(f"[pdf] markdown line render failed: {e}")
 
 
 class RISPdf(FPDF):
@@ -235,7 +321,8 @@ def generate_pdf(report_sections: dict, meta: dict, output_path: str, verified_d
                     pdf.set_text_color(40, 40, 40)
                 else:
                     pdf.multi_cell(0, 5.5, _sanitize(line))
-            except Exception:
+            except Exception as e:
+                logger.debug(f"[pdf] font fallback: {e}")
                 pdf.set_font("Helvetica", "I", 8)
                 pdf.set_text_color(180, 180, 180)
                 pdf.cell(0, 4, "[paragraf nerandat]", new_x="LMARGIN", new_y="NEXT")

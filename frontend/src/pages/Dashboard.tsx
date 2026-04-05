@@ -1,21 +1,26 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   FileText,
   Building2,
   CheckCircle,
   Clock,
   TrendingUp,
+
   PlusCircle,
   Zap,
   AlertCircle,
   Activity,
   AlertTriangle,
+  ArrowUpRight,
+  ArrowDownRight,
+  Minus,
+  Shield,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { logAction } from "@/lib/logger";
-import type { Stats, Job } from "@/lib/types";
+import type { Stats, Job, RiskMover } from "@/lib/types";
 import { JOB_STATUS_LABELS, ANALYSIS_TYPE_LABELS } from "@/lib/constants";
 import clsx from "clsx";
 
@@ -28,6 +33,27 @@ interface IntegrationStatus {
   has_email: boolean;
   synthesis_mode: string;
 }
+
+const SkeletonCard = () => (
+  <div className="card animate-pulse">
+    <div className="h-4 bg-gray-700 rounded w-1/3 mb-3" />
+    <div className="h-8 bg-gray-700 rounded w-2/3 mb-2" />
+    <div className="h-3 bg-gray-700 rounded w-1/2" />
+  </div>
+);
+
+const SkeletonDashboard = () => (
+  <div className="space-y-6">
+    <div className="h-8 bg-dark-card rounded w-48 animate-pulse" />
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
+    </div>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="lg:col-span-2 card animate-pulse h-64" />
+      <div className="card animate-pulse h-64" />
+    </div>
+  </div>
+);
 
 export default function Dashboard() {
   const { toast } = useToast();
@@ -61,18 +87,17 @@ export default function Dashboard() {
     return () => clearInterval(healthInterval);
   }, []);
 
-  if (loading) {
-    return (
-      <div className="animate-pulse space-y-6">
-        <div className="h-8 bg-dark-card rounded w-48" />
-        <div className="grid grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-28 bg-dark-card rounded-xl" />
-          ))}
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <SkeletonDashboard />;
+
+  // Trend indicator: compare jobs_this_month with a previous reference
+  // The API doesn't expose last month's count directly, so we show a visual placeholder
+  // based on whether the current month value is above/below the monthly average
+  const monthlyAvg = stats && stats.total_jobs > 0
+    ? Math.round(stats.total_jobs / Math.max(1, 6)) // rough 6-month avg
+    : null;
+  const monthDelta = monthlyAvg !== null && stats
+    ? (stats.jobs_this_month ?? 0) - monthlyAvg
+    : null;
 
   const statCards = [
     {
@@ -80,24 +105,28 @@ export default function Dashboard() {
       value: stats?.total_reports ?? 0,
       icon: FileText,
       color: "text-accent-primary",
+      trend: null as number | null,
     },
     {
       label: "Companii Analizate",
       value: stats?.total_companies ?? 0,
       icon: Building2,
       color: "text-blue-400",
+      trend: null as number | null,
     },
     {
       label: "Joburi Finalizate",
       value: stats?.completed_jobs ?? 0,
       icon: CheckCircle,
       color: "text-green-400",
+      trend: null as number | null,
     },
     {
       label: "Analize Luna Asta",
       value: stats?.jobs_this_month ?? 0,
       icon: TrendingUp,
       color: "text-purple-400",
+      trend: monthDelta,
     },
   ];
 
@@ -139,9 +168,27 @@ export default function Dashboard() {
                 <p className="text-xs text-gray-500 uppercase tracking-wider">
                   {card.label}
                 </p>
-                <p className="text-3xl font-bold text-white mt-2">
-                  {card.value}
-                </p>
+                <div className="flex items-end gap-2 mt-2">
+                  <p className="text-3xl font-bold text-white">
+                    {card.value}
+                  </p>
+                  {card.trend !== null && card.trend !== 0 && (
+                    <span className={clsx(
+                      "flex items-center gap-0.5 text-xs font-medium mb-1",
+                      card.trend > 0 ? "text-green-400" : "text-red-400"
+                    )}>
+                      {card.trend > 0
+                        ? <ArrowUpRight className="w-3.5 h-3.5" />
+                        : <ArrowDownRight className="w-3.5 h-3.5" />}
+                      {card.trend > 0 ? "+" : ""}{card.trend} vs medie
+                    </span>
+                  )}
+                  {card.trend !== null && card.trend === 0 && (
+                    <span className="flex items-center gap-0.5 text-xs font-medium mb-1 text-gray-500">
+                      <Minus className="w-3.5 h-3.5" /> la medie
+                    </span>
+                  )}
+                </div>
               </div>
               <card.icon className={clsx("w-8 h-8", card.color)} />
             </div>
@@ -240,32 +287,45 @@ export default function Dashboard() {
             Status Integrari
           </h2>
           <div className="space-y-2">
-            {integrationItems.map((item) => (
-              <div
-                key={item.name}
-                className="flex items-center justify-between py-1.5"
-              >
-                <div className="flex items-center gap-2">
-                  {item.status ? (
-                    <Zap className="w-3.5 h-3.5 text-green-400" />
-                  ) : (
-                    <AlertCircle className="w-3.5 h-3.5 text-gray-600" />
-                  )}
+            {integrationItems.map((item) => {
+              const content = (
+                <div className="flex items-center justify-between py-1.5">
+                  <div className="flex items-center gap-2">
+                    {item.status ? (
+                      <Zap className="w-3.5 h-3.5 text-green-400" />
+                    ) : (
+                      <AlertCircle className="w-3.5 h-3.5 text-gray-600" />
+                    )}
+                    <span className={clsx(
+                      "text-sm",
+                      item.status ? "text-gray-300" : "text-gray-600"
+                    )}>
+                      {item.name}
+                    </span>
+                  </div>
                   <span className={clsx(
-                    "text-sm",
-                    item.status ? "text-gray-300" : "text-gray-600"
+                    "text-[10px] font-mono",
+                    item.status ? "text-green-400" : "text-gray-600"
                   )}>
-                    {item.name}
+                    {item.status ? "OK" : "---"}
                   </span>
                 </div>
-                <span className={clsx(
-                  "text-[10px] font-mono",
-                  item.status ? "text-green-400" : "text-gray-600"
-                )}>
-                  {item.status ? "OK" : "---"}
-                </span>
-              </div>
-            ))}
+              );
+
+              // Wrap unconfigured integrations as link to Settings
+              return item.status ? (
+                <div key={item.name}>{content}</div>
+              ) : (
+                <Link
+                  key={item.name}
+                  to="/settings"
+                  className="block rounded hover:bg-dark-hover/50 transition-colors"
+                  title={`Configureaza ${item.name} in Setari`}
+                >
+                  {content}
+                </Link>
+              );
+            })}
           </div>
           <Link
             to="/settings"
@@ -275,6 +335,9 @@ export default function Dashboard() {
           </Link>
         </div>
       </div>
+
+      {/* N3: Risk Movers Widget */}
+      <RiskMoversWidget />
 
       {/* 10C M1.1: Health Status Card (Live) */}
       {healthData && (
@@ -339,6 +402,77 @@ export default function Dashboard() {
   );
 }
 
+
+function RiskMoversWidget() {
+  const navigate = useNavigate();
+  const [movers, setMovers] = useState<RiskMover[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    api.getRiskMovers()
+      .then((data) => setMovers((data.movers || []).slice(0, 5)))
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="card">
+      <div className="flex items-center gap-2 mb-4">
+        <Shield className="w-4 h-4 text-accent-secondary" />
+        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
+          Risc in Schimbare
+        </h2>
+      </div>
+
+      {loading ? (
+        <div className="animate-pulse space-y-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-10 bg-dark-surface rounded-lg" />
+          ))}
+        </div>
+      ) : error || movers.length === 0 ? (
+        <div className="text-center py-6">
+          <AlertTriangle className="w-6 h-6 text-gray-600 mx-auto mb-2" />
+          <p className="text-xs text-gray-500">Nicio schimbare detectata</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {movers.map((mover) => (
+            <button
+              key={mover.id}
+              onClick={() => navigate(`/company/${mover.id}`)}
+              className="w-full flex items-center justify-between p-3 bg-dark-surface rounded-lg hover:bg-dark-hover transition-colors text-left"
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-gray-300 font-medium truncate">{mover.name}</p>
+                {mover.cui && (
+                  <p className="text-[10px] text-gray-600 font-mono">CUI: {mover.cui}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-3 shrink-0 ml-3">
+                <span className="text-sm font-mono text-gray-400">{mover.current_score}</span>
+                <span
+                  className={clsx(
+                    "flex items-center gap-0.5 text-xs font-medium",
+                    mover.delta < 0 ? "text-red-400" : "text-green-400"
+                  )}
+                >
+                  {mover.delta < 0 ? (
+                    <ArrowDownRight className="w-3.5 h-3.5" />
+                  ) : (
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  )}
+                  {mover.delta > 0 ? "+" : ""}{mover.delta}
+                </span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function TrendChart() {
   const [trend, setTrend] = useState<{ month: string; count: number }[]>([]);

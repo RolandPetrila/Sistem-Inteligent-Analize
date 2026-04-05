@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from backend.database import db
+from backend.errors import RISError, ErrorCode
 from loguru import logger
 
 router = APIRouter()
@@ -38,7 +39,7 @@ async def create_monitoring_alert(data: MonitoringCreate):
     # Verifica ca firma exista
     company = await db.fetch_one("SELECT id, name FROM companies WHERE id = ?", (data.company_id,))
     if not company:
-        raise HTTPException(status_code=404, detail="Firma nu exista in baza de date. Ruleaza o analiza mai intai.")
+        raise RISError(ErrorCode.JOB_NOT_FOUND, "Firma nu exista in baza de date. Ruleaza o analiza mai intai.")
 
     # Verifica daca exista deja
     existing = await db.fetch_one(
@@ -62,7 +63,7 @@ async def toggle_monitoring(alert_id: str):
     """Activeaza/dezactiveaza o alerta."""
     row = await db.fetch_one("SELECT * FROM monitoring_alerts WHERE id = ?", (alert_id,))
     if not row:
-        raise HTTPException(status_code=404, detail="Alerta nu exista")
+        raise RISError(ErrorCode.JOB_NOT_FOUND, "Alerta nu exista")
 
     new_status = not row["is_active"]
     await db.execute(
@@ -77,7 +78,7 @@ async def delete_monitoring(alert_id: str):
     """Sterge o alerta de monitorizare."""
     row = await db.fetch_one("SELECT id FROM monitoring_alerts WHERE id = ?", (alert_id,))
     if not row:
-        raise HTTPException(status_code=404, detail="Alerta nu exista")
+        raise RISError(ErrorCode.JOB_NOT_FOUND, "Alerta nu exista")
 
     await db.execute("DELETE FROM monitoring_alerts WHERE id = ?", (alert_id,))
     return {"status": "deleted", "id": alert_id}

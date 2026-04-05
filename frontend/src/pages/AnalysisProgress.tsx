@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   CheckCircle,
@@ -8,6 +8,7 @@ import {
   Pause,
   Download,
   RefreshCw,
+  Timer,
 } from "lucide-react";
 import clsx from "clsx";
 import { api } from "@/lib/api";
@@ -23,6 +24,7 @@ export default function AnalysisProgress() {
   const [job, setJob] = useState<Job | null>(null);
   const [logs, setLogs] = useState<{ text: string; type: string }[]>([]);
   const [reportId, setReportId] = useState<string | null>(null);
+  const runStartRef = useRef<number | null>(null);
 
   // Load job on mount
   useEffect(() => {
@@ -31,6 +33,29 @@ export default function AnalysisProgress() {
     api.getJob(id).then(setJob).catch(() => toast("Eroare la incarcarea jobului", "error"));
   }, [id]);
 
+  // Track when the job started RUNNING for ETA calculation
+  useEffect(() => {
+    if (job?.status === "RUNNING" && runStartRef.current === null) {
+      runStartRef.current = Date.now();
+    }
+    if (job?.status !== "RUNNING") {
+      runStartRef.current = null;
+    }
+  }, [job?.status]);
+
+  // Calculate ETA in seconds based on elapsed time and progress
+  const computeETA = (): number | null => {
+    if (!job || job.status !== "RUNNING" || !runStartRef.current) return null;
+    const progress = job.progress_percent;
+    if (progress <= 5) return null; // too early to estimate
+    const elapsed = (Date.now() - runStartRef.current) / 1000;
+    const totalEstimated = (elapsed / progress) * 100;
+    const remaining = Math.max(0, Math.round(totalEstimated - elapsed));
+    return remaining;
+  };
+
+  const etaSeconds = computeETA();
+
   // WebSocket for real-time progress
   const onMessage = (msg: WSMessage) => {
     if (msg.type === "progress") {
@@ -38,7 +63,11 @@ export default function AnalysisProgress() {
         prev
           ? {
               ...prev,
-              progress_percent: msg.percent ?? prev.progress_percent,
+              // R2 fix: Guard progress from going backwards — use Math.max
+              progress_percent: Math.max(
+                msg.percent ?? prev.progress_percent,
+                prev.progress_percent
+              ),
               current_step: msg.step ?? prev.current_step,
               status: (msg.status as Job["status"]) ?? prev.status,
             }
@@ -122,9 +151,17 @@ export default function AnalysisProgress() {
       <div className="card">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm text-gray-400">Progres</span>
-          <span className="text-sm font-mono text-white">
-            {job.progress_percent}%
-          </span>
+          <div className="flex items-center gap-3">
+            {etaSeconds !== null && etaSeconds > 0 && (
+              <span className="flex items-center gap-1 text-xs text-gray-500">
+                <Timer className="w-3 h-3" />
+                ~{etaSeconds >= 60 ? `${Math.floor(etaSeconds / 60)}m ${etaSeconds % 60}s` : `${etaSeconds}s`} ramase
+              </span>
+            )}
+            <span className="text-sm font-mono text-white">
+              {job.progress_percent}%
+            </span>
+          </div>
         </div>
         <div className="w-full h-3 bg-dark-border rounded-full overflow-hidden">
           <div

@@ -20,6 +20,9 @@ from backend.config import settings
 from backend.http_client import get_client
 from backend.prompts.system_prompt import SYSTEM_PROMPT
 from backend.prompts.section_prompts import get_sections_for_analysis
+from backend.agents.circuit_breaker import (
+    is_provider_circuit_open, record_provider_failure, reset_provider_circuit,
+)
 
 
 class SynthesisAgent(BaseAgent):
@@ -72,47 +75,43 @@ class SynthesisAgent(BaseAgent):
             logger.info(f"[synthesis] Section {i+1}/{total}: {title} ({word_target}w, route={route})")
 
             if route == "fast":
-                # B9 fix: Fast route — speed priority: Groq → Cerebras → Mistral → Gemini
+                # B9 fix: Fast route — speed priority: Groq → concurrent fallback (Cerebras+Mistral+Gemini)
                 # 10F M4.5: Token Budget Enforcement — check if prompt fits provider context
+                # FIX #30: Build prompt once, reuse for token check + generation
                 initial_provider = "groq"
-                test_prompt = self._build_section_prompt(section, verified_data, initial_provider)
-                initial_provider = self._check_token_budget(test_prompt, initial_provider)
+                prompt = self._build_section_prompt(section, verified_data, initial_provider)
+                initial_provider = self._check_token_budget(prompt, initial_provider)
 
                 if initial_provider == "groq":
-                    text = await self._generate_with_groq(
-                        self._build_section_prompt(section, verified_data, "groq"))
+                    text = await self._generate_with_groq(prompt)
                 else:
                     text = None
+
+                # FIX #9: After primary failure, launch remaining providers concurrently
                 if not text:
-                    text = await self._generate_with_cerebras(
-                        self._build_section_prompt(section, verified_data, "cerebras"))
-                if not text:
-                    text = await self._generate_with_mistral(
-                        self._build_section_prompt(section, verified_data, "mistral"))
-                if not text:
-                    text = await self._generate_with_gemini(
-                        self._build_section_prompt(section, verified_data, "gemini"))
+                    text = await self._concurrent_fallback(
+                        section, verified_data,
+                        providers=["cerebras", "mistral", "gemini"],
+                    )
             else:
-                # B9 fix: Quality route — quality priority: Claude → Gemini → Groq → Mistral
+                # B9 fix: Quality route — quality priority: Claude → concurrent fallback (Gemini+Groq+Mistral)
                 # 10F M4.5: Token Budget Enforcement
+                # FIX #30: Build prompt once, reuse for token check + generation
                 initial_provider = "claude"
-                test_prompt = self._build_section_prompt(section, verified_data, initial_provider)
-                initial_provider = self._check_token_budget(test_prompt, initial_provider)
+                prompt = self._build_section_prompt(section, verified_data, initial_provider)
+                initial_provider = self._check_token_budget(prompt, initial_provider)
 
                 if initial_provider == "claude":
-                    text = await self._generate_with_claude(
-                        self._build_section_prompt(section, verified_data, "claude"))
+                    text = await self._generate_with_claude(prompt)
                 else:
                     text = None
+
+                # FIX #9: After primary failure, launch remaining providers concurrently
                 if not text:
-                    text = await self._generate_with_gemini(
-                        self._build_section_prompt(section, verified_data, "gemini"))
-                if not text:
-                    text = await self._generate_with_groq(
-                        self._build_section_prompt(section, verified_data, "groq"))
-                if not text:
-                    text = await self._generate_with_mistral(
-                        self._build_section_prompt(section, verified_data, "mistral"))
+                    text = await self._concurrent_fallback(
+                        section, verified_data,
+                        providers=["gemini", "groq", "mistral"],
+                    )
 
             if not text:
                 text = await self._generate_with_cerebras(
@@ -146,6 +145,13 @@ class SynthesisAgent(BaseAgent):
             "current_step": f"Sinteza completa: {len(report_sections)} sectiuni",
             "progress": 0.75,
         }
+
+    def _estimate_prompt_tokens(self, data: dict, word_target: int) -> int:
+        """Pre-check: estimate token count before building the full prompt.
+        Formula: base_tokens(500) + data_chars/4 + word_target*2.
+        Useful for early budget checks before expensive prompt construction."""
+        data_chars = len(json.dumps(data, ensure_ascii=False, default=str))
+        return 500 + data_chars // 4 + word_target * 2
 
     def _build_section_prompt(self, section: dict, verified_data: dict, provider: str = "claude") -> str:
         """Construieste prompt-ul optimizat per provider AI.
@@ -431,6 +437,11 @@ class SynthesisAgent(BaseAgent):
 
     async def _generate_with_openai_compat(self, prompt: str, provider: str) -> str | None:
         """F14: Generic OpenAI-compatible API call (Groq, Mistral, Cerebras)."""
+        # R2 Fix #2: Circuit breaker — skip provider if repeatedly failing
+        if is_provider_circuit_open(provider):
+            logger.info(f"[synthesis] {provider} circuit OPEN, skipping")
+            return None
+
         cfg = self._PROVIDERS.get(provider)
         if not cfg:
             return None
@@ -460,12 +471,15 @@ class SynthesisAgent(BaseAgent):
                 text = choices[0].get("message", {}).get("content", "").strip()
                 if text:
                     logger.debug(f"[synthesis] {provider.capitalize()} OK: {len(text.split())} words")
+                    reset_provider_circuit(provider)
                     return text
 
             logger.warning(f"[synthesis] {provider.capitalize()} returned empty response")
+            record_provider_failure(provider)
             return None
         except Exception as e:
             logger.warning(f"[synthesis] {provider.capitalize()} error: {e}")
+            record_provider_failure(provider)
             return None
 
     async def _generate_with_groq(self, prompt: str) -> str | None:
@@ -479,6 +493,10 @@ class SynthesisAgent(BaseAgent):
 
     async def _generate_with_gemini(self, prompt: str) -> str | None:
         """Gemini uses a different API format (not OpenAI-compatible)."""
+        # R2 Fix #2: Circuit breaker for Gemini
+        if is_provider_circuit_open("gemini"):
+            logger.info("[synthesis] Gemini circuit OPEN, skipping")
+            return None
         if not settings.google_ai_api_key:
             logger.warning("[synthesis] No GOOGLE_AI_API_KEY — cannot use Gemini fallback")
             return None
@@ -505,14 +523,75 @@ class SynthesisAgent(BaseAgent):
                     text = parts[0].get("text", "").strip()
                     if text:
                         logger.debug(f"[synthesis] Gemini OK: {len(text.split())} words")
+                        reset_provider_circuit("gemini")
                         return text
 
             logger.warning("[synthesis] Gemini returned empty response")
+            record_provider_failure("gemini")
             return None
         except Exception as e:
             logger.warning(f"[synthesis] Gemini error: {e}")
+            record_provider_failure("gemini")
             return None
 
+
+    async def _concurrent_fallback(
+        self, section: dict, verified_data: dict, providers: list[str]
+    ) -> str | None:
+        """FIX #9: Launch multiple providers concurrently, return first successful result.
+        Uses asyncio.wait(FIRST_COMPLETED) with 30s timeout."""
+        _provider_methods = {
+            "groq": self._generate_with_groq,
+            "gemini": self._generate_with_gemini,
+            "mistral": self._generate_with_mistral,
+            "cerebras": self._generate_with_cerebras,
+        }
+
+        # Filter out providers with open circuit breakers
+        active = [p for p in providers if not is_provider_circuit_open(p)]
+        if not active:
+            logger.warning("[synthesis] _concurrent_fallback: all provider circuits open")
+            return None
+
+        tasks = {
+            asyncio.create_task(
+                _provider_methods[p](self._build_section_prompt(section, verified_data, p))
+            ): p
+            for p in active
+            if p in _provider_methods
+        }
+        if not tasks:
+            return None
+
+        try:
+            done, pending = await asyncio.wait(
+                tasks.keys(), return_when=asyncio.FIRST_COMPLETED, timeout=30
+            )
+            # Cancel remaining tasks
+            for task in pending:
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):
+                    pass
+
+            for task in done:
+                exc = task.exception()
+                if exc is None:
+                    result = task.result()
+                    if result:
+                        provider_name = tasks[task]
+                        reset_provider_circuit(provider_name)
+                        logger.info(f"[synthesis] Concurrent fallback winner: {provider_name}")
+                        return result
+                else:
+                    provider_name = tasks[task]
+                    logger.warning(f"[synthesis] Concurrent fallback {provider_name} error: {exc}")
+                    record_provider_failure(provider_name)
+        except Exception as e:
+            logger.warning(f"[synthesis] Concurrent fallback failed: {e}")
+
+        return None
 
     # ── 10F M4.2: Structured Degradation 3-Tier ──────────────────────────────
     def _verify_numbers_in_text(self, text: str, verified_data: dict, section_key: str) -> tuple[bool, list[str]]:

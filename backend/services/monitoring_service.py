@@ -6,7 +6,7 @@ Monitoring Service — Verifica periodic firmele monitorizate si trimite alerte.
 
 import asyncio
 import json
-from datetime import datetime
+from datetime import datetime, UTC
 
 from loguru import logger
 
@@ -42,6 +42,47 @@ def _determine_severity(change_type: str, old_val, new_val) -> str:
         return "YELLOW"
     elif change_type == "split_tva":
         return "YELLOW"
+    return "INFO"
+
+
+# Combinatii critice care escaladeaza severitatea
+CRITICAL_COMBINATIONS = [
+    ({"field": "Stare", "new_contains": "RADIAT"}, {"field": "Inactiv", "new": True}),
+    ({"field": "Stare", "new_contains": "RADIAT"}, {"field": "TVA", "lost": True}),
+    ({"field": "Inactiv", "new": True}, {"field": "TVA", "lost": True}),
+]
+
+
+def _determine_combined_severity(changes: list[dict]) -> str:
+    """Verifica daca combinatia de schimbari justifica escaladare la CRITICAL."""
+    if not changes:
+        return "INFO"
+
+    def _matches(change: dict, rule: dict) -> bool:
+        if change.get("field") != rule.get("field"):
+            return False
+        if "new_contains" in rule:
+            return rule["new_contains"] in str(change.get("new", "")).upper()
+        if "new" in rule:
+            return change.get("new") == rule["new"]
+        if "lost" in rule and rule["lost"]:
+            return change.get("new") is False or change.get("new") == "False"
+        return True
+
+    for combo_a, combo_b in CRITICAL_COMBINATIONS:
+        a_match = any(_matches(c, combo_a) for c in changes)
+        b_match = any(_matches(c, combo_b) for c in changes)
+        if a_match and b_match:
+            return "CRITICAL"
+
+    severities = [c.get("severity", "INFO") for c in changes]
+    if "RED" in severities:
+        return "RED"
+    if severities.count("YELLOW") >= 2:
+        return "RED"  # 2+ yellow = escalate
+    for s in ["YELLOW", "GREEN"]:
+        if s in severities:
+            return s
     return "INFO"
 
 
@@ -144,7 +185,7 @@ async def run_monitoring_check() -> list[dict]:
                         f"🔴 <b>ALERTA RIS [RED] — {company_name}</b>\n"
                         f"CUI: {cui}\n"
                         f"Firma NU mai apare in ANAF — posibil radiata/dizolvata!\n"
-                        f"Verificat: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+                        f"Verificat: {datetime.now(UTC).strftime('%d.%m.%Y %H:%M')}"
                     )
                     await _send_telegram_with_retry(msg)
                 await _log_audit(alert_id, cui, company_name, "stare_firma", "activa", "NEGASIT ANAF", "RED")
@@ -208,15 +249,8 @@ async def run_monitoring_check() -> list[dict]:
                         changes.append({"field": "Split TVA", "old": old_split, "new": new_split, "severity": sev})
                         await _log_audit(alert_id, cui, company_name, "split_tva", old_split, new_split, sev)
 
-                # Determine max severity
-                for c in changes:
-                    sev = c.get("severity", "INFO")
-                    if sev == "RED":
-                        max_severity = "RED"
-                    elif sev == "YELLOW" and max_severity != "RED":
-                        max_severity = "YELLOW"
-                    elif sev == "GREEN" and max_severity == "INFO":
-                        max_severity = "GREEN"
+                # Determine max severity — including critical combinations
+                max_severity = _determine_combined_severity(changes)
 
             # Update last_checked
             await db.execute(
@@ -237,11 +271,24 @@ async def run_monitoring_check() -> list[dict]:
                     for c in changes:
                         sev_icon = {"RED": "🔴", "YELLOW": "🟡", "GREEN": "🟢"}.get(c["severity"], "")
                         msg += f"  {sev_icon} {c['field']}: {c['old']} → {c['new']}\n"
-                    msg += f"Verificat: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+                    msg += f"Verificat: {datetime.now(UTC).strftime('%d.%m.%Y %H:%M')}"
                     delivered = await _send_telegram_with_retry(msg)
                     logger.info(f"[monitoring] Alert [{max_severity}] {'sent' if delivered else 'FAILED'} for {company_name}")
                 else:
                     logger.info(f"[monitoring] Alert [{max_severity}] throttled for {company_name}")
+
+                # R2 Fix #1: Create in-app notification for monitoring alerts
+                try:
+                    from backend.routers.notifications import create_notification
+                    await create_notification(
+                        type="monitoring_alert",
+                        title=f"Alerta [{max_severity}]: {company_name}",
+                        message="; ".join(f"{c['field']}: {c['old']}→{c['new']}" for c in changes),
+                        link=f"/company/{alert['company_id']}",
+                        severity="error" if max_severity in ("RED", "CRITICAL") else "warning",
+                    )
+                except Exception as notif_err:
+                    logger.debug(f"Notification create failed: {notif_err}")
 
             results.append({
                 "cui": cui,

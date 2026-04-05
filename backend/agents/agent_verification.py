@@ -683,7 +683,7 @@ class VerificationAgent(BaseAgent):
             try:
                 from datetime import datetime, date, UTC
                 inreg_date = datetime.strptime(data_inreg.split(" ")[-1] if " " in data_inreg else data_inreg, "%d.%m.%Y")
-                age_years = (datetime.now() - inreg_date).days / 365.25
+                age_years = (datetime.now(UTC) - inreg_date.replace(tzinfo=UTC)).days / 365.25
                 if age_years < 1 and ca is not None and ca > 500_000:
                     anomalies.append({
                         "level": "ATENTIE",

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Send, Loader2, Sparkles } from "lucide-react";
-import clsx from "clsx";
+
 
 interface ParseResult {
   analysis_type: string;

@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS report_sources (
 CREATE INDEX IF NOT EXISTS idx_sources_report ON report_sources(report_id);
 
 -- Markets
+-- NOTE: markets table defined but unused (2026-04-05) — kept for potential future use
 CREATE TABLE IF NOT EXISTS markets (
     id TEXT PRIMARY KEY,
     caen_code TEXT,

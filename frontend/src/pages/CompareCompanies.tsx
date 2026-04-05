@@ -83,6 +83,35 @@ export default function CompareCompanies() {
     }
   };
 
+  const exportCSV = () => {
+    if (!result) return;
+    const headers = ["Indicator", ...result.companies.map((c) => c.denumire || `CUI ${c.cui}`)];
+    const rows: string[][] = [];
+    for (const ind of indicators) {
+      const row = [ind.label];
+      for (const c of result.companies) {
+        const val = c[ind.key];
+        if (ind.format === "number" && typeof val === "number") {
+          row.push(String(val));
+        } else if (ind.format === "bool") {
+          row.push(val ? "Da" : "Nu");
+        } else {
+          row.push(val !== undefined && val !== null ? String(val) : "N/A");
+        }
+      }
+      rows.push(row);
+    }
+    const csvContent = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `comparatie_${result.companies.map((c) => c.cui).join("_")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    logAction("Compare", "exportCSV", { companies: result.companies.length });
+  };
+
   const indicators: { key: keyof CompanyResult; label: string; format?: "number" | "bool" }[] = [
     { key: "denumire", label: "Denumire" },
     { key: "caen_code", label: "CAEN" },
@@ -170,27 +199,35 @@ export default function CompareCompanies() {
               <ArrowUpDown className="w-5 h-5 text-accent-primary" />
               Comparatie — Date {result.an_financiar}
             </h2>
-            {result.companies.length === 2 && (
+            <div className="flex items-center gap-2">
               <button
-                onClick={async () => {
-                  try {
-                    logAction("Compare", "downloadPDF", { cui1: result.companies[0].cui, cui2: result.companies[1].cui });
-                    const blob = await api.compareReport(result.companies[0].cui, result.companies[1].cui);
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `comparativ_${result.companies[0].cui}_${result.companies[1].cui}.pdf`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  } catch {
-                    setError("Eroare la generarea PDF comparativ");
-                  }
-                }}
+                onClick={exportCSV}
                 className="btn-secondary flex items-center gap-1.5 text-sm"
               >
-                <Download className="w-3.5 h-3.5" /> PDF Comparativ
+                <Download className="w-3.5 h-3.5" /> Export CSV
               </button>
-            )}
+              {result.companies.length === 2 && (
+                <button
+                  onClick={async () => {
+                    try {
+                      logAction("Compare", "downloadPDF", { cui1: result.companies[0].cui, cui2: result.companies[1].cui });
+                      const blob = await api.compareReport(result.companies[0].cui, result.companies[1].cui);
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `comparativ_${result.companies[0].cui}_${result.companies[1].cui}.pdf`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    } catch {
+                      setError("Eroare la generarea PDF comparativ");
+                    }
+                  }}
+                  className="btn-secondary flex items-center gap-1.5 text-sm"
+                >
+                  <Download className="w-3.5 h-3.5" /> PDF Comparativ
+                </button>
+              )}
+            </div>
           </div>
 
           <table className="w-full text-sm">

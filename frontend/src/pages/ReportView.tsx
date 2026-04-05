@@ -3,18 +3,26 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   Download,
-  FileText,
+
   Shield,
   ChevronDown,
   ChevronRight,
   ExternalLink,
   RefreshCw,
+  Database,
+  Calendar,
+  Layers,
+  GitCompare,
+  Mail,
+  X,
+  Loader2,
 } from "lucide-react";
 import clsx from "clsx";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { logAction, logValidation, validateReportData } from "@/lib/logger";
 import { ANALYSIS_TYPE_LABELS } from "@/lib/constants";
+import type { ReportDelta } from "@/lib/types";
 
 interface ReportFull {
   id: string;
@@ -37,6 +45,65 @@ interface ReportFull {
   sources: { source_name: string; source_url: string; status: string; data_found: boolean; response_time_ms: number }[];
 }
 
+const DeltaView = ({ reportId }: { reportId: string }) => {
+  const [delta, setDelta] = useState<ReportDelta | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.getReportDelta(reportId)
+      .then(setDelta)
+      .catch(() => setDelta(null))
+      .finally(() => setLoading(false));
+  }, [reportId]);
+
+  if (loading) return (
+    <div className="card animate-pulse">
+      <div className="h-4 bg-gray-700 rounded w-1/3 mb-3" />
+      <div className="h-6 bg-gray-700 rounded w-1/2" />
+    </div>
+  );
+
+  if (!delta?.has_delta) return (
+    <div className="card text-center py-8">
+      <p className="text-gray-500">Prima analiza — fara date anterioare pentru comparatie</p>
+    </div>
+  );
+
+  return (
+    <div className="card space-y-4">
+      <div className="flex items-center gap-4">
+        <h3 className="text-lg font-semibold">Evolutie Scor</h3>
+        <div className="flex items-center gap-2 text-2xl font-bold">
+          <span className="text-gray-400">{delta.previous_score}</span>
+          <span className="text-gray-500">→</span>
+          <span>{delta.current_score}</span>
+          {delta.score_delta !== undefined && (
+            <span className={`text-lg ml-2 ${delta.score_delta > 0 ? "text-green-400" : delta.score_delta < 0 ? "text-red-400" : "text-gray-400"}`}>
+              ({delta.score_delta > 0 ? "+" : ""}{delta.score_delta})
+            </span>
+          )}
+        </div>
+      </div>
+
+      {delta.changes && delta.changes.length > 0 && (
+        <div className="space-y-2">
+          <h4 className="text-sm font-medium text-gray-400 uppercase tracking-wide">Modificari detectate</h4>
+          {delta.changes.map((change, i) => (
+            <div key={i} className="flex justify-between items-center py-2 border-b border-gray-800">
+              <span className="text-gray-300">{change.field}</span>
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-red-400 line-through">{String(change.old ?? "—")}</span>
+                <span className="text-gray-500">→</span>
+                <span className="text-green-400 font-medium">{String(change.new ?? "—")}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function ReportView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -46,6 +113,11 @@ export default function ReportView() {
   const [activeTab, setActiveTab] = useState("overview");
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [reanalyzing, setReanalyzing] = useState(false);
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailTo, setEmailTo] = useState("");
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailMessage, setEmailMessage] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -59,6 +131,7 @@ export default function ReportView() {
         if (issues.length > 0) {
           logValidation("ReportView", issues);
         }
+        setEmailSubject(`Raport: ${rep.title || ANALYSIS_TYPE_LABELS[rep.report_type] || "Raport RIS"}`);
         logAction("ReportView", "open", {
           reportId: id,
           type: rep.report_type,
@@ -101,6 +174,7 @@ export default function ReportView() {
     { key: "overview", label: "Rezumat" },
     { key: "company", label: "Profil Firma" },
     { key: "risk", label: "Risc" },
+    { key: "delta", label: "Modificari" },
     { key: "raw", label: "Date JSON" },
   ];
 
@@ -160,7 +234,54 @@ export default function ReportView() {
               {fmt.toUpperCase()}
             </a>
           ))}
+          <button
+            onClick={() => setEmailModalOpen(true)}
+            className="btn-secondary flex items-center gap-1.5 text-sm"
+          >
+            <Mail className="w-3.5 h-3.5" />
+            Trimite email
+          </button>
         </div>
+      </div>
+
+      {/* Report Metadata Bar */}
+      <div className="flex flex-wrap items-center gap-3 text-xs">
+        {/* Sources OK/total */}
+        {report.sources && report.sources.length > 0 && (
+          <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-dark-surface text-gray-400">
+            <Database className="w-3.5 h-3.5" />
+            Surse: {report.sources.filter((s) => s.data_found).length}/{report.sources.length} OK
+          </span>
+        )}
+        {/* Generation date */}
+        <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-dark-surface text-gray-400">
+          <Calendar className="w-3.5 h-3.5" />
+          {new Date(report.created_at).toLocaleDateString("ro-RO", {
+            day: "2-digit",
+            month: "long",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </span>
+        {/* Report level */}
+        <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-dark-surface text-gray-400">
+          <Layers className="w-3.5 h-3.5" />
+          Nivel {report.report_level}
+        </span>
+        {/* Delta / previous report reference */}
+        {Boolean(data?.delta_info) && (
+          <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-accent-primary/10 text-accent-secondary border border-accent-primary/20">
+            <GitCompare className="w-3.5 h-3.5" />
+            vs anterior
+          </span>
+        )}
+        {Boolean(data?.previous_report_id) && !data?.delta_info && (
+          <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
+            <GitCompare className="w-3.5 h-3.5" />
+            vs anterior
+          </span>
+        )}
       </div>
 
       {/* Risk Score Card */}
@@ -309,6 +430,13 @@ export default function ReportView() {
           </div>
         )}
 
+        {activeTab === "delta" && (
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-gray-400 uppercase">Modificari fata de analiza anterioara</h3>
+            <DeltaView reportId={report.id} />
+          </div>
+        )}
+
         {activeTab === "raw" && (
           <div>
             <h3 className="text-sm font-semibold text-gray-400 uppercase mb-3">Date Verificate (JSON)</h3>
@@ -375,6 +503,117 @@ export default function ReportView() {
           </div>
         )}
       </div>
+
+      {/* N5: Email Send Modal */}
+      {emailModalOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm"
+            onClick={() => setEmailModalOpen(false)}
+          />
+          <div className="fixed inset-0 z-[61] flex items-center justify-center p-4">
+            <div className="bg-dark-card border border-dark-border rounded-xl shadow-2xl w-full max-w-md">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-dark-border">
+                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-accent-secondary" />
+                  Trimite raport pe email
+                </h3>
+                <button
+                  onClick={() => setEmailModalOpen(false)}
+                  className="text-gray-500 hover:text-gray-300 p-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!emailTo.trim()) {
+                    toast("Introdu adresa de email", "warning");
+                    return;
+                  }
+                  setEmailSending(true);
+                  try {
+                    await api.sendReportEmail(report.id, {
+                      to: emailTo.trim(),
+                      subject: emailSubject,
+                      message: emailMessage,
+                    });
+                    toast("Email trimis cu succes!", "success");
+                    logAction("ReportView", "sendEmail", { reportId: report.id, to: emailTo });
+                    setEmailModalOpen(false);
+                    setEmailTo("");
+                    setEmailMessage("");
+                  } catch {
+                    toast("Eroare la trimiterea emailului. Verifica configurarea Gmail.", "error");
+                  } finally {
+                    setEmailSending(false);
+                  }
+                }}
+                className="p-5 space-y-4"
+              >
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5">Destinatar</label>
+                  <input
+                    type="email"
+                    value={emailTo}
+                    onChange={(e) => setEmailTo(e.target.value)}
+                    placeholder="email@exemplu.com"
+                    className="input-field w-full"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5">Subiect</label>
+                  <input
+                    type="text"
+                    value={emailSubject}
+                    onChange={(e) => setEmailSubject(e.target.value)}
+                    className="input-field w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5">Mesaj (optional)</label>
+                  <textarea
+                    value={emailMessage}
+                    onChange={(e) => setEmailMessage(e.target.value)}
+                    placeholder="Mesaj aditional..."
+                    rows={3}
+                    className="input-field w-full resize-none"
+                  />
+                </div>
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={emailSending}
+                    className="btn-primary flex-1 flex items-center justify-center gap-2"
+                  >
+                    {emailSending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Se trimite...
+                      </>
+                    ) : (
+                      <>
+                        <Mail className="w-4 h-4" />
+                        Trimite
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEmailModalOpen(false)}
+                    className="btn-secondary"
+                  >
+                    Anuleaza
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  Key,
+
   Bell,
   Mail,
   Save,
@@ -12,6 +12,7 @@ import {
   Eye,
   EyeOff,
   Copy,
+  FlaskConical,
 } from "lucide-react";
 import clsx from "clsx";
 import { useToast } from "@/components/Toast";
@@ -52,6 +53,7 @@ export default function Settings() {
   const [saved, setSaved] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
+  const [integrationTests, setIntegrationTests] = useState<Record<string, { status: "loading" | "ok" | "fail"; message?: string }>>({});
 
   useEffect(() => {
     api.getSettings()
@@ -75,6 +77,40 @@ export default function Settings() {
       toast("Eroare la salvarea setarilor", "error");
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Generic integration test using /health/deep endpoint
+  const handleTestIntegration = async (name: string) => {
+    setIntegrationTests((prev) => ({ ...prev, [name]: { status: "loading" } }));
+    logAction("Settings", "testIntegration", { name });
+    try {
+      const health = await api.healthDeep() as Record<string, unknown>;
+      // Map integration name to health key
+      const keyMap: Record<string, string> = {
+        "api": "ai_providers",
+        "tavily": "search",
+        "telegram": "notifications",
+        "email": "email",
+      };
+      const healthKey = keyMap[name] || name;
+      const status = health[healthKey] as Record<string, unknown> | undefined;
+      if (status && status.status === "ok") {
+        setIntegrationTests((prev) => ({ ...prev, [name]: { status: "ok", message: "Conectat" } }));
+      } else if (status) {
+        const errMsg = (status.error as string) || (status.status as string) || "Indisponibil";
+        setIntegrationTests((prev) => ({ ...prev, [name]: { status: "fail", message: errMsg } }));
+      } else {
+        // Try to find status in nested keys
+        const dbStatus = health.database as Record<string, unknown> | undefined;
+        if (name === "api" && dbStatus?.status === "ok") {
+          setIntegrationTests((prev) => ({ ...prev, [name]: { status: "ok", message: "Backend OK" } }));
+        } else {
+          setIntegrationTests((prev) => ({ ...prev, [name]: { status: "fail", message: "Nedetectat in health" } }));
+        }
+      }
+    } catch {
+      setIntegrationTests((prev) => ({ ...prev, [name]: { status: "fail", message: "Eroare conexiune" } }));
     }
   };
 
@@ -172,6 +208,32 @@ export default function Settings() {
           {testResult}
         </p>
       )}
+
+      {/* Test integration via /health/deep */}
+      <div className="flex items-center gap-3 pt-2 border-t border-dark-border/50">
+        <button
+          onClick={() => handleTestIntegration(groupKey)}
+          disabled={integrationTests[groupKey]?.status === "loading"}
+          className="btn-secondary text-sm flex items-center gap-2"
+        >
+          {integrationTests[groupKey]?.status === "loading" ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <FlaskConical className="w-3.5 h-3.5" />
+          )}
+          Testeaza
+        </button>
+        {integrationTests[groupKey]?.status === "ok" && (
+          <span className="flex items-center gap-1 text-xs text-green-400">
+            <CheckCircle className="w-3.5 h-3.5" /> {integrationTests[groupKey].message}
+          </span>
+        )}
+        {integrationTests[groupKey]?.status === "fail" && (
+          <span className="flex items-center gap-1 text-xs text-red-400">
+            <XCircle className="w-3.5 h-3.5" /> {integrationTests[groupKey].message}
+          </span>
+        )}
+      </div>
     </div>
   );
 

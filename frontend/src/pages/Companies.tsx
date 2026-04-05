@@ -1,33 +1,50 @@
-import { useEffect, useState } from "react";
-import { Building2, Download, Search, ChevronLeft, ChevronRight } from "lucide-react";
-import { Link } from "react-router-dom";
+import { useEffect, useState, useOptimistic, useTransition } from "react";
+import { Building2, Download, Search, ChevronLeft, ChevronRight, Star } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import clsx from "clsx";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { logAction } from "@/lib/logger";
 import { useDebounce } from "@/hooks/useDebounce";
 import type { Company } from "@/lib/types";
 
+const SORT_OPTIONS = [
+  { value: "last_analyzed", label: "Ultima analiza" },
+  { value: "score_desc", label: "Scor (mare \u2192 mic)" },
+  { value: "score_asc", label: "Scor (mic \u2192 mare)" },
+  { value: "name_asc", label: "Nume A-Z" },
+  { value: "name_desc", label: "Nume Z-A" },
+  { value: "analysis_count", label: "Nr. analize" },
+];
+
 const PAGE_SIZE = 20;
 
 export default function Companies() {
   const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
+  const [favorites, setFavorites] = useState<Record<string, boolean>>({});
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+
+  const sort = searchParams.get("sort") || "last_analyzed";
 
   // 10C M12.4: Debounced search — auto-search after 300ms typing pause
   const debouncedSearch = useDebounce(search, 300);
 
-  const loadCompanies = (searchTerm?: string, pageNum = 0) => {
+  const loadCompanies = (searchTerm?: string, pageNum = 0, sortParam = sort) => {
     setLoading(true);
-    api
-      .listCompanies({ search: searchTerm, limit: PAGE_SIZE, offset: pageNum * PAGE_SIZE })
+    const fetchFn = showFavoritesOnly
+      ? api.listFavorites()
+      : api.listCompanies({ search: searchTerm, limit: PAGE_SIZE, offset: pageNum * PAGE_SIZE, sort: sortParam });
+    fetchFn
       .then((res) => {
         setCompanies(res.companies);
         setTotal(res.total);
-        logAction("Companies", "loaded", { total: res.total });
+        logAction("Companies", "loaded", { total: res.total, sort: sortParam });
       })
       .catch(() => toast("Eroare la incarcarea companiilor", "error"))
       .finally(() => setLoading(false));
@@ -43,17 +60,70 @@ export default function Companies() {
     loadCompanies(debouncedSearch, 0);
   }, [debouncedSearch]);
 
+  // Reload when sort changes
+  useEffect(() => {
+    setPage(0);
+    loadCompanies(debouncedSearch, 0, sort);
+  }, [sort]);
+
+  // Reload when favorites filter changes
+  useEffect(() => {
+    setPage(0);
+    loadCompanies(debouncedSearch, 0);
+  }, [showFavoritesOnly]);
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(0);
     loadCompanies(search, 0);
   };
 
+  const [_isPending, startTransition] = useTransition();
+  const [optimisticFavorites, setOptimisticFavorites] = useOptimistic(
+    favorites,
+    (_current: Record<string, boolean>, update: { id: string; value: boolean }) => ({
+      ..._current,
+      [update.id]: update.value,
+    })
+  );
+
+  const toggleFavorite = (companyId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const currentVal = optimisticFavorites[companyId] ?? false;
+    startTransition(async () => {
+      setOptimisticFavorites({ id: companyId, value: !currentVal });
+      try {
+        const res = await api.toggleFavorite(companyId);
+        setFavorites((prev) => ({ ...prev, [companyId]: res.is_favorite }));
+        logAction("Companies", "toggleFavorite", { companyId, isFavorite: res.is_favorite });
+      } catch {
+        // Rollback via setFavorites — optimistic state reverts on next render
+        setFavorites((prev) => ({ ...prev, [companyId]: currentVal }));
+        toast("Eroare la actualizarea favoritelor", "error");
+      }
+    });
+  };
+
+  // Initialize favorites from company data (backend may return 0/1 integer or boolean)
+  useEffect(() => {
+    const favMap: Record<string, boolean> = {};
+    companies.forEach((c) => {
+      if (c.is_favorite !== undefined && c.is_favorite !== null) {
+        favMap[c.id] = Boolean(c.is_favorite);
+      }
+    });
+    setFavorites((prev) => ({ ...prev, ...favMap }));
+  }, [companies]);
+
+  // When showFavoritesOnly, companies already come from listFavorites endpoint
+  const filteredCompanies = companies;
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const goToPage = (p: number) => {
     setPage(p);
-    loadCompanies(search, p);
+    loadCompanies(search, p, sort);
   };
 
   return (
@@ -74,6 +144,35 @@ export default function Companies() {
             Export CSV
           </button>
         )}
+      </div>
+
+      {/* Filters */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <button
+          onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+          className={clsx(
+            "flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors",
+            showFavoritesOnly
+              ? "border-yellow-500/50 bg-yellow-500/10 text-yellow-400"
+              : "border-dark-border bg-dark-surface text-gray-400 hover:text-gray-300"
+          )}
+        >
+          <Star className={clsx("w-4 h-4", showFavoritesOnly && "fill-yellow-400")} />
+          Doar favorite
+        </button>
+
+        {/* Sort dropdown — persisted in URL */}
+        <select
+          value={sort}
+          onChange={(e) => setSearchParams({ sort: e.target.value })}
+          className="bg-dark-surface border border-dark-border rounded px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-accent-primary/50"
+        >
+          {SORT_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Search */}
@@ -120,7 +219,7 @@ export default function Companies() {
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {companies.map((company) => (
+            {filteredCompanies.map((company) => (
               <Link
                 key={company.id}
                 to={`/company/${company.id}`}
@@ -146,6 +245,21 @@ export default function Companies() {
                         : "Neanalizata"}
                     </p>
                   </div>
+                  <button
+                    onClick={(e) => toggleFavorite(company.id, e)}
+                    className="shrink-0 p-1 rounded hover:bg-dark-hover transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+                    aria-label={optimisticFavorites[company.id] ? "Elimina din favorite" : "Adauga la favorite"}
+                    title={optimisticFavorites[company.id] ? "Sterge din favorite" : "Adauga la favorite"}
+                  >
+                    <Star
+                      className={clsx(
+                        "w-4 h-4 transition-colors",
+                        optimisticFavorites[company.id]
+                          ? "text-yellow-400 fill-yellow-400"
+                          : "text-gray-600 hover:text-yellow-400"
+                      )}
+                    />
+                  </button>
                   <ChevronRight className="w-4 h-4 text-gray-600 group-hover:text-accent-secondary shrink-0 mt-1" />
                 </div>
               </Link>

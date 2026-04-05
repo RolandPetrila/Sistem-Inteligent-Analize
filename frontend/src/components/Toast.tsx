@@ -8,6 +8,7 @@ interface ToastItem {
   id: number;
   message: string;
   type: ToastType;
+  count?: number;
 }
 
 interface ToastContextValue {
@@ -28,8 +29,16 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   const toast = useCallback((message: string, type: ToastType = "info") => {
-    const id = nextId++;
-    setToasts((prev) => [...prev, { id, message, type }]);
+    setToasts((prev) => {
+      const existing = prev.find((t) => t.message === message && t.type === type);
+      if (existing) {
+        return prev.map((t) =>
+          t.id === existing.id ? { ...t, count: (t.count ?? 1) + 1 } : t
+        );
+      }
+      const id = nextId++;
+      return [...prev, { id, message, type, count: 1 }];
+    });
   }, []);
 
   const remove = useCallback((id: number) => {
@@ -92,7 +101,12 @@ function ToastItem({
       )}
     >
       <Icon className={clsx("w-4 h-4 mt-0.5 shrink-0", ICON_COLORS[item.type])} />
-      <p className="text-sm flex-1">{item.message}</p>
+      <span className="text-sm flex-1">
+        {item.message}
+        {(item.count ?? 1) > 1 && (
+          <span className="ml-1.5 text-xs font-bold opacity-70">(x{item.count})</span>
+        )}
+      </span>
       <button
         onClick={() => onRemove(item.id)}
         className="text-gray-500 hover:text-gray-300 shrink-0"

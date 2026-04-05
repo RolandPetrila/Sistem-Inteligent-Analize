@@ -446,11 +446,20 @@ def generate_html(report_sections: dict, meta: dict, verified_data: dict, output
         for ew in ew_list:
             sev = ew.get("severity", "MEDIUM")
             conf = ew.get("confidence", 0)
+            # Confidence-based gradient color for border-left
+            if conf >= 80:
+                border_color = "#ef4444"   # red — high confidence warning
+            elif conf >= 60:
+                border_color = "#f97316"   # orange
+            elif conf >= 40:
+                border_color = "#eab308"   # yellow
+            else:
+                border_color = "#6b7280"   # gray — low confidence
             sev_color = "#ef4444" if sev == "HIGH" else "#eab308" if sev == "MEDIUM" else "#22c55e"
             sev_icon = "!!" if sev == "HIGH" else "!" if sev == "MEDIUM" else "i"
             ew_items += (
                 f'<div style="padding:10px 14px;margin-bottom:8px;background:#16213e;border-radius:8px;'
-                f'border-left:4px solid {sev_color};display:flex;align-items:center;gap:12px">'
+                f'border-left:4px solid {border_color};display:flex;align-items:center;gap:12px">'
                 f'<span style="background:{sev_color}20;color:{sev_color};font-weight:700;font-size:0.85em;'
                 f'padding:2px 8px;border-radius:4px;min-width:28px;text-align:center">{sev_icon}</span>'
                 f'<span style="color:#e2e8f0;flex:1">{_escape(ew.get("warning", ""))}</span>'

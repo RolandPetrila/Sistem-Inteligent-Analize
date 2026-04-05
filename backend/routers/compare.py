@@ -11,12 +11,14 @@ from datetime import date
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
+from loguru import logger
 from pydantic import BaseModel
 
 from backend.agents.tools.anaf_client import get_anaf_data
 from backend.agents.tools.anaf_bilant_client import get_bilant
 from backend.agents.tools.cui_validator import validate_cui
 from backend.agents.tools.caen_context import get_caen_description, CAEN_BENCHMARK
+from backend.agents.verification.scoring import calculate_risk_score
 from backend.services import cache_service
 from backend.database import db
 
@@ -59,7 +61,7 @@ async def compare_companies(data: CompareRequest):
                 anaf = {}
                 company["error_anaf"] = str(e)
             # C17 fix: Only sleep on cache miss (rate limit), not on hit
-            await asyncio.sleep(2)
+            await asyncio.sleep(2)  # rate limit: doar la fetch real, nu la cache hit
 
         if anaf and anaf.get("found"):
             company["denumire"] = anaf.get("denumire", "N/A")
@@ -79,10 +81,11 @@ async def compare_companies(data: CompareRequest):
                 bilant = await get_bilant(cui, last_year)
                 if bilant:
                     await cache_service.set(cache_key_bilant, bilant, "anaf")
-            except Exception:
+            except Exception as e:
+                logger.warning(f"[compare] bilant fetch: {e}")
                 bilant = {}
-            # C17 fix: Only sleep on cache miss
-            await asyncio.sleep(2)
+            # C17 fix: Only sleep on cache miss (rate limit), not on hit
+            await asyncio.sleep(2)  # rate limit: doar la fetch real, nu la cache hit
 
         if bilant and bilant.get("found"):
             company["cifra_afaceri"] = bilant.get("cifra_afaceri_neta")
@@ -115,8 +118,8 @@ async def compare_companies(data: CompareRequest):
             "INSERT INTO compare_history (id, cui_list, result_data) VALUES (?, ?, ?)",
             (compare_id, json.dumps(clean_cuis), json.dumps(results, ensure_ascii=False, default=str)),
         )
-    except Exception:
-        pass  # table may not exist yet if migration hasn't run
+    except Exception as e:
+        logger.warning(f"[compare] history: {e}")
 
     # 10D M7.4: Chart.js-ready data format for frontend instant charts
     chart_data = _build_chart_data(results)
@@ -140,47 +143,37 @@ async def compare_companies(data: CompareRequest):
 
 
 def _calculate_compare_score(company: dict) -> int:
-    """Consistent risk scoring aligned with Agent 4 (6 dimensions simplified)."""
-    score = 70
+    """DRY scoring: delegates to canonical calculate_risk_score (Agent 4).
+    Builds the verified-data structure expected by the canonical function
+    from the flat compare company dict."""
+    # Build verified-data structure compatible with canonical scoring
+    def _field(val):
+        return {"value": val} if val is not None else {}
 
-    # Financiar
-    ca = company.get("cifra_afaceri") or 0
-    if ca > 10_000_000:
-        score += 10
-    elif ca > 1_000_000:
-        score += 5
-    elif ca <= 0:
-        score -= 15
+    verified = {
+        "financial": {
+            "cifra_afaceri": _field(company.get("cifra_afaceri")),
+            "profit_net": _field(company.get("profit_net")),
+            "profit_brut": _field(company.get("profit_brut")),
+            "capitaluri_proprii": _field(company.get("capitaluri")),
+            "numar_mediu_salariati": _field(company.get("angajati")),
+        },
+        "risk": {
+            "inactiv": {"value": company.get("inactiv", False)},
+            "platitor_tva": {"value": company.get("platitor_tva", False)},
+        },
+        "company": {
+            "data_inregistrare": {"value": company.get("data_inregistrare", "")},
+            "stare_inregistrare": {"value": company.get("stare", "")},
+        },
+    }
 
-    pn = company.get("profit_net")
-    if pn is not None and pn > 0:
-        score += 10
-    elif pn is not None and pn < 0:
-        score -= 10
-
-    # Fiscal
-    if company.get("inactiv"):
-        score -= 40
-
-    # Operational
-    angajati = company.get("angajati")
-    if angajati is not None:
-        if angajati >= 50:
-            score += 10
-        elif angajati >= 10:
-            score += 5
-        elif angajati == 0 and ca > 1_000_000:
-            score -= 20
-
-    # Solvency (8B)
-    cap = company.get("capitaluri")
-    if cap is not None and ca > 0:
-        if cap < 0:
-            score -= 15
-        elif cap / ca < 0.05:
-            score -= 5
-
-    return max(0, min(100, score))
+    try:
+        result = calculate_risk_score(verified)
+        return result.get("total_score", 70)
+    except Exception as e:
+        logger.warning(f"[compare] fallback scoring: {e}")
+        return 70
 
 
 def _calculate_financial_ratios(company: dict) -> dict:

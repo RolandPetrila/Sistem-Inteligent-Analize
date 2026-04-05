@@ -1,22 +1,51 @@
 import { logApi } from "./logger";
 
 const BASE = "/api";
+const REQUEST_TIMEOUT_MS = 30_000;
+
+// User-friendly error messages for common HTTP codes (Romanian)
+const HTTP_ERROR_MESSAGES: Record<number, string> = {
+  400: "Cerere invalida. Verifica datele introduse.",
+  401: "Neautorizat. Verifica cheia API.",
+  403: "Acces interzis.",
+  404: "Resursa nu a fost gasita.",
+  408: "Cererea a expirat. Incearca din nou.",
+  429: "Prea multe cereri. Asteapta cateva secunde.",
+  500: "Eroare server. Incearca din nou.",
+  502: "Server indisponibil momentan.",
+  503: "Serviciu temporar indisponibil.",
+  504: "Timeout server. Incearca din nou.",
+};
 
 // D21: Auto-retry with exponential backoff for 429 and transient errors
+// R2 Fix #8: Create NEW AbortController per attempt (not reused across retries)
 async function request<T>(path: string, options?: RequestInit, _attempt = 0): Promise<T> {
   const method = options?.method || "GET";
   const start = performance.now();
+
+  // R2 Fix: Fresh AbortController for each attempt
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   let res: Response;
   try {
     res = await fetch(`${BASE}${path}`, {
       headers: { "Content-Type": "application/json", ...options?.headers },
       ...options,
+      signal: controller.signal,
     });
   } catch (netErr) {
+    clearTimeout(timeoutId);
     const ms = Math.round(performance.now() - start);
+    // Check if it was an abort (timeout)
+    if (netErr instanceof DOMException && netErr.name === "AbortError") {
+      logApi(method, path, 0, ms, "Request timeout");
+      throw new ApiError("Cererea a expirat. Incearca din nou.", "TIMEOUT", 408);
+    }
     logApi(method, path, 0, ms, `Network error: ${netErr}`);
-    throw netErr;
+    throw new ApiError("Eroare de retea. Verifica conexiunea.", "NETWORK_ERROR", 0);
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   const durationMs = Math.round(performance.now() - start);
@@ -48,8 +77,11 @@ async function request<T>(path: string, options?: RequestInit, _attempt = 0): Pr
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     const code = err.error_code || err.code || "";
-    const msg = err.detail || `HTTP ${res.status}`;
-    logApi(method, path, res.status, durationMs, msg);
+    // Use user-friendly message, with server detail as fallback
+    const friendlyMsg = HTTP_ERROR_MESSAGES[res.status];
+    const serverMsg = err.detail || `HTTP ${res.status}`;
+    const msg = friendlyMsg || serverMsg;
+    logApi(method, path, res.status, durationMs, serverMsg);
     throw new ApiError(msg, code, res.status);
   }
 
@@ -123,11 +155,12 @@ export const api = {
   getReport: (id: string) => request<import("./types").Report & { full_data: unknown; sources: unknown[] }>(`/reports/${id}`),
 
   // Companies
-  listCompanies: (params?: { search?: string; limit?: number; offset?: number }) => {
+  listCompanies: (params?: { search?: string; limit?: number; offset?: number; sort?: string }) => {
     const q = new URLSearchParams();
     if (params?.search) q.set("search", params.search);
     if (params?.limit) q.set("limit", String(params.limit));
     if (params?.offset) q.set("offset", String(params.offset));
+    if (params?.sort) q.set("sort", params.sort);
     const qs = q.toString();
     return request<{ companies: import("./types").Company[]; total: number }>(
       `/companies${qs ? `?${qs}` : ""}`
@@ -267,4 +300,83 @@ export const api = {
   // Monitoring toggle
   toggleMonitoring: (id: string) =>
     request<unknown>(`/monitoring/${id}/toggle`, { method: "PUT" }),
+
+  // Notifications
+  listNotifications: (params?: { unread_only?: boolean; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.unread_only) q.set("unread_only", "true");
+    if (params?.limit) q.set("limit", String(params.limit));
+    const qs = q.toString();
+    return request<{ notifications: import("./types").Notification[]; unread_count: number }>(
+      `/notifications${qs ? `?${qs}` : ""}`
+    );
+  },
+  markNotificationRead: (id: string) =>
+    request<{ success: boolean }>(`/notifications/${id}/read`, { method: "PUT" }),
+  markAllNotificationsRead: () =>
+    request<{ success: boolean }>("/notifications/read-all", { method: "PUT" }),
+
+  // Company favorites
+  toggleFavorite: (id: string) =>
+    request<{ is_favorite: boolean }>(`/companies/${id}/favorite`, { method: "PUT" }),
+
+  // Risk movers
+  getRiskMovers: () =>
+    request<{ movers: import("./types").RiskMover[] }>("/companies/stats/risk-movers"),
+
+  // Company timeline
+  getCompanyTimeline: (id: string) =>
+    request<{ events: import("./types").TimelineEvent[] }>(`/companies/${id}/timeline`),
+
+  // Report email
+  sendReportEmail: (reportId: string, data: { to: string; subject: string; message: string }) =>
+    request<{ success: boolean }>(`/reports/${reportId}/send-email`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  // Download report in any format (PDF, DOCX, HTML, Excel, PPTX)
+  downloadReport: async (reportId: string, format: string): Promise<Blob> => {
+    const res = await fetch(`${BASE}/reports/${reportId}/download/${format}`);
+    if (!res.ok) throw new ApiError(`Download ${format} failed`, "", res.status);
+    return res.blob();
+  },
+
+  // Download one-pager PDF
+  downloadOnePager: async (reportId: string): Promise<Blob> => {
+    const res = await fetch(`${BASE}/reports/${reportId}/download/one_pager`);
+    if (!res.ok) throw new ApiError("Download one-pager failed", "", res.status);
+    return res.blob();
+  },
+
+  // Download compare report PDF (alias for compareReport, explicit naming)
+  downloadCompareReport: async (cui1: string, cui2: string): Promise<Blob> => {
+    const res = await fetch(`${BASE}/compare/report`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cui_1: cui1, cui_2: cui2 }),
+    });
+    if (!res.ok) throw new ApiError("Compare report generation failed", "", res.status);
+    return res.blob();
+  },
+
+  // Get report data (lazy-load full JSON)
+  getReportData: (reportId: string, section?: string): Promise<Record<string, unknown>> => {
+    const url = section
+      ? `/reports/${reportId}/data?section=${section}`
+      : `/reports/${reportId}/data`;
+    return request(url);
+  },
+
+  // Get report delta (changes vs previous analysis)
+  getReportDelta: (reportId: string): Promise<import("./types").ReportDelta> =>
+    request(`/reports/${reportId}/delta`),
+
+  // List favorites
+  listFavorites: (): Promise<{ companies: import("./types").Company[]; total: number }> =>
+    request("/companies/favorites"),
+
+  // Score trend with SQL window functions
+  getScoreTrend: (companyId: number): Promise<import("./types").ScoreTrendPoint[]> =>
+    request(`/companies/${companyId}/score-trend`),
 };

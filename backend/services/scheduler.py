@@ -31,8 +31,8 @@ async def _get_checkpoint(key: str) -> float:
         if row and row["last_run"]:
             dt = datetime.fromisoformat(row["last_run"])
             return dt.timestamp()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"[scheduler] sleep prevention: {e}")
     return 0.0
 
 
@@ -152,7 +152,7 @@ async def _run_backup_safe():
         backup_dir.mkdir(exist_ok=True)
 
         # Format: ris_2026-03-21.db
-        date_str = datetime.now().strftime("%Y-%m-%d")
+        date_str = datetime.now(UTC).strftime("%Y-%m-%d")
         backup_path = backup_dir / f"ris_{date_str}.db"
 
         # Nu suprascrie backup din aceeasi zi

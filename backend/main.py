@@ -1,3 +1,4 @@
+import asyncio
 import json
 import re
 import uuid
@@ -14,7 +15,8 @@ from loguru import logger
 from backend.config import settings
 from backend.database import db
 from backend import http_client
-from backend.routers import jobs, reports, companies, analysis, settings as settings_router, compare, monitoring, batch
+from backend.errors import RISError, ERROR_HTTP_STATUS
+from backend.routers import jobs, reports, companies, analysis, settings as settings_router, compare, monitoring, batch, notifications
 
 # Runtime log — captures startup, shutdown, 500 errors (not per-job)
 from pathlib import Path as _Path
@@ -56,8 +58,9 @@ class ConnectionManager:
             for ws in self.active[job_id]:
                 try:
                     await ws.send_text(data)
-                except Exception:
+                except Exception as e:
                     # B25 fix: Track dead connections for cleanup instead of silently ignoring
+                    logger.debug(f"[ws_broadcast] Non-critical: {e}")
                     dead.append(ws)
             # Remove dead connections
             for ws in dead:
@@ -236,6 +239,24 @@ app.add_middleware(
     max_age=86400,  # 10A M11.7: Cache preflight OPTIONS for 24h — reduces overhead
 )
 
+# --- FIX #3: RISError handler — HTTP status corect per ErrorCode ---
+
+@app.exception_handler(RISError)
+async def ris_error_handler(request: Request, exc: RISError):
+    """Transforma RISError in HTTP response cu status code corect."""
+    request_id = getattr(request.state, 'request_id', 'unknown')
+    status_code = ERROR_HTTP_STATUS.get(exc.code, 500)
+    logger.warning(f"RISError [{exc.code.value}] [req={request_id}]: {exc.message}")
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "detail": exc.message,
+            "error_code": exc.code.value,
+            "request_id": request_id,
+        },
+    )
+
+
 # --- 10F M11.2: Error Message Sanitization ---
 
 @app.exception_handler(Exception)
@@ -286,6 +307,7 @@ app.include_router(settings_router.router, prefix="/api/settings", tags=["Settin
 app.include_router(compare.router, prefix="/api/compare", tags=["Compare"])
 app.include_router(monitoring.router, prefix="/api/monitoring", tags=["Monitoring"])
 app.include_router(batch.router, prefix="/api/batch", tags=["Batch"])
+app.include_router(notifications.router)
 
 
 # --- Frontend Log Endpoint ---
@@ -327,7 +349,8 @@ async def frontend_log(request: Request):
                             f.write(f"{'': <12} | {'': <20} | {sline.strip()}\n")
 
         return {"ok": True}
-    except Exception:
+    except Exception as e:
+        logger.debug(f"[health] Non-critical: {e}")
         return {"ok": False}
 
 
@@ -372,7 +395,8 @@ async def health_check_deep():
         quota = await get_quota_status()
         checks["tavily_quota"] = f"{quota['used']}/{quota['quota']} ({quota['percent_used']}%)"
         checks["tavily_ok"] = quota["remaining"] > 0
-    except Exception:
+    except Exception as e:
+        logger.debug(f"[tavily_check] Non-critical: {e}")
         checks["tavily_quota"] = "N/A"
 
     # Disk space
@@ -381,7 +405,8 @@ async def health_check_deep():
         free_gb = disk.free / (1024**3)
         checks["disk_free_gb"] = round(free_gb, 1)
         checks["disk_ok"] = free_gb > 1.0
-    except Exception:
+    except Exception as e:
+        logger.debug(f"[disk] Non-critical: {e}")
         checks["disk_free_gb"] = "N/A"
 
     # AI providers configured
@@ -409,6 +434,7 @@ async def health_check_deep():
 
 _stats_cache: dict | None = None
 _stats_cache_time: float = 0
+_stats_lock = asyncio.Lock()
 
 
 @app.get("/api/stats")
@@ -417,26 +443,27 @@ async def get_stats():
     import time
     global _stats_cache, _stats_cache_time
 
-    now = time.time()
-    if _stats_cache and (now - _stats_cache_time) < 30:
-        return _stats_cache
+    async with _stats_lock:
+        now = time.time()
+        if _stats_cache and (now - _stats_cache_time) < 30:
+            return _stats_cache
 
-    total_jobs = await db.fetch_one("SELECT COUNT(*) as c FROM jobs")
-    completed = await db.fetch_one("SELECT COUNT(*) as c FROM jobs WHERE status = 'DONE'")
-    total_reports = await db.fetch_one("SELECT COUNT(*) as c FROM reports")
-    total_companies = await db.fetch_one("SELECT COUNT(*) as c FROM companies")
-    this_month = await db.fetch_one(
-        "SELECT COUNT(*) as c FROM jobs WHERE created_at >= date('now', 'start of month')"
-    )
-    _stats_cache = {
-        "total_jobs": total_jobs["c"] if total_jobs else 0,
-        "completed_jobs": completed["c"] if completed else 0,
-        "total_reports": total_reports["c"] if total_reports else 0,
-        "total_companies": total_companies["c"] if total_companies else 0,
-        "jobs_this_month": this_month["c"] if this_month else 0,
-    }
-    _stats_cache_time = now
-    return _stats_cache
+        total_jobs = await db.fetch_one("SELECT COUNT(*) as c FROM jobs")
+        completed = await db.fetch_one("SELECT COUNT(*) as c FROM jobs WHERE status = 'DONE'")
+        total_reports = await db.fetch_one("SELECT COUNT(*) as c FROM reports")
+        total_companies = await db.fetch_one("SELECT COUNT(*) as c FROM companies")
+        this_month = await db.fetch_one(
+            "SELECT COUNT(*) as c FROM jobs WHERE created_at >= date('now', 'start of month')"
+        )
+        _stats_cache = {
+            "total_jobs": total_jobs["c"] if total_jobs else 0,
+            "completed_jobs": completed["c"] if completed else 0,
+            "total_reports": total_reports["c"] if total_reports else 0,
+            "total_companies": total_companies["c"] if total_companies else 0,
+            "jobs_this_month": this_month["c"] if this_month else 0,
+        }
+        _stats_cache_time = now
+        return _stats_cache
 
 
 @app.get("/api/stats/trend")
@@ -480,7 +507,8 @@ async def websocket_job_progress(websocket: WebSocket, job_id: str):
                 await websocket.send_text(json.dumps({"type": "pong"}))
     except WebSocketDisconnect:
         ws_manager.disconnect(job_id, websocket)
-    except Exception:
+    except Exception as e:
+        logger.debug(f"[ws_recv] Non-critical: {e}")
         ws_manager.disconnect(job_id, websocket)
 
 

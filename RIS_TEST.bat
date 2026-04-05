@@ -84,5 +84,11 @@ if "!VITEST_RESULT!"=="FAIL" (
 )
 
 echo.
+echo === SECURITY AUDIT ===
+pip-audit --requirement requirements.txt --desc 2>>TEST_RESULTS.log
+cd frontend && npm audit --production 2>>..\TEST_RESULTS.log && cd ..
+echo Security audit complete.
+
+echo.
 echo Apasa orice tasta pentru a inchide...
 pause >nul

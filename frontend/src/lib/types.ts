@@ -58,6 +58,7 @@ export interface Company {
   first_analyzed_at: string | null;
   last_analyzed_at: string | null;
   analysis_count: number;
+  is_favorite?: number | boolean;
 }
 
 export interface AnalysisTypeInfo {
@@ -85,6 +86,68 @@ export interface Stats {
   total_reports: number;
   total_companies: number;
   jobs_this_month: number;
+}
+
+export interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  severity: "info" | "warning" | "error" | "success";
+  link: string | null;
+  read: boolean;
+  created_at: string;
+}
+
+export interface RiskMover {
+  id: string;
+  name: string;
+  cui: string | null;
+  current_score: number;
+  previous_score: number;
+  delta: number;
+}
+
+export interface TimelineEvent {
+  type: "report" | "score_change" | "alert";
+  title: string;
+  detail: string | null;
+  date: string;
+  icon?: string;
+}
+
+export interface ReportDelta {
+  has_delta: boolean;
+  message?: string;
+  previous_report_id?: string;
+  previous_score?: number;
+  current_score?: number;
+  score_delta?: number;
+  changes?: Array<{
+    field: string;
+    old: string | number | null;
+    new: string | number | null;
+  }>;
+}
+
+export interface ScoreTrendPoint {
+  created_at: string;
+  score: number;
+  delta?: number;
+}
+
+export interface ScoringReason {
+  text: string;
+  impact: number;
+}
+
+export interface ScoringDimension {
+  score: number;
+  weight: number;
+  reasons?: ScoringReason[];
+  confidence?: number;
+  raw_score?: number;
+  insufficient_data?: boolean;
+  data_available?: boolean;
 }
 
 export interface WSMessage {

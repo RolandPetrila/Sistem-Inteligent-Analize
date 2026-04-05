@@ -266,8 +266,8 @@ def finish_job_log(job_id: str, success: bool = True, error: str = "",
 
         with open(SUMMARY_LOG, "a", encoding="utf-8") as sf:
             sf.write(summary_line + "\n")
-    except Exception:
-        pass  # Summary log failure should never block job completion
+    except Exception as e:
+        logger.warning(f"[job_logger] summary log: {e}")
 
     # Cleanup
     sink_id = _active_sinks.pop(job_id, None)

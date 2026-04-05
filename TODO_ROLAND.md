@@ -1,6 +1,23 @@
 # RIS — Plan Complet de Implementare
 
-Data actualizare: 2026-03-23 | Versiune plan: 6.0
+Data actualizare: 2026-04-05 | Versiune plan: 7.0
+
+---
+
+## AUDIT R14 — PLAN REMEDIERE (2026-04-05)
+
+**Scor curent: 82/100 | Scor tinta: 90/100**
+**Plan detaliat:** `99_Plan_vs_Audit/RECOMANDARI_IMBUNATATIRI_R4.md`
+
+| Faza | Estimat | Status | Prioritate |
+|------|---------|--------|-----------|
+| F0 — Critica (git + securitate) | 30 min | `[ ]` | MAXIMA |
+| F1 — Quick Wins | 3-4h | `[ ]` | MARE |
+| F2 — Modernizare | 4-5h | `[ ]` | MEDIE |
+| F3 — Calitate & Testare | 2-4 zile | `[ ]` | MEDIE |
+| F4 — Features Strategice | 3-5 zile | `[ ]` | MICA |
+| F5 — Audit R14 HIGH | 1-2 zile | `[ ]` | MARE |
+| F6 — Audit R14 MEDIUM | 2-4 zile | `[ ]` | MEDIE |
 
 ---
 

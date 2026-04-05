@@ -10,12 +10,19 @@ import {
   TrendingDown,
   Calendar,
   MapPin,
+  Bell,
+  ArrowUpDown,
+  Users,
+  Star,
+  AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import clsx from "clsx";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { logAction } from "@/lib/logger";
 import { ANALYSIS_TYPE_LABELS } from "@/lib/constants";
+import type { TimelineEvent, ScoringDimension } from "@/lib/types";
 
 interface CompanyReport {
   id: string;
@@ -63,18 +70,44 @@ export default function CompanyDetail() {
   const { toast } = useToast();
   const [company, setCompany] = useState<CompanyFull | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [monitoringLoading, setMonitoringLoading] = useState(false);
+  const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
 
   useEffect(() => {
     if (!id) return;
     api
       .getCompany(id)
       .then((c) => {
-        setCompany(c as unknown as CompanyFull);
-        logAction("CompanyDetail", "open", { companyId: id, name: (c as unknown as CompanyFull).name });
+        const full = c as unknown as CompanyFull;
+        setCompany(full);
+        // Check if is_favorite field exists (backend may return 0/1 integer or boolean)
+        const maybeFav = (c as unknown as Record<string, unknown>).is_favorite;
+        if (maybeFav !== undefined && maybeFav !== null) setIsFavorite(Boolean(maybeFav));
+        logAction("CompanyDetail", "open", { companyId: id, name: full.name });
       })
       .catch(() => toast("Eroare la incarcarea companiei", "error"))
       .finally(() => setLoading(false));
+
+    // N4: Fetch timeline
+    setTimelineLoading(true);
+    api.getCompanyTimeline(id)
+      .then((res) => setTimeline(res.events))
+      .catch(() => { /* timeline is optional */ })
+      .finally(() => setTimelineLoading(false));
   }, [id]);
+
+  const handleToggleFavorite = () => {
+    if (!id) return;
+    api.toggleFavorite(id)
+      .then((res) => {
+        setIsFavorite(res.is_favorite);
+        toast(res.is_favorite ? "Adaugat la favorite" : "Eliminat din favorite", "success");
+        logAction("CompanyDetail", "toggleFavorite", { companyId: id, isFavorite: res.is_favorite });
+      })
+      .catch(() => toast("Eroare la actualizarea favoritelor", "error"));
+  };
 
   const handleNewAnalysis = () => {
     if (!company?.cui) return;
@@ -104,7 +137,7 @@ export default function CompanyDetail() {
       : null;
 
   // Parse dimensions from latest score
-  let dimensions: Record<string, { score: number; weight: number }> | null = null;
+  let dimensions: Record<string, ScoringDimension> | null = null;
   if (latestScore?.dimensions) {
     try {
       dimensions = JSON.parse(latestScore.dimensions);
@@ -130,7 +163,24 @@ export default function CompanyDetail() {
               <Building2 className="w-7 h-7 text-accent-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white">{company.name}</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold text-white">{company.name}</h1>
+                <button
+                  onClick={handleToggleFavorite}
+                  className="p-1 rounded hover:bg-dark-hover transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+                  aria-label={isFavorite ? "Elimina din favorite" : "Adauga la favorite"}
+                  title={isFavorite ? "Sterge din favorite" : "Adauga la favorite"}
+                >
+                  <Star
+                    className={clsx(
+                      "w-5 h-5 transition-colors",
+                      isFavorite
+                        ? "text-yellow-400 fill-yellow-400"
+                        : "text-gray-600 hover:text-yellow-400"
+                    )}
+                  />
+                </button>
+              </div>
               <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm text-gray-500">
                 {company.cui && <span>CUI: {company.cui}</span>}
                 {company.caen_code && (
@@ -149,10 +199,57 @@ export default function CompanyDetail() {
             </div>
           </div>
 
-          <button onClick={handleNewAnalysis} className="btn-primary flex items-center gap-2">
-            <PlusCircle className="w-4 h-4" />
-            Re-analiza
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={handleNewAnalysis}
+              className="btn-primary flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+              aria-label="Porneste o noua analiza pentru aceasta firma"
+            >
+              <PlusCircle className="w-4 h-4" />
+              Re-analiza
+            </button>
+            <button
+              onClick={() => {
+                if (!company.cui) { toast("CUI indisponibil", "warning"); return; }
+                setMonitoringLoading(true);
+                api.createMonitoring({ company_id: company.id, telegram_notify: true })
+                  .then(() => toast("Monitorizare activata!", "success"))
+                  .catch(() => toast("Eroare la activarea monitorizarii", "error"))
+                  .finally(() => setMonitoringLoading(false));
+              }}
+              disabled={monitoringLoading}
+              className="btn-secondary flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+              aria-label="Activeaza monitorizare pentru aceasta firma"
+            >
+              {monitoringLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Bell className="w-4 h-4" />
+              )}
+              {monitoringLoading ? "Se activeaza..." : "Monitorizeaza"}
+            </button>
+            <button
+              onClick={() => {
+                if (!company.cui) { toast("CUI indisponibil", "warning"); return; }
+                navigate(`/compare?cui=${company.cui}`);
+              }}
+              className="btn-secondary flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+              aria-label="Compara aceasta firma cu alta"
+            >
+              <ArrowUpDown className="w-4 h-4" />
+              Compara
+            </button>
+            {company.caen_code && (
+              <button
+                onClick={() => navigate(`/companies?search=${company.caen_code}`)}
+                className="btn-secondary flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+                aria-label={`Cauta firme similare cu CAEN ${company.caen_code}`}
+              >
+                <Users className="w-4 h-4" />
+                Firme similare
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -228,6 +325,7 @@ export default function CompanyDetail() {
           <h3 className="text-sm font-semibold text-gray-400 uppercase mb-3">
             Scor pe Dimensiuni
           </h3>
+          <p className="text-[10px] text-gray-600 mb-3">Hover pe o dimensiune pentru a vedea explicatia scorului</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {Object.entries(dimensions).map(([key, dim]) => {
               const barColor =
@@ -236,10 +334,16 @@ export default function CompanyDetail() {
                   : dim.score >= 40
                     ? "bg-yellow-400"
                     : "bg-red-400";
+              const hasReasons = dim.reasons && dim.reasons.length > 0;
               return (
-                <div key={key} className="bg-dark-surface rounded-lg p-3">
+                <div key={key} className="relative group bg-dark-surface rounded-lg p-3">
                   <div className="flex justify-between items-center mb-1.5">
-                    <span className="text-xs text-gray-400 capitalize">{key}</span>
+                    <span className="text-xs text-gray-400 capitalize flex items-center gap-1">
+                      {key}
+                      {hasReasons && (
+                        <span className="text-gray-600 text-[9px]" title="Click pentru detalii">ⓘ</span>
+                      )}
+                    </span>
                     <span className="text-sm font-mono font-medium text-gray-300">
                       {dim.score}
                     </span>
@@ -252,7 +356,43 @@ export default function CompanyDetail() {
                   </div>
                   <span className="text-[10px] text-gray-600 mt-1 block">
                     Pondere: {dim.weight}%
+                    {dim.confidence !== undefined && (
+                      <span className="ml-2 text-gray-700">
+                        Conf: {Math.round(dim.confidence * 100)}%
+                      </span>
+                    )}
                   </span>
+
+                  {/* Tooltip cu reasons */}
+                  {hasReasons && (
+                    <div className="absolute left-0 top-full mt-1 z-30 hidden group-hover:block bg-gray-900 border border-gray-700 rounded-lg p-3 shadow-xl w-72 pointer-events-none">
+                      <p className="text-xs text-gray-400 mb-2 font-medium">
+                        De ce {dim.score}/100:
+                      </p>
+                      <div className="space-y-1.5">
+                        {dim.reasons!.map((r, i) => (
+                          <div key={i} className="flex justify-between items-start gap-2 text-xs">
+                            <span className="text-gray-300 flex-1 leading-tight">{r.text}</span>
+                            {r.impact !== 0 && (
+                              <span
+                                className={clsx(
+                                  "font-mono font-bold whitespace-nowrap shrink-0",
+                                  r.impact > 0 ? "text-green-400" : "text-red-400"
+                                )}
+                              >
+                                {r.impact > 0 ? "+" : ""}{r.impact}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      {dim.insufficient_data && (
+                        <p className="text-[10px] text-yellow-600 mt-2 border-t border-gray-800 pt-2">
+                          Date insuficiente — scor neutralizat la 50
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -343,6 +483,66 @@ export default function CompanyDetail() {
                 )}
               </Link>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* N4: Timeline */}
+      <div className="card">
+        <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">
+          Timeline
+        </h3>
+
+        {timelineLoading ? (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 className="w-5 h-5 text-accent-primary animate-spin" />
+          </div>
+        ) : timeline.length === 0 ? (
+          <p className="text-gray-600 text-sm py-4 text-center">
+            Nicio activitate inregistrata
+          </p>
+        ) : (
+          <div className="relative">
+            {/* Vertical line */}
+            <div className="absolute left-4 top-0 bottom-0 w-px bg-dark-border" />
+
+            <div className="space-y-4">
+              {timeline.map((event, i) => {
+                const TimelineIcon =
+                  event.type === "report" ? FileText
+                  : event.type === "score_change"
+                    ? (event.detail?.includes("-") || event.detail?.includes("scadere") ? TrendingDown : TrendingUp)
+                    : AlertTriangle;
+                const iconColor =
+                  event.type === "report" ? "text-blue-400 bg-blue-500/10"
+                  : event.type === "score_change"
+                    ? (event.detail?.includes("-") || event.detail?.includes("scadere") ? "text-red-400 bg-red-500/10" : "text-green-400 bg-green-500/10")
+                    : "text-yellow-400 bg-yellow-500/10";
+
+                return (
+                  <div key={i} className="flex items-start gap-4 pl-1">
+                    <div className={clsx("w-7 h-7 rounded-full flex items-center justify-center shrink-0 z-10", iconColor)}>
+                      <TimelineIcon className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="flex-1 min-w-0 pb-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm text-gray-300 font-medium">{event.title}</p>
+                        <span className="text-[10px] text-gray-600 shrink-0">
+                          {new Date(event.date).toLocaleDateString("ro-RO", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                          })}
+                        </span>
+                      </div>
+                      {event.detail && (
+                        <p className="text-xs text-gray-500 mt-0.5">{event.detail}</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

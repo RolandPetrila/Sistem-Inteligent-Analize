@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from "react";
-import { Upload, Download, Loader2, CheckCircle, XCircle } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Upload, Download, Loader2, CheckCircle, XCircle, FileSearch } from "lucide-react";
 import clsx from "clsx";
 import { useToast } from "@/components/Toast";
 import { api } from "@/lib/api";
 import { logAction } from "@/lib/logger";
+import { validateCUI } from "@/lib/cui-validator";
 
 interface BatchStatus {
   batch_id: string;
@@ -16,6 +17,13 @@ interface BatchStatus {
   current_cui: string;
 }
 
+interface CsvPreviewRow {
+  raw: string;
+  cui: string;
+  valid: boolean;
+  error?: string;
+}
+
 export default function BatchAnalysis() {
   const { toast } = useToast();
   const [file, setFile] = useState<File | null>(null);
@@ -23,6 +31,38 @@ export default function BatchAnalysis() {
   const [batch, setBatch] = useState<BatchStatus | null>(null);
   const [polling, setPolling] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [csvPreview, setCsvPreview] = useState<CsvPreviewRow[] | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+
+  // R2 fix: CSV header keywords to detect and skip header row
+  const CSV_HEADER_KEYWORDS = ["cui", "firma", "company", "denumire", "nume", "name", "cod"];
+
+  // Parse CSV file client-side for preview and validation
+  const parseCSVFile = useCallback(async (f: File) => {
+    const text = await f.text();
+    let lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
+
+    // R2 fix: Skip header row if first row contains known header keywords
+    if (lines.length > 0) {
+      const firstRow = lines[0].toLowerCase().replace(/"/g, "").trim();
+      const isHeader = CSV_HEADER_KEYWORDS.some((kw) => firstRow.includes(kw));
+      if (isHeader) {
+        lines = lines.slice(1);
+      }
+    }
+
+    const rows: CsvPreviewRow[] = lines.map((line) => {
+      // Extract first column (handles comma/semicolon separators and quotes)
+      const raw = line.split(/[,;]/)[0].replace(/"/g, "").trim();
+      // Strip RO prefix for validation
+      const cuiClean = raw.toUpperCase().replace(/^RO/, "").replace(/\s/g, "");
+      if (!cuiClean) return { raw, cui: cuiClean, valid: false, error: "Linie goala" };
+      const result = validateCUI(cuiClean);
+      return { raw, cui: result.cui, valid: result.valid, error: result.error };
+    });
+    setCsvPreview(rows);
+    setShowPreview(true);
+  }, []);
 
   // C23 fix: Clean up polling interval on unmount
   useEffect(() => {
@@ -109,7 +149,13 @@ export default function BatchAnalysis() {
               accept=".csv"
               className="hidden"
               id="csv-upload"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
+              onChange={(e) => {
+                const f = e.target.files?.[0] || null;
+                setFile(f);
+                setCsvPreview(null);
+                setShowPreview(false);
+                if (f) parseCSVFile(f);
+              }}
             />
             <label
               htmlFor="csv-upload"
@@ -123,10 +169,60 @@ export default function BatchAnalysis() {
             Format: un CUI per linie, maxim 50 CUI-uri. Exemplu: 43978110
           </p>
 
+          {/* CSV Preview */}
+          {showPreview && csvPreview && csvPreview.length > 0 && (
+            <div className="border border-dark-border rounded-lg overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 bg-dark-surface">
+                <div className="flex items-center gap-2">
+                  <FileSearch className="w-4 h-4 text-accent-secondary" />
+                  <span className="text-sm font-medium text-gray-300">
+                    Previzualizare CSV
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="text-gray-400">{csvPreview.length} randuri</span>
+                  <span className="text-green-400">
+                    {csvPreview.filter((r) => r.valid).length} valide
+                  </span>
+                  {csvPreview.filter((r) => !r.valid).length > 0 && (
+                    <span className="text-red-400">
+                      {csvPreview.filter((r) => !r.valid).length} invalide
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="max-h-48 overflow-y-auto">
+                {csvPreview.map((row, i) => (
+                  <div
+                    key={i}
+                    className={clsx(
+                      "flex items-center justify-between px-3 py-1.5 text-sm border-t border-dark-border/50",
+                      i % 2 === 0 ? "bg-dark-card" : "bg-dark-surface"
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      {row.valid ? (
+                        <CheckCircle className="w-3.5 h-3.5 text-green-400 shrink-0" />
+                      ) : (
+                        <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                      )}
+                      <span className={row.valid ? "text-gray-300" : "text-red-300"}>
+                        {row.raw || "(gol)"}
+                      </span>
+                    </div>
+                    {!row.valid && row.error && (
+                      <span className="text-[10px] text-red-400 ml-2">{row.error}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {file && (
             <button
               onClick={handleUpload}
-              disabled={submitting}
+              disabled={submitting || (csvPreview !== null && csvPreview.filter((r) => r.valid).length === 0)}
               className="btn-primary w-full flex items-center justify-center gap-2"
             >
               {submitting ? (
@@ -135,7 +231,10 @@ export default function BatchAnalysis() {
                 </>
               ) : (
                 <>
-                  <Upload className="w-4 h-4" /> Porneste Batch Analysis
+                  <Upload className="w-4 h-4" />
+                  {csvPreview
+                    ? `Confirma si porneste (${csvPreview.filter((r) => r.valid).length} CUI-uri)`
+                    : "Porneste Batch Analysis"}
                 </>
               )}
             </button>

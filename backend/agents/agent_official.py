@@ -29,6 +29,19 @@ class OfficialAgent(BaseAgent):
     retry_backoff = [2, 5, 15]
     total_timeout = 300  # 5 min
 
+    async def _fetch_with_timeout(self, coro, source_name: str, timeout_s: int):
+        """Wrap coroutine with individual timeout to prevent one slow source blocking others."""
+        try:
+            return await asyncio.wait_for(coro, timeout=timeout_s)
+        except asyncio.TimeoutError:
+            logger.warning(f"[official] {source_name} individual timeout after {timeout_s}s")
+            return {
+                "data_found": False,
+                "data": {"error": f"Timeout individual {timeout_s}s"},
+                "source": source_name,
+                "response_time_ms": timeout_s * 1000,
+            }
+
     async def execute(self, state: AnalysisState) -> dict:
         params = state.get("input_params", {})
         cui = params.get("cui", "")
@@ -68,36 +81,13 @@ class OfficialAgent(BaseAgent):
 
         # --- 9A: Parallel source fetching (Phase 1 — ANAF + openapi.ro + BNR simultan) ---
         if cui_clean:
-            # Fetch ANAF, openapi.ro, ANAF Bilant, BNR in parallel
-            anaf_task = self.fetch_with_retry(
-                lambda: self._fetch_anaf(cui_clean),
-                source_name="ANAF",
-                source_url="https://webservicesp.anaf.ro",
-            )
-            openapi_task = self.fetch_with_retry(
-                lambda: self._fetch_openapi_ro(cui_clean),
-                source_name="openapi.ro",
-                source_url="https://openapi.ro",
-            )
-            bilant_task = self.fetch_with_retry(
-                lambda: self._fetch_anaf_bilant(cui_clean),
-                source_name="ANAF Bilant",
-                source_url="https://webservicesp.anaf.ro/bilant",
-            )
-            bnr_task = self.fetch_with_retry(
-                lambda: self._fetch_bnr(),
-                source_name="BNR",
-                source_url="https://www.bnr.ro/nbrfxrates.xml",
-            )
-            # EP1: BPI insolvency check in parallel
-            bpi_task = self.fetch_with_retry(
-                lambda c=cui_clean: self._fetch_bpi(c),
-                source_name="BPI (buletinul.ro)",
-                source_url="https://www.buletinul.ro",
-            )
-
+            # Fetch ANAF, openapi.ro, ANAF Bilant, BNR, BPI in parallel cu timeout individual
             anaf_source, openapi_source, bilant_source, bnr_source, bpi_source = await asyncio.gather(
-                anaf_task, openapi_task, bilant_task, bnr_task, bpi_task
+                self._fetch_with_timeout(self.fetch_with_retry(lambda: self._fetch_anaf(cui_clean), source_name="ANAF", source_url="https://webservicesp.anaf.ro"), "ANAF", 15),
+                self._fetch_with_timeout(self.fetch_with_retry(lambda: self._fetch_openapi_ro(cui_clean), source_name="openapi.ro", source_url="https://openapi.ro"), "openapi.ro", 10),
+                self._fetch_with_timeout(self.fetch_with_retry(lambda: self._fetch_anaf_bilant(cui_clean), source_name="ANAF Bilant", source_url="https://webservicesp.anaf.ro/bilant"), "ANAF Bilant", 15),
+                self._fetch_with_timeout(self.fetch_with_retry(lambda: self._fetch_bnr(), source_name="BNR", source_url="https://www.bnr.ro/nbrfxrates.xml"), "BNR", 5),
+                self._fetch_with_timeout(self.fetch_with_retry(lambda c=cui_clean: self._fetch_bpi(c), source_name="BPI (buletinul.ro)", source_url="https://www.buletinul.ro"), "BPI (buletinul.ro)", 10),
             )
 
             # Process ANAF result
@@ -226,8 +216,8 @@ class OfficialAgent(BaseAgent):
                     logger.warning(f"[official] Tavily quota exhausted ({quota_usage}), skipping BPI+Litigation")
                     official_data["tavily_quota_exhausted"] = True
                     official_data["tavily_usage"] = quota_usage
-            except Exception:
-                pass  # If quota check fails, proceed anyway
+            except Exception as e:
+                logger.debug(f"[official] Tavily quota check failed: {e}")
 
         # --- 10B M2.4: Merged BPI+Litigation into single Tavily call (saves quota) ---
         if search_term and tavily_quota_ok:
@@ -330,15 +320,23 @@ class OfficialAgent(BaseAgent):
                 "error": s.get("data", {}).get("error") if not s.get("data_found") else None,
             }
 
-        # Verifica surse ASTEPTATE dar lipsa
-        expected_sources = ["ANAF", "ANAF Bilant", "BNR"]
-        if cui_clean:
-            expected_sources.extend(["openapi.ro", "BPI (Tavily)", "portal.just.ro (Tavily)"])
+        # Verifica surse ASTEPTATE dar lipsa — dinamic per tip analiza
+        analysis_type = state.get("analysis_type", "FULL_COMPANY_PROFILE")
+        REQUIRED_SOURCES_BY_TYPE = {
+            "FULL_COMPANY_PROFILE": ["ANAF", "ANAF Bilant", "BNR", "openapi.ro", "BPI (buletinul.ro)"],
+            "COMPETITION_ANALYSIS": ["ANAF", "ANAF Bilant", "SEAP"],
+            "PARTNER_RISK_ASSESSMENT": ["ANAF", "ANAF Bilant", "BNR", "BPI (buletinul.ro)", "openapi.ro"],
+            "TENDER_OPPORTUNITIES": ["ANAF", "SEAP"],
+            "MARKET_ENTRY_ANALYSIS": ["ANAF", "ANAF Bilant"],
+            "LEAD_GENERATION": ["ANAF"],
+            "MONITORING_SETUP": ["ANAF"],
+        }
+        expected_sources = REQUIRED_SOURCES_BY_TYPE.get(analysis_type, ["ANAF", "ANAF Bilant", "BNR"])
+        if not cui_clean:
+            expected_sources = ["BNR"]  # fara CUI, doar BNR e asteptat
 
-        missing_sources = [
-            es for es in expected_sources
-            if not any(s.get("source_name") == es and s.get("data_found") for s in sources)
-        ]
+        found_source_names = {s.get("source_name") for s in sources if s.get("data_found")}
+        missing_sources = [es for es in expected_sources if es not in found_source_names]
 
         # Verifica campuri critice lipsa
         missing_fields = []
@@ -354,14 +352,21 @@ class OfficialAgent(BaseAgent):
         if not official_data.get("caen_context", {}).get("available"):
             missing_fields.append("Context CAEN (sector, numar firme, benchmark)")
 
+        # Completeness: dinamic pe baza surselor required + bonus pentru surse extra
+        required_found = len(found_source_names & set(expected_sources))
+        required_total = max(len(expected_sources), 1)
+        base_score = round(required_found / required_total * 100)
+        # Bonus +2 per sursa extra (max +10)
+        extra_sources = found_source_names - set(expected_sources)
+        bonus = min(len(extra_sources) * 2, 10)
+        completeness_score = min(base_score + bonus, 100)
+
         official_data["diagnostics"] = {
             "per_source": diagnostics,
             "missing_sources": missing_sources,
             "missing_fields": missing_fields,
-            # C3 fix: Use total expected fields (5 field checks) as denominator, not source count
-            "completeness_score": round(
-                (1 - len(missing_fields) / max(5, 1)) * 100
-            ),
+            "expected_sources": expected_sources,
+            "completeness_score": completeness_score,
         }
 
         # Sumarul surselor

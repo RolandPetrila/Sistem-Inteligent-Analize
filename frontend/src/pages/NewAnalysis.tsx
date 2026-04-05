@@ -12,6 +12,7 @@ import {
   Sparkles,
   ArrowRight,
   ArrowLeft,
+  Check,
 } from "lucide-react";
 import clsx from "clsx";
 import { api } from "@/lib/api";
@@ -44,6 +45,63 @@ const ICONS: Record<string, React.ElementType> = {
 };
 
 type Step = "type" | "questions" | "level" | "confirm";
+
+const WIZARD_STEPS: { key: Step; label: string }[] = [
+  { key: "type", label: "Tip analiza" },
+  { key: "questions", label: "Intrebari" },
+  { key: "level", label: "Nivel" },
+  { key: "confirm", label: "Confirmare" },
+];
+
+function WizardProgress({ currentStep }: { currentStep: Step }) {
+  const currentIndex = WIZARD_STEPS.findIndex((s) => s.key === currentStep);
+
+  return (
+    <div className="flex items-center justify-center gap-0 mb-2">
+      {WIZARD_STEPS.map((ws, i) => {
+        const isCompleted = i < currentIndex;
+        const isCurrent = i === currentIndex;
+
+        return (
+          <div key={ws.key} className="flex items-center">
+            {/* Circle */}
+            <div className="flex flex-col items-center">
+              <div
+                className={clsx(
+                  "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all",
+                  isCompleted
+                    ? "bg-accent-primary border-accent-primary text-white"
+                    : isCurrent
+                      ? "border-accent-primary text-accent-secondary bg-accent-primary/10"
+                      : "border-dark-border text-gray-600 bg-dark-surface"
+                )}
+              >
+                {isCompleted ? <Check className="w-4 h-4" /> : i + 1}
+              </div>
+              <span
+                className={clsx(
+                  "text-[10px] mt-1 whitespace-nowrap",
+                  isCurrent ? "text-accent-secondary" : isCompleted ? "text-gray-400" : "text-gray-600"
+                )}
+              >
+                {ws.label}
+              </span>
+            </div>
+            {/* Connector line */}
+            {i < WIZARD_STEPS.length - 1 && (
+              <div
+                className={clsx(
+                  "w-12 sm:w-20 h-0.5 mx-1 mt-[-14px]",
+                  i < currentIndex ? "bg-accent-primary" : "bg-dark-border"
+                )}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function NewAnalysis() {
   const navigate = useNavigate();
@@ -144,6 +202,9 @@ export default function NewAnalysis() {
           {step === "confirm" && "Confirma si porneste analiza"}
         </p>
       </div>
+
+      {/* Wizard Step Indicator */}
+      <WizardProgress currentStep={step} />
 
       {/* Chatbot Input */}
       {step === "type" && (

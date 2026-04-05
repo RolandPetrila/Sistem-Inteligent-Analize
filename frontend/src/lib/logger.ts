@@ -24,7 +24,6 @@ interface LogEntry {
 }
 
 let _queue: LogEntry[] = [];
-let _timer: ReturnType<typeof setInterval> | null = null;
 let _currentPage = "-";
 
 function _now(): string {
@@ -131,7 +130,7 @@ export function initLogger(): void {
   _setupErrorHandlers();
   _setupConsoleInterception();
   _sendSessionStart();
-  _timer = setInterval(_flush, BATCH_INTERVAL);
+  setInterval(_flush, BATCH_INTERVAL);
 
   // Flush on page unload
   window.addEventListener("beforeunload", _flush);

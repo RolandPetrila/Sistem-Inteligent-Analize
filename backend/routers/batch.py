@@ -20,6 +20,7 @@ from backend.database import db
 from backend.config import settings
 from backend.agents.tools.cui_validator import validate_cui
 from backend.rate_limiter import rate_limit_batch
+from backend.errors import RISError, ErrorCode
 
 router = APIRouter()
 
@@ -130,7 +131,7 @@ async def create_batch(
         "SELECT COUNT(*) as c FROM jobs WHERE type LIKE 'BATCH_%' AND status = 'RUNNING'"
     )
     if active and active["c"] >= 2:
-        raise HTTPException(status_code=429, detail="Maximum 2 batch-uri active simultan. Asteapta finalizarea.")
+        raise RISError(ErrorCode.RATE_LIMITED, "Maximum 2 batch-uri active simultan. Asteapta finalizarea.")
 
     batch_id = str(uuid.uuid4())
     now = datetime.now(UTC).isoformat()
@@ -303,7 +304,8 @@ async def _extract_batch_summary_row(result: dict) -> list:
         color = risk.get("score", "")
 
         return [cui, denumire, caen, caen_desc, ca, pn, ang, score, color, status, ""]
-    except Exception:
+    except Exception as e:
+        logger.warning(f"[batch] CSV row build: {e}")
         return [cui, "", "", "", "", "", "", "", "", status, ""]
 
 
