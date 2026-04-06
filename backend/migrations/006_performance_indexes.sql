@@ -7,8 +7,8 @@ ON score_history(company_id, recorded_at DESC);
 CREATE INDEX IF NOT EXISTS idx_reports_company_created
 ON reports(company_id, created_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_monitoring_company_created
-ON monitoring_audit(company_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_monitoring_company_triggered
+ON monitoring_audit(company_cui, triggered_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_jobs_type_status
 ON jobs(type, status);

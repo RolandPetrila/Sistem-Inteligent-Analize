@@ -46,13 +46,14 @@ if %errorlevel% neq 0 (
 cd ..
 echo  [2/4] Build OK — dist/ generat.
 
-:: Opreste orice backend vechi
+:: Opreste orice backend vechi (pythonw + orice proces pe portul 8001)
 echo  [3/4] Pornire backend pe 0.0.0.0:8001...
 taskkill /f /im pythonw.exe >nul 2>&1
-taskkill /f /im python.exe /fi "WINDOWTITLE eq RIS*" >nul 2>&1
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":8001 "') do taskkill /f /pid %%p >nul 2>&1
+ping -n 3 127.0.0.1 >nul
 
-:: Porneste backend (serveste si frontend/dist/)
-start "RIS-Backend" /min cmd /c "python -m backend.main > logs\ris_tailscale.log 2>&1"
+:: Porneste backend in productie — RIS_ENV=production dezactiveaza reload automat
+start "RIS-Backend" /min cmd /c "set RIS_ENV=production && cd /d "%PROJECT_DIR%" && python -m backend.main > logs\ris_tailscale.log 2>&1"
 
 :: Health check backend (max 15 sec)
 echo  [3/4] Astept backend...

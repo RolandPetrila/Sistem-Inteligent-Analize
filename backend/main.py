@@ -523,24 +523,45 @@ async def websocket_job_progress(websocket: WebSocket, job_id: str):
 
 
 # --- Serve frontend static build (Tailscale / production mode) ---
-# Mounted AFTER all API routes so /api/* and /ws/* are matched first.
-# If frontend/dist/ exists, FastAPI serves it directly — no Vite dev server needed.
+# Routes defined AFTER all API routes — FastAPI matches in order, so /api/* wins.
+# Pattern: explicit mounts for /assets and known root files + catch-all for SPA routing.
 
-_FRONTEND_DIST = _Path("frontend") / "dist"
+_FRONTEND_DIST = _Path(__file__).parent.parent / "frontend" / "dist"
 
 if _FRONTEND_DIST.exists():
     from fastapi.staticfiles import StaticFiles
-    from fastapi.responses import FileResponse as _FileResponse
+    from fastapi.responses import FileResponse as _FileResponse, HTMLResponse as _HTMLResponse
 
-    class _SPAStaticFiles(StaticFiles):
-        """Serve static assets; fall back to index.html for unknown paths (SPA routing)."""
-        async def get_response(self, path: str, scope):
-            try:
-                return await super().get_response(path, scope)
-            except Exception:
-                return await super().get_response("index.html", scope)
+    # /assets/* — JS, CSS bundles (content-hashed, safe to cache)
+    _assets_dir = _FRONTEND_DIST / "assets"
+    if _assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(_assets_dir)), name="assets")
 
-    app.mount("/", _SPAStaticFiles(directory=str(_FRONTEND_DIST), html=True), name="spa")
+    # /icons/* — PWA icons
+    _icons_dir = _FRONTEND_DIST / "icons"
+    if _icons_dir.exists():
+        app.mount("/icons", StaticFiles(directory=str(_icons_dir)), name="icons")
+
+    # Known root-level static files
+    _ROOT_STATIC = ["manifest.webmanifest", "sw.js", "registerSW.js",
+                    "workbox-b51dd497.js", "favicon.ico", "robots.txt"]
+
+    for _fname in _ROOT_STATIC:
+        _fpath = _FRONTEND_DIST / _fname
+        if _fpath.exists():
+            _captured = str(_fpath)
+            _route = f"/{_fname}"
+
+            @app.get(_route, include_in_schema=False)
+            async def _serve_root_file(_p=_captured):
+                return _FileResponse(_p)
+
+    # SPA catch-all — must be last; serves index.html for all remaining paths
+    @app.get("/", include_in_schema=False)
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str = ""):
+        return _FileResponse(str(_FRONTEND_DIST / "index.html"))
+
     logger.info(f"Frontend build found — serving from {_FRONTEND_DIST}")
 else:
     logger.info("No frontend/dist — run 'cd frontend && npm run build' for Tailscale/PWA mode")
