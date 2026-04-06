@@ -162,11 +162,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self'; "  # F6.5: removed 'unsafe-inline'
-            "style-src 'self' 'unsafe-inline'; "
+            "script-src 'self'; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "img-src 'self' data: blob:; "
             "connect-src 'self' ws: wss:; "
-            "font-src 'self' data:;"
+            "font-src 'self' data: https://fonts.gstatic.com; "
+            "worker-src 'self';"
         )
         # API Response Caching Headers (8A)
         path = request.url.path
@@ -519,6 +520,30 @@ async def websocket_job_progress(websocket: WebSocket, job_id: str):
     except Exception as e:
         logger.debug(f"[ws_recv] Non-critical: {e}")
         ws_manager.disconnect(job_id, websocket)
+
+
+# --- Serve frontend static build (Tailscale / production mode) ---
+# Mounted AFTER all API routes so /api/* and /ws/* are matched first.
+# If frontend/dist/ exists, FastAPI serves it directly — no Vite dev server needed.
+
+_FRONTEND_DIST = _Path("frontend") / "dist"
+
+if _FRONTEND_DIST.exists():
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.responses import FileResponse as _FileResponse
+
+    class _SPAStaticFiles(StaticFiles):
+        """Serve static assets; fall back to index.html for unknown paths (SPA routing)."""
+        async def get_response(self, path: str, scope):
+            try:
+                return await super().get_response(path, scope)
+            except Exception:
+                return await super().get_response("index.html", scope)
+
+    app.mount("/", _SPAStaticFiles(directory=str(_FRONTEND_DIST), html=True), name="spa")
+    logger.info(f"Frontend build found — serving from {_FRONTEND_DIST}")
+else:
+    logger.info("No frontend/dist — run 'cd frontend && npm run build' for Tailscale/PWA mode")
 
 
 if __name__ == "__main__":
