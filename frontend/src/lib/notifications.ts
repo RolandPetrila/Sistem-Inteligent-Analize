@@ -24,11 +24,22 @@ export function sendBrowserNotification(
     requireInteraction: false,
   });
   if (url) {
-    n.onclick = () => {
-      window.focus();
-      window.location.href = url;
-      n.close();
-    };
+    let safeUrl: string | null = null;
+    try {
+      const parsed = new URL(url, window.location.origin);
+      if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+        safeUrl = parsed.href;
+      }
+    } catch {
+      // invalid URL — skip navigation
+    }
+    if (safeUrl) {
+      n.onclick = () => {
+        window.focus();
+        window.location.href = safeUrl!;
+        n.close();
+      };
+    }
   }
   // Auto-close dupa 5 secunde
   setTimeout(() => n.close(), 5000);

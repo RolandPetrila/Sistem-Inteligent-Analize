@@ -32,6 +32,7 @@ class RateLimiter:
 # Rate limiters per use-case
 _job_limiter = RateLimiter(requests_per_minute=5)
 _batch_limiter = RateLimiter(requests_per_minute=2)
+_download_limiter = RateLimiter(requests_per_minute=20)
 
 
 def _get_client_ip(request: Request) -> str:
@@ -54,3 +55,10 @@ async def rate_limit_batch(request: Request):
     ip = _get_client_ip(request)
     if not _batch_limiter.check(ip):
         raise HTTPException(status_code=429, detail="Prea multe cereri batch. Asteapta 1 minut.")
+
+
+async def rate_limit_downloads(request: Request):
+    """Dependency: max 20 file downloads per minute per IP."""
+    ip = _get_client_ip(request)
+    if not _download_limiter.check(ip):
+        raise HTTPException(status_code=429, detail="Prea multe descarcari. Asteapta 1 minut.")

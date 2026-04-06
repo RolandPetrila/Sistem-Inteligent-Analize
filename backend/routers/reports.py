@@ -2,9 +2,10 @@ import json
 import re
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, field_validator
+from backend.rate_limiter import rate_limit_downloads
 
 from backend.database import db
 from backend.config import settings
@@ -108,7 +109,7 @@ async def get_report(report_id: str):
     }
 
 
-@router.get("/{report_id}/download/one_pager")
+@router.get("/{report_id}/download/one_pager", dependencies=[Depends(rate_limit_downloads)])
 async def download_one_pager(report_id: str):
     """DF3: Download raport executiv 1-pager PDF."""
     row = await db.fetch_one("SELECT job_id FROM reports WHERE id = ?", (report_id,))
@@ -131,7 +132,7 @@ async def download_one_pager(report_id: str):
     )
 
 
-@router.get("/{report_id}/download/{format}")
+@router.get("/{report_id}/download/{format}", dependencies=[Depends(rate_limit_downloads)])
 async def download_report(report_id: str, format: str):
     if format not in ("pdf", "docx", "excel", "html", "pptx"):
         raise HTTPException(status_code=400, detail="Invalid format")
@@ -237,8 +238,12 @@ async def export_seap_calendar(report_id: str):
     ]
     events_added = 0
     for t in tenders:
-        deadline = str(t.get("deadline_date", "")).replace("-", "")
-        if not deadline or len(deadline) < 8:
+        raw_deadline = str(t.get("deadline_date", ""))
+        try:
+            from datetime import date as _date
+            dt = _date.fromisoformat(raw_deadline[:10])
+            deadline = dt.strftime("%Y%m%d")
+        except (ValueError, TypeError):
             continue
         title = str(t.get("title", "Licitatie SEAP"))[:60]
         uid = t.get("id", str(_uuid.uuid4()))

@@ -71,14 +71,28 @@ async def _send_webhook_if_configured(job_id: str, report_data: dict):
     if not webhook_url:
         return
     from urllib.parse import urlparse
+    import socket
+    from ipaddress import ip_address, AddressValueError
+
+    def _is_private_ip(hostname: str) -> bool:
+        try:
+            ip = ip_address(hostname)
+            return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
+        except (AddressValueError, TypeError):
+            pass
+        try:
+            resolved = socket.gethostbyname(hostname)
+            ip = ip_address(resolved)
+            return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
+        except Exception:
+            return True  # fail-safe: block if can't resolve
+
     parsed = urlparse(webhook_url)
     if parsed.scheme != "https" or not parsed.hostname:
         logger.warning(f"[webhook] URL invalid sau non-HTTPS: {webhook_url[:50]}")
         return
-    # SSRF: blocheaza IP-uri private
-    import re as _re
-    if _re.match(r"^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)", parsed.hostname or ""):
-        logger.warning("[webhook] Webhook URL blocat — IP privat detectat")
+    if _is_private_ip(parsed.hostname):
+        logger.warning("[webhook] Webhook URL blocat — IP privat/localhost detectat")
         return
     from datetime import timezone
     payload = {

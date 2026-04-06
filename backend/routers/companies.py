@@ -114,6 +114,10 @@ async def import_companies_csv(file: UploadFile = File(...)):
         1
     )
 
+    data_lines = [l for l in lines[1:] if l.strip()]
+    if len(data_lines) > 5000:
+        raise RISError(ErrorCode.VALIDATION_ERROR, "CSV prea mare — maxim 5000 randuri per import")
+
     imported, skipped = 0, 0
     for line in lines[1:]:
         if not line.strip():
