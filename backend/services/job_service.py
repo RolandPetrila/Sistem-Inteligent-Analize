@@ -6,7 +6,10 @@ Porneste LangGraph, broadcast progress via WebSocket, update DB.
 import asyncio
 import json
 import ctypes
+import socket
 from datetime import datetime, date, UTC
+from ipaddress import ip_address, AddressValueError
+from urllib.parse import urlparse
 
 from loguru import logger
 
@@ -64,29 +67,27 @@ async def update_job_progress(
         })
 
 
+def _is_private_ip(hostname: str) -> bool:
+    """Verifica daca un hostname se rezolva la un IP privat/loopback/rezervat."""
+    try:
+        ip = ip_address(hostname)
+        return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
+    except (AddressValueError, TypeError):
+        pass
+    try:
+        resolved = socket.gethostbyname(hostname)
+        ip = ip_address(resolved)
+        return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
+    except Exception:
+        return True  # fail-safe: block if can't resolve
+
+
 async def _send_webhook_if_configured(job_id: str, report_data: dict):
     """F3-1: Trimite POST webhook la URL configurat dupa finalizarea unui job."""
     from backend.config import settings
     webhook_url = settings.webhook_url
     if not webhook_url:
         return
-    from urllib.parse import urlparse
-    import socket
-    from ipaddress import ip_address, AddressValueError
-
-    def _is_private_ip(hostname: str) -> bool:
-        try:
-            ip = ip_address(hostname)
-            return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
-        except (AddressValueError, TypeError):
-            pass
-        try:
-            resolved = socket.gethostbyname(hostname)
-            ip = ip_address(resolved)
-            return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
-        except Exception:
-            return True  # fail-safe: block if can't resolve
-
     parsed = urlparse(webhook_url)
     if parsed.scheme != "https" or not parsed.hostname:
         logger.warning(f"[webhook] URL invalid sau non-HTTPS: {webhook_url[:50]}")
@@ -94,7 +95,6 @@ async def _send_webhook_if_configured(job_id: str, report_data: dict):
     if _is_private_ip(parsed.hostname):
         logger.warning("[webhook] Webhook URL blocat — IP privat/localhost detectat")
         return
-    from datetime import timezone
     payload = {
         "event": "analysis_completed",
         "job_id": job_id,
@@ -102,7 +102,7 @@ async def _send_webhook_if_configured(job_id: str, report_data: dict):
         "cui": report_data.get("cui"),
         "risk_score": report_data.get("risk_score"),
         "numeric_score": report_data.get("numeric_score"),
-        "completed_at": datetime.now(timezone.utc).isoformat(),
+        "completed_at": datetime.now(UTC).isoformat(),
     }
     try:
         from backend.http_client import get_client

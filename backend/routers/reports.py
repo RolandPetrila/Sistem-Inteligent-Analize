@@ -1,5 +1,6 @@
 import json
 import re
+from datetime import date as _date
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -240,7 +241,6 @@ async def export_seap_calendar(report_id: str):
     for t in tenders:
         raw_deadline = str(t.get("deadline_date", ""))
         try:
-            from datetime import date as _date
             dt = _date.fromisoformat(raw_deadline[:10])
             deadline = dt.strftime("%Y%m%d")
         except (ValueError, TypeError):

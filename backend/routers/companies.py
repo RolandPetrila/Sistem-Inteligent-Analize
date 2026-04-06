@@ -119,10 +119,7 @@ async def import_companies_csv(file: UploadFile = File(...)):
         raise RISError(ErrorCode.VALIDATION_ERROR, "CSV prea mare — maxim 5000 randuri per import")
 
     imported, skipped = 0, 0
-    for line in lines[1:]:
-        if not line.strip():
-            skipped += 1
-            continue
+    for line in data_lines:
         parts = line.split(",")
         if len(parts) <= max(cui_idx, name_idx):
             skipped += 1
