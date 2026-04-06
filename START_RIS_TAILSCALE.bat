@@ -46,14 +46,16 @@ if %errorlevel% neq 0 (
 cd ..
 echo  [2/4] Build OK — dist/ generat.
 
-:: Opreste orice backend vechi (pythonw + orice proces pe portul 8001)
+:: Opreste TOATE instantele Python RIS (pythonw, uvicorn workers, reloaders)
 echo  [3/4] Pornire backend pe 0.0.0.0:8001...
-taskkill /f /im pythonw.exe >nul 2>&1
-for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":8001 "') do taskkill /f /pid %%p >nul 2>&1
-ping -n 3 127.0.0.1 >nul
+taskkill /f /t /im pythonw.exe >nul 2>&1
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr /c:":8001 "') do (
+    if not "%%p"=="0" taskkill /f /t /pid %%p >nul 2>&1
+)
+ping -n 4 127.0.0.1 >nul
 
-:: Porneste backend in productie — RIS_ENV=production dezactiveaza reload automat
-start "RIS-Backend" /min cmd /c "set RIS_ENV=production && cd /d "%PROJECT_DIR%" && python -m backend.main > logs\ris_tailscale.log 2>&1"
+:: Porneste backend cu uvicorn direct --no-reload (stabil, fara procese zombie)
+start "RIS-Backend" /min cmd /c "cd /d "%PROJECT_DIR%" && uvicorn backend.main:app --host 0.0.0.0 --port 8001 --no-reload > logs\ris_tailscale.log 2>&1"
 
 :: Health check backend (max 15 sec)
 echo  [3/4] Astept backend...
