@@ -55,7 +55,7 @@ for /f "tokens=5" %%p in ('netstat -ano ^| findstr /c:":8001 "') do (
 ping -n 4 127.0.0.1 >nul
 
 :: Porneste backend cu uvicorn direct --no-reload (stabil, fara procese zombie)
-start "RIS-Backend" /min cmd /c "cd /d "%PROJECT_DIR%" && uvicorn backend.main:app --host 0.0.0.0 --port 8001 --no-reload > logs\ris_tailscale.log 2>&1"
+start "RIS-Backend" /min cmd /c "cd /d "%PROJECT_DIR%" && uvicorn backend.main:app --host 0.0.0.0 --port 8001 > logs\ris_tailscale.log 2>&1"
 
 :: Health check backend (max 15 sec)
 echo  [3/4] Astept backend...
