@@ -8,6 +8,7 @@ import re
 import unicodedata
 from fpdf import FPDF
 from loguru import logger
+from backend.config import settings
 
 DISCLAIMER = (
     "Acest raport a fost generat automat folosind exclusiv date disponibile public "
@@ -194,14 +195,17 @@ class RISPdf(FPDF):
         self.set_y(-20)
         self.set_font("Helvetica", "I", 7)
         self.set_text_color(150, 150, 150)
-        self.cell(0, 5, f"CONFIDENTIAL | Pagina {self.page_no()}/{{nb}}", align="C")
+        watermark_label = self.watermark if self.watermark else "CONFIDENTIAL"
+        self.cell(0, 5, f"{watermark_label} | Pagina {self.page_no()}/{{nb}}", align="C")
 
 
 def generate_pdf(report_sections: dict, meta: dict, output_path: str, verified_data: dict = None):
     """Genereaza PDF din report_sections. 9D: watermark + TOC. B15: due_diligence + early_warnings."""
     # meta and report_sections should already be sanitized by caller
     verified_data = verified_data or {}
-    pdf = RISPdf(meta)
+    # F3-12: Watermark personalizabil din settings (.env PDF_WATERMARK / PDF_WATERMARK_ENABLED)
+    watermark_text = settings.pdf_watermark if settings.pdf_watermark_enabled else ""
+    pdf = RISPdf(meta, watermark=watermark_text)
     pdf.alias_nb_pages()
     pdf.add_page()
 

@@ -3,6 +3,7 @@ import json
 import re
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -16,61 +17,34 @@ from backend.config import settings
 from backend.database import db
 from backend import http_client
 from backend.errors import RISError, ERROR_HTTP_STATUS
+from backend.ws import ws_manager, ConnectionManager
 from backend.routers import jobs, reports, companies, analysis, settings as settings_router, compare, monitoring, batch, notifications
 
 # Runtime log — captures startup, shutdown, 500 errors (not per-job)
 from pathlib import Path as _Path
 _LOGS_DIR = _Path("logs")
 _LOGS_DIR.mkdir(exist_ok=True)
-logger.add(
-    str(_LOGS_DIR / "ris_runtime.log"),
-    format="[{time:YYYY-MM-DD HH:mm:ss}] {level: <8} | {message}",
-    level="WARNING",
-    rotation="5 MB",
-    retention="7 days",
-    encoding="utf-8",
-)
+if settings.log_format == "json":
+    logger.add(
+        str(_LOGS_DIR / "ris_runtime.json"),
+        serialize=True,
+        level="WARNING",
+        rotation="5 MB",
+        retention="7 days",
+        encoding="utf-8",
+    )
+else:
+    logger.add(
+        str(_LOGS_DIR / "ris_runtime.log"),
+        format="[{time:YYYY-MM-DD HH:mm:ss}] {level: <8} | {message}",
+        level="WARNING",
+        rotation="5 MB",
+        retention="7 days",
+        encoding="utf-8",
+    )
 
 
-# --- WebSocket connection manager ---
-
-class ConnectionManager:
-    def __init__(self):
-        self.active: dict[str, list[WebSocket]] = {}
-
-    async def connect(self, job_id: str, ws: WebSocket):
-        await ws.accept()
-        if job_id not in self.active:
-            self.active[job_id] = []
-        self.active[job_id].append(ws)
-        logger.debug(f"WS connected for job {job_id}")
-
-    def disconnect(self, job_id: str, ws: WebSocket):
-        if job_id in self.active:
-            self.active[job_id].remove(ws)
-            if not self.active[job_id]:
-                del self.active[job_id]
-
-    async def broadcast(self, job_id: str, message: dict):
-        if job_id in self.active:
-            data = json.dumps(message, ensure_ascii=False)
-            dead = []
-            for ws in self.active[job_id]:
-                try:
-                    await ws.send_text(data)
-                except Exception as e:
-                    # B25 fix: Track dead connections for cleanup instead of silently ignoring
-                    logger.debug(f"[ws_broadcast] Non-critical: {e}")
-                    dead.append(ws)
-            # Remove dead connections
-            for ws in dead:
-                try:
-                    self.active[job_id].remove(ws)
-                except ValueError:
-                    pass
-
-
-ws_manager = ConnectionManager()
+# --- WebSocket connection manager --- (defined in backend.ws, imported above)
 
 
 # --- App lifespan ---
@@ -117,9 +91,11 @@ async def lifespan(app: FastAPI):
 # --- FastAPI app ---
 
 app = FastAPI(
-    title="Roland Intelligence System",
-    version="1.0.0",
-    description="Sistem local de Business Intelligence",
+    title="Roland Intelligence System API",
+    description="Business Intelligence cu date publice romanesti — ANAF, ONRC, SEAP, BNR",
+    version="2.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
     lifespan=lifespan,
 )
 
@@ -234,8 +210,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r"http://(localhost|127\.0\.0\.1|100\.\d+\.\d+\.\d+)(:\d+)?",
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-RIS-Key", "Accept", "Authorization"],
     max_age=86400,  # 10A M11.7: Cache preflight OPTIONS for 24h — reduces overhead
 )
 
@@ -430,6 +406,39 @@ async def health_check_deep():
     checks["status"] = "healthy" if all_ok else "degraded"
 
     return checks
+
+
+@app.get("/health/status", include_in_schema=False)
+async def health_status_page():
+    """F3-13: Status page publica — nu include date sensibile, fara autentificare."""
+    from datetime import timezone
+    db_ok = True
+    try:
+        await db.fetch_one("SELECT 1 as ok")
+    except Exception:
+        db_ok = False
+    recent_jobs = await db.fetch_all(
+        "SELECT status, completed_at FROM jobs ORDER BY created_at DESC LIMIT 5"
+    )
+    from backend.services.scheduler import get_scheduler_status
+    scheduler_info: dict = {}
+    try:
+        scheduler_info = await get_scheduler_status()
+    except Exception:
+        scheduler_info = {"status": "unknown"}
+    return {
+        "status": "ok" if db_ok else "degraded",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "components": {
+            "api": "ok",
+            "database": "ok" if db_ok else "error",
+            "scheduler": scheduler_info.get("status", "ok"),
+        },
+        "recent_jobs": [
+            {"status": j["status"], "completed": j["completed_at"]}
+            for j in recent_jobs
+        ]
+    }
 
 
 _stats_cache: dict | None = None

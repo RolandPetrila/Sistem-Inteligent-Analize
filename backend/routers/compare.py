@@ -275,6 +275,93 @@ async def compare_report_pdf(data: CompareReportRequest):
     )
 
 
+# --- Compare Templates (F3-8) ---
+@router.get("/templates")
+async def list_compare_templates():
+    rows = await db.fetch_all("SELECT * FROM compare_templates ORDER BY created_at DESC")
+    return {
+        "templates": [
+            {
+                "id": r["id"],
+                "name": r["name"],
+                "cuis": json.loads(r["cuis"]),
+                "created_at": r["created_at"],
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.post("/templates")
+async def save_compare_template(body: dict):
+    name = str(body.get("name", "")).strip()[:50]
+    cuis = body.get("cuis", [])
+    if not name or not cuis:
+        from backend.errors import RISError, ErrorCode
+        raise RISError(ErrorCode.VALIDATION_ERROR, "Nume si CUI-uri obligatorii")
+    template_id = uuid.uuid4().hex
+    await db.execute(
+        "INSERT INTO compare_templates(id, name, cuis) VALUES (?,?,?)",
+        (template_id, name, json.dumps(cuis)),
+    )
+    return {"ok": True, "id": template_id}
+
+
+@router.delete("/templates/{template_id}")
+async def delete_compare_template(template_id: str):
+    await db.execute("DELETE FROM compare_templates WHERE id = ?", (template_id,))
+    return {"ok": True}
+
+
+# --- Sector CAEN Dashboard (F3-6) ---
+@router.get("/sector/{caen_code}/dashboard")
+async def sector_dashboard(caen_code: str):
+    """Agregat sector din DB: scoruri, distributie, top firme."""
+    import re as _re
+    if not _re.match(r"^\d{4}$", caen_code):
+        from backend.errors import RISError, ErrorCode
+        raise RISError(ErrorCode.VALIDATION_ERROR, "Cod CAEN invalid (4 cifre)")
+
+    stats = await db.fetch_one(
+        """
+        SELECT
+            COUNT(DISTINCT c.id) as total_companies,
+            ROUND(AVG(sh.numeric_score), 1) as avg_score,
+            SUM(CASE WHEN sh.numeric_score >= 70 THEN 1 ELSE 0 END) as count_verde,
+            SUM(CASE WHEN sh.numeric_score >= 40 AND sh.numeric_score < 70 THEN 1 ELSE 0 END) as count_galben,
+            SUM(CASE WHEN sh.numeric_score < 40 THEN 1 ELSE 0 END) as count_rosu
+        FROM companies c
+        LEFT JOIN score_history sh ON sh.company_id = c.id
+        WHERE c.caen_code = ?
+        """,
+        (caen_code,),
+    )
+
+    top_companies = await db.fetch_all(
+        """
+        SELECT c.id, c.name, c.cui, MAX(sh.numeric_score) as score, c.county
+        FROM companies c
+        JOIN score_history sh ON sh.company_id = c.id
+        WHERE c.caen_code = ?
+        GROUP BY c.id ORDER BY score DESC LIMIT 10
+        """,
+        (caen_code,),
+    )
+
+    try:
+        from backend.agents.tools.caen_context import get_caen_info
+        caen_info = get_caen_info(caen_code)
+    except Exception:
+        caen_info = {}
+
+    return {
+        "caen_code": caen_code,
+        "caen_description": caen_info.get("description", "") if isinstance(caen_info, dict) else "",
+        "stats": dict(stats) if stats else {},
+        "top_companies": [dict(r) for r in top_companies],
+    }
+
+
 class SectorRequest(BaseModel):
     caen_section: str
     min_ca: int = 0

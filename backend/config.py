@@ -1,5 +1,6 @@
 import secrets as _secrets
 
+from loguru import logger
 from pydantic import model_validator
 from pydantic_settings import BaseSettings
 from pathlib import Path
@@ -66,9 +67,19 @@ class Settings(BaseSettings):
     batch_max_cuis: int = 50
     batch_timeout_hours: int = 4
 
+    # Webhook outbound
+    webhook_url: str = ""  # WEBHOOK_URL in .env — URL HTTPS la care se trimite POST la finalizare job
+
     # Compare & dedup
     compare_rate_delay_s: int = 2
     dedup_cleanup_s: int = 600
+
+    # Logging
+    log_format: str = "text"  # "text" sau "json" — LOG_FORMAT in .env
+
+    # PDF
+    pdf_watermark: str = "CONFIDENTIAL"  # PDF_WATERMARK in .env
+    pdf_watermark_enabled: bool = True   # PDF_WATERMARK_ENABLED in .env (false = fara watermark)
 
     model_config = {
         "env_file": ".env",
@@ -78,12 +89,10 @@ class Settings(BaseSettings):
     def model_post_init(self, __context) -> None:
         # D19: Auto-generate secret key if not set or still default
         if not self.app_secret_key or self.app_secret_key == "change-me-to-random-string":
-            import sys
             self.app_secret_key = _default_secret_key()
-            print(
-                "[WARNING] APP_SECRET_KEY nu e setat in .env — s-a generat automat. "
-                "Setati APP_SECRET_KEY in .env pentru persistenta intre restart-uri.",
-                file=sys.stderr,
+            logger.warning(
+                "APP_SECRET_KEY nu e setat in .env — s-a generat automat. "
+                "Setati APP_SECRET_KEY in .env pentru persistenta intre restart-uri."
             )
 
     @model_validator(mode="after")

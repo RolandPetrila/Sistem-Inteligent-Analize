@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -22,7 +22,7 @@ import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { logAction, logValidation, validateReportData } from "@/lib/logger";
 import { ANALYSIS_TYPE_LABELS } from "@/lib/constants";
-import type { ReportDelta } from "@/lib/types";
+import type { ReportDelta, AnalysisType } from "@/lib/types";
 
 interface ReportFull {
   id: string;
@@ -104,6 +104,74 @@ const DeltaView = ({ reportId }: { reportId: string }) => {
   );
 };
 
+function SimpleBarChart({
+  data,
+  years,
+  label,
+  color,
+  unit,
+}: {
+  data: (number | null)[];
+  years: string[];
+  label: string;
+  color: string;
+  unit?: string;
+}) {
+  if (!data || data.every((v) => v === null)) return null;
+  const valid = data.filter((v): v is number => v !== null);
+  const max = Math.max(...valid);
+  if (max === 0) return null;
+  const W = 280;
+  const H = 80;
+  const BAR_W = Math.max(10, Math.floor(W / data.length) - 4);
+  return (
+    <div className="space-y-1">
+      <p className="text-xs text-gray-400">
+        {label}
+        {unit ? ` (${unit})` : ""}
+      </p>
+      <svg width={W} height={H} className="overflow-visible">
+        {data.map((v, i) => {
+          if (v === null) return null;
+          const barH = Math.max(2, (v / max) * (H - 16));
+          const x = i * (BAR_W + 4);
+          return (
+            <g key={i}>
+              <rect
+                x={x}
+                y={H - barH - 16}
+                width={BAR_W}
+                height={barH}
+                fill={color}
+                rx={2}
+                opacity={0.8}
+              />
+              <text
+                x={x + BAR_W / 2}
+                y={H - 4}
+                fontSize={8}
+                fill="#9ca3af"
+                textAnchor="middle"
+              >
+                {years[i]}
+              </text>
+              <text
+                x={x + BAR_W / 2}
+                y={H - barH - 18}
+                fontSize={7}
+                fill="#9ca3af"
+                textAnchor="middle"
+              >
+                {v >= 1000 ? `${(v / 1000).toFixed(0)}K` : String(v)}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
 export default function ReportView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -164,6 +232,21 @@ export default function ReportView() {
     factors: [string, string][];
     recommendation: string;
   } | undefined;
+
+  const DIMENSION_INFO: Record<string, { weight: number; label: string; desc: string }> = {
+    financiar: { weight: 30, label: "Financiar", desc: "CA, profit, trend, solvabilitate" },
+    juridic: { weight: 20, label: "Juridic", desc: "Litigii, insolventa" },
+    fiscal: { weight: 15, label: "Fiscal", desc: "Stare TVA, inactivi ANAF" },
+    operational: { weight: 15, label: "Operational", desc: "Angajati, vechime, stabilitate" },
+    reputational: { weight: 10, label: "Reputational", desc: "Prezenta online" },
+    piata: { weight: 10, label: "Piata", desc: "Competitie, SEAP, benchmark" },
+  };
+
+  // Extrage dimensiunile din structura raportului
+  const scoringDimensions: Record<string, { score: number; weight: number }> | undefined =
+    riskScore?.dimensions ||
+    (data?.scoring as { dimensions?: Record<string, { score: number; weight: number }> } | undefined)?.dimensions ||
+    (data?.verification as { scoring_dimensions?: Record<string, { score: number; weight: number }> } | undefined)?.scoring_dimensions;
   const riskColor = {
     Verde: "text-risk-verde border-risk-verde/30 bg-risk-verde/5",
     Galben: "text-risk-galben border-risk-galben/30 bg-risk-galben/5",
@@ -174,9 +257,34 @@ export default function ReportView() {
     { key: "overview", label: "Rezumat" },
     { key: "company", label: "Profil Firma" },
     { key: "risk", label: "Risc" },
+    { key: "charts", label: "Grafice" },
     { key: "delta", label: "Modificari" },
     { key: "raw", label: "Date JSON" },
   ];
+
+  // F2-12: Date financiare multi-an pentru grafice SVG
+  const financialChartData = useMemo(() => {
+    if (!report?.full_data?.financial) return null;
+    const fin = report.full_data.financial as Record<
+      string,
+      { value?: number; historical?: Record<string, number> }
+    >;
+    const caHist = fin.cifra_afaceri?.historical || {};
+    const profitHist = fin.profit_net?.historical || {};
+    const angajatiHist = fin.numar_angajati?.historical || {};
+    const years = [
+      ...new Set([...Object.keys(caHist), ...Object.keys(profitHist)]),
+    ]
+      .sort()
+      .slice(-5);
+    if (years.length < 2) return null;
+    return {
+      years,
+      ca: years.map((y) => caHist[y] ?? null),
+      profit: years.map((y) => profitHist[y] ?? null),
+      angajati: years.map((y) => angajatiHist[y] ?? null),
+    };
+  }, [report]);
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -206,8 +314,8 @@ export default function ReportView() {
               setReanalyzing(true);
               try {
                 const job = await api.createJob({
-                  analysis_type: report.report_type as any,
-                  report_level: report.report_level as any,
+                  analysis_type: report.report_type as AnalysisType,
+                  report_level: report.report_level as number,
                   input_params: { cui: String(typeof cui === "object" ? "" : cui) },
                 });
                 await api.startJob(job.id);
@@ -409,10 +517,58 @@ export default function ReportView() {
           </div>
         )}
 
-        {activeTab === "risk" && data?.risk && (
-          <div className="space-y-2">
+        {activeTab === "risk" && (
+          <div className="space-y-4">
             <h3 className="text-sm font-semibold text-gray-400 uppercase mb-3">Evaluare Risc</h3>
-            {Object.entries(data.risk).map(([key, field]) => {
+
+            {/* Breakdown scor per dimensiune */}
+            {scoringDimensions && Object.keys(scoringDimensions).length > 0 ? (
+              <div className="space-y-3 mb-4">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Scor per Dimensiune</h4>
+                <div className="grid grid-cols-1 gap-3">
+                  {Object.entries(DIMENSION_INFO).map(([key, info]) => {
+                    const dim = scoringDimensions[key];
+                    const score = dim?.score ?? 0;
+                    const barColor = score >= 70 ? "bg-green-400" : score >= 40 ? "bg-yellow-400" : "bg-red-400";
+                    const scoreColor = score >= 70 ? "text-green-400" : score >= 40 ? "text-yellow-400" : "text-red-400";
+                    return (
+                      <div key={key} className="p-3 bg-dark-surface rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <span className="text-sm font-medium text-gray-200">{info.label}</span>
+                            <span className="ml-2 text-[10px] text-gray-500 bg-dark-border px-1.5 py-0.5 rounded">{info.weight}%</span>
+                            <p className="text-xs text-gray-500 mt-0.5">{info.desc}</p>
+                          </div>
+                          <span className={clsx("text-xl font-bold font-mono", scoreColor)}>
+                            {dim ? score : "—"}
+                          </span>
+                        </div>
+                        {dim && (
+                          <div className="w-full h-2 bg-dark-border rounded-full overflow-hidden">
+                            <div
+                              className={clsx("h-full rounded-full transition-all", barColor)}
+                              style={{ width: `${score}%` }}
+                            />
+                          </div>
+                        )}
+                        {!dim && (
+                          <p className="text-[10px] text-gray-600 italic">Date indisponibile</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-dark-surface rounded-lg mb-4">
+                <p className="text-xs text-gray-500 italic">
+                  Scor detaliat per dimensiune nu este disponibil pentru acest raport.
+                </p>
+              </div>
+            )}
+
+            {/* Date risc din structura raportului */}
+            {data?.risk && Object.entries(data.risk).map(([key, field]) => {
               if (!field || typeof field !== "object") return null;
               const f = field as { value: unknown; trust?: string; note?: string };
               return (
@@ -427,6 +583,45 @@ export default function ReportView() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {activeTab === "charts" && (
+          <div className="space-y-6">
+            <h3 className="text-sm font-semibold text-gray-400 uppercase">Evolutie Financiara Multi-An</h3>
+            {financialChartData ? (
+              <div className="space-y-8">
+                <div className="text-xs text-gray-500 mb-2">
+                  Ani disponibili: {financialChartData.years.join(", ")}
+                </div>
+                <SimpleBarChart
+                  data={financialChartData.ca}
+                  years={financialChartData.years}
+                  label="Cifra de Afaceri"
+                  color="#3b82f6"
+                  unit="RON"
+                />
+                <SimpleBarChart
+                  data={financialChartData.profit}
+                  years={financialChartData.years}
+                  label="Profit Net"
+                  color="#22c55e"
+                  unit="RON"
+                />
+                <SimpleBarChart
+                  data={financialChartData.angajati}
+                  years={financialChartData.years}
+                  label="Numar Angajati"
+                  color="#a855f7"
+                />
+              </div>
+            ) : (
+              <div className="p-4 bg-dark-surface rounded-lg text-center">
+                <p className="text-sm text-gray-500">
+                  Date financiare insuficiente pentru grafice (necesita minim 2 ani de date).
+                </p>
+              </div>
+            )}
           </div>
         )}
 

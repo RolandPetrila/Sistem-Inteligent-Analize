@@ -144,8 +144,7 @@ async def start_job(job_id: str):
     if row["status"] not in (JobStatus.PENDING.value, JobStatus.PAUSED.value):
         raise HTTPException(status_code=400, detail=f"Cannot start job with status {row['status']}")
 
-    # Import ws_manager from main
-    from backend.main import ws_manager
+    from backend.ws import ws_manager
 
     # Porneste executia in background
     asyncio.create_task(run_analysis_job(job_id, ws_manager=ws_manager))

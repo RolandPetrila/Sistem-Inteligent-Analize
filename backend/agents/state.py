@@ -39,6 +39,7 @@ class AnalysisState(TypedDict, total=False):
 
     # Sinteza
     report_sections: Optional[dict]
+    key_takeaways: Optional[str]  # F2-15: 3 concluzii cheie generate post-sinteza
 
     # Raport generat
     report_paths: Optional[dict]

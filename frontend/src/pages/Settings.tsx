@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-
   Bell,
   Mail,
   Save,
@@ -14,6 +13,7 @@ import {
   Copy,
   FlaskConical,
 } from "lucide-react";
+import { requestNotificationPermission, getNotificationPermission, isNotificationSupported } from "@/lib/notifications";
 import clsx from "clsx";
 import { useToast } from "@/components/Toast";
 import { api } from "@/lib/api";
@@ -54,6 +54,8 @@ export default function Settings() {
   const [testResult, setTestResult] = useState<string | null>(null);
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
   const [integrationTests, setIntegrationTests] = useState<Record<string, { status: "loading" | "ok" | "fail"; message?: string }>>({});
+  const [serviceTests, setServiceTests] = useState<Record<string, { ok: boolean; message: string } | null>>({});
+  const [notifPermission, setNotifPermission] = useState(getNotificationPermission());
 
   useEffect(() => {
     api.getSettings()
@@ -125,6 +127,17 @@ export default function Settings() {
     }
   };
 
+  const handleTestService = async (service: string) => {
+    setServiceTests((prev) => ({ ...prev, [service]: null }));
+    logAction("Settings", "testService", { service });
+    try {
+      const result = await api.testService(service);
+      setServiceTests((prev) => ({ ...prev, [service]: result }));
+    } catch {
+      setServiceTests((prev) => ({ ...prev, [service]: { ok: false, message: "Eroare conexiune" } }));
+    }
+  };
+
   const renderGroup = (
     groupKey: string,
     title: string,
@@ -152,38 +165,72 @@ export default function Settings() {
       {FIELD_CONFIG.filter((f) => f.group === groupKey).map((field) => {
         const isPassword = field.type === "password";
         const isVisible = visibleKeys.has(field.key);
+        // Servicii testabile individual per camp
+        const serviceMap: Record<string, string> = {
+          GROQ_API_KEY: "groq",
+          GOOGLE_AI_API_KEY: "gemini",
+          TAVILY_API_KEY: "tavily",
+          TELEGRAM_BOT_TOKEN: "telegram",
+        };
+        const testServiceKey = serviceMap[field.key];
+        const svcResult = testServiceKey ? serviceTests[testServiceKey] : undefined;
         return (
           <div key={field.key}>
             <label className="block text-sm text-gray-400 mb-1">
               {field.label}
             </label>
-            <div className="relative">
-              <input
-                type={isPassword && !isVisible ? "password" : "text"}
-                className={clsx("input-field w-full", isPassword && "pr-10")}
-                placeholder={field.placeholder}
-                value={fields[field.key] || ""}
-                onChange={(e) =>
-                  setFields({ ...fields, [field.key]: e.target.value })
-                }
-              />
-              {isPassword && fields[field.key] && (
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  type={isPassword && !isVisible ? "password" : "text"}
+                  className={clsx("input-field w-full", isPassword && "pr-10")}
+                  placeholder={field.placeholder}
+                  value={fields[field.key] || ""}
+                  onChange={(e) =>
+                    setFields({ ...fields, [field.key]: e.target.value })
+                  }
+                />
+                {isPassword && fields[field.key] && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = new Set(visibleKeys);
+                      if (isVisible) next.delete(field.key);
+                      else next.add(field.key);
+                      setVisibleKeys(next);
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500
+                               hover:text-gray-300 transition-colors p-1"
+                    title={isVisible ? "Ascunde" : "Arata"}
+                  >
+                    {isVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                )}
+              </div>
+              {testServiceKey && (
                 <button
                   type="button"
-                  onClick={() => {
-                    const next = new Set(visibleKeys);
-                    if (isVisible) next.delete(field.key);
-                    else next.add(field.key);
-                    setVisibleKeys(next);
-                  }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500
-                             hover:text-gray-300 transition-colors p-1"
-                  title={isVisible ? "Ascunde" : "Arata"}
+                  onClick={() => handleTestService(testServiceKey)}
+                  disabled={svcResult === null}
+                  className="btn-secondary text-xs px-2 py-1.5 flex items-center gap-1 shrink-0"
+                  title={`Testeaza ${testServiceKey}`}
                 >
-                  {isVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {svcResult === null ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <FlaskConical className="w-3 h-3" />
+                  )}
+                  Test
                 </button>
               )}
             </div>
+            {/* Rezultat test serviciu individual */}
+            {testServiceKey && svcResult !== undefined && svcResult !== null && (
+              <p className={clsx("text-xs mt-1 flex items-center gap-1", svcResult.ok ? "text-green-400" : "text-red-400")}>
+                {svcResult.ok ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                {svcResult.message}
+              </p>
+            )}
             {field.hint && (
               <p className="text-xs text-gray-600 mt-1">{field.hint}</p>
             )}
@@ -293,6 +340,37 @@ export default function Settings() {
                 </span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* F3-9: Notificari Browser */}
+      {isNotificationSupported() && (
+        <div className="card space-y-3">
+          <h3 className="text-sm font-semibold text-gray-400 uppercase">Notificari Browser</h3>
+          <p className="text-xs text-gray-500">
+            Primeste notificari native cand o analiza se finalizeaza, chiar daca tab-ul e minimizat.
+          </p>
+          <div className="flex items-center gap-3">
+            <span className={`text-xs px-2 py-1 rounded-full ${
+              notifPermission === "granted" ? "bg-green-500/20 text-green-400" :
+              notifPermission === "denied" ? "bg-red-500/20 text-red-400" :
+              "bg-gray-500/20 text-gray-400"
+            }`}>
+              {notifPermission === "granted" ? "Active" : notifPermission === "denied" ? "Blocate" : "Neactivate"}
+            </span>
+            {notifPermission !== "granted" && notifPermission !== "denied" && (
+              <button
+                onClick={async () => {
+                  const ok = await requestNotificationPermission();
+                  setNotifPermission(ok ? "granted" : "denied");
+                  if (ok) toast("Notificari browser activate!", "success");
+                }}
+                className="btn-secondary text-sm"
+              >
+                Activeaza Notificari
+              </button>
+            )}
           </div>
         </div>
       )}

@@ -64,6 +64,41 @@ async def update_job_progress(
         })
 
 
+async def _send_webhook_if_configured(job_id: str, report_data: dict):
+    """F3-1: Trimite POST webhook la URL configurat dupa finalizarea unui job."""
+    from backend.config import settings
+    webhook_url = settings.webhook_url
+    if not webhook_url:
+        return
+    from urllib.parse import urlparse
+    parsed = urlparse(webhook_url)
+    if parsed.scheme != "https" or not parsed.hostname:
+        logger.warning(f"[webhook] URL invalid sau non-HTTPS: {webhook_url[:50]}")
+        return
+    # SSRF: blocheaza IP-uri private
+    import re as _re
+    if _re.match(r"^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)", parsed.hostname or ""):
+        logger.warning("[webhook] Webhook URL blocat — IP privat detectat")
+        return
+    from datetime import timezone
+    payload = {
+        "event": "analysis_completed",
+        "job_id": job_id,
+        "company_name": report_data.get("company_name"),
+        "cui": report_data.get("cui"),
+        "risk_score": report_data.get("risk_score"),
+        "numeric_score": report_data.get("numeric_score"),
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        from backend.http_client import get_client
+        c = get_client()
+        await c.post(webhook_url, json=payload, timeout=5)
+        logger.info(f"[webhook] Trimis OK pentru job {job_id}")
+    except Exception as e:
+        logger.warning(f"[webhook] Esuat: {e}")
+
+
 async def run_analysis_job(job_id: str, ws_manager=None):
     """
     Executa un job de analiza complet.
@@ -153,6 +188,11 @@ async def run_analysis_job(job_id: str, ws_manager=None):
         verified_data = final_state.get("verified_data", {})
         errors = final_state.get("errors", [])
         sources = final_state.get("sources", [])
+
+        # F2-15: Injecteaza key_takeaways in verified_data pentru a ajunge in full_data (DB + frontend)
+        key_takeaways = final_state.get("key_takeaways", "")
+        if key_takeaways and isinstance(verified_data, dict):
+            verified_data["key_takeaways"] = key_takeaways
 
         # Log completeness
         completeness = verified_data.get("completeness", {}) if verified_data else {}
@@ -330,6 +370,18 @@ async def run_analysis_job(job_id: str, ws_manager=None):
             report_formats=formats_available,
             duration_seconds=int(elapsed),
         )
+
+        # F3-1: Webhook outbound la finalizare job
+        try:
+            _numeric_score = verified_data.get("risk_score", {}).get("numeric_score") if verified_data else None
+            await _send_webhook_if_configured(job_id, {
+                "company_name": company_name if verified_data else "",
+                "cui": cui,
+                "risk_score": risk_score,
+                "numeric_score": _numeric_score,
+            })
+        except Exception as _wh_err:
+            logger.debug(f"[webhook] Non-critical: {_wh_err}")
 
         # R2 Fix #1: Create in-app notification on job complete
         try:

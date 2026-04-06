@@ -129,7 +129,7 @@ def generate_one_pager(verified_data: dict, meta: dict, output_path: str):
 
     y += 2
 
-    # --- Due Diligence Checklist (left column) ---
+    # --- Due Diligence Checklist (left column) — F2-14: tabel cu Verificare|Rezultat|Sursa ---
     col1_x = 10
     col2_x = 108
     dd_y = y
@@ -140,30 +140,50 @@ def generate_one_pager(verified_data: dict, meta: dict, output_path: str):
     pdf.cell(0, 5, "DUE DILIGENCE CHECKLIST")
     dd_y += 6
 
-    for item in due_diligence[:10]:
-        status = item.get("status", "?")
-        name = _sanitize(item.get("name", ""))
-        severity = item.get("severity", "info")
-
-        if status == "DA":
-            marker = "[OK]"
-            pdf.set_text_color(34, 197, 94)
-        elif status == "NU":
-            marker = "[X]"
-            if severity == "critical":
-                pdf.set_text_color(239, 68, 68)
-            else:
-                pdf.set_text_color(234, 179, 8)
-        else:
-            marker = "[?]"
-            pdf.set_text_color(150, 150, 150)
-
+    if due_diligence:
+        # Header tabel
         pdf.set_xy(col1_x, dd_y)
         pdf.set_font("Helvetica", "B", 7)
-        pdf.cell(8, 3.5, marker)
-        pdf.set_font("Helvetica", "", 7)
-        pdf.set_text_color(60, 60, 60)
-        pdf.cell(80, 3.5, name[:40])
+        pdf.set_fill_color(40, 40, 60)
+        pdf.set_text_color(200, 200, 220)
+        pdf.cell(58, 4, "Verificare", border=1, fill=True)
+        pdf.cell(14, 4, "Rezultat", border=1, fill=True, align="C")
+        pdf.cell(18, 4, "Sursa", border=1, fill=True)
+        dd_y += 4
+
+        for item in due_diligence[:10]:
+            status = item.get("status", "?")
+            name = _sanitize(item.get("name", ""))[:35]
+            source = _sanitize(str(item.get("source", "")))[:16]
+
+            # Culoare fundal per rezultat
+            result_upper = str(status).upper()
+            if result_upper in ("DA", "YES", "TRUE", "OK"):
+                pdf.set_fill_color(20, 60, 30)
+                result_display = "DA"
+            elif result_upper in ("NU", "NO", "FALSE", "FAIL"):
+                severity = item.get("severity", "info")
+                if severity == "critical":
+                    pdf.set_fill_color(70, 15, 15)
+                else:
+                    pdf.set_fill_color(60, 35, 10)
+                result_display = "NU"
+            else:
+                pdf.set_fill_color(40, 40, 45)
+                result_display = "?"
+
+            pdf.set_xy(col1_x, dd_y)
+            pdf.set_font("Helvetica", "", 7)
+            pdf.set_text_color(220, 220, 220)
+            pdf.cell(58, 3.8, name, border=1, fill=True)
+            pdf.cell(14, 3.8, result_display, border=1, fill=True, align="C")
+            pdf.cell(18, 3.8, source, border=1, fill=True)
+            dd_y += 3.8
+    else:
+        pdf.set_xy(col1_x, dd_y)
+        pdf.set_font("Helvetica", "I", 7)
+        pdf.set_text_color(150, 150, 150)
+        pdf.cell(0, 3.5, "Date checklist indisponibile")
         dd_y += 4.2
 
     # --- Top 3 riscuri + top 3 puncte tari (right column) ---

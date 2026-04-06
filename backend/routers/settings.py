@@ -205,3 +205,59 @@ async def test_telegram():
     from backend.services.notification import send_telegram
     ok = await send_telegram("RIS - Test notificare Telegram OK")
     return {"success": ok}
+
+
+TESTABLE_SERVICES = ["groq", "gemini", "tavily", "telegram"]
+
+
+@router.post("/test/{service}")
+async def test_service(service: str):
+    """Test conectivitate individual per serviciu (groq, gemini, tavily, telegram)."""
+    from backend.errors import RISError, ErrorCode
+
+    if service not in TESTABLE_SERVICES:
+        raise RISError(ErrorCode.VALIDATION_ERROR, f"Serviciu necunoscut: {service}. Valide: {', '.join(TESTABLE_SERVICES)}")
+
+    try:
+        if service == "tavily":
+            from backend.agents.tools.tavily_client import TavilyClient
+            client = TavilyClient()
+            result = await client.search("test connectivity RIS", max_results=1)
+            return {"ok": bool(result), "message": "Tavily OK" if result else "Tavily: niciun rezultat returnat"}
+
+        elif service == "groq":
+            from backend.http_client import get_client
+            env = _read_env()
+            groq_key = env.get("GROQ_API_KEY", "") or settings.groq_api_key
+            if not groq_key:
+                return {"ok": False, "message": "GROQ_API_KEY nu este configurat"}
+            c = get_client()
+            r = await c.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {groq_key}"},
+                json={"model": "llama-3.1-8b-instant", "messages": [{"role": "user", "content": "1+1="}], "max_tokens": 5},
+                timeout=10,
+            )
+            return {"ok": r.status_code == 200, "message": f"Groq HTTP {r.status_code}"}
+
+        elif service == "gemini":
+            from backend.http_client import get_client
+            env = _read_env()
+            gemini_key = env.get("GOOGLE_AI_API_KEY", "") or settings.google_ai_api_key
+            if not gemini_key:
+                return {"ok": False, "message": "GOOGLE_AI_API_KEY nu este configurat"}
+            c = get_client()
+            r = await c.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_key}",
+                json={"contents": [{"parts": [{"text": "1+1="}]}]},
+                timeout=10,
+            )
+            return {"ok": r.status_code == 200, "message": f"Gemini HTTP {r.status_code}"}
+
+        elif service == "telegram":
+            from backend.services.notification import send_telegram
+            ok = await send_telegram("Test conexiune RIS — OK")
+            return {"ok": ok, "message": "Telegram OK" if ok else "Telegram: eroare la trimitere"}
+
+    except Exception as e:
+        return {"ok": False, "message": str(e)[:150]}

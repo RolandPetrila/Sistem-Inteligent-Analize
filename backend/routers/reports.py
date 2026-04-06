@@ -8,6 +8,7 @@ from pydantic import BaseModel, field_validator
 
 from backend.database import db
 from backend.config import settings
+from backend.errors import RISError, ErrorCode
 
 router = APIRouter()
 
@@ -116,7 +117,9 @@ async def download_one_pager(report_id: str):
 
     one_pager_path = (Path(settings.outputs_dir) / row["job_id"] / "raport_executiv.pdf").resolve()
     outputs_root = Path(settings.outputs_dir).resolve()
-    if not str(one_pager_path).startswith(str(outputs_root)):
+    try:
+        one_pager_path.relative_to(outputs_root)
+    except ValueError:
         raise HTTPException(status_code=403, detail="Access denied")
     if not one_pager_path.exists():
         raise HTTPException(status_code=404, detail="1-Pager not generated for this report")
@@ -144,7 +147,9 @@ async def download_report(report_id: str, format: str):
 
     full_path = Path(file_path).resolve()
     outputs_root = Path(settings.outputs_dir).resolve()
-    if not str(full_path).startswith(str(outputs_root)):
+    try:
+        full_path.relative_to(outputs_root)
+    except ValueError:
         raise HTTPException(status_code=403, detail="Access denied")
     if not full_path.exists():
         raise HTTPException(status_code=404, detail="File not found on disk")
@@ -157,10 +162,12 @@ async def download_report(report_id: str, format: str):
         "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     }
 
+    from urllib.parse import quote
+    safe_name = quote(full_path.name, safe=".")
     return FileResponse(
         full_path,
         media_type=media_types.get(format, "application/octet-stream"),
-        filename=full_path.name,
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{safe_name}"},
     )
 
 
@@ -197,7 +204,7 @@ async def get_report_delta(report_id: str):
     if row.get("changes_json"):
         try:
             changes = json.loads(row["changes_json"])
-        except Exception:
+        except (json.JSONDecodeError, TypeError):
             changes = []
     return {
         "has_delta": True,
@@ -207,6 +214,56 @@ async def get_report_delta(report_id: str):
         "score_delta": (row.get("current_score") or 0) - (row.get("previous_score") or 0),
         "changes": changes,
     }
+
+
+@router.get("/{report_id}/export/ics")
+async def export_seap_calendar(report_id: str):
+    """F3-5: Exporta licitatii SEAP din raport ca fisier .ics (iCalendar)."""
+    import uuid as _uuid
+    from fastapi.responses import Response as FastAPIResponse
+
+    report = await db.fetch_one("SELECT full_data FROM reports WHERE id = ?", (report_id,))
+    if not report:
+        raise RISError(ErrorCode.NOT_FOUND, "Raport negasit")
+
+    data = json.loads(report["full_data"] or "{}")
+    tenders = data.get("market", {}).get("seap_tenders", [])
+    if not tenders:
+        raise RISError(ErrorCode.NOT_FOUND, "Nu exista licitatii in acest raport")
+
+    ics_lines = [
+        "BEGIN:VCALENDAR", "VERSION:2.0",
+        "PRODID:-//RIS//Licitatii SEAP//RO", "CALSCALE:GREGORIAN",
+    ]
+    events_added = 0
+    for t in tenders:
+        deadline = str(t.get("deadline_date", "")).replace("-", "")
+        if not deadline or len(deadline) < 8:
+            continue
+        title = str(t.get("title", "Licitatie SEAP"))[:60]
+        uid = t.get("id", str(_uuid.uuid4()))
+        ics_lines += [
+            "BEGIN:VEVENT",
+            f"UID:{uid}@ris-local",
+            f"SUMMARY:{title}",
+            f"DESCRIPTION:Valoare: {t.get('value', 'N/A')} RON\\nSursa: SEAP",
+            f"DTSTART;VALUE=DATE:{deadline}",
+            f"DTEND;VALUE=DATE:{deadline}",
+            "STATUS:TENTATIVE",
+            "END:VEVENT",
+        ]
+        events_added += 1
+
+    if events_added == 0:
+        raise RISError(ErrorCode.NOT_FOUND, "Nu exista licitatii cu data de deadline valida in acest raport")
+
+    ics_lines.append("END:VCALENDAR")
+    ics_content = "\r\n".join(ics_lines)
+    return FastAPIResponse(
+        content=ics_content,
+        media_type="text/calendar",
+        headers={"Content-Disposition": f"attachment; filename=licitatii_{report_id[:8]}.ics"}
+    )
 
 
 class SendEmailRequest(BaseModel):
@@ -235,7 +292,9 @@ async def send_report_email(report_id: str, data: SendEmailRequest):
     # Validate path stays inside outputs
     full_path = Path(pdf_path).resolve()
     outputs_root = Path(settings.outputs_dir).resolve()
-    if not str(full_path).startswith(str(outputs_root)):
+    try:
+        full_path.relative_to(outputs_root)
+    except ValueError:
         raise HTTPException(status_code=403, detail="Access denied")
 
     subject = data.subject or f"Raport RIS — {row.get('title', 'Raport')}"

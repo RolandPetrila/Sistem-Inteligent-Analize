@@ -34,15 +34,23 @@ _job_limiter = RateLimiter(requests_per_minute=5)
 _batch_limiter = RateLimiter(requests_per_minute=2)
 
 
+def _get_client_ip(request: Request) -> str:
+    """Respect X-Forwarded-For header for clients behind proxies."""
+    xff = request.headers.get("X-Forwarded-For")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 async def rate_limit_jobs(request: Request):
     """Dependency: max 5 job creations per minute per IP."""
-    ip = request.client.host if request.client else "unknown"
+    ip = _get_client_ip(request)
     if not _job_limiter.check(ip):
         raise HTTPException(status_code=429, detail="Prea multe cereri. Asteapta 1 minut.")
 
 
 async def rate_limit_batch(request: Request):
     """Dependency: max 2 batch uploads per minute per IP."""
-    ip = request.client.host if request.client else "unknown"
+    ip = _get_client_ip(request)
     if not _batch_limiter.check(ip):
         raise HTTPException(status_code=429, detail="Prea multe cereri batch. Asteapta 1 minut.")

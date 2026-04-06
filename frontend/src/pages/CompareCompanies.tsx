@@ -1,8 +1,9 @@
-import { useState } from "react";
-import { Plus, Trash2, Search, ArrowUpDown, CheckCircle, XCircle, Download } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Trash2, Search, ArrowUpDown, CheckCircle, XCircle, Download, BookmarkPlus, FolderOpen } from "lucide-react";
 import { validateCUI } from "@/lib/cui-validator";
 import { logAction } from "@/lib/logger";
 import { api } from "@/lib/api";
+import { useToast } from "@/components/Toast";
 import clsx from "clsx";
 
 interface CompanyResult {
@@ -41,11 +42,66 @@ function riskColor(score: number | undefined | null): string {
   return "text-red-400";
 }
 
+interface CompareTemplate {
+  id: string;
+  name: string;
+  cuis: string[];
+  created_at: string;
+}
+
 export default function CompareCompanies() {
+  const { toast } = useToast();
   const [cuis, setCuis] = useState<string[]>(["", ""]);
   const [result, setResult] = useState<CompareResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // F3-8: Templates
+  const [templates, setTemplates] = useState<CompareTemplate[]>([]);
+  const [templateName, setTemplateName] = useState("");
+  const [showSaveForm, setShowSaveForm] = useState(false);
+
+  useEffect(() => {
+    api.listCompareTemplates()
+      .then((res) => setTemplates(res.templates || []))
+      .catch(() => { /* templates optional */ });
+  }, []);
+
+  const loadTemplate = (tpl: CompareTemplate) => {
+    setCuis(tpl.cuis.length >= 2 ? [...tpl.cuis] : [...tpl.cuis, ""]);
+    setResult(null);
+    setError(null);
+    toast(`Template "${tpl.name}" incarcat`, "success");
+    logAction("Compare", "loadTemplate", { templateId: tpl.id, name: tpl.name });
+  };
+
+  const handleSaveTemplate = async () => {
+    const name = templateName.trim();
+    const validCuis = cuis.filter((c) => c.trim().length >= 2);
+    if (!name) { toast("Introdu un nume pentru template", "warning"); return; }
+    if (validCuis.length < 2) { toast("Introdu cel putin 2 CUI-uri", "warning"); return; }
+    try {
+      await api.saveCompareTemplate(name, validCuis);
+      const res = await api.listCompareTemplates();
+      setTemplates(res.templates || []);
+      setTemplateName("");
+      setShowSaveForm(false);
+      toast(`Template "${name}" salvat`, "success");
+      logAction("Compare", "saveTemplate", { name, cuis: validCuis });
+    } catch {
+      toast("Eroare la salvarea template-ului", "error");
+    }
+  };
+
+  const handleDeleteTemplate = async (tpl: CompareTemplate) => {
+    try {
+      await api.deleteCompareTemplate(tpl.id);
+      setTemplates(templates.filter((t) => t.id !== tpl.id));
+      toast(`Template "${tpl.name}" sters`, "success");
+      logAction("Compare", "deleteTemplate", { templateId: tpl.id });
+    } catch {
+      toast("Eroare la stergerea template-ului", "error");
+    }
+  };
 
   const addCui = () => {
     if (cuis.length < 5) setCuis([...cuis, ""]);
@@ -132,6 +188,71 @@ export default function CompareCompanies() {
           Introdu 2-5 CUI-uri pentru comparatie side-by-side (date ANAF + Bilant)
         </p>
       </div>
+
+      {/* F3-8: Template-uri salvate */}
+      {(templates.length > 0 || true) && (
+        <div className="card space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-400 uppercase flex items-center gap-2">
+              <FolderOpen className="w-4 h-4" /> Template-uri salvate
+            </h2>
+            <button
+              onClick={() => setShowSaveForm(!showSaveForm)}
+              className="btn-secondary flex items-center gap-1.5 text-xs"
+            >
+              <BookmarkPlus className="w-3.5 h-3.5" />
+              Salveaza comparatia curenta
+            </button>
+          </div>
+
+          {/* Form salvare */}
+          {showSaveForm && (
+            <div className="flex items-center gap-2 p-3 bg-dark-surface rounded-lg border border-dark-border">
+              <input
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value.slice(0, 50))}
+                onKeyDown={(e) => e.key === "Enter" && handleSaveTemplate()}
+                placeholder="Nume template (ex: Producatori Cluj)"
+                maxLength={50}
+                className="flex-1 bg-dark-bg border border-dark-border rounded px-2 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-primary"
+              />
+              <button onClick={handleSaveTemplate} className="btn-primary text-sm px-3">Salveaza</button>
+              <button onClick={() => setShowSaveForm(false)} className="text-gray-500 hover:text-white text-sm px-2">Anuleaza</button>
+            </div>
+          )}
+
+          {/* Lista templates */}
+          {templates.length === 0 ? (
+            <p className="text-xs text-gray-600 italic">Niciun template salvat inca. Compara firme si salveaza comparatia pentru reutilizare.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {templates.map((tpl) => (
+                <div key={tpl.id} className="flex items-center justify-between p-2.5 bg-dark-surface rounded-lg hover:bg-dark-hover transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-300 font-medium truncate">{tpl.name}</p>
+                    <p className="text-xs text-gray-600">{tpl.cuis.join(", ")}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                    <button
+                      onClick={() => loadTemplate(tpl)}
+                      className="btn-secondary text-xs px-2 py-1"
+                    >
+                      Incarca
+                    </button>
+                    <button
+                      onClick={() => handleDeleteTemplate(tpl)}
+                      className="p-1.5 text-gray-600 hover:text-red-400 transition-colors"
+                      aria-label={`Sterge template ${tpl.name}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* CUI inputs */}
       <div className="card space-y-3">

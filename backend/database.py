@@ -49,7 +49,8 @@ class Database:
         try:
             yield self
             await self.db.commit()
-        except Exception:
+        except Exception as e:
+            logger.error(f"[db] Transaction rollback: {e}", exc_info=True)
             await self.db.rollback()
             raise
 
@@ -108,6 +109,18 @@ class Database:
             await self.db.commit()
         except Exception as e:
             logger.debug(f"Migration index report_deltas: {e}")
+        # F3-3: Auto-reanalyze columns pe companies (safe ALTER TABLE)
+        for col_sql, col_name in [
+            ("ALTER TABLE companies ADD COLUMN auto_reanalyze_days INTEGER DEFAULT NULL", "auto_reanalyze_days"),
+            ("ALTER TABLE companies ADD COLUMN next_reanalyze_at TEXT DEFAULT NULL", "next_reanalyze_at"),
+            ("ALTER TABLE companies ADD COLUMN reanalyze_level INTEGER DEFAULT 2", "reanalyze_level"),
+        ]:
+            try:
+                await self.db.execute(col_sql)
+                await self.db.commit()
+                logger.info(f"Migration: added {col_name} to companies")
+            except Exception as e:
+                logger.debug(f"Migration column check companies.{col_name} (expected if exists): {e}")
         logger.info(f"Migrations complete ({len(migration_files)} files)")
 
 

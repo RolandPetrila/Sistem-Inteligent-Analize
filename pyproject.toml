@@ -1,4 +1,37 @@
+[project]
+name = "roland-intelligence-system"
+version = "2.0.0"
+description = "Business Intelligence system cu date publice romanesti"
+requires-python = ">=3.13"
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+select = ["E", "F", "W", "I", "N", "UP", "B"]
+ignore = ["E501", "B008", "N802", "N803", "N806"]
+exclude = [
+    "backend/agents/tools/_experimental/",
+    "backend/migrations/",
+    "frontend/",
+]
+
 [tool.pytest.ini_options]
+testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.coverage.run]
+source = ["backend"]
+omit = [
+    "backend/migrations/*",
+    "backend/agents/tools/_experimental/*",
+    "tests/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false

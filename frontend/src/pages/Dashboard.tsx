@@ -6,7 +6,7 @@ import {
   CheckCircle,
   Clock,
   TrendingUp,
-
+  TrendingDown,
   PlusCircle,
   Zap,
   AlertCircle,
@@ -62,6 +62,8 @@ export default function Dashboard() {
   const [integrations, setIntegrations] = useState<IntegrationStatus | null>(null);
   const [healthData, setHealthData] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
+  // F2-1: Scoruri in scadere
+  const [riskMovers, setRiskMovers] = useState<RiskMover[]>([]);
 
   useEffect(() => {
     Promise.all([
@@ -79,6 +81,14 @@ export default function Dashboard() {
       })
       .catch(() => toast("Eroare la incarcarea dashboard-ului", "error"))
       .finally(() => setLoading(false));
+
+    // F2-1: Fetch risk movers pentru widgetul "Scoruri in scadere"
+    api.getRiskMovers()
+      .then((data) => {
+        const declining = (data.movers || []).filter((m) => m.delta < 0);
+        setRiskMovers(declining);
+      })
+      .catch(() => { /* widget optional — fail silently */ });
 
     // 10C M1.1: Refresh health status every 60s
     const healthInterval = setInterval(() => {
@@ -335,6 +345,25 @@ export default function Dashboard() {
           </Link>
         </div>
       </div>
+
+      {/* F2-1: Widget "Scoruri in Scadere" — top 3 firme cu delta negativ */}
+      {riskMovers.length > 0 && (
+        <div className="bg-dark-card border border-red-500/20 rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <TrendingDown className="w-4 h-4 text-red-400" />
+            <h3 className="text-sm font-medium text-white">Scoruri in scadere</h3>
+          </div>
+          <div className="space-y-2">
+            {riskMovers.slice(0, 3).map(m => (
+              <Link key={m.id} to={`/company/${m.id}`}
+                className="flex justify-between items-center p-2 hover:bg-dark-border/30 rounded transition">
+                <span className="text-sm text-gray-300">{m.name}</span>
+                <span className="text-red-400 text-sm font-mono">{m.delta > 0 ? '+' : ''}{m.delta}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* N3: Risk Movers Widget */}
       <RiskMoversWidget />

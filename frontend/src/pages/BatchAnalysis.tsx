@@ -24,6 +24,14 @@ interface CsvPreviewRow {
   error?: string;
 }
 
+interface ServerPreview {
+  valid_count: number;
+  invalid_count: number;
+  valid_cuis: string[];
+  invalid_entries: { line: number; cui: string; error: string }[];
+  estimated_time_minutes: number;
+}
+
 export default function BatchAnalysis() {
   const { toast } = useToast();
   const [file, setFile] = useState<File | null>(null);
@@ -33,6 +41,9 @@ export default function BatchAnalysis() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [csvPreview, setCsvPreview] = useState<CsvPreviewRow[] | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [serverPreview, setServerPreview] = useState<ServerPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewConfirmed, setPreviewConfirmed] = useState(false);
 
   // R2 fix: CSV header keywords to detect and skip header row
   const CSV_HEADER_KEYWORDS = ["cui", "firma", "company", "denumire", "nume", "name", "cod"];
@@ -149,12 +160,26 @@ export default function BatchAnalysis() {
               accept=".csv"
               className="hidden"
               id="csv-upload"
-              onChange={(e) => {
+              onChange={async (e) => {
                 const f = e.target.files?.[0] || null;
                 setFile(f);
                 setCsvPreview(null);
                 setShowPreview(false);
-                if (f) parseCSVFile(f);
+                setServerPreview(null);
+                setPreviewConfirmed(false);
+                if (f) {
+                  parseCSVFile(f);
+                  // Apeleaza preview server-side
+                  setPreviewLoading(true);
+                  try {
+                    const prev = await api.previewBatch(f);
+                    setServerPreview(prev);
+                  } catch {
+                    // Preview server-side optional — continua cu preview client
+                  } finally {
+                    setPreviewLoading(false);
+                  }
+                }
               }}
             />
             <label
@@ -219,10 +244,56 @@ export default function BatchAnalysis() {
             </div>
           )}
 
+          {/* Server Preview Summary */}
+          {previewLoading && (
+            <div className="flex items-center gap-2 text-sm text-gray-400 py-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Validare server...
+            </div>
+          )}
+          {serverPreview && !previewLoading && (
+            <div className="border border-dark-border rounded-lg p-3 bg-dark-surface space-y-2">
+              <div className="flex items-center gap-3 text-sm">
+                <span className="text-green-400 font-medium">{serverPreview.valid_count} CUI-uri valide</span>
+                {serverPreview.invalid_count > 0 && (
+                  <span className="text-red-400">{serverPreview.invalid_count} invalide</span>
+                )}
+                <span className="text-gray-500">~{serverPreview.estimated_time_minutes} min estimat</span>
+              </div>
+              {serverPreview.invalid_entries.length > 0 && (
+                <div className="space-y-0.5">
+                  {serverPreview.invalid_entries.map((e, i) => (
+                    <p key={i} className="text-[11px] text-red-400">
+                      Linia {e.line}: {e.cui} — {e.error}
+                    </p>
+                  ))}
+                </div>
+              )}
+              {!previewConfirmed && serverPreview.valid_count > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setPreviewConfirmed(true)}
+                  className="btn-primary text-sm w-full mt-1"
+                >
+                  Confirma si pregateste analiza
+                </button>
+              )}
+              {previewConfirmed && (
+                <p className="text-xs text-green-400 flex items-center gap-1">
+                  <CheckCircle className="w-3.5 h-3.5" /> Confirmat — apasa Porneste pentru a incepe
+                </p>
+              )}
+            </div>
+          )}
+
           {file && (
             <button
               onClick={handleUpload}
-              disabled={submitting || (csvPreview !== null && csvPreview.filter((r) => r.valid).length === 0)}
+              disabled={
+                submitting ||
+                (csvPreview !== null && csvPreview.filter((r) => r.valid).length === 0) ||
+                (serverPreview !== null && !previewConfirmed)
+              }
               className="btn-primary w-full flex items-center justify-center gap-2"
             >
               {submitting ? (
@@ -233,7 +304,7 @@ export default function BatchAnalysis() {
                 <>
                   <Upload className="w-4 h-4" />
                   {csvPreview
-                    ? `Confirma si porneste (${csvPreview.filter((r) => r.valid).length} CUI-uri)`
+                    ? `Porneste Analiza (${csvPreview.filter((r) => r.valid).length} CUI-uri)`
                     : "Porneste Batch Analysis"}
                 </>
               )}

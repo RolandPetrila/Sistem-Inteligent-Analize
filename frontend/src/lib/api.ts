@@ -155,12 +155,15 @@ export const api = {
   getReport: (id: string) => request<import("./types").Report & { full_data: unknown; sources: unknown[] }>(`/reports/${id}`),
 
   // Companies
-  listCompanies: (params?: { search?: string; limit?: number; offset?: number; sort?: string }) => {
+  listCompanies: (params?: { search?: string; limit?: number; offset?: number; sort?: string; county?: string; caen?: string; risk_score?: string }) => {
     const q = new URLSearchParams();
     if (params?.search) q.set("search", params.search);
     if (params?.limit) q.set("limit", String(params.limit));
     if (params?.offset) q.set("offset", String(params.offset));
     if (params?.sort) q.set("sort", params.sort);
+    if (params?.county) q.set("county", params.county);
+    if (params?.caen) q.set("caen", params.caen);
+    if (params?.risk_score) q.set("risk_score", params.risk_score);
     const qs = q.toString();
     return request<{ companies: import("./types").Company[]; total: number }>(
       `/companies${qs ? `?${qs}` : ""}`
@@ -379,4 +382,78 @@ export const api = {
   // Score trend with SQL window functions
   getScoreTrend: (companyId: number): Promise<import("./types").ScoreTrendPoint[]> =>
     request(`/companies/${companyId}/score-trend`),
+
+  // Monitoring history
+  getMonitoringHistory: (limit = 20) =>
+    request<{ history: Record<string, unknown>[] }>(`/monitoring/history?limit=${limit}`),
+
+  // Settings — test individual service
+  testService: (service: string) =>
+    request<{ ok: boolean; message: string }>(`/settings/test/${service}`, { method: "POST" }),
+
+  // Company tags (F3-3)
+  getCompanyTags: (companyId: string) =>
+    request<{ tags: string[] }>(`/companies/${companyId}/tags`),
+  addCompanyTag: (companyId: string, tag: string) =>
+    request<{ ok: boolean }>(`/companies/${companyId}/tags`, {
+      method: "POST",
+      body: JSON.stringify({ tag }),
+    }),
+  removeCompanyTag: (companyId: string, tag: string) =>
+    request<{ ok: boolean }>(`/companies/${companyId}/tags/${encodeURIComponent(tag)}`, {
+      method: "DELETE",
+    }),
+
+  // Company notes (F3-3)
+  getCompanyNote: (companyId: string) =>
+    request<{ note: string; updated_at: string | null }>(`/companies/${companyId}/note`),
+  upsertCompanyNote: (companyId: string, note: string) =>
+    request<{ ok: boolean }>(`/companies/${companyId}/note`, {
+      method: "PUT",
+      body: JSON.stringify({ note }),
+    }),
+
+  // Compare templates (F3-8)
+  listCompareTemplates: () =>
+    request<{ templates: { id: string; name: string; cuis: string[]; created_at: string }[] }>(
+      "/compare/templates"
+    ),
+  saveCompareTemplate: (name: string, cuis: string[]) =>
+    request<{ ok: boolean; id: string }>("/compare/templates", {
+      method: "POST",
+      body: JSON.stringify({ name, cuis }),
+    }),
+  deleteCompareTemplate: (templateId: string) =>
+    request<{ ok: boolean }>(`/compare/templates/${templateId}`, { method: "DELETE" }),
+
+  // Sector CAEN dashboard (F3-6)
+  getSectorDashboard: (caenCode: string) =>
+    request<{
+      caen_code: string;
+      caen_description: string;
+      stats: Record<string, number | null>;
+      top_companies: { id: string; name: string; cui: string; score: number; county: string }[];
+    }>(`/compare/sector/${caenCode}/dashboard`),
+
+  // Batch preview CSV
+  previewBatch: async (file: File) => {
+    const start = performance.now();
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`${BASE}/batch/preview`, { method: "POST", body: fd });
+    const ms = Math.round(performance.now() - start);
+    if (!res.ok) {
+      logApi("POST", "/batch/preview", res.status, ms, "Preview failed");
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new ApiError(err.detail || `HTTP ${res.status}`, "", res.status);
+    }
+    logApi("POST", "/batch/preview", res.status, ms);
+    return res.json() as Promise<{
+      valid_count: number;
+      invalid_count: number;
+      valid_cuis: string[];
+      invalid_entries: { line: number; cui: string; error: string }[];
+      estimated_time_minutes: number;
+    }>;
+  },
 };

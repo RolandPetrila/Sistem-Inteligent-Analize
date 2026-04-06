@@ -1,11 +1,12 @@
 import csv
 import io
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File
 from fastapi.responses import StreamingResponse
 from loguru import logger
 
 from backend.database import db
+from backend.errors import RISError, ErrorCode
 
 router = APIRouter()
 
@@ -95,11 +96,68 @@ async def search_companies_fts(
         return rows
 
 
+@router.post("/import")
+async def import_companies_csv(file: UploadFile = File(...)):
+    """F3-7: Import companii din CSV cu coloane cui, name. INSERT OR IGNORE — nu suprascrie date existente."""
+    import uuid as _uuid
+    from backend.agents.tools.cui_validator import validate_cui
+
+    content = await file.read()
+    lines = content.decode("utf-8", errors="replace").splitlines()
+    if not lines:
+        raise RISError(ErrorCode.VALIDATION_ERROR, "Fisier CSV gol")
+
+    header = [h.lower().strip().strip('"') for h in lines[0].split(",")]
+    cui_idx = next((i for i, h in enumerate(header) if "cui" in h), 0)
+    name_idx = next(
+        (i for i, h in enumerate(header) if any(k in h for k in ["name", "denu", "firma", "compan", "nume"])),
+        1
+    )
+
+    imported, skipped = 0, 0
+    for line in lines[1:]:
+        if not line.strip():
+            skipped += 1
+            continue
+        parts = line.split(",")
+        if len(parts) <= max(cui_idx, name_idx):
+            skipped += 1
+            continue
+        cui = parts[cui_idx].strip().strip('"')
+        name = parts[name_idx].strip().strip('"') if name_idx < len(parts) else ""
+        val = validate_cui(cui)
+        if not val.get("valid"):
+            skipped += 1
+            continue
+        await db.execute(
+            "INSERT OR IGNORE INTO companies(id, cui, name, created_at, updated_at) "
+            "VALUES (?,?,?,datetime('now'),datetime('now'))",
+            (_uuid.uuid4().hex, cui, name or f"Firma {cui}")
+        )
+        imported += 1
+
+    return {"imported": imported, "skipped": skipped}
+
+
+VALID_SORT_COLS = {
+    "last_analyzed": "last_analyzed_at DESC",
+    "score_desc": "CAST(COALESCE(last_risk_score_numeric, 0) AS INTEGER) DESC",
+    "score_asc": "CAST(COALESCE(last_risk_score_numeric, 0) AS INTEGER) ASC",
+    "name_asc": "name ASC",
+    "name_desc": "name DESC",
+    "analysis_count": "analysis_count DESC",
+}
+
+VALID_RISK_SCORES = {"Verde", "Galben", "Rosu"}
+
+
 @router.get("")
 async def list_companies(
     search: str | None = None,
     county: str | None = None,
     caen: str | None = None,
+    risk_score: str | None = None,
+    sort: str | None = None,
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ):
@@ -115,8 +173,13 @@ async def list_companies(
     if caen:
         conditions.append("caen_code = ?")
         params.append(caen)
+    if risk_score and risk_score in VALID_RISK_SCORES:
+        conditions.append("risk_score = ?")
+        params.append(risk_score)
 
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    order_by = VALID_SORT_COLS.get(sort or "last_analyzed", "last_analyzed_at DESC")
 
     total_row = await db.fetch_one(
         f"SELECT COUNT(*) as c FROM companies {where}", tuple(params)
@@ -124,7 +187,7 @@ async def list_companies(
     total = total_row["c"] if total_row else 0
 
     rows = await db.fetch_all(
-        f"SELECT * FROM companies {where} ORDER BY last_analyzed_at DESC LIMIT ? OFFSET ?",
+        f"SELECT * FROM companies {where} ORDER BY {order_by} LIMIT ? OFFSET ?",
         tuple(params + [limit, offset]),
     )
 
@@ -166,6 +229,69 @@ async def export_companies_csv():
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=companii_ris.csv"},
     )
+
+
+# --- Tags (F3-3) ---
+@router.get("/{company_id}/tags")
+async def get_company_tags(company_id: str):
+    tags = await db.fetch_all(
+        "SELECT tag, created_at FROM company_tags WHERE company_id = ? ORDER BY created_at DESC",
+        (company_id,),
+    )
+    return {"tags": [r["tag"] for r in tags]}
+
+
+@router.post("/{company_id}/tags")
+async def add_company_tag(company_id: str, body: dict):
+    tag = str(body.get("tag", "")).strip()[:30]
+    if not tag:
+        raise RISError(ErrorCode.VALIDATION_ERROR, "Tag gol")
+    await db.execute(
+        "INSERT OR IGNORE INTO company_tags(company_id, tag) VALUES (?, ?)",
+        (company_id, tag),
+    )
+    return {"ok": True}
+
+
+@router.delete("/{company_id}/tags/{tag}")
+async def remove_company_tag(company_id: str, tag: str):
+    await db.execute(
+        "DELETE FROM company_tags WHERE company_id = ? AND tag = ?",
+        (company_id, tag),
+    )
+    return {"ok": True}
+
+
+# --- Note (F3-3) ---
+@router.get("/{company_id}/note")
+async def get_company_note(company_id: str):
+    row = await db.fetch_one(
+        "SELECT note, updated_at FROM company_notes WHERE company_id = ?",
+        (company_id,),
+    )
+    return {
+        "note": row["note"] if row else "",
+        "updated_at": row["updated_at"] if row else None,
+    }
+
+
+@router.put("/{company_id}/note")
+async def upsert_company_note(company_id: str, body: dict):
+    note = str(body.get("note", ""))[:2000]
+    existing = await db.fetch_one(
+        "SELECT id FROM company_notes WHERE company_id = ?", (company_id,)
+    )
+    if existing:
+        await db.execute(
+            "UPDATE company_notes SET note = ?, updated_at = datetime('now') WHERE company_id = ?",
+            (note, company_id),
+        )
+    else:
+        await db.execute(
+            "INSERT INTO company_notes(company_id, note) VALUES (?, ?)",
+            (company_id, note),
+        )
+    return {"ok": True}
 
 
 @router.get("/{company_id}")

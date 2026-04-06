@@ -4,6 +4,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from backend.models import AnalysisType, ANALYSIS_TYPES_META, AnalysisTypeResponse
+from backend.errors import RISError, ErrorCode
 
 router = APIRouter()
 
@@ -112,3 +113,57 @@ async def parse_natural_query(data: ParseQueryRequest):
         confidence=round(confidence, 2),
         suggestion=f"Sugerez: {suggestion}",
     )
+
+
+@router.post("/quick-score")
+async def quick_score_batch(body: dict):
+    """F3-2: Scoring rapid pentru max 20 CUI-uri — doar ANAF TVA + Bilant, fara AI synthesis."""
+    import asyncio
+    from backend.agents.tools.anaf_client import ANAFClient
+    from backend.agents.tools.anaf_bilant_client import ANAFBilantClient
+    from backend.agents.tools.cui_validator import validate_cui
+
+    cuis = body.get("cuis", [])[:20]
+    if not cuis:
+        raise RISError(ErrorCode.VALIDATION_ERROR, "Lista CUI goala")
+
+    anaf = ANAFClient()
+    bilant = ANAFBilantClient()
+
+    async def score_one(cui: str) -> dict:
+        val = validate_cui(cui)
+        if not val.get("valid"):
+            return {"cui": cui, "error": "CUI invalid"}
+        try:
+            tva_data, bil_data = await asyncio.gather(
+                anaf.get_company_info(cui),
+                bilant.get_latest_year(cui),
+                return_exceptions=True
+            )
+            ca = bil_data.get("cifra_afaceri") if isinstance(bil_data, dict) else None
+            angajati = bil_data.get("numar_angajati") if isinstance(bil_data, dict) else None
+            inactiv = tva_data.get("stare_inactiv", False) if isinstance(tva_data, dict) else False
+            tva_activ = tva_data.get("tva_activ", False) if isinstance(tva_data, dict) else False
+
+            score = 50
+            if ca and ca > 1_000_000: score += 15
+            if ca and ca > 10_000_000: score += 10
+            if inactiv: score -= 30
+            if not tva_activ and ca and ca > 500_000: score -= 10
+            score = max(0, min(100, score))
+
+            return {
+                "cui": cui,
+                "name": tva_data.get("denumire", "?") if isinstance(tva_data, dict) else "?",
+                "ca_last_year": ca,
+                "angajati": angajati,
+                "tva_activ": tva_activ,
+                "inactiv_anaf": inactiv,
+                "quick_score": score,
+                "risk": "Verde" if score >= 70 else "Galben" if score >= 40 else "Rosu"
+            }
+        except Exception as e:
+            return {"cui": cui, "error": str(e)[:80]}
+
+    results = await asyncio.gather(*[score_one(c) for c in cuis])
+    return {"results": list(results), "note": "Scoring rapid — doar ANAF, fara AI synthesis"}

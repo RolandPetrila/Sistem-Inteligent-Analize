@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Building2, FileText, Zap, X, Command } from "lucide-react";
+import { Search, Building2, FileText, Zap, X, Command, Clock } from "lucide-react";
 import clsx from "clsx";
 import { api } from "@/lib/api";
 import type { Company, Report } from "@/lib/types";
@@ -26,6 +26,18 @@ const QUICK_ACTIONS: QuickAction[] = [
   { id: "monitoring", label: "Monitorizare", description: "Alerte firme", path: "/monitoring" },
 ];
 
+// F2-7: Cheie pentru istoricul cautarilor recente
+const RECENT_KEY = "ris_search_recent";
+
+function loadRecentSearches(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function GlobalSearch() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -33,8 +45,20 @@ export default function GlobalSearch() {
   const [results, setResults] = useState<SearchResults>({ companies: [], reports: [], actions: QUICK_ACTIONS.slice(0, 4) });
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState(0);
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => loadRecentSearches());
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // F2-7: Salveaza termenul cautat in ultimele 5 cautari
+  const saveRecent = useCallback((q: string) => {
+    const trimmed = q.trim();
+    if (!trimmed || trimmed.length < 2) return;
+    setRecentSearches(prev => {
+      const updated = [trimmed, ...prev.filter(r => r !== trimmed)].slice(0, 5);
+      try { localStorage.setItem(RECENT_KEY, JSON.stringify(updated)); } catch { /* ignoram */ }
+      return updated;
+    });
+  }, []);
 
   // Ctrl+K to open
   useEffect(() => {
@@ -139,16 +163,19 @@ export default function GlobalSearch() {
   ];
 
   const handleSelectAction = (action: QuickAction) => {
+    if (query.trim().length >= 2) saveRecent(query);
     setOpen(false);
     navigate(action.path);
   };
 
   const handleSelectCompany = (company: Company) => {
+    if (query.trim().length >= 2) saveRecent(query);
     setOpen(false);
     navigate(`/company/${company.id}`);
   };
 
   const handleSelectReport = (report: Report) => {
+    if (query.trim().length >= 2) saveRecent(query);
     setOpen(false);
     navigate(`/report/${report.id}`);
   };
@@ -373,14 +400,50 @@ export default function GlobalSearch() {
             )}
 
             {!loading && query.length < 2 && (
-              <div className="py-6 text-center">
-                <Command className="w-6 h-6 text-gray-600 mx-auto mb-2" />
-                <p className="text-xs text-gray-500">
-                  Scrie minim 2 caractere pentru a cauta
-                </p>
-                <p className="text-[10px] text-gray-600 mt-1">
-                  Firme, rapoarte, actiuni sau CUI numeric
-                </p>
+              <div>
+                {/* F2-7: Cautari recente */}
+                {recentSearches.length > 0 && (
+                  <div className="py-2">
+                    <p className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-600">
+                      Recente
+                    </p>
+                    {recentSearches.map((recent) => (
+                      <button
+                        key={recent}
+                        onClick={() => {
+                          setQuery(recent);
+                          searchAll(recent);
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-2 text-left text-gray-300 hover:bg-dark-hover transition-colors"
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-dark-surface flex items-center justify-center shrink-0">
+                          <Clock className="w-3.5 h-3.5 text-gray-500" />
+                        </div>
+                        <span className="text-sm truncate">{recent}</span>
+                      </button>
+                    ))}
+                    <div className="px-4 pt-1 pb-2">
+                      <button
+                        onClick={() => {
+                          setRecentSearches([]);
+                          try { localStorage.removeItem(RECENT_KEY); } catch { /* ignoram */ }
+                        }}
+                        className="text-[10px] text-gray-600 hover:text-gray-400 transition-colors"
+                      >
+                        Sterge istoricul
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <div className="py-6 text-center">
+                  <Command className="w-6 h-6 text-gray-600 mx-auto mb-2" />
+                  <p className="text-xs text-gray-500">
+                    Scrie minim 2 caractere pentru a cauta
+                  </p>
+                  <p className="text-[10px] text-gray-600 mt-1">
+                    Firme, rapoarte, actiuni sau CUI numeric
+                  </p>
+                </div>
               </div>
             )}
           </div>

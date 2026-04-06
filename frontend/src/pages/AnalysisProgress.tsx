@@ -17,12 +17,13 @@ import { logAction } from "@/lib/logger";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import type { Job, WSMessage } from "@/lib/types";
 import { ANALYSIS_TYPE_LABELS } from "@/lib/constants";
+import { sendBrowserNotification } from "@/lib/notifications";
 
 export default function AnalysisProgress() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
   const [job, setJob] = useState<Job | null>(null);
-  const [logs, setLogs] = useState<{ text: string; type: string }[]>([]);
+  const [logs, setLogs] = useState<{ text: string; type: string; ts: string }[]>([]);
   const [reportId, setReportId] = useState<string | null>(null);
   const runStartRef = useRef<number | null>(null);
 
@@ -74,19 +75,30 @@ export default function AnalysisProgress() {
           : prev
       );
     }
+    // F2-8: Helper pentru timestamp curent
+    const nowTs = () => new Date().toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+    if (msg.type === "progress" && msg.step) {
+      setLogs((prev) => {
+        // Evita duplicate consecutive de steps identice
+        if (prev.length > 0 && prev[prev.length - 1].text === msg.step) return prev;
+        return [...prev, { text: msg.step!, type: "info", ts: nowTs() }];
+      });
+    }
     if (msg.type === "agent_complete") {
       setLogs((prev) => [
         ...prev,
         {
           text: `Agent ${msg.agent} finalizat (${msg.status})`,
           type: "success",
+          ts: nowTs(),
         },
       ]);
     }
     if (msg.type === "agent_warning") {
       setLogs((prev) => [
         ...prev,
-        { text: msg.message || "Warning", type: "warning" },
+        { text: msg.message || "Warning", type: "warning", ts: nowTs() },
       ]);
     }
     if (msg.type === "job_complete") {
@@ -97,8 +109,14 @@ export default function AnalysisProgress() {
       logAction("AnalysisProgress", "complete", { jobId: id, reportId: msg.report_id, formats: msg.formats });
       setLogs((prev) => [
         ...prev,
-        { text: `Analiza finalizata! Formate: ${(msg.formats || []).join(", ").toUpperCase() || "N/A"}`, type: "success" },
+        { text: `Analiza finalizata! Formate: ${(msg.formats || []).join(", ").toUpperCase() || "N/A"}`, type: "success", ts: nowTs() },
       ]);
+      // F3-9: Browser notification la finalizare analiza
+      sendBrowserNotification(
+        "Analiza finalizata",
+        "Raport disponibil — deschide pentru a vedea scorul",
+        msg.report_id ? `/report/${msg.report_id}` : undefined
+      );
     }
     if (msg.type === "job_failed") {
       setJob((prev) =>
@@ -109,7 +127,7 @@ export default function AnalysisProgress() {
       logAction("AnalysisProgress", "failed", { jobId: id, error: msg.error });
       setLogs((prev) => [
         ...prev,
-        { text: msg.error || "Eroare fatala", type: "error" },
+        { text: msg.error || "Eroare fatala", type: "error", ts: nowTs() },
       ]);
     }
   };
@@ -221,10 +239,10 @@ export default function AnalysisProgress() {
                     .then((res) => {
                       if (res.success) {
                         toast(`Sursa ${source.toUpperCase()} reinterogata cu succes`, "success");
-                        setLogs((prev) => [...prev, { text: `Retry ${source}: OK`, type: "success" }]);
+                        setLogs((prev) => [...prev, { text: `Retry ${source}: OK`, type: "success", ts: new Date().toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) }]);
                       } else {
                         toast(`Eroare ${source}: ${res.error || "necunoscuta"}`, "warning");
-                        setLogs((prev) => [...prev, { text: `Retry ${source}: ${res.error || "eroare"}`, type: "warning" }]);
+                        setLogs((prev) => [...prev, { text: `Retry ${source}: ${res.error || "eroare"}`, type: "warning", ts: new Date().toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) }]);
                       }
                     })
                     .catch(() => toast(`Eroare la reinterogarea sursei ${source}`, "error"));
@@ -272,7 +290,7 @@ export default function AnalysisProgress() {
             Nicio activitate inca...
           </p>
         ) : (
-          <div className="space-y-2 max-h-60 overflow-y-auto">
+          <div className="space-y-1.5 max-h-60 overflow-y-auto font-mono">
             {logs.map((log, i) => (
               <div
                 key={i}
@@ -287,7 +305,19 @@ export default function AnalysisProgress() {
                 {log.type === "error" && (
                   <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
                 )}
-                <span className="text-gray-400">{log.text}</span>
+                {log.type === "info" && (
+                  <span className="w-3.5 h-3.5 shrink-0 mt-0.5 text-blue-400 font-bold text-[10px] flex items-center justify-center">▸</span>
+                )}
+                <span className={clsx(
+                  "flex-1",
+                  log.type === "success" ? "text-green-300" :
+                  log.type === "warning" ? "text-yellow-300" :
+                  log.type === "error" ? "text-red-300" :
+                  "text-gray-400"
+                )}>{log.text}</span>
+                {log.ts && (
+                  <span className="text-[10px] text-gray-600 shrink-0">{log.ts}</span>
+                )}
               </div>
             ))}
           </div>

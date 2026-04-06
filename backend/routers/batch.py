@@ -56,6 +56,48 @@ async def _update_batch_progress(batch_id: str, progress: dict):
     )
 
 
+@router.post("/preview")
+async def preview_batch_csv(file: UploadFile = File(...)):
+    """Valideaza CSV fara a porni procesarea."""
+    content = await file.read()
+    lines = content.decode("utf-8", errors="replace").splitlines()
+    if not lines:
+        raise RISError(ErrorCode.VALIDATION_ERROR, "Fisier CSV gol")
+
+    valid: list[str] = []
+    invalid: list[dict] = []
+    seen: set[str] = set()
+
+    # Detecteaza si sari header-ul
+    first = lines[0].lower().replace('"', "").strip()
+    header_keywords = ["cui", "firma", "company", "denumire", "nume", "name", "cod"]
+    start_idx = 1 if any(kw in first for kw in header_keywords) else 0
+
+    for i, line in enumerate(lines[start_idx:], start_idx + 1):
+        parts = line.split(",")
+        cui_raw = parts[0].strip().strip('"') if parts else ""
+        if not cui_raw:
+            continue
+        cui_clean = cui_raw.upper().replace("RO", "").replace(" ", "")
+        if cui_clean in seen:
+            invalid.append({"line": i, "cui": cui_raw, "error": "duplicat"})
+            continue
+        seen.add(cui_clean)
+        result = validate_cui(cui_clean)
+        if result.get("valid"):
+            valid.append(cui_clean)
+        else:
+            invalid.append({"line": i, "cui": cui_raw, "error": result.get("error", "CUI invalid (MOD 11)")})
+
+    return {
+        "valid_count": len(valid),
+        "invalid_count": len(invalid),
+        "valid_cuis": valid[:5],
+        "invalid_entries": invalid[:10],
+        "estimated_time_minutes": len(valid) * 2,
+    }
+
+
 @router.post("", dependencies=[Depends(rate_limit_batch)])
 async def create_batch(
     file: UploadFile = File(...),
@@ -163,7 +205,7 @@ async def create_batch(
     )
 
     # Porneste executia in background
-    from backend.main import ws_manager
+    from backend.ws import ws_manager
     asyncio.create_task(_run_batch(batch_id, cuis, analysis_type, report_level, ws_manager, refresh=refresh))
 
     # 10E M8.2: Include validation warnings in response
@@ -238,7 +280,7 @@ async def resume_batch(batch_id: str):
     # 10F M8.5: Preserve refresh flag from original batch
     refresh = input_data.get("refresh", False)
 
-    from backend.main import ws_manager
+    from backend.ws import ws_manager
     asyncio.create_task(_run_batch(batch_id, failed_cuis, analysis_type, report_level, ws_manager, refresh=refresh))
 
     return {

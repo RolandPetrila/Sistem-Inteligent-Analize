@@ -103,6 +103,16 @@ function WizardProgress({ currentStep }: { currentStep: Step }) {
   );
 }
 
+// F2-6: Cheie pentru draft wizard in sessionStorage
+const DRAFT_KEY = "ris_wizard_draft";
+
+interface WizardDraft {
+  selectedType: string | null;
+  answers: Record<string, string>;
+  level: number;
+  step: Step;
+}
+
 export default function NewAnalysis() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -120,18 +130,54 @@ export default function NewAnalysis() {
   useEffect(() => {
     api.getAnalysisTypes().then((loaded) => {
       setTypes(loaded);
-      // Auto-select FULL_COMPANY_PROFILE and pre-fill CUI if provided
       const cuiParam = searchParams.get("cui");
       if (cuiParam && loaded.length > 0) {
+        // URL param are prioritate fata de draft salvat
         const fullProfile = loaded.find((t) => t.type === "FULL_COMPANY_PROFILE");
         if (fullProfile) {
           setSelected(fullProfile);
           setAnswers({ cui: cuiParam });
           setStep(fullProfile.questions.length > 0 ? "questions" : "level");
         }
+        return;
+      }
+      // F2-6: Restaureaza draft din sessionStorage daca nu exista param URL
+      try {
+        const raw = sessionStorage.getItem(DRAFT_KEY);
+        if (raw) {
+          const draft: WizardDraft = JSON.parse(raw);
+          if (draft.selectedType) {
+            const found = loaded.find((t) => t.type === draft.selectedType);
+            if (found) {
+              setSelected(found);
+              setAnswers(draft.answers || {});
+              setLevel(draft.level || 2);
+              setStep(draft.step || "type");
+              toast("Draft restaurat", "info");
+            }
+          }
+        }
+      } catch {
+        // draft corupt — ignoram
       }
     }).catch(() => toast("Eroare la incarcarea tipurilor de analiza", "error"));
   }, []);
+
+  // F2-6: Salveaza draft la fiecare schimbare de state
+  useEffect(() => {
+    if (!selected) return;
+    const draft: WizardDraft = {
+      selectedType: selected.type,
+      answers,
+      level,
+      step,
+    };
+    try {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    } catch {
+      // sessionStorage indisponibil — ignoram
+    }
+  }, [selected, answers, level, step]);
 
   const handleSelectType = (t: AnalysisTypeInfo) => {
     if (t.deferred) return;
@@ -183,6 +229,8 @@ export default function NewAnalysis() {
       // Auto-start the job
       await api.startJob(job.id).catch(() => toast("Job creat, dar pornirea automata a esuat", "warning"));
       logAction("NewAnalysis", "job_created", { jobId: job.id });
+      // F2-6: Sterge draft dupa submit reusit
+      sessionStorage.removeItem(DRAFT_KEY);
       navigate(`/analysis/${job.id}`);
     } catch {
       logAction("NewAnalysis", "submit_failed", { type: selected.type });

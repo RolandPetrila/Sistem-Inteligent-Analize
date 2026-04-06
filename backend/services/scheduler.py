@@ -50,13 +50,24 @@ async def _save_checkpoint(key: str, status: str = "OK"):
         logger.debug(f"[scheduler] Checkpoint save failed for {key}: {e}")
 
 
+_task: asyncio.Task | None = None
+
+
+async def get_scheduler_status() -> dict:
+    """Returneaza statusul curent al scheduler-ului (pentru health/status endpoint)."""
+    return {
+        "status": "ok" if _task is not None and not _task.done() else "stopped",
+        "running": _task is not None and not _task.done(),
+    }
+
+
 async def start_scheduler() -> asyncio.Task:
     """Porneste scheduler-ul in background. Returneaza task-ul pentru cleanup."""
-    global _running
+    global _running, _task
     _running = True
-    task = asyncio.create_task(_scheduler_loop())
+    _task = asyncio.create_task(_scheduler_loop())
     logger.info("[scheduler] Started — monitoring every 6h, backup every 24h, cache cleanup every 12h")
-    return task
+    return _task
 
 
 async def stop_scheduler(task: asyncio.Task):
@@ -159,6 +170,12 @@ async def _run_backup_safe():
         if backup_path.exists():
             return
 
+        # WAL checkpoint before backup — ensures WAL is flushed into main DB
+        import aiosqlite
+        async with aiosqlite.connect(str(db_path)) as conn:
+            await conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            logger.info("[scheduler] WAL checkpoint completed")
+
         # sqlite3.backup() — safe chiar daca DB e in uz (WAL mode)
         src = sqlite3.connect(str(db_path))
         dst = sqlite3.connect(str(backup_path))
@@ -166,6 +183,11 @@ async def _run_backup_safe():
         dst.close()
         src.close()
         logger.info(f"[scheduler] DB backup created: {backup_path}")
+
+        # Incremental VACUUM — recupareaza spatiu dupa DELETE-uri (non-blocking)
+        async with aiosqlite.connect(str(db_path)) as conn:
+            await conn.execute("PRAGMA incremental_vacuum(100)")
+            logger.debug("[scheduler] Incremental vacuum completed")
 
         # Rotatie: pastreaza ultimele 7 zile
         backups = sorted(backup_dir.glob("ris_*.db"), reverse=True)

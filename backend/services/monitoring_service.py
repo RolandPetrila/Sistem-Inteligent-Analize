@@ -111,7 +111,8 @@ async def _is_duplicate_alert(alert_id: str, change_type: str, new_val) -> bool:
             (alert_id, change_type, str(new_val)),
         )
         return existing is not None
-    except Exception:
+    except Exception as e:
+        logger.debug(f"[monitoring] dedup check failed: {e}")
         return False
 
 

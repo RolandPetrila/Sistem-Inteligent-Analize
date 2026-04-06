@@ -92,6 +92,35 @@ async def check_all_now():
     return {"checked": len(results), "alerts_triggered": sum(1 for r in results if r.get("changed"))}
 
 
+@router.get("/history")
+async def get_monitoring_history(limit: int = 20):
+    """Returneaza ultimele N triggere din monitoring_audit."""
+    try:
+        rows = await db.fetch_all(
+            """SELECT ma.*, c.name as company_name
+               FROM monitoring_audit ma
+               LEFT JOIN companies c ON ma.company_id = c.id
+               ORDER BY ma.triggered_at DESC LIMIT ?""",
+            (limit,),
+        )
+        return {"history": [dict(r) for r in rows]}
+    except Exception as e:
+        logger.debug(f"[monitoring] history query error: {e}")
+        # Incearca cu created_at daca triggered_at nu exista
+        try:
+            rows = await db.fetch_all(
+                """SELECT ma.*, c.name as company_name
+                   FROM monitoring_audit ma
+                   LEFT JOIN companies c ON ma.company_id = c.id
+                   ORDER BY ma.created_at DESC LIMIT ?""",
+                (limit,),
+            )
+            return {"history": [dict(r) for r in rows]}
+        except Exception as e2:
+            logger.debug(f"[monitoring] history fallback error: {e2}")
+            return {"history": []}
+
+
 @router.get("/health")
 async def monitoring_health():
     """10E M9.4: Monitoring health — last check per alert, failed count, next scheduled."""

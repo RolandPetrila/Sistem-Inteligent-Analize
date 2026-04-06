@@ -138,13 +138,57 @@ class SynthesisAgent(BaseAgent):
         # 10B M4.3: Cross-Section Coherence — verify consistency between sections
         report_sections = self._check_cross_section_coherence(report_sections, verified_data)
 
+        # F2-15: Generate 3 key takeaways from the full report
+        full_report_text = "\n\n".join(
+            f"{s['title']}:\n{s['content']}"
+            for s in report_sections.values()
+            if s.get("content")
+        )
+        key_takeaways = await self._generate_key_takeaways(full_report_text)
+
         logger.info(f"[synthesis] Done: {len(report_sections)}/{total} sections generated")
 
         return {
             "report_sections": report_sections,
+            "key_takeaways": key_takeaways,
             "current_step": f"Sinteza completa: {len(report_sections)} sectiuni",
             "progress": 0.75,
         }
+
+    async def _generate_key_takeaways(self, full_report_text: str) -> str:
+        """F2-15: Genereaza 3 concluzii cheie pe baza raportului complet. Foloseste Groq (provider rapid)."""
+        prompt = f"""Analizeaza raportul urmator si genereaza exact 3 concluzii cheie.
+
+Raport (extras):
+{full_report_text[:3000]}
+
+Format OBLIGATORIU (exact 3 bullets, nu mai mult, nu mai putin):
+\u2022 [Concluzie 1 \u2014 max 20 cuvinte, specific si actionabil, incepe cu un fapt concret]
+\u2022 [Concluzie 2 \u2014 max 20 cuvinte, specific si actionabil]
+\u2022 [Concluzie 3 \u2014 max 20 cuvinte, orientat spre decizie]
+
+Reguli:
+- Fiecare bullet incepe cu un fapt numeric sau o constatare concreta
+- NU repeta informatii evidente sau generale
+- Orientat spre decizie: ce ar trebui sa stie un decident
+- Limba: Romana
+- NU adauga alt text in afara de cele 3 bullets"""
+
+        try:
+            result = await self._generate_with_groq(prompt)
+            if result:
+                return result.strip()
+        except Exception as e:
+            logger.warning(f"[synthesis] Key takeaways Groq failed: {e}")
+
+        try:
+            result = await self._generate_with_gemini(prompt)
+            if result:
+                return result.strip()
+        except Exception as e:
+            logger.warning(f"[synthesis] Key takeaways generation failed: {e}")
+
+        return ""
 
     def _estimate_prompt_tokens(self, data: dict, word_target: int) -> int:
         """Pre-check: estimate token count before building the full prompt.

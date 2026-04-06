@@ -17,6 +17,15 @@ const SORT_OPTIONS = [
   { value: "analysis_count", label: "Nr. analize" },
 ];
 
+const JUDETE_RO = [
+  "Alba", "Arad", "Arges", "Bacau", "Bihor", "Bistrita-Nasaud", "Botosani",
+  "Brasov", "Braila", "Buzau", "Caras-Severin", "Cluj", "Constanta", "Covasna",
+  "Dambovita", "Dolj", "Galati", "Giurgiu", "Gorj", "Harghita", "Hunedoara",
+  "Ialomita", "Iasi", "Ilfov", "Maramures", "Mehedinti", "Mures", "Neamt",
+  "Olt", "Prahova", "Salaj", "Satu Mare", "Sibiu", "Suceava", "Teleorman",
+  "Timis", "Tulcea", "Vaslui", "Valcea", "Vrancea", "Bucuresti",
+];
+
 const PAGE_SIZE = 20;
 
 export default function Companies() {
@@ -31,15 +40,18 @@ export default function Companies() {
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
   const sort = searchParams.get("sort") || "last_analyzed";
+  const filterCounty = searchParams.get("county") || "";
+  const filterCaen = searchParams.get("caen") || "";
+  const filterRiskScore = searchParams.get("risk_score") || "";
 
   // 10C M12.4: Debounced search — auto-search after 300ms typing pause
   const debouncedSearch = useDebounce(search, 300);
 
-  const loadCompanies = (searchTerm?: string, pageNum = 0, sortParam = sort) => {
+  const loadCompanies = (searchTerm?: string, pageNum = 0, sortParam = sort, county = filterCounty, caen = filterCaen, riskScore = filterRiskScore) => {
     setLoading(true);
     const fetchFn = showFavoritesOnly
       ? api.listFavorites()
-      : api.listCompanies({ search: searchTerm, limit: PAGE_SIZE, offset: pageNum * PAGE_SIZE, sort: sortParam });
+      : api.listCompanies({ search: searchTerm, limit: PAGE_SIZE, offset: pageNum * PAGE_SIZE, sort: sortParam, county: county || undefined, caen: caen || undefined, risk_score: riskScore || undefined });
     fetchFn
       .then((res) => {
         setCompanies(res.companies);
@@ -66,6 +78,12 @@ export default function Companies() {
     loadCompanies(debouncedSearch, 0, sort);
   }, [sort]);
 
+  // Reload when advanced filters change
+  useEffect(() => {
+    setPage(0);
+    loadCompanies(debouncedSearch, 0, sort, filterCounty, filterCaen, filterRiskScore);
+  }, [filterCounty, filterCaen, filterRiskScore]);
+
   // Reload when favorites filter changes
   useEffect(() => {
     setPage(0);
@@ -76,6 +94,16 @@ export default function Companies() {
     e.preventDefault();
     setPage(0);
     loadCompanies(search, 0);
+  };
+
+  const updateFilter = (key: string, value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (value) {
+      next.set(key, value);
+    } else {
+      next.delete(key);
+    }
+    setSearchParams(next);
   };
 
   const [_isPending, startTransition] = useTransition();
@@ -164,7 +192,7 @@ export default function Companies() {
         {/* Sort dropdown — persisted in URL */}
         <select
           value={sort}
-          onChange={(e) => setSearchParams({ sort: e.target.value })}
+          onChange={(e) => updateFilter("sort", e.target.value)}
           className="bg-dark-surface border border-dark-border rounded px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-accent-primary/50"
         >
           {SORT_OPTIONS.map((opt) => (
@@ -173,6 +201,60 @@ export default function Companies() {
             </option>
           ))}
         </select>
+
+        {/* Filtru judet */}
+        <select
+          value={filterCounty}
+          onChange={(e) => updateFilter("county", e.target.value)}
+          className="bg-dark-surface border border-dark-border rounded px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-accent-primary/50"
+          title="Filtru judet"
+        >
+          <option value="">Toate judetele</option>
+          {JUDETE_RO.map((j) => (
+            <option key={j} value={j}>{j}</option>
+          ))}
+        </select>
+
+        {/* Filtru CAEN */}
+        <input
+          type="text"
+          value={filterCaen}
+          onChange={(e) => updateFilter("caen", e.target.value)}
+          maxLength={4}
+          placeholder="CAEN (ex: 6201)"
+          className="bg-dark-surface border border-dark-border rounded px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-accent-primary/50 w-36"
+          title="Filtru cod CAEN"
+        />
+
+        {/* Filtru scor risc */}
+        <select
+          value={filterRiskScore}
+          onChange={(e) => updateFilter("risk_score", e.target.value)}
+          className="bg-dark-surface border border-dark-border rounded px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-accent-primary/50"
+          title="Filtru scor risc"
+        >
+          <option value="">Orice scor</option>
+          <option value="Verde">Verde (70+)</option>
+          <option value="Galben">Galben (40-69)</option>
+          <option value="Rosu">Rosu (sub 40)</option>
+        </select>
+
+        {/* Sterge filtre avansate */}
+        {(filterCounty || filterCaen || filterRiskScore) && (
+          <button
+            type="button"
+            onClick={() => {
+              const next = new URLSearchParams(searchParams);
+              next.delete("county");
+              next.delete("caen");
+              next.delete("risk_score");
+              setSearchParams(next);
+            }}
+            className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1 rounded border border-dark-border bg-dark-surface"
+          >
+            Sterge filtre
+          </button>
+        )}
       </div>
 
       {/* Search */}

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Bell, BellOff, Trash2, RefreshCw, Plus } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
+import { Bell, BellOff, Trash2, RefreshCw, Plus, History } from "lucide-react";
 import clsx from "clsx";
 import { useToast } from "@/components/Toast";
 import { api } from "@/lib/api";
@@ -17,11 +17,31 @@ interface MonitoringAlert {
   telegram_notify: boolean;
 }
 
+// F2-9: Mapare frecventa la eticheta lizibila
+const FREQUENCY_LABELS: Record<string, string> = {
+  "6h": "La 6h",
+  "12h": "La 12h",
+  "24h": "Zilnic",
+  "168h": "Saptamanal",
+};
+
 interface CompanyOption {
   id: string;
   name: string;
   cui: string;
 }
+
+interface HistoryEntry {
+  id?: string;
+  company_id?: string;
+  company_name?: string;
+  message?: string;
+  severity?: string;
+  triggered_at?: string;
+  created_at?: string;
+}
+
+type HistoryFilter = "zi" | "saptamana" | "toate";
 
 export default function Monitoring() {
   const { toast } = useToast();
@@ -30,15 +50,21 @@ export default function Monitoring() {
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState("");
+  // F2-9: Frecventa de verificare configurabila
+  const [frequency, setFrequency] = useState("6h");
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("saptamana");
 
   const loadData = async () => {
     try {
-      const [alertsRes, companiesRes] = await Promise.all([
+      const [alertsRes, companiesRes, historyRes] = await Promise.all([
         api.listMonitoring(),
         api.listCompanies({ limit: 100 }),
+        api.getMonitoringHistory(50).catch(() => ({ history: [] })),
       ]);
       setAlerts((alertsRes as { alerts: MonitoringAlert[] }).alerts || []);
       setCompanies((companiesRes.companies || []) as unknown as CompanyOption[]);
+      setHistory(historyRes.history as HistoryEntry[]);
       logAction("Monitoring", "loaded", { alerts: (alertsRes as { alerts: unknown[] }).alerts?.length });
     } catch {
       toast("Eroare la incarcarea datelor de monitorizare", "error");
@@ -51,9 +77,10 @@ export default function Monitoring() {
 
   const addAlert = async () => {
     if (!selectedCompany) return;
-    logAction("Monitoring", "addAlert", { companyId: selectedCompany });
+    logAction("Monitoring", "addAlert", { companyId: selectedCompany, frequency });
     try {
-      await api.createMonitoring({ company_id: selectedCompany });
+      // F2-9: Pasam frecventa selectata
+      await api.createMonitoring({ company_id: selectedCompany, check_frequency: frequency });
       setSelectedCompany("");
       loadData();
     } catch { toast("Eroare la adaugarea alertei", "error"); }
@@ -87,6 +114,18 @@ export default function Monitoring() {
     finally { setChecking(false); }
   };
 
+  // Filtrare istoric alerte
+  const filteredHistory = useMemo(() => {
+    if (historyFilter === "toate") return history;
+    const now = Date.now();
+    const cutoff = historyFilter === "zi" ? now - 86400_000 : now - 7 * 86400_000;
+    return history.filter((h) => {
+      const ts = h.triggered_at || h.created_at || "";
+      if (!ts) return false;
+      return new Date(ts).getTime() >= cutoff;
+    });
+  }, [history, historyFilter]);
+
   // Firme disponibile (care nu au deja monitorizare)
   const monitoredIds = new Set(alerts.map((a) => a.company_id));
   const availableCompanies = companies.filter((c) => !monitoredIds.has(c.id));
@@ -116,11 +155,11 @@ export default function Monitoring() {
 
       {/* Add new */}
       {availableCompanies.length > 0 && (
-        <div className="card flex items-center gap-3">
+        <div className="card flex flex-wrap items-center gap-3">
           <select
             value={selectedCompany}
             onChange={(e) => setSelectedCompany(e.target.value)}
-            className="flex-1 bg-dark-surface border border-dark-border rounded-lg px-3 py-2
+            className="flex-1 min-w-[200px] bg-dark-surface border border-dark-border rounded-lg px-3 py-2
                        text-white text-sm focus:border-accent-primary focus:outline-none"
           >
             <option value="">Selecteaza firma de monitorizat...</option>
@@ -129,6 +168,19 @@ export default function Monitoring() {
                 {c.name} (CUI {c.cui})
               </option>
             ))}
+          </select>
+          {/* F2-9: Select frecventa verificare */}
+          <select
+            value={frequency}
+            onChange={(e) => setFrequency(e.target.value)}
+            className="bg-dark-surface border border-dark-border rounded-lg px-3 py-2
+                       text-white text-sm focus:border-accent-primary focus:outline-none"
+            title="Frecventa de verificare"
+          >
+            <option value="6h">La 6 ore</option>
+            <option value="12h">La 12 ore</option>
+            <option value="24h">Zilnic</option>
+            <option value="168h">Saptamanal</option>
           </select>
           <button onClick={addAlert} disabled={!selectedCompany} className="btn-primary flex items-center gap-1.5 text-sm">
             <Plus className="w-4 h-4" /> Adauga
@@ -156,7 +208,7 @@ export default function Monitoring() {
                 <div>
                   <p className="text-sm font-medium text-white">{alert.company_name || "N/A"}</p>
                   <p className="text-xs text-gray-500">
-                    CUI {alert.cui} | {alert.check_frequency}
+                    CUI {alert.cui} | {FREQUENCY_LABELS[alert.check_frequency] || alert.check_frequency}
                     {alert.last_checked_at && ` | Ultima verificare: ${new Date(alert.last_checked_at).toLocaleDateString("ro-RO")}`}
                   </p>
                 </div>
@@ -176,6 +228,69 @@ export default function Monitoring() {
           ))}
         </div>
       )}
+      {/* Istoric Alerte */}
+      <div className="space-y-3 mt-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <History className="w-4 h-4 text-accent-secondary" />
+            <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">Istoric Alerte</h2>
+          </div>
+          <div className="flex gap-1">
+            {(["zi", "saptamana", "toate"] as HistoryFilter[]).map((f) => (
+              <button
+                key={f}
+                onClick={() => setHistoryFilter(f)}
+                className={clsx(
+                  "text-xs px-2.5 py-1 rounded transition-colors",
+                  historyFilter === f
+                    ? "bg-accent-primary/20 text-accent-secondary border border-accent-primary/30"
+                    : "bg-dark-surface text-gray-500 border border-dark-border hover:text-gray-300"
+                )}
+              >
+                {f === "zi" ? "Ultima zi" : f === "saptamana" ? "Ultima saptamana" : "Toate"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {filteredHistory.length === 0 ? (
+          <div className="card text-center py-8">
+            <History className="w-8 h-8 text-gray-700 mx-auto mb-2" />
+            <p className="text-gray-600 text-sm">Niciun eveniment in intervalul selectat</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredHistory.map((entry, i) => {
+              const sev = (entry.severity || "").toUpperCase();
+              const severityClass =
+                sev === "RED"
+                  ? "text-red-400 bg-red-500/10 border border-red-500/20"
+                  : sev === "YELLOW"
+                  ? "text-yellow-400 bg-yellow-500/10 border border-yellow-500/20"
+                  : "text-green-400 bg-green-500/10 border border-green-500/20";
+              const ts = entry.triggered_at || entry.created_at || "";
+              return (
+                <div key={entry.id || i} className="card flex items-start gap-3 py-3">
+                  <span className={clsx("text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 mt-0.5", severityClass)}>
+                    {sev || "INFO"}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-300 font-medium">
+                      {entry.company_name || `Companie ${entry.company_id?.slice(0, 8) || "N/A"}`}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{entry.message || "—"}</p>
+                  </div>
+                  {ts && (
+                    <span className="text-[10px] text-gray-600 shrink-0 whitespace-nowrap">
+                      {new Date(ts).toLocaleDateString("ro-RO", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

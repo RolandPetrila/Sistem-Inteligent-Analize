@@ -16,6 +16,7 @@ import {
   Star,
   AlertTriangle,
   Loader2,
+  Download,
 } from "lucide-react";
 import clsx from "clsx";
 import { api } from "@/lib/api";
@@ -55,6 +56,32 @@ interface CompanyFull {
   score_history: ScoreEntry[];
 }
 
+// F2-4: SVG Sparkline pentru istoricul scorului (zero dependinte externe)
+function ScoreSparkline({ history }: { history: Array<{ numeric_score: number; recorded_at: string }> }) {
+  if (!history || history.length < 2) return null;
+  const scores = history.map(h => h.numeric_score ?? 0);
+  const min = Math.min(...scores);
+  const max = Math.max(...scores);
+  const W = 200, H = 60, PAD = 4;
+  const points = scores.map((s, i) => {
+    const x = PAD + (i / (scores.length - 1)) * (W - PAD * 2);
+    const y = H - PAD - ((s - min) / (max - min || 1)) * (H - PAD * 2);
+    return `${x},${y}`;
+  }).join(" ");
+  const last = scores[scores.length - 1];
+  const color = last >= 70 ? "#22c55e" : last >= 40 ? "#eab308" : "#ef4444";
+  return (
+    <svg width={W} height={H} className="overflow-visible">
+      <polyline points={points} fill="none" stroke={color} strokeWidth="2" />
+      {scores.map((s, i) => {
+        const x = PAD + (i / (scores.length - 1)) * (W - PAD * 2);
+        const y = H - PAD - ((s - min) / (max - min || 1)) * (H - PAD * 2);
+        return <circle key={i} cx={x} cy={y} r={3} fill={color} />;
+      })}
+    </svg>
+  );
+}
+
 const riskBadge = (score: string | null) => {
   const map: Record<string, string> = {
     Verde: "bg-green-500/15 text-green-400 border-green-500/30",
@@ -74,6 +101,10 @@ export default function CompanyDetail() {
   const [monitoringLoading, setMonitoringLoading] = useState(false);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
+  // F3-3: Tags & Note
+  const [tags, setTags] = useState<string[]>([]);
+  const [note, setNote] = useState("");
+  const [newTag, setNewTag] = useState("");
 
   useEffect(() => {
     if (!id) return;
@@ -96,6 +127,15 @@ export default function CompanyDetail() {
       .then((res) => setTimeline(res.events))
       .catch(() => { /* timeline is optional */ })
       .finally(() => setTimelineLoading(false));
+
+    // F3-3: Fetch tags & note
+    Promise.all([
+      api.getCompanyTags(id).catch(() => ({ tags: [] as string[] })),
+      api.getCompanyNote(id).catch(() => ({ note: "", updated_at: null })),
+    ]).then(([tagsRes, noteRes]) => {
+      setTags(tagsRes.tags || []);
+      setNote(noteRes.note || "");
+    });
   }, [id]);
 
   const handleToggleFavorite = () => {
@@ -112,6 +152,40 @@ export default function CompanyDetail() {
   const handleNewAnalysis = () => {
     if (!company?.cui) return;
     navigate(`/new-analysis?cui=${company.cui}&name=${encodeURIComponent(company.name)}`);
+  };
+
+  // F3-3: Tag handlers
+  const handleAddTag = async () => {
+    const trimmed = newTag.trim();
+    if (!trimmed || !id) return;
+    if (tags.includes(trimmed)) { setNewTag(""); return; }
+    try {
+      await api.addCompanyTag(id, trimmed);
+      setTags([trimmed, ...tags]);
+      setNewTag("");
+    } catch {
+      toast("Eroare la adaugarea tag-ului", "error");
+    }
+  };
+
+  const handleRemoveTag = async (tag: string) => {
+    if (!id) return;
+    try {
+      await api.removeCompanyTag(id, tag);
+      setTags(tags.filter((t) => t !== tag));
+    } catch {
+      toast("Eroare la stergerea tag-ului", "error");
+    }
+  };
+
+  const handleSaveNote = async () => {
+    if (!id) return;
+    try {
+      await api.upsertCompanyNote(id, note);
+      toast("Nota salvata", "success");
+    } catch {
+      toast("Eroare la salvarea notei", "error");
+    }
   };
 
   if (loading) {
@@ -406,6 +480,19 @@ export default function CompanyDetail() {
           <h3 className="text-sm font-semibold text-gray-400 uppercase mb-3">
             Istoric Scor ({company.score_history.length} inregistrari)
           </h3>
+          {/* F2-4: Sparkline SVG trend */}
+          <div className="mb-4 flex items-center gap-3">
+            <ScoreSparkline
+              history={[...company.score_history].reverse().map(e => ({
+                numeric_score: e.numeric_score ?? 0,
+                recorded_at: e.recorded_at,
+              }))}
+            />
+            <div className="text-xs text-gray-600 leading-relaxed">
+              <p>Evolutie scor</p>
+              <p className="font-mono">{[...company.score_history].reverse()[0]?.numeric_score ?? "—"} → {company.score_history[0]?.numeric_score ?? "—"}</p>
+            </div>
+          </div>
           <div className="flex items-end gap-1 h-24">
             {[...company.score_history].reverse().map((entry, i) => {
               const score = entry.numeric_score ?? 0;
@@ -451,15 +538,17 @@ export default function CompanyDetail() {
         ) : (
           <div className="space-y-2">
             {company.reports.map((report) => (
-              <Link
+              <div
                 key={report.id}
-                to={`/report/${report.id}`}
                 className="flex items-center justify-between p-3 bg-dark-surface rounded-lg hover:bg-dark-hover transition-colors group"
               >
-                <div className="flex items-center gap-3">
-                  <FileText className="w-4 h-4 text-gray-500 group-hover:text-accent-secondary" />
-                  <div>
-                    <p className="text-sm text-gray-300 group-hover:text-white">
+                <Link
+                  to={`/report/${report.id}`}
+                  className="flex items-center gap-3 flex-1 min-w-0"
+                >
+                  <FileText className="w-4 h-4 text-gray-500 group-hover:text-accent-secondary shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm text-gray-300 group-hover:text-white truncate">
                       {report.title ||
                         ANALYSIS_TYPE_LABELS[report.report_type] ||
                         report.report_type}
@@ -469,22 +558,101 @@ export default function CompanyDetail() {
                       {new Date(report.created_at).toLocaleDateString("ro-RO")}
                     </p>
                   </div>
-                </div>
+                </Link>
 
-                {report.risk_score && (
-                  <span
-                    className={clsx(
-                      "text-xs font-medium px-2 py-0.5 rounded border",
-                      riskBadge(report.risk_score)
-                    )}
-                  >
-                    {report.risk_score}
-                  </span>
-                )}
-              </Link>
+                <div className="flex items-center gap-2 shrink-0 ml-2">
+                  {/* F2-5: Download direct PDF/Excel/HTML */}
+                  <div className="flex items-center gap-1">
+                    <Download className="w-3 h-3 text-gray-600" />
+                    {(["pdf", "excel", "html"] as const).map(fmt => (
+                      <a
+                        key={fmt}
+                        href={`/api/reports/${report.id}/download/${fmt}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        className="text-xs text-gray-500 hover:text-white uppercase px-1 py-0.5 rounded hover:bg-dark-border/50 transition-colors"
+                        title={`Descarca ${fmt.toUpperCase()}`}
+                      >
+                        {fmt}
+                      </a>
+                    ))}
+                  </div>
+                  {report.risk_score && (
+                    <span
+                      className={clsx(
+                        "text-xs font-medium px-2 py-0.5 rounded border",
+                        riskBadge(report.risk_score)
+                      )}
+                    >
+                      {report.risk_score}
+                    </span>
+                  )}
+                </div>
+              </div>
             ))}
           </div>
         )}
+      </div>
+
+      {/* F3-3: Note & Tag-uri */}
+      <div className="card space-y-4">
+        <h3 className="text-sm font-semibold text-gray-400 uppercase">Note &amp; Tag-uri</h3>
+
+        {/* Tags */}
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2 min-h-[28px]">
+            {tags.map((t) => (
+              <span
+                key={t}
+                className="inline-flex items-center gap-1 px-2 py-1 bg-accent-primary/20 text-accent-primary text-xs rounded-full"
+              >
+                {t}
+                <button
+                  onClick={() => handleRemoveTag(t)}
+                  className="hover:text-white leading-none"
+                  aria-label={`Sterge tag ${t}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {tags.length === 0 && (
+              <span className="text-xs text-gray-600 italic">Niciun tag adaugat</span>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <input
+              value={newTag}
+              onChange={(e) => setNewTag(e.target.value.slice(0, 30))}
+              onKeyDown={(e) => e.key === "Enter" && handleAddTag()}
+              placeholder="Tag nou (max 30 caract.) — Enter pentru adaugare"
+              maxLength={30}
+              className="flex-1 bg-dark-surface border border-dark-border rounded px-2 py-1 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-primary"
+            />
+            <button
+              onClick={handleAddTag}
+              className="btn-secondary text-sm px-3"
+            >
+              Adauga
+            </button>
+          </div>
+        </div>
+
+        {/* Nota interna */}
+        <div className="space-y-1.5">
+          <label className="text-xs text-gray-500">Nota interna</label>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value.slice(0, 2000))}
+            onBlur={handleSaveNote}
+            placeholder="Adauga o nota despre aceasta firma..."
+            rows={3}
+            maxLength={2000}
+            className="w-full bg-dark-surface border border-dark-border rounded px-3 py-2 text-sm text-white resize-none placeholder-gray-600 focus:outline-none focus:border-accent-primary"
+          />
+          <p className="text-xs text-gray-600">{note.length}/2000 — salvat automat la pierderea focusului</p>
+        </div>
       </div>
 
       {/* N4: Timeline */}
