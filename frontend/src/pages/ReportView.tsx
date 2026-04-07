@@ -705,7 +705,7 @@ export default function ReportView() {
           className="flex items-center justify-between w-full"
         >
           <h3 className="text-sm font-semibold text-gray-400 uppercase">
-            Surse Accesate ({report.sources.length})
+            Surse Accesate ({(report.sources ?? []).length})
           </h3>
           {sourcesOpen ? (
             <ChevronDown className="w-4 h-4 text-gray-500" />
@@ -715,7 +715,7 @@ export default function ReportView() {
         </button>
         {sourcesOpen && (
           <div className="mt-3 space-y-2">
-            {report.sources.map((src, i) => (
+            {(report.sources ?? []).map((src, i) => (
               <div
                 key={i}
                 className="flex items-center justify-between text-sm p-2 bg-dark-surface rounded"
