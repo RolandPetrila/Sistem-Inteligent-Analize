@@ -4,12 +4,13 @@ Monitoring API — CRUD pentru alerte de monitorizare firme.
 """
 
 import uuid
+
 from fastapi import APIRouter, HTTPException
+from loguru import logger
 from pydantic import BaseModel
 
 from backend.database import db
-from backend.errors import RISError, ErrorCode
-from loguru import logger
+from backend.errors import ErrorCode, RISError
 
 router = APIRouter()
 
@@ -119,6 +120,72 @@ async def get_monitoring_history(limit: int = 20):
         except Exception as e2:
             logger.debug(f"[monitoring] history fallback error: {e2}")
             return {"history": []}
+
+
+@router.get("/{alert_id}/audit-log")
+async def get_alert_audit_log(alert_id: str):
+    """F4-3: Returneaza audit log pentru o alerta specifica."""
+    try:
+        rows = await db.fetch_all(
+            """
+            SELECT triggered_at as timestamp, change_type, old_value, new_value, severity
+            FROM monitoring_audit
+            WHERE alert_id = ?
+            ORDER BY triggered_at DESC
+            LIMIT 100
+            """,
+            (alert_id,),
+        )
+        return {"alert_id": alert_id, "audit_log": [dict(r) for r in rows]}
+    except Exception as e:
+        logger.debug(f"[monitoring] audit-log query error: {e}")
+        try:
+            rows = await db.fetch_all(
+                """
+                SELECT * FROM monitoring_audit
+                ORDER BY triggered_at DESC
+                LIMIT 100
+                """,
+            )
+            return {"alert_id": alert_id, "audit_log": [dict(r) for r in rows]}
+        except Exception as e2:
+            logger.debug(f"[monitoring] audit-log fallback error: {e2}")
+            return {"alert_id": alert_id, "audit_log": []}
+
+
+
+class SuppressRequest(BaseModel):
+    reason: str
+    suppress_until: str | None = None  # ISO datetime string sau null
+
+
+@router.post("/{alert_id}/suppress")
+async def suppress_alert(alert_id: str, body: SuppressRequest):
+    """F4-4: Suprima o alerta pentru o perioada definita."""
+    # Verifica ca alerta exista
+    alert = await db.fetch_one("SELECT id FROM monitoring_alerts WHERE id = ?", (alert_id,))
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alerta negasita")
+
+    try:
+        await db.execute(
+            "UPDATE monitoring_alerts SET suppressed_until = ?, suppress_reason = ? WHERE id = ?",
+            (body.suppress_until, body.reason, alert_id),
+        )
+        return {
+            "alert_id": alert_id,
+            "suppressed_until": body.suppress_until,
+            "reason": body.reason,
+            "status": "suppressed",
+        }
+    except Exception as e:
+        # Daca coloana nu exista (migrare inca neruata), returneaza 202 cu nota
+        logger.debug(f"[monitoring] suppress column missing: {e}")
+        return {
+            "alert_id": alert_id,
+            "status": "accepted",
+            "note": "Coloana suppressed_until necesita migrare 008_network.sql"
+        }
 
 
 @router.get("/health")

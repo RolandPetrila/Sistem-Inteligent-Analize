@@ -4,14 +4,13 @@ Foloseste tabelul data_cache din SQLite.
 9A: Hit/miss tracking per source.
 """
 
-import json
 import hashlib
+import json
 import threading
-from datetime import datetime
 
 from loguru import logger
-from backend.database import db
 
+from backend.database import db
 
 # 10A M10.2: Cache schema version — increment to auto-invalidate stale entries
 CACHE_SCHEMA_VERSION = 1
@@ -54,17 +53,17 @@ class _L1Cache:
                 del self._store[key]
             return None
 
-    def put(self, key: str, value: dict):
+    def put(self, key: str, value: dict) -> None:
         with self._lock:
             self._store[key] = (_time_now(), value)
             self._store.move_to_end(key)
             while len(self._store) > self._max_size:
                 self._store.popitem(last=False)
 
-    def invalidate(self, key: str):
+    def invalidate(self, key: str) -> None:
         self._store.pop(key, None)
 
-    def clear(self):
+    def clear(self) -> None:
         self._store.clear()
 
 
@@ -120,7 +119,7 @@ async def get(key: str) -> dict | None:
     return None
 
 
-async def set(key: str, data: dict, source: str, ttl_hours: int | None = None):
+async def set(key: str, data: dict, source: str, ttl_hours: int | None = None) -> None:
     """Salveaza date in cache cu TTL."""
     if ttl_hours is None:
         ttl_hours = TTL_HOURS.get(source, 6)
@@ -157,7 +156,7 @@ async def _enforce_size_limit():
     logger.info(f"Cache LRU: evicted {deleted} bytes to stay under {MAX_CACHE_SIZE_MB}MB")
 
 
-async def invalidate(pattern: str):
+async def invalidate(pattern: str) -> None:
     """Invalideaza toate cheile care incep cu pattern."""
     _l1.invalidate(pattern)  # L1: invalidate exact key (conservative)
     await db.execute(
@@ -210,6 +209,7 @@ async def get_stats() -> dict:
 # D18 fix: Bounded OrderedDict to prevent memory leak (max 500 entries)
 import asyncio as _asyncio
 from collections import OrderedDict as _OrderedDict
+
 _fetch_locks: _OrderedDict[str, _asyncio.Lock] = _OrderedDict()
 _MAX_LOCKS = 500
 
@@ -251,7 +251,7 @@ async def get_or_fetch(
         return data
 
 
-async def invalidate_company(cui: str):
+async def invalidate_company(cui: str) -> None:
     """C16 fix: Cache invalidation using LIKE to match all key variants for a CUI.
     Real keys are like anaf_{md5("bilant_CUI_YEAR")}, not anaf_{md5(cui)}.
     We search for any key whose original identifier contained this CUI."""

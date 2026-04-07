@@ -1,0 +1,190 @@
+[
+  {
+    "id": "pnrr_imm_digitalizare",
+    "nume": "PNRR — Digitalizare IMM (C9-I3)",
+    "sursa": "pnrr.gov.ro",
+    "suma_max_eur": 50000,
+    "eligibilitate": {
+      "caen_exclude": ["6419", "6499", "6491", "6492"],
+      "angajati_min": 1,
+      "angajati_max": 249,
+      "vechime_ani_min": 1,
+      "datorii_anaf": false,
+      "regiuni": ["toate"]
+    },
+    "termen": "2026-06-30",
+    "link": "https://mfe.gov.ro/pnrr",
+    "activ": true,
+    "descriere": "Finantare pentru digitalizarea IMM-urilor: hardware, software, securitate cibernetica"
+  },
+  {
+    "id": "por_2021_competitivitate",
+    "nume": "POR 2021-2027 — Competitivitate IMM",
+    "sursa": "fonduri-ue.ro",
+    "suma_max_eur": 200000,
+    "eligibilitate": {
+      "caen_exclude": ["6419", "6499"],
+      "angajati_min": 1,
+      "angajati_max": 249,
+      "vechime_ani_min": 2,
+      "datorii_anaf": false,
+      "regiuni": ["NE", "NV", "V", "SV", "S", "SE", "C"]
+    },
+    "termen": "2027-12-31",
+    "link": "https://fonduri-ue.ro/por-2021-2027",
+    "activ": true,
+    "descriere": "Investitii in capacitatea productiva a IMM-urilor din regiunile mai putin dezvoltate"
+  },
+  {
+    "id": "afir_masura_4_1",
+    "nume": "AFIR — Masura 4.1 Investitii in exploatatii agricole",
+    "sursa": "afir.info",
+    "suma_max_eur": 1500000,
+    "eligibilitate": {
+      "caen_includ": [
+        "0111",
+        "0112",
+        "0113",
+        "0114",
+        "0115",
+        "0116",
+        "0121",
+        "0122",
+        "0123",
+        "0124",
+        "0125",
+        "0126",
+        "0127",
+        "0128",
+        "0129",
+        "0130",
+        "0141",
+        "0142",
+        "0143",
+        "0144",
+        "0145",
+        "0146",
+        "0149",
+        "0150"
+      ],
+      "angajati_min": 0,
+      "angajati_max": 499,
+      "vechime_ani_min": 0,
+      "datorii_anaf": false,
+      "regiuni": ["toate"]
+    },
+    "termen": "2027-12-31",
+    "link": "https://www.afir.info",
+    "activ": true,
+    "descriere": "Investitii in modernizarea exploatatiilor agricole vegetale si zootehnice"
+  },
+  {
+    "id": "startup_nation_2024",
+    "nume": "Start-Up Nation 2024",
+    "sursa": "antreprenoriat.gov.ro",
+    "suma_max_eur": 50000,
+    "eligibilitate": {
+      "caen_exclude": ["6419", "6499", "9200"],
+      "angajati_min": 0,
+      "angajati_max": 49,
+      "vechime_ani_min": 0,
+      "vechime_ani_max": 2,
+      "datorii_anaf": false,
+      "regiuni": ["toate"]
+    },
+    "termen": "2024-12-31",
+    "link": "https://antreprenoriat.gov.ro/startup-nation",
+    "activ": false,
+    "descriere": "Finantare nerambursabila pentru infiintarea si dezvoltarea afacerilor noi"
+  },
+  {
+    "id": "granturi_imm_2024",
+    "nume": "Granturi IMM — Capital de Lucru",
+    "sursa": "imm.gov.ro",
+    "suma_max_eur": 200000,
+    "eligibilitate": {
+      "caen_exclude": ["6419", "6499"],
+      "angajati_min": 1,
+      "angajati_max": 249,
+      "vechime_ani_min": 1,
+      "datorii_anaf": false,
+      "regiuni": ["toate"]
+    },
+    "termen": "2026-12-31",
+    "link": "https://imm.gov.ro",
+    "activ": true,
+    "descriere": "Granturi pentru asigurarea capitalului de lucru al IMM-urilor"
+  },
+  {
+    "id": "hg_807_ajutor_stat",
+    "nume": "HG 807/2014 — Ajutor de Stat pentru Investitii",
+    "sursa": "imm.gov.ro",
+    "suma_max_eur": 37500000,
+    "eligibilitate": {
+      "caen_exclude": ["0111", "0112", "6419", "6499"],
+      "angajati_min": 10,
+      "angajati_max": 9999,
+      "vechime_ani_min": 2,
+      "datorii_anaf": false,
+      "regiuni": ["NE", "NV", "V", "SV", "S", "SE", "C"]
+    },
+    "termen": "2027-12-31",
+    "link": "https://imm.gov.ro/hg-807",
+    "activ": true,
+    "descriere": "Schema de ajutor de stat pentru investitii mari cu crearea de locuri de munca"
+  },
+  {
+    "id": "leader_gal",
+    "nume": "LEADER/GAL — Dezvoltare Rurala",
+    "sursa": "afir.info",
+    "suma_max_eur": 200000,
+    "eligibilitate": {
+      "caen_exclude": ["6419", "6499"],
+      "angajati_min": 0,
+      "angajati_max": 49,
+      "vechime_ani_min": 0,
+      "datorii_anaf": false,
+      "regiuni": ["rural"]
+    },
+    "termen": "2027-12-31",
+    "link": "https://www.afir.info/leader",
+    "activ": true,
+    "descriere": "Finantare prin Grupuri de Actiune Locala pentru firme din mediul rural"
+  },
+  {
+    "id": "pnrr_turism_verde",
+    "nume": "PNRR — Turism Verde (C11-I4)",
+    "sursa": "pnrr.gov.ro",
+    "suma_max_eur": 200000,
+    "eligibilitate": {
+      "caen_includ": [
+        "5510",
+        "5520",
+        "5530",
+        "5590",
+        "5610",
+        "5621",
+        "5629",
+        "5630",
+        "7912",
+        "7911",
+        "7990",
+        "9311",
+        "9312",
+        "9313",
+        "9319",
+        "9321",
+        "9329"
+      ],
+      "angajati_min": 1,
+      "angajati_max": 249,
+      "vechime_ani_min": 1,
+      "datorii_anaf": false,
+      "regiuni": ["toate"]
+    },
+    "termen": "2026-08-31",
+    "link": "https://mfe.gov.ro/pnrr",
+    "activ": true,
+    "descriere": "Investitii in infrastructura de turism si servicii eco-turistice"
+  }
+]

@@ -15,14 +15,16 @@ import subprocess
 from loguru import logger
 
 from backend.agents.base import BaseAgent
+from backend.agents.circuit_breaker import (
+    is_provider_circuit_open,
+    record_provider_failure,
+    reset_provider_circuit,
+)
 from backend.agents.state import AnalysisState
 from backend.config import settings
 from backend.http_client import get_client
-from backend.prompts.system_prompt import SYSTEM_PROMPT
 from backend.prompts.section_prompts import get_sections_for_analysis
-from backend.agents.circuit_breaker import (
-    is_provider_circuit_open, record_provider_failure, reset_provider_circuit,
-)
+from backend.prompts.system_prompt import SYSTEM_PROMPT
 
 
 class SynthesisAgent(BaseAgent):
@@ -378,6 +380,42 @@ Reguli:
 
         return text
 
+    def _check_numeric_coherence(self, sections: dict) -> list:
+        """F3-6: Detecteaza discrepante numerice majore intre sectiuni.
+        Extrage valori CA mentionate si verifica daca difera cu mai mult de 2.5x."""
+        warnings_out = []
+        ca_mentions = []
+
+        # Extrage valori numerice mentionate ca "milioane RON" sau "mil. RON" sau "M RON"
+        for section_key, content_dict in sections.items():
+            if not isinstance(content_dict, dict):
+                continue
+            content = content_dict.get("content", "")
+            if not isinstance(content, str):
+                continue
+            mil_matches = re.findall(
+                r'(\d+(?:[.,]\d+)?)\s*(?:milioane|mil\.|M)\s*RON',
+                content,
+                re.IGNORECASE,
+            )
+            for m in mil_matches:
+                try:
+                    val = float(m.replace(",", "."))
+                    ca_mentions.append((section_key, val))
+                except ValueError:
+                    pass
+
+        if len(ca_mentions) >= 2:
+            values = [v for _, v in ca_mentions]
+            max_v = max(values)
+            min_v = min(values)
+            if min_v > 0 and max_v / min_v > 2.5:
+                warnings_out.append(
+                    f"Discrepanta CA detectata intre sectiuni: {min_v:.1f}M vs {max_v:.1f}M RON — verificati datele"
+                )
+
+        return warnings_out
+
     def _check_cross_section_coherence(self, sections: dict, verified_data: dict) -> dict:
         """10B M4.3: Check consistency between sections — risk color, financial figures."""
         risk_score = verified_data.get("risk_score", {})
@@ -408,6 +446,16 @@ Reguli:
                 logger.warning(f"[synthesis] Cross-section incoherence: exec_summary contradicts risk={risk_color}")
                 sections["executive_summary"]["content"] += (
                     f"\n\n*[Nota: Scorul de risc calculat este {risk_color} ({risk_score.get('numeric_score', '?')}/100).]*"
+                )
+
+        # F3-6: Numeric coherence check — detect CA discrepancies between sections
+        coherence_warnings = self._check_numeric_coherence(sections)
+        if coherence_warnings:
+            logger.warning(f"[synthesis] Numeric coherence warnings: {coherence_warnings}")
+            # Append warnings as a note in executive_summary if it exists
+            if "executive_summary" in sections and isinstance(sections["executive_summary"].get("content"), str):
+                sections["executive_summary"]["content"] += (
+                    "\n\n*[Nota sistem: " + "; ".join(coherence_warnings) + "]*"
                 )
 
         return sections
@@ -453,7 +501,7 @@ Reguli:
         except FileNotFoundError:
             logger.warning("[synthesis] Claude CLI not found — falling back to Gemini")
             return None
-        except (asyncio.TimeoutError, subprocess.TimeoutExpired):
+        except (TimeoutError, subprocess.TimeoutExpired):
             logger.warning("[synthesis] Claude Code timeout — falling back to Gemini")
             return None
         except Exception as e:
@@ -483,11 +531,29 @@ Reguli:
             "model": "deepseek-reasoner",
             "api_key_attr": "deepseek_api_key",
         },
-        # F7.6: OpenRouter — unified gateway (free models available)
+        # F7.6: OpenRouter — unified gateway (free :free models)
         "openrouter": {
             "url": "https://openrouter.ai/api/v1/chat/completions",
             "model": "deepseek/deepseek-r1:free",
             "api_key_attr": "openrouter_api_key",
+        },
+        # R6: GitHub Models — GPT-4.1 + Llama 4 Scout gratuit (50-150 req/zi)
+        "github": {
+            "url": "https://models.inference.ai.azure.com/chat/completions",
+            "model": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
+            "api_key_attr": "github_token",
+        },
+        # R6: Fireworks AI — Llama 4 Scout/Maverick (10 RPM permanent free)
+        "fireworks": {
+            "url": "https://api.fireworks.ai/inference/v1/chat/completions",
+            "model": "accounts/fireworks/models/llama4-scout-instruct-basic",
+            "api_key_attr": "fireworks_api_key",
+        },
+        # R6: SambaNova — Llama 3.1 405B GRATUIT (unic in industrie, 10 RPM)
+        "sambanova": {
+            "url": "https://api.sambanova.ai/v1/chat/completions",
+            "model": "Meta-Llama-3.1-405B-Instruct",
+            "api_key_attr": "sambanova_api_key",
         },
     }
 
@@ -596,6 +662,18 @@ Reguli:
             record_provider_failure("openrouter")
             return None
 
+    async def _generate_with_github(self, prompt: str) -> str | None:
+        """R6: GitHub Models — Llama 4 Scout via Azure inference endpoint."""
+        return await self._generate_with_openai_compat(prompt, "github")
+
+    async def _generate_with_fireworks(self, prompt: str) -> str | None:
+        """R6: Fireworks AI — Llama 4 Scout (10 RPM permanent free)."""
+        return await self._generate_with_openai_compat(prompt, "fireworks")
+
+    async def _generate_with_sambanova(self, prompt: str) -> str | None:
+        """R6: SambaNova Cloud — Llama 3.1 405B (only free 405B in industry)."""
+        return await self._generate_with_openai_compat(prompt, "sambanova")
+
     async def _generate_with_gemini(self, prompt: str) -> str | None:
         """Gemini uses a different API format (not OpenAI-compatible)."""
         # R2 Fix #2: Circuit breaker for Gemini
@@ -652,8 +730,11 @@ Reguli:
             "gemini": self._generate_with_gemini,
             "mistral": self._generate_with_mistral,
             "cerebras": self._generate_with_cerebras,
-            "deepseek": self._generate_with_deepseek,      # F7.2
-            "openrouter": self._generate_with_openrouter,  # F7.6
+            "deepseek": self._generate_with_deepseek,        # F7.2
+            "openrouter": self._generate_with_openrouter,    # F7.6
+            "github": self._generate_with_github,            # R6: GitHub Models (free)
+            "fireworks": self._generate_with_fireworks,      # R6: Fireworks AI (free)
+            "sambanova": self._generate_with_sambanova,      # R6: SambaNova 405B (free)
         }
 
         # Filter out providers with open circuit breakers

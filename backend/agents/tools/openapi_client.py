@@ -5,9 +5,9 @@ Client openapi.ro — Date ONRC structurate.
 
 import httpx
 from loguru import logger
-from backend.http_client import get_client
 
 from backend.config import settings
+from backend.http_client import get_client
 
 OPENAPI_BASE = "https://api.openapi.ro/api/companies"
 
@@ -37,7 +37,9 @@ async def get_company_onrc(cui: str) -> dict:
             return {"cui": cui_clean, "found": False, "error": "CUI negasit in ONRC"}
 
         if response.status_code == 429:
-            return {"cui": cui_clean, "found": False, "error": "Quota openapi.ro depasita (100 req/luna)"}
+            # F3-8: Log explicit quota epuizata
+            logger.warning("[openapi.ro] QUOTA EPUIZATA (100 req/luna atinse) — ONRC indisponibil")
+            return {"found": False, "error": "quota_exceeded", "source": "openapi.ro"}
 
         if response.status_code != 200:
             return {"cui": cui_clean, "found": False, "error": f"HTTP {response.status_code}"}

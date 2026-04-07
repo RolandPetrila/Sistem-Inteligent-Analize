@@ -10,13 +10,12 @@ Reguli:
 5. Deduplicare cu cross-validation
 """
 
-from datetime import datetime, date, UTC
+from datetime import UTC, datetime
 
 from loguru import logger
 
 from backend.agents.base import BaseAgent
 from backend.agents.state import AnalysisState
-
 
 # Mapare surse la niveluri de trust
 SOURCE_LEVELS = {
@@ -134,6 +133,22 @@ class VerificationAgent(BaseAgent):
             logger.warning(
                 f"[verification] DATE LIPSA: {', '.join(g['field'] for g in verified['completeness']['gaps'])}"
             )
+
+        # F1-6: Retea firme — query DB pentru asociati comuni
+        cui_verified = verified.get("company", {}).get("cui", {})
+        cui_val = cui_verified.get("value", "") if isinstance(cui_verified, dict) else str(cui_verified or "")
+        if cui_val:
+            try:
+                from backend.agents.tools.network_client import get_company_network
+                network_data = await get_company_network(cui_val)
+                verified["company_network"] = network_data
+                # Aplica penalizari scoring daca retea toxica
+                if network_data.get("risk_flags"):
+                    for flag in network_data["risk_flags"]:
+                        if flag.get("severity") == "RED":
+                            logger.info(f"[verification] Network risk flag: {flag['detail']}")
+            except Exception as _ne:
+                logger.debug(f"[verification] network query error: {_ne}")
 
         return {
             "verified_data": verified,
@@ -646,11 +661,26 @@ class VerificationAgent(BaseAgent):
         inactiv = anaf.get("inactiv", False)
         data_inreg = anaf.get("data_inregistrare", "")
 
-        # Regula 1: 0 angajati + CA mare
-        if angajati is not None and angajati == 0 and ca is not None and ca > 1_000_000:
+        # F3-4: Sector-adjusted anomaly threshold
+        SECTOR_CA_THRESHOLD = {
+            "J": 5_000_000,   # IT — normal sa ai CA mare cu 0 angajati (freelanceri)
+            "M": 3_000_000,   # Consultanta
+            "K": 2_000_000,   # Servicii financiare
+            "RETAIL": 500_000,
+            "DEFAULT": 1_000_000,
+        }
+        onrc_s = official.get("onrc_structured", {})
+        caen_code = (
+            onrc_s.get("caen_code", "") if isinstance(onrc_s, dict) else ""
+        ) or (official.get("caen_context", {}) or {}).get("caen_code", "")
+        caen_section = str(caen_code)[0].upper() if caen_code else "DEFAULT"
+        ca_threshold = SECTOR_CA_THRESHOLD.get(caen_section, SECTOR_CA_THRESHOLD["DEFAULT"])
+
+        # Regula 1: 0 angajati + CA mare (sector-ajustat)
+        if angajati is not None and angajati == 0 and ca is not None and ca > ca_threshold:
             anomalies.append({
                 "level": "SUSPECT",
-                "rule": "0 angajati + CA > 1M RON",
+                "rule": f"0 angajati + CA > {ca_threshold:,.0f} RON",
                 "detail": f"Firma declara 0 angajati dar are cifra de afaceri de {ca:,.0f} RON. Posibil firma fantoma sau externalizare totala.",
             })
 
@@ -681,7 +711,7 @@ class VerificationAgent(BaseAgent):
         # Regula 5: Firma foarte noua + CA mare
         if data_inreg:
             try:
-                from datetime import datetime, date, UTC
+                from datetime import UTC, datetime
                 inreg_date = datetime.strptime(data_inreg.split(" ")[-1] if " " in data_inreg else data_inreg, "%d.%m.%Y")
                 age_years = (datetime.now(UTC) - inreg_date.replace(tzinfo=UTC)).days / 365.25
                 if age_years < 1 and ca is not None and ca > 500_000:
@@ -729,7 +759,11 @@ class VerificationAgent(BaseAgent):
                     sources_for_name.append(("ONRC/Tavily", title))
                     break
 
-        confidence = min(1.0, 0.4 + 0.3 * (len(sources_for_name) - 1)) if sources_for_name else 0.0
+        # F3-3: Trust scoring ponderat SOURCE_LEVEL
+        SOURCE_WEIGHTS = {1: 1.0, 2: 0.7, 3: 0.4, 4: 0.2}
+        weighted_sum = sum(SOURCE_WEIGHTS.get(1, 0.5) for _ in sources_for_name)
+        max_possible = max(len(sources_for_name), 1)
+        confidence = min(1.0, 0.3 + 0.7 * (weighted_sum / (max_possible * SOURCE_WEIGHTS[1]))) if sources_for_name else 0.0
         cross_validation["denumire"] = {
             "sources_count": len(sources_for_name),
             "confidence": round(confidence, 1),
@@ -745,7 +779,11 @@ class VerificationAgent(BaseAgent):
         if anaf.get("found"):
             cui_sources.append("ANAF")
 
-        confidence = min(1.0, 0.4 + 0.3 * (len(cui_sources) - 1)) if cui_sources else 0.0
+        # F3-3: Trust scoring ponderat SOURCE_LEVEL
+        _sw = {1: 1.0, 2: 0.7, 3: 0.4, 4: 0.2}
+        _ws = sum(_sw.get(1, 0.5) for _ in cui_sources)
+        _mp = max(len(cui_sources), 1)
+        confidence = min(1.0, 0.3 + 0.7 * (_ws / (_mp * _sw[1]))) if cui_sources else 0.0
         cross_validation["cui"] = {
             "sources_count": len(cui_sources),
             "confidence": round(confidence, 1),
@@ -761,7 +799,11 @@ class VerificationAgent(BaseAgent):
         if isinstance(fin_tavily, dict) and fin_tavily.get("results"):
             fin_sources.append("listafirme.ro")
 
-        confidence = min(1.0, 0.4 + 0.3 * (len(fin_sources) - 1)) if fin_sources else 0.0
+        # F3-3: Trust scoring ponderat SOURCE_LEVEL
+        _sw2 = {1: 1.0, 2: 0.7, 3: 0.4, 4: 0.2}
+        _ws2 = sum(_sw2.get(1, 0.5) for _ in fin_sources)
+        _mp2 = max(len(fin_sources), 1)
+        confidence = min(1.0, 0.3 + 0.7 * (_ws2 / (_mp2 * _sw2[1]))) if fin_sources else 0.0
         cross_validation["financiar"] = {
             "sources_count": len(fin_sources),
             "confidence": round(confidence, 1),

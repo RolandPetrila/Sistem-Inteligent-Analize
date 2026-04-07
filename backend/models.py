@@ -1,7 +1,6 @@
-from pydantic import BaseModel, Field, ConfigDict
-from datetime import datetime
 from enum import Enum
 
+from pydantic import BaseModel, ConfigDict, Field
 
 # --- Enums ---
 
@@ -270,3 +269,28 @@ class WSProgressMessage(BaseModel):
     formats: list[str] | None = None
     error: str | None = None
     retry_available: bool | None = None
+
+
+# --- Predictive Scores (F2-5) ---
+
+class PredictiveScoreDetail(BaseModel):
+    """Detalii scor predictiv individual."""
+    score: float | None = None
+    zone: str | None = None
+    grade: str | None = None
+    risk: str | None = None
+    distress: bool | None = None
+    available: bool = True
+    disclaimer: str | None = None
+
+
+class PredictiveScores(BaseModel):
+    """F2-5: Scoruri predictive financiare pentru o firma."""
+    cui: str
+    altman_z: PredictiveScoreDetail | None = None
+    piotroski_f: PredictiveScoreDetail | None = None
+    beneish_m: PredictiveScoreDetail | None = None
+    zmijewski_x: PredictiveScoreDetail | None = None
+    distress_signals: int = 0
+    summary: str = ""
+    computed_at: str = ""

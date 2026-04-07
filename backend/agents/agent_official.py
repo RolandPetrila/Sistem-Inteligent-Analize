@@ -5,7 +5,7 @@ Output: JSON structurat cu toate campurile + sursa + timestamp
 """
 
 import asyncio
-from datetime import datetime, date, UTC
+from datetime import UTC, date, datetime
 
 from loguru import logger
 
@@ -14,15 +14,18 @@ from backend.agents.state import AnalysisState, SourceResult
 from backend.agents.tools import anaf_client, bnr_client, tavily_client
 from backend.agents.tools.anaf_bilant_client import get_bilant_multi_year
 from backend.agents.tools.bpi_client import check_insolvency
-from backend.agents.tools.cui_validator import validate_cui
-from backend.agents.tools.openapi_client import get_company_onrc
-from backend.agents.tools.caen_context import get_caen_context
-from backend.agents.tools.jina_client import enrich_tavily_results
-from backend.agents.tools.brave_client import search_company_reputation as brave_search
 from backend.agents.tools.brave_client import is_available as brave_available
+from backend.agents.tools.brave_client import search_company_reputation as brave_search
+from backend.agents.tools.caen_context import get_caen_context
+from backend.agents.tools.cui_validator import validate_cui
+from backend.agents.tools.jina_client import enrich_tavily_results
+from backend.agents.tools.just_client import search_dosare
+from backend.agents.tools.openapi_client import get_company_onrc
 from backend.services import cache_service
 from backend.services.job_logger import (
-    get_job_logger, log_agent_start, log_agent_end, log_source_result,
+    log_agent_end,
+    log_agent_start,
+    log_source_result,
 )
 
 
@@ -36,7 +39,7 @@ class OfficialAgent(BaseAgent):
         """Wrap coroutine with individual timeout to prevent one slow source blocking others."""
         try:
             return await asyncio.wait_for(coro, timeout=timeout_s)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(f"[official] {source_name} individual timeout after {timeout_s}s")
             return {
                 "data_found": False,
@@ -147,6 +150,60 @@ class OfficialAgent(BaseAgent):
             else:
                 log_source_result(job_id, "BPI", False, bpi_source.get("response_time_ms", 0),
                     error="BPI check failed")
+
+            # F1-2: Store administrators in DB for network queries
+            if openapi_source["data_found"]:
+                from backend.agents.tools.network_client import store_administrators
+                odata = openapi_source["data"]
+                all_persons = []
+                for assoc in (odata.get("asociati") or []):
+                    name = assoc.get("name") or assoc.get("nume") or assoc.get("denumire", "")
+                    if name:
+                        all_persons.append({
+                            "name": name,
+                            "role": "asociat",
+                            "ownership_pct": assoc.get("procent") or assoc.get("ownership_pct"),
+                        })
+                for admin in (odata.get("administratori") or []):
+                    name = admin.get("name") or admin.get("nume") or admin.get("denumire", "")
+                    if name:
+                        all_persons.append({
+                            "name": name,
+                            "role": "administrator",
+                            "ownership_pct": None,
+                        })
+                if all_persons and cui_clean:
+                    try:
+                        await store_administrators(cui_clean, company_name or "", all_persons)
+                    except Exception as _e:
+                        logger.debug(f"[official] store_administrators error: {_e}")
+
+            # F1-1: Portal Just — dosare judecatoresti oficiale
+            if company_name:
+                just_result = await self._fetch_with_timeout(
+                    search_dosare(company_name, cui_clean),
+                    "portal.just.ro",
+                    30,
+                )
+                if just_result and just_result.get("found") is not False:
+                    official_data["dosare_just"] = just_result
+                    sources.append({
+                        "source_name": "portal.just.ro",
+                        "source_url": "http://portalquery.just.ro",
+                        "status": "OK",
+                        "data_found": True,
+                        "response_time_ms": 0,
+                    })
+                    log_source_result(job_id, "portal.just.ro", True, 0,
+                        [f"dosare={just_result.get('total_dosare', 0)}"])
+                else:
+                    sources.append({
+                        "source_name": "portal.just.ro",
+                        "source_url": "http://portalquery.just.ro",
+                        "status": "FAIL",
+                        "data_found": False,
+                        "response_time_ms": 0,
+                    })
 
             # EP2+EP3: Extract ANAF inactivi + risc fiscal (already in ANAF v9 response)
             if anaf_source["data_found"]:
@@ -461,7 +518,6 @@ class OfficialAgent(BaseAgent):
         )
 
     async def _fetch_bnr(self) -> dict:
-        from datetime import date, UTC
         cache_key = cache_service.make_cache_key("bnr", str(date.today()))
         return await cache_service.get_or_fetch(
             key=cache_key,

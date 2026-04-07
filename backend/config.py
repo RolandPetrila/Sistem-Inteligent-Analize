@@ -1,9 +1,9 @@
 import secrets as _secrets
+from pathlib import Path
 
 from loguru import logger
 from pydantic import model_validator
 from pydantic_settings import BaseSettings
-from pathlib import Path
 
 
 def _default_secret_key() -> str:
@@ -33,9 +33,13 @@ class Settings(BaseSettings):
     jina_api_key: str = ""           # https://jina.ai/reader/ (optional, free without key)
     deepseek_api_key: str = ""       # https://platform.deepseek.com/api_keys
     cohere_api_key: str = ""         # https://dashboard.cohere.com/
-    brave_api_key: str = ""           # https://api.search.brave.com/register (2000 req/luna gratuit)
-    xai_api_key: str = ""            # https://console.x.ai/
-    openrouter_api_key: str = ""     # https://openrouter.ai/
+    brave_api_key: str = ""          # https://api.search.brave.com/register (2000 req/luna gratuit)
+    xai_api_key: str = ""            # https://console.x.ai/ (credit $25 — not permanent free)
+    openrouter_api_key: str = ""     # https://openrouter.ai/ (50 req/zi :free models)
+    # R6 — Truly free permanent AI providers
+    github_token: str = ""           # https://github.com/settings/tokens (50-150 req/zi, GPT-4.1 + Llama 4)
+    fireworks_api_key: str = ""      # https://fireworks.ai/ (10 RPM permanent free, Llama 4 Scout/Maverick)
+    sambanova_api_key: str = ""      # https://cloud.sambanova.ai/ (Llama 405B GRATUIT — unic)
 
     # Notifications
     telegram_bot_token: str = ""

@@ -1,5 +1,12 @@
 import { useEffect, useState, useOptimistic, useTransition } from "react";
-import { Building2, Download, Search, ChevronLeft, ChevronRight, Star } from "lucide-react";
+import {
+  Building2,
+  Download,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Star,
+} from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import clsx from "clsx";
 import { api } from "@/lib/api";
@@ -18,15 +25,77 @@ const SORT_OPTIONS = [
 ];
 
 const JUDETE_RO = [
-  "Alba", "Arad", "Arges", "Bacau", "Bihor", "Bistrita-Nasaud", "Botosani",
-  "Brasov", "Braila", "Buzau", "Caras-Severin", "Cluj", "Constanta", "Covasna",
-  "Dambovita", "Dolj", "Galati", "Giurgiu", "Gorj", "Harghita", "Hunedoara",
-  "Ialomita", "Iasi", "Ilfov", "Maramures", "Mehedinti", "Mures", "Neamt",
-  "Olt", "Prahova", "Salaj", "Satu Mare", "Sibiu", "Suceava", "Teleorman",
-  "Timis", "Tulcea", "Vaslui", "Valcea", "Vrancea", "Bucuresti",
+  "Alba",
+  "Arad",
+  "Arges",
+  "Bacau",
+  "Bihor",
+  "Bistrita-Nasaud",
+  "Botosani",
+  "Brasov",
+  "Braila",
+  "Buzau",
+  "Caras-Severin",
+  "Cluj",
+  "Constanta",
+  "Covasna",
+  "Dambovita",
+  "Dolj",
+  "Galati",
+  "Giurgiu",
+  "Gorj",
+  "Harghita",
+  "Hunedoara",
+  "Ialomita",
+  "Iasi",
+  "Ilfov",
+  "Maramures",
+  "Mehedinti",
+  "Mures",
+  "Neamt",
+  "Olt",
+  "Prahova",
+  "Salaj",
+  "Satu Mare",
+  "Sibiu",
+  "Suceava",
+  "Teleorman",
+  "Timis",
+  "Tulcea",
+  "Vaslui",
+  "Valcea",
+  "Vrancea",
+  "Bucuresti",
 ];
 
 const PAGE_SIZE = 20;
+
+// F6-1: Badge colorat pentru scor risc
+const riskBadge = (score: number | null | undefined) => {
+  if (score == null)
+    return (
+      <span className="px-2 py-0.5 text-xs rounded bg-gray-700 text-gray-400">
+        N/A
+      </span>
+    );
+  if (score >= 70)
+    return (
+      <span className="px-2 py-0.5 text-xs rounded bg-green-900 text-green-300">
+        Verde
+      </span>
+    );
+  if (score >= 40)
+    return (
+      <span className="px-2 py-0.5 text-xs rounded bg-yellow-900 text-yellow-300">
+        Galben
+      </span>
+    );
+  return (
+    <span className="px-2 py-0.5 text-xs rounded bg-red-900 text-red-300">
+      Rosu
+    </span>
+  );
+};
 
 export default function Companies() {
   const { toast } = useToast();
@@ -47,11 +116,26 @@ export default function Companies() {
   // 10C M12.4: Debounced search — auto-search after 300ms typing pause
   const debouncedSearch = useDebounce(search, 300);
 
-  const loadCompanies = (searchTerm?: string, pageNum = 0, sortParam = sort, county = filterCounty, caen = filterCaen, riskScore = filterRiskScore) => {
+  const loadCompanies = (
+    searchTerm?: string,
+    pageNum = 0,
+    sortParam = sort,
+    county = filterCounty,
+    caen = filterCaen,
+    riskScore = filterRiskScore,
+  ) => {
     setLoading(true);
     const fetchFn = showFavoritesOnly
       ? api.listFavorites()
-      : api.listCompanies({ search: searchTerm, limit: PAGE_SIZE, offset: pageNum * PAGE_SIZE, sort: sortParam, county: county || undefined, caen: caen || undefined, risk_score: riskScore || undefined });
+      : api.listCompanies({
+          search: searchTerm,
+          limit: PAGE_SIZE,
+          offset: pageNum * PAGE_SIZE,
+          sort: sortParam,
+          county: county || undefined,
+          caen: caen || undefined,
+          risk_score: riskScore || undefined,
+        });
     fetchFn
       .then((res) => {
         setCompanies(res.companies);
@@ -81,7 +165,14 @@ export default function Companies() {
   // Reload when advanced filters change
   useEffect(() => {
     setPage(0);
-    loadCompanies(debouncedSearch, 0, sort, filterCounty, filterCaen, filterRiskScore);
+    loadCompanies(
+      debouncedSearch,
+      0,
+      sort,
+      filterCounty,
+      filterCaen,
+      filterRiskScore,
+    );
   }, [filterCounty, filterCaen, filterRiskScore]);
 
   // Reload when favorites filter changes
@@ -109,10 +200,13 @@ export default function Companies() {
   const [_isPending, startTransition] = useTransition();
   const [optimisticFavorites, setOptimisticFavorites] = useOptimistic(
     favorites,
-    (_current: Record<string, boolean>, update: { id: string; value: boolean }) => ({
+    (
+      _current: Record<string, boolean>,
+      update: { id: string; value: boolean },
+    ) => ({
       ..._current,
       [update.id]: update.value,
-    })
+    }),
   );
 
   const toggleFavorite = (companyId: string, e: React.MouseEvent) => {
@@ -124,7 +218,10 @@ export default function Companies() {
       try {
         const res = await api.toggleFavorite(companyId);
         setFavorites((prev) => ({ ...prev, [companyId]: res.is_favorite }));
-        logAction("Companies", "toggleFavorite", { companyId, isFavorite: res.is_favorite });
+        logAction("Companies", "toggleFavorite", {
+          companyId,
+          isFavorite: res.is_favorite,
+        });
       } catch {
         // Rollback via setFavorites — optimistic state reverts on next render
         setFavorites((prev) => ({ ...prev, [companyId]: currentVal }));
@@ -182,10 +279,12 @@ export default function Companies() {
             "flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors",
             showFavoritesOnly
               ? "border-yellow-500/50 bg-yellow-500/10 text-yellow-400"
-              : "border-dark-border bg-dark-surface text-gray-400 hover:text-gray-300"
+              : "border-dark-border bg-dark-surface text-gray-400 hover:text-gray-300",
           )}
         >
-          <Star className={clsx("w-4 h-4", showFavoritesOnly && "fill-yellow-400")} />
+          <Star
+            className={clsx("w-4 h-4", showFavoritesOnly && "fill-yellow-400")}
+          />
           Doar favorite
         </button>
 
@@ -211,7 +310,9 @@ export default function Companies() {
         >
           <option value="">Toate judetele</option>
           {JUDETE_RO.map((j) => (
-            <option key={j} value={j}>{j}</option>
+            <option key={j} value={j}>
+              {j}
+            </option>
           ))}
         </select>
 
@@ -276,7 +377,11 @@ export default function Companies() {
         {search && (
           <button
             type="button"
-            onClick={() => { setSearch(""); setPage(0); loadCompanies("", 0); }}
+            onClick={() => {
+              setSearch("");
+              setPage(0);
+              loadCompanies("", 0);
+            }}
             className="btn-secondary text-sm"
           >
             Sterge
@@ -315,30 +420,47 @@ export default function Companies() {
                     </h3>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-gray-500">
                       {company.cui && <span>CUI: {company.cui}</span>}
-                      {company.caen_code && <span>CAEN: {company.caen_code}</span>}
+                      {company.caen_code && (
+                        <span>CAEN: {company.caen_code}</span>
+                      )}
                       {company.county && <span>{company.county}</span>}
                     </div>
-                    <p className="text-xs text-gray-600 mt-2">
-                      {company.analysis_count} analize |{" "}
-                      {company.last_analyzed_at
-                        ? `Ultima: ${new Date(
-                            company.last_analyzed_at
-                          ).toLocaleDateString("ro-RO")}`
-                        : "Neanalizata"}
-                    </p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <p className="text-xs text-gray-600">
+                        {company.analysis_count} analize |{" "}
+                        {company.last_analyzed_at
+                          ? `Ultima: ${new Date(
+                              company.last_analyzed_at,
+                            ).toLocaleDateString("ro-RO")}`
+                          : "Neanalizata"}
+                      </p>
+                      {/* F6-1: Badge scor risc */}
+                      {riskBadge(
+                        (company as unknown as Record<string, unknown>)
+                          .last_score as number | null | undefined,
+                      )}
+                    </div>
                   </div>
                   <button
                     onClick={(e) => toggleFavorite(company.id, e)}
                     className="shrink-0 p-1 rounded hover:bg-dark-hover transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
-                    aria-label={optimisticFavorites[company.id] ? "Elimina din favorite" : "Adauga la favorite"}
-                    title={optimisticFavorites[company.id] ? "Sterge din favorite" : "Adauga la favorite"}
+                    aria-label={
+                      optimisticFavorites[company.id]
+                        ? "Elimina din favorite"
+                        : "Adauga la favorite"
+                    }
+                    title={
+                      optimisticFavorites[company.id]
+                        ? "Sterge din favorite"
+                        : "Adauga la favorite"
+                    }
                   >
                     <Star
                       className={clsx(
                         "w-4 h-4 transition-colors",
                         optimisticFavorites[company.id]
                           ? "text-yellow-400 fill-yellow-400"
-                          : "text-gray-600 hover:text-yellow-400"
+                          : "text-gray-600 hover:text-yellow-400",
                       )}
                     />
                   </button>

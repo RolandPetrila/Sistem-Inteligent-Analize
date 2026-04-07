@@ -1,9 +1,11 @@
 # Roland Intelligence System (RIS)
 
 ## Overview
+
 Sistem local de Business Intelligence care ruleaza pe Windows 10. Extrage automat date din surse publice romanesti (ANAF, ONRC, SEAP, etc.), le proceseaza prin agenti AI si produce rapoarte profesionale.
 
 ## Status
+
 - **Faza 1:** Fundatie — COMPLETATA
 - **Faza 2:** Agenti de date — COMPLETATA (Agent 1 + Agent 4 + LangGraph + Cache)
 - **Faza 3:** Sinteza + Rapoarte — COMPLETATA (Synthesis + PDF + DOCX + HTML)
@@ -44,10 +46,11 @@ Sistem local de Business Intelligence care ruleaza pe Windows 10. Extrage automa
 - **Faza 17 (R10):** COMPLETATA — Audit Full 90/100 + R10 unificat: unused deps removed (python-dotenv, jinja2), ALL datetime.utcnow migrated (29 locations, 0 warnings), WS auth token, scoring constants extracted, README.md, 15 router tests, comment cleanup, DB except fix
 - **Faza 18 (R11):** COMPLETATA — 40 imbunatatiri din /imbunatatiri: scoring confidence power-law fix, zombie detection, dynamic completeness, monitoring critical combos, provider circuit breaker, L1 cache, DRY scoring compare, token pre-check, SQLite cache 64MB, dashboard trends, breadcrumbs, wizard progress, ETA progress, batch CSV preview, global search Ctrl+K, compare CSV export, report metadata, company actions (monitor/compare/similar), settings test all, api.ts timeout+errors, notifications center (CRUD+migration), favorites, risk movers endpoint, company timeline, email report send, PDF encoding unicodedata, HTML warnings gradient, .env backup
 - **Faza 19 (R12):** COMPLETATA — 17 items R2 fix+completare: notifications create integration (job_service+monitoring), circuit breaker wired in synthesis (Groq/Gemini/Cerebras/Mistral), AbortController fix retry, L1 cache threading lock, email field_validator, zombie exclude inactive, CSV header detection, ETA progress guard, monitoring loading state, Notification Bell UI (poll 60s+dropdown+mark read), Favorites UI (star+filter), Risk Movers Widget, Timeline UI (CompanyDetail), Email Send Modal (ReportView), circuit_breaker.py module (circular import fix)
-- **Faza 20 (R13):** COMPLETATA — 39 items din RECOMANDARI_IMBUNATATIRI_R3: P0(#31 .env.bak gitignore, #32 datetime UTC 4 loc, #2 memory leak _in_flight, #1 agent timeout individual, #21+26 input validation+extra=forbid), P1(#33 DB transactions, #34 report /data endpoint, #35 22x bare except→logger, #7 scoring Why reasons, #3 HTTPException→RISError, #4 api.ts endpoints, #5 WS agent_start/complete, #15 FTS5 search, #22 SSRF prevention, #24 path traversal hardening, #25 pip-audit script, #36 settings auth+security.py), P2(#37 tsconfig strict, #38 stats cache lock, #39 is_favorite fix, #40 DB indexes, #41 conditional sleep, #42 config validation, #9 concurrent fallback synthesis, #6 cache L1/LRU, #8 GlobalSearch rapoarte+actiuni, #10 scoring volatilitate per industrie, #11 companies sort+filter, #14 dashboard skeleton, #16 useOptimistic favorites, #17 report delta endpoint+UI, #18 PDF markdown helper, #19 SQL window functions score trend, #23 dead code cleanup, #29 accessibility ARIA, #30 token budget single-build), P3(#12 toast dedup, #13 favorites endpoint dedicat)
+- **Faza 20 (R13):** COMPLETATA — 39 items din RECOMANDARI_IMBUNATATIRI_R3: P0(#31 .env.bak gitignore, #32 datetime UTC 4 loc, #2 memory leak \_in_flight, #1 agent timeout individual, #21+26 input validation+extra=forbid), P1(#33 DB transactions, #34 report /data endpoint, #35 22x bare except→logger, #7 scoring Why reasons, #3 HTTPException→RISError, #4 api.ts endpoints, #5 WS agent_start/complete, #15 FTS5 search, #22 SSRF prevention, #24 path traversal hardening, #25 pip-audit script, #36 settings auth+security.py), P2(#37 tsconfig strict, #38 stats cache lock, #39 is_favorite fix, #40 DB indexes, #41 conditional sleep, #42 config validation, #9 concurrent fallback synthesis, #6 cache L1/LRU, #8 GlobalSearch rapoarte+actiuni, #10 scoring volatilitate per industrie, #11 companies sort+filter, #14 dashboard skeleton, #16 useOptimistic favorites, #17 report delta endpoint+UI, #18 PDF markdown helper, #19 SQL window functions score trend, #23 dead code cleanup, #29 accessibility ARIA, #30 token budget single-build), P3(#12 toast dedup, #13 favorites endpoint dedicat)
 - **Audit R14 (2026-04-05):** EFECTUAT — scor 82/100 (delta -8 vs R10 90/100). Plan: 99_Plan_vs_Audit/RECOMANDARI_IMBUNATATIRI_R4.md (F0-F6, 28 items). Probleme critice: API key Gemini in logs, 47 fisiere necomise. Scor tinta dupa F0-F5: 90/100.
 - **Audit R15 (2026-04-06):** EFECTUAT — scor 86/100 (+4 vs R14). Plan unificat: RECOMANDARI_IMBUNATATIRI_R5.md (53 items din 3 surse). 184 pytest PASSED, 0 failures. TypeScript: 0 erori.
 - **Faza R5 (2026-04-06):** COMPLETATA — 47/53 items implementate (F0 9/9 + F1 10/10 + F2 15/15 + F3 11/13 + F4 4/6). 13 feature-uri noi: webhook, quick-score, tags+note, compare templates, sector CAEN, ICS export, batch preview, health status, CLI script, browser notifications, watermark config, key takeaways, score sparkline.
+- **Faza R6 (2026-04-07):** COMPLETATA PARTIAL — ~45/65 items implementate din RECOMANDARI_IMBUNATATIRI_R6.md. F0-3 (job_service split), F1-2/F1-3/F1-4/F1-5 (retea firme + SQL migration 008), F2-1..F2-4 (Altman/Piotroski/Beneish/Zmijewski + wrapper), F3-3/F3-4/F3-6/F3-8 (trust scoring/anomalii/coherence/quota), F4-1/F4-2/F4-3/F4-4 (monitoring escalation/sync/audit-log/suppress), F5-1 (funding programs JSON+module), F6-1/F6-3/F6-5/F6-8 (risk badge/completeness warning/localStorage draft/dedup dashboard), F7-1/F7-2 (N+1 fix/CSV streaming), F8-5 (29 teste modele predictive). Provideri noi: GitHub Models, Fireworks AI, SambaNova. 213 pytest PASSED.
 - **Feedback Loop:** ACTIV — RIS_TEST.bat, logs/ris_summary.log, ris_runtime.log, ris_frontend.log (5 componente), ISSUES.md, session startup protocol, G1-G8 complete
 - **Git:** https://github.com/RolandPetrila/Sistem-Inteligent-Analize.git | 182 teste (171 pytest + 11 vitest)
 - **12 pagini frontend** (adaugat CompanyDetail /company/:id)
@@ -57,13 +60,16 @@ Sistem local de Business Intelligence care ruleaza pe Windows 10. Extrage automa
 - **42 REST endpoints + 1 WebSocket + 12 pagini frontend + 8 formate raport + diagnostic + audit + request tracing + notifications + favorites + timeline**
 
 ## Feedback Loop (Session Protocol)
+
 La FIECARE sesiune noua, Claude citeste automat:
+
 1. `logs/ris_summary.log` — sumar per-analiza (CUI, status, score, erori)
 2. `logs/ris_runtime.log` — erori de startup/runtime (WARNING+)
 3. `ISSUES.md` — probleme raportate manual de utilizator
 4. `TEST_RESULTS.log` — ultimul run RIS_TEST.bat (pytest + vitest)
 
 Fisiere feedback loop:
+
 - `RIS_TEST.bat` — dublu-click: ruleaza toate testele, salveaza in TEST_RESULTS.log
 - `ISSUES.md` — utilizatorul noteaza minim: "ce am facut + ce s-a intamplat"
 - `backend/services/job_logger.py` — logging automat per-job + summary consolidat
@@ -71,6 +77,7 @@ Fisiere feedback loop:
 - `logs/ris_runtime.log` — erori WARNING+ din backend (rotatie 5MB, retentie 7 zile)
 
 ## Stack
+
 - Backend: Python 3.13 + FastAPI + SQLite (aiosqlite, WAL mode)
 - Frontend: React 19 + Vite + TypeScript + Tailwind CSS
 - AI: Claude CLI (Opus) + Groq (Llama 4 Scout) + Mistral (Small 3) + Gemini (2.5 Flash) + Cerebras (Qwen 3 235B) — 5-level fallback + smart routing
@@ -82,6 +89,7 @@ Fisiere feedback loop:
 - Statistici: INS TEMPO API (date oficiale per CAEN)
 
 ## Key Files
+
 - `backend/main.py` — FastAPI entry point + WebSocket + lifespan + SecurityHeaders + CSP + scheduler
 - `backend/config.py` — Settings din .env (pydantic-settings)
 - `backend/database.py` — SQLite connection + migrations
@@ -140,6 +148,7 @@ Fisiere feedback loop:
 - `frontend/src/lib/cui-validator.ts` — Validare CUI MOD 11 in browser
 
 ## ANAF APIs
+
 - **ANAF TVA/Stare (v9):** `POST https://webservicesp.anaf.ro/api/PlatitorTvaRest/v9/tva`
   - Returneaza 404 HTTP dar cu JSON valid (found/notFound) — NU face raise_for_status()
   - Rate limit: 1 req/2 sec
@@ -150,6 +159,7 @@ Fisiere feedback loop:
   - Formatul indicatorilor difera intre firme mari/mici — parsam dupa val_den_indicator text
 
 ## Scoring System (Phase 8B enhanced)
+
 - Scor numeric 0-100 pe 6 dimensiuni (ponderat):
   - Financiar (30%): CA, profit, trend growth, volatility index (CV), solvency ratio
   - Juridic (20%): litigii, insolventa
@@ -166,6 +176,7 @@ Fisiere feedback loop:
 - Early Warning Confidence: 0-100 per avertisment (freshness + cross-source + extreme values)
 
 ## Conventii
+
 - Limba UI: Romana
 - Limba cod: Engleza (variabile, functii, comentarii tehnice)
 - Port backend: 8001
@@ -178,6 +189,7 @@ Fisiere feedback loop:
 - Synthesis: subprocess `claude --print --model claude-opus-4-6 --effort max`
 
 ## Decizii tehnice confirmate
+
 1. Synthesis via Claude Code CLI subprocess ($0, calitate maxima)
 2. Groq (Llama 4 Scout) ca fallback rapid (gratuit)
 3. Gemini 2.5 Flash ca fallback autonom (gratuit)
@@ -206,7 +218,9 @@ Fisiere feedback loop:
 26. Solvency Stress Matrix 3x3 (profit margin x equity ratio)
 
 ## Documentatie — Fisiere de tinut sincronizate
+
 La finalul fiecarei sesiuni de lucru, actualizeaza:
+
 - `CLAUDE.md` — status faze, key files, decizii
 - `TODO_ROLAND.md` — status items, ce ramane de facut
 - `FUNCTII_SISTEM.md` — inventar complet functionalitati
@@ -214,6 +228,7 @@ La finalul fiecarei sesiuni de lucru, actualizeaza:
 - Memory files — project_ris_status.md, reference_api_keys.md
 
 ## Comenzi
+
 ```bash
 # Start complet (dublu-click)
 START_RIS.vbs

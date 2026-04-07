@@ -25,11 +25,36 @@ import ChatInput from "@/components/ChatInput";
 
 // E4: Quick analysis templates
 const ANALYSIS_TEMPLATES = [
-  { name: "Due Diligence Partener", type: "PARTNER_RISK_ASSESSMENT", level: 3, description: "Verificare completa partener de afaceri" },
-  { name: "Screening Rapid", type: "CUSTOM_REPORT", level: 1, description: "Verificare rapida, date de baza" },
-  { name: "Raport Complet Vanzare", type: "FULL_COMPANY_PROFILE", level: 3, description: "Raport complet pentru prezentare client" },
-  { name: "Analiza Competitie", type: "COMPETITION_ANALYSIS", level: 2, description: "Focus pe competitori si pozitionare" },
-  { name: "Oportunitati Licitatii", type: "TENDER_OPPORTUNITIES", level: 2, description: "Licitatii SEAP relevante" },
+  {
+    name: "Due Diligence Partener",
+    type: "PARTNER_RISK_ASSESSMENT",
+    level: 3,
+    description: "Verificare completa partener de afaceri",
+  },
+  {
+    name: "Screening Rapid",
+    type: "CUSTOM_REPORT",
+    level: 1,
+    description: "Verificare rapida, date de baza",
+  },
+  {
+    name: "Raport Complet Vanzare",
+    type: "FULL_COMPANY_PROFILE",
+    level: 3,
+    description: "Raport complet pentru prezentare client",
+  },
+  {
+    name: "Analiza Competitie",
+    type: "COMPETITION_ANALYSIS",
+    level: 2,
+    description: "Focus pe competitori si pozitionare",
+  },
+  {
+    name: "Oportunitati Licitatii",
+    type: "TENDER_OPPORTUNITIES",
+    level: 2,
+    description: "Licitatii SEAP relevante",
+  },
 ];
 
 const ICONS: Record<string, React.ElementType> = {
@@ -73,7 +98,7 @@ function WizardProgress({ currentStep }: { currentStep: Step }) {
                     ? "bg-accent-primary border-accent-primary text-white"
                     : isCurrent
                       ? "border-accent-primary text-accent-secondary bg-accent-primary/10"
-                      : "border-dark-border text-gray-600 bg-dark-surface"
+                      : "border-dark-border text-gray-600 bg-dark-surface",
                 )}
               >
                 {isCompleted ? <Check className="w-4 h-4" /> : i + 1}
@@ -81,7 +106,11 @@ function WizardProgress({ currentStep }: { currentStep: Step }) {
               <span
                 className={clsx(
                   "text-[10px] mt-1 whitespace-nowrap",
-                  isCurrent ? "text-accent-secondary" : isCompleted ? "text-gray-400" : "text-gray-600"
+                  isCurrent
+                    ? "text-accent-secondary"
+                    : isCompleted
+                      ? "text-gray-400"
+                      : "text-gray-600",
                 )}
               >
                 {ws.label}
@@ -92,7 +121,7 @@ function WizardProgress({ currentStep }: { currentStep: Step }) {
               <div
                 className={clsx(
                   "w-12 sm:w-20 h-0.5 mx-1 mt-[-14px]",
-                  i < currentIndex ? "bg-accent-primary" : "bg-dark-border"
+                  i < currentIndex ? "bg-accent-primary" : "bg-dark-border",
                 )}
               />
             )}
@@ -103,8 +132,9 @@ function WizardProgress({ currentStep }: { currentStep: Step }) {
   );
 }
 
-// F2-6: Cheie pentru draft wizard in sessionStorage
-const DRAFT_KEY = "ris_wizard_draft";
+// F6-5: Draft wizard cu localStorage + TTL 24h (inlocuieste sessionStorage)
+const DRAFT_KEY = "ris_wizard_draft_v2";
+const DRAFT_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
 interface WizardDraft {
   selectedType: string | null;
@@ -128,42 +158,52 @@ export default function NewAnalysis() {
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
-    api.getAnalysisTypes().then((loaded) => {
-      setTypes(loaded);
-      const cuiParam = searchParams.get("cui");
-      if (cuiParam && loaded.length > 0) {
-        // URL param are prioritate fata de draft salvat
-        const fullProfile = loaded.find((t) => t.type === "FULL_COMPANY_PROFILE");
-        if (fullProfile) {
-          setSelected(fullProfile);
-          setAnswers({ cui: cuiParam });
-          setStep(fullProfile.questions.length > 0 ? "questions" : "level");
+    api
+      .getAnalysisTypes()
+      .then((loaded) => {
+        setTypes(loaded);
+        const cuiParam = searchParams.get("cui");
+        if (cuiParam && loaded.length > 0) {
+          // URL param are prioritate fata de draft salvat
+          const fullProfile = loaded.find(
+            (t) => t.type === "FULL_COMPANY_PROFILE",
+          );
+          if (fullProfile) {
+            setSelected(fullProfile);
+            setAnswers({ cui: cuiParam });
+            setStep(fullProfile.questions.length > 0 ? "questions" : "level");
+          }
+          return;
         }
-        return;
-      }
-      // F2-6: Restaureaza draft din sessionStorage daca nu exista param URL
-      try {
-        const raw = sessionStorage.getItem(DRAFT_KEY);
-        if (raw) {
-          const draft: WizardDraft = JSON.parse(raw);
-          if (draft.selectedType) {
-            const found = loaded.find((t) => t.type === draft.selectedType);
-            if (found) {
-              setSelected(found);
-              setAnswers(draft.answers || {});
-              setLevel(draft.level || 2);
-              setStep(draft.step || "type");
-              toast("Draft restaurat", "info");
+        // F6-5: Restaureaza draft din localStorage cu TTL 24h
+        try {
+          const raw = localStorage.getItem(DRAFT_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed.expires && parsed.expires > Date.now()) {
+              const draft: WizardDraft = parsed.data;
+              if (draft?.selectedType) {
+                const found = loaded.find((t) => t.type === draft.selectedType);
+                if (found) {
+                  setSelected(found);
+                  setAnswers(draft.answers || {});
+                  setLevel(draft.level || 2);
+                  setStep(draft.step || "type");
+                  toast("Draft restaurat", "info");
+                }
+              }
+            } else {
+              localStorage.removeItem(DRAFT_KEY); // expirat
             }
           }
+        } catch {
+          localStorage.removeItem(DRAFT_KEY); // draft corupt
         }
-      } catch {
-        // draft corupt — ignoram
-      }
-    }).catch(() => toast("Eroare la incarcarea tipurilor de analiza", "error"));
+      })
+      .catch(() => toast("Eroare la incarcarea tipurilor de analiza", "error"));
   }, []);
 
-  // F2-6: Salveaza draft la fiecare schimbare de state
+  // F6-5: Salveaza draft in localStorage cu TTL 24h la fiecare schimbare de state
   useEffect(() => {
     if (!selected) return;
     const draft: WizardDraft = {
@@ -173,9 +213,12 @@ export default function NewAnalysis() {
       step,
     };
     try {
-      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      localStorage.setItem(
+        DRAFT_KEY,
+        JSON.stringify({ data: draft, expires: Date.now() + DRAFT_TTL_MS }),
+      );
     } catch {
-      // sessionStorage indisponibil — ignoram
+      // localStorage indisponibil — ignoram
     }
   }, [selected, answers, level, step]);
 
@@ -211,15 +254,21 @@ export default function NewAnalysis() {
 
   const canProceedFromQuestions = (): boolean => {
     if (!selected) return false;
-    return selected.questions
-      .filter((q) => q.required)
-      .every((q) => (answers[q.id] || "").trim() !== "") && !cuiError;
+    return (
+      selected.questions
+        .filter((q) => q.required)
+        .every((q) => (answers[q.id] || "").trim() !== "") && !cuiError
+    );
   };
 
   const handleSubmit = async () => {
     if (!selected) return;
     setSubmitting(true);
-    logAction("NewAnalysis", "start", { type: selected.type, level, cui: answers.cui });
+    logAction("NewAnalysis", "start", {
+      type: selected.type,
+      level,
+      cui: answers.cui,
+    });
     try {
       const job = await api.createJob({
         analysis_type: selected.type,
@@ -227,10 +276,14 @@ export default function NewAnalysis() {
         input_params: answers,
       });
       // Auto-start the job
-      await api.startJob(job.id).catch(() => toast("Job creat, dar pornirea automata a esuat", "warning"));
+      await api
+        .startJob(job.id)
+        .catch(() =>
+          toast("Job creat, dar pornirea automata a esuat", "warning"),
+        );
       logAction("NewAnalysis", "job_created", { jobId: job.id });
-      // F2-6: Sterge draft dupa submit reusit
-      sessionStorage.removeItem(DRAFT_KEY);
+      // F6-5: Sterge draft dupa submit reusit
+      localStorage.removeItem(DRAFT_KEY);
       navigate(`/analysis/${job.id}`);
     } catch {
       logAction("NewAnalysis", "submit_failed", { type: selected.type });
@@ -271,7 +324,9 @@ export default function NewAnalysis() {
       {/* E4: Quick Templates */}
       {step === "type" && types.length > 0 && (
         <div>
-          <h3 className="text-xs text-gray-500 uppercase tracking-wider mb-2">Template rapid</h3>
+          <h3 className="text-xs text-gray-500 uppercase tracking-wider mb-2">
+            Template rapid
+          </h3>
           <div className="flex flex-wrap gap-2 mb-6">
             {ANALYSIS_TEMPLATES.map((tmpl) => (
               <button
@@ -310,7 +365,7 @@ export default function NewAnalysis() {
                   "card text-left transition-all duration-200 group",
                   t.deferred
                     ? "opacity-40 cursor-not-allowed"
-                    : "hover:border-accent-primary/50 hover:shadow-lg hover:shadow-accent-primary/5 cursor-pointer"
+                    : "hover:border-accent-primary/50 hover:shadow-lg hover:shadow-accent-primary/5 cursor-pointer",
                 )}
               >
                 <div className="flex items-start gap-3">
@@ -381,13 +436,16 @@ export default function NewAnalysis() {
                     type="text"
                     className={clsx(
                       "input-field w-full",
-                      q.id === "cui" && cuiError && "border-red-500/50"
+                      q.id === "cui" && cuiError && "border-red-500/50",
                     )}
                     value={answers[q.id] || ""}
                     onChange={(e) => {
                       const val = e.target.value;
                       setAnswers({ ...answers, [q.id]: val });
-                      if (q.id === "cui" && val.replace(/\D/g, "").length >= 2) {
+                      if (
+                        q.id === "cui" &&
+                        val.replace(/\D/g, "").length >= 2
+                      ) {
                         const result = validateCUI(val);
                         setCuiError(result.valid ? "" : result.error || "");
                       } else if (q.id === "cui") {
@@ -399,12 +457,17 @@ export default function NewAnalysis() {
                   {q.id === "cui" && cuiError && (
                     <p className="text-xs text-red-400 mt-1">{cuiError}</p>
                   )}
-                  {q.id === "cui" && answers[q.id] && !cuiError && answers[q.id].replace(/\D/g, "").length >= 2 && (
-                    <p className="text-xs text-green-400 mt-1">CUI valid</p>
-                  )}
+                  {q.id === "cui" &&
+                    answers[q.id] &&
+                    !cuiError &&
+                    answers[q.id].replace(/\D/g, "").length >= 2 && (
+                      <p className="text-xs text-green-400 mt-1">CUI valid</p>
+                    )}
                   {/* 10F M12.1: Form validation error per field */}
                   {q.id !== "cui" && formErrors[q.id] && (
-                    <p className="text-xs text-red-400 mt-1">{formErrors[q.id]}</p>
+                    <p className="text-xs text-red-400 mt-1">
+                      {formErrors[q.id]}
+                    </p>
                   )}
                 </div>
               )}
@@ -444,7 +507,7 @@ export default function NewAnalysis() {
                   "card w-full text-left transition-all",
                   level === lv
                     ? "border-accent-primary ring-1 ring-accent-primary/30"
-                    : "hover:border-dark-hover"
+                    : "hover:border-dark-hover",
                 )}
               >
                 <div className="flex items-center justify-between">
@@ -468,7 +531,7 @@ export default function NewAnalysis() {
                 setStep(
                   selected && selected.questions.length > 0
                     ? "questions"
-                    : "type"
+                    : "type",
                 )
               }
             >
@@ -487,9 +550,7 @@ export default function NewAnalysis() {
       {/* Step: Confirm */}
       {step === "confirm" && selected && (
         <div className="card max-w-2xl space-y-5">
-          <h2 className="text-lg font-semibold text-white">
-            Confirma Analiza
-          </h2>
+          <h2 className="text-lg font-semibold text-white">Confirma Analiza</h2>
           <div className="space-y-3 text-sm">
             <div className="flex justify-between py-2 border-b border-dark-border">
               <span className="text-gray-500">Tip Analiza</span>

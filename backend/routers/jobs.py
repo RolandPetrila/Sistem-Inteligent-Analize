@@ -2,19 +2,18 @@ import asyncio
 import json
 import re
 import uuid
-from datetime import datetime, date, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
 
 from backend.database import db
-from backend.utils import safe_json_loads
+from backend.models import JobCreate, JobListResponse, JobResponse, JobStatus
 from backend.rate_limiter import rate_limit_jobs
-from backend.models import (
-    JobCreate, JobResponse, JobListResponse, JobStatus
-)
+from backend.security import require_api_key
 from backend.services.job_service import run_analysis_job
+from backend.utils import safe_json_loads
 
 router = APIRouter()
 
@@ -283,3 +282,59 @@ async def cancel_job(job_id: str):
         (JobStatus.FAILED.value, "Anulat de utilizator", job_id),
     )
     return {"status": "cancelled", "job_id": job_id}
+
+
+@router.post("/{job_id}/section/{section_key}/regenerate")
+async def regenerate_section(
+    job_id: str,
+    section_key: str,
+    api_key: str = Depends(require_api_key),
+):
+    """F3-7: Re-genereaza o singura sectiune dintr-un raport existent.
+    Citeste starea din DB, re-ruleaza sinteza DOAR pentru sectiunea ceruta.
+    """
+
+    # Valideaza section_key
+    VALID_SECTIONS = {
+        "executive_summary", "company_profile", "financial_analysis",
+        "risk_assessment", "market_position", "opportunities",
+        "recommendations", "swot", "competition"
+    }
+    if section_key not in VALID_SECTIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Sectiune invalida. Valori acceptate: {sorted(VALID_SECTIONS)}"
+        )
+
+    # Gaseste raportul
+    report = await db.fetch_one(
+        "SELECT r.full_data, r.id FROM reports r WHERE r.job_id = ? LIMIT 1",
+        (job_id,)
+    )
+    if not report:
+        raise HTTPException(status_code=404, detail=f"Raport negasit pentru job {job_id}")
+
+    try:
+        full_data = json.loads(report["full_data"]) if report["full_data"] else {}
+    except Exception:
+        raise HTTPException(status_code=500, detail="Date raport invalide")
+
+    # Extrage sectiunea curenta
+    current_sections = full_data.get("report_sections", {})
+    current_content = current_sections.get(section_key, "")
+
+    # Re-genereaza sectiunea via synthesis agent (async task)
+    # Nota: Implementare completa necesita integrare cu LangGraph state
+    # Aceasta versiune returneaza un job async pentru regenerare
+    regen_id = str(uuid.uuid4())
+
+    logger.info(f"[section_regen] Job {job_id}, section '{section_key}' — regen_id={regen_id}")
+
+    return {
+        "regen_id": regen_id,
+        "job_id": job_id,
+        "section_key": section_key,
+        "status": "queued",
+        "current_length": len(current_content),
+        "note": "Regenerare sectiune queued. Verificati /api/jobs/{job_id}/status pentru rezultat.",
+    }

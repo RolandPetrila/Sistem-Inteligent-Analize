@@ -6,7 +6,6 @@ import {
   CheckCircle,
   Clock,
   TrendingUp,
-  TrendingDown,
   PlusCircle,
   Zap,
   AlertCircle,
@@ -46,7 +45,9 @@ const SkeletonDashboard = () => (
   <div className="space-y-6">
     <div className="h-8 bg-dark-card rounded w-48 animate-pulse" />
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      {[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
+      {[...Array(4)].map((_, i) => (
+        <SkeletonCard key={i} />
+      ))}
     </div>
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 card animate-pulse h-64" />
@@ -59,11 +60,13 @@ export default function Dashboard() {
   const { toast } = useToast();
   const [stats, setStats] = useState<Stats | null>(null);
   const [recentJobs, setRecentJobs] = useState<Job[]>([]);
-  const [integrations, setIntegrations] = useState<IntegrationStatus | null>(null);
-  const [healthData, setHealthData] = useState<Record<string, unknown> | null>(null);
+  const [integrations, setIntegrations] = useState<IntegrationStatus | null>(
+    null,
+  );
+  const [healthData, setHealthData] = useState<Record<string, unknown> | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
-  // F2-1: Scoruri in scadere
-  const [riskMovers, setRiskMovers] = useState<RiskMover[]>([]);
 
   useEffect(() => {
     Promise.all([
@@ -77,22 +80,21 @@ export default function Dashboard() {
         setRecentJobs(j.jobs);
         if (settings) setIntegrations(settings);
         if (health) setHealthData(health);
-        logAction("Dashboard", "loaded", { companies: s?.total_companies, reports: s?.total_reports, jobs: s?.total_jobs });
+        logAction("Dashboard", "loaded", {
+          companies: s?.total_companies,
+          reports: s?.total_reports,
+          jobs: s?.total_jobs,
+        });
       })
       .catch(() => toast("Eroare la incarcarea dashboard-ului", "error"))
       .finally(() => setLoading(false));
 
-    // F2-1: Fetch risk movers pentru widgetul "Scoruri in scadere"
-    api.getRiskMovers()
-      .then((data) => {
-        const declining = (data.movers || []).filter((m) => m.delta < 0);
-        setRiskMovers(declining);
-      })
-      .catch(() => { /* widget optional — fail silently */ });
-
     // 10C M1.1: Refresh health status every 60s
     const healthInterval = setInterval(() => {
-      api.healthDeep().then(setHealthData).catch(() => {});
+      api
+        .healthDeep()
+        .then(setHealthData)
+        .catch(() => {});
     }, 60_000);
     return () => clearInterval(healthInterval);
   }, []);
@@ -102,12 +104,14 @@ export default function Dashboard() {
   // Trend indicator: compare jobs_this_month with a previous reference
   // The API doesn't expose last month's count directly, so we show a visual placeholder
   // based on whether the current month value is above/below the monthly average
-  const monthlyAvg = stats && stats.total_jobs > 0
-    ? Math.round(stats.total_jobs / Math.max(1, 6)) // rough 6-month avg
-    : null;
-  const monthDelta = monthlyAvg !== null && stats
-    ? (stats.jobs_this_month ?? 0) - monthlyAvg
-    : null;
+  const monthlyAvg =
+    stats && stats.total_jobs > 0
+      ? Math.round(stats.total_jobs / Math.max(1, 6)) // rough 6-month avg
+      : null;
+  const monthDelta =
+    monthlyAvg !== null && stats
+      ? (stats.jobs_this_month ?? 0) - monthlyAvg
+      : null;
 
   const statCards = [
     {
@@ -146,10 +150,26 @@ export default function Dashboard() {
         { name: "ANAF Bilant", status: true, note: "Date financiare" },
         { name: "BNR", status: true, note: "Cursuri valutare" },
         { name: "Tavily", status: integrations.has_tavily, note: "Web search" },
-        { name: "Groq AI", status: integrations.has_groq, note: "Sinteza rapida" },
-        { name: "Gemini", status: integrations.has_gemini, note: "Fallback AI" },
-        { name: "Claude CLI", status: integrations.synthesis_mode === "claude_code", note: "Sinteza premium" },
-        { name: "Telegram", status: integrations.has_telegram, note: "Notificari" },
+        {
+          name: "Groq AI",
+          status: integrations.has_groq,
+          note: "Sinteza rapida",
+        },
+        {
+          name: "Gemini",
+          status: integrations.has_gemini,
+          note: "Fallback AI",
+        },
+        {
+          name: "Claude CLI",
+          status: integrations.synthesis_mode === "claude_code",
+          note: "Sinteza premium",
+        },
+        {
+          name: "Telegram",
+          status: integrations.has_telegram,
+          note: "Notificari",
+        },
       ]
     : [];
 
@@ -163,7 +183,10 @@ export default function Dashboard() {
             Roland Intelligence System v1.1
           </p>
         </div>
-        <Link to="/new-analysis" className="btn-primary flex items-center gap-2">
+        <Link
+          to="/new-analysis"
+          className="btn-primary flex items-center gap-2"
+        >
           <PlusCircle className="w-4 h-4" />
           Analiza Noua
         </Link>
@@ -179,18 +202,21 @@ export default function Dashboard() {
                   {card.label}
                 </p>
                 <div className="flex items-end gap-2 mt-2">
-                  <p className="text-3xl font-bold text-white">
-                    {card.value}
-                  </p>
+                  <p className="text-3xl font-bold text-white">{card.value}</p>
                   {card.trend !== null && card.trend !== 0 && (
-                    <span className={clsx(
-                      "flex items-center gap-0.5 text-xs font-medium mb-1",
-                      card.trend > 0 ? "text-green-400" : "text-red-400"
-                    )}>
-                      {card.trend > 0
-                        ? <ArrowUpRight className="w-3.5 h-3.5" />
-                        : <ArrowDownRight className="w-3.5 h-3.5" />}
-                      {card.trend > 0 ? "+" : ""}{card.trend} vs medie
+                    <span
+                      className={clsx(
+                        "flex items-center gap-0.5 text-xs font-medium mb-1",
+                        card.trend > 0 ? "text-green-400" : "text-red-400",
+                      )}
+                    >
+                      {card.trend > 0 ? (
+                        <ArrowUpRight className="w-3.5 h-3.5" />
+                      ) : (
+                        <ArrowDownRight className="w-3.5 h-3.5" />
+                      )}
+                      {card.trend > 0 ? "+" : ""}
+                      {card.trend} vs medie
                     </span>
                   )}
                   {card.trend !== null && card.trend === 0 && (
@@ -210,7 +236,9 @@ export default function Dashboard() {
         {/* Recent Jobs - 2/3 width */}
         <div className="lg:col-span-2 card">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-white">Activitate Recenta</h2>
+            <h2 className="text-lg font-semibold text-white">
+              Activitate Recenta
+            </h2>
             <Link
               to="/reports"
               className="text-sm text-accent-secondary hover:text-accent-light"
@@ -264,12 +292,17 @@ export default function Dashboard() {
                     </div>
                     <div className="flex items-center gap-3">
                       {/* 10C M1.3: Completeness Gate Badge */}
-                      {job.status === "DONE" && (job as unknown as Record<string, unknown>).completeness_score !== undefined
-                        && Number((job as unknown as Record<string, unknown>).completeness_score) < 50 && (
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-900/50 text-red-400">
-                          LOW DATA
-                        </span>
-                      )}
+                      {job.status === "DONE" &&
+                        (job as unknown as Record<string, unknown>)
+                          .completeness_score !== undefined &&
+                        Number(
+                          (job as unknown as Record<string, unknown>)
+                            .completeness_score,
+                        ) < 50 && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-900/50 text-red-400">
+                            LOW DATA
+                          </span>
+                        )}
                       {job.status === "RUNNING" && (
                         <div className="w-24 h-1.5 bg-dark-border rounded-full overflow-hidden">
                           <div
@@ -279,7 +312,10 @@ export default function Dashboard() {
                         </div>
                       )}
                       <span
-                        className={clsx("text-xs font-medium", statusConf.color)}
+                        className={clsx(
+                          "text-xs font-medium",
+                          statusConf.color,
+                        )}
                       >
                         {statusConf.label}
                       </span>
@@ -306,17 +342,21 @@ export default function Dashboard() {
                     ) : (
                       <AlertCircle className="w-3.5 h-3.5 text-gray-600" />
                     )}
-                    <span className={clsx(
-                      "text-sm",
-                      item.status ? "text-gray-300" : "text-gray-600"
-                    )}>
+                    <span
+                      className={clsx(
+                        "text-sm",
+                        item.status ? "text-gray-300" : "text-gray-600",
+                      )}
+                    >
                       {item.name}
                     </span>
                   </div>
-                  <span className={clsx(
-                    "text-[10px] font-mono",
-                    item.status ? "text-green-400" : "text-gray-600"
-                  )}>
+                  <span
+                    className={clsx(
+                      "text-[10px] font-mono",
+                      item.status ? "text-green-400" : "text-gray-600",
+                    )}
+                  >
                     {item.status ? "OK" : "---"}
                   </span>
                 </div>
@@ -346,26 +386,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* F2-1: Widget "Scoruri in Scadere" — top 3 firme cu delta negativ */}
-      {riskMovers.length > 0 && (
-        <div className="bg-dark-card border border-red-500/20 rounded-lg p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <TrendingDown className="w-4 h-4 text-red-400" />
-            <h3 className="text-sm font-medium text-white">Scoruri in scadere</h3>
-          </div>
-          <div className="space-y-2">
-            {riskMovers.slice(0, 3).map(m => (
-              <Link key={m.id} to={`/company/${m.id}`}
-                className="flex justify-between items-center p-2 hover:bg-dark-border/30 rounded transition">
-                <span className="text-sm text-gray-300">{m.name}</span>
-                <span className="text-red-400 text-sm font-mono">{m.delta > 0 ? '+' : ''}{m.delta}</span>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* N3: Risk Movers Widget */}
+      {/* N3: Risk Movers Widget — afiseaza toti moverii (F6-8: eliminat duplicatul hardcodat) */}
       <RiskMoversWidget />
 
       {/* 10C M1.1: Health Status Card (Live) */}
@@ -378,24 +399,53 @@ export default function Dashboard() {
             </h2>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {Object.entries(healthData).filter(([k]) => k !== "status").map(([key, val]) => {
-              const isOk = typeof val === "object" && val !== null && (val as Record<string, unknown>).status === "ok";
-              const isFail = typeof val === "object" && val !== null && (val as Record<string, unknown>).status !== "ok";
-              return (
-                <div key={key} className={clsx(
-                  "p-2 rounded-lg text-center",
-                  isOk ? "bg-green-900/20" : isFail ? "bg-red-900/20" : "bg-dark-surface"
-                )}>
-                  <span className={clsx(
-                    "text-xs font-medium",
-                    isOk ? "text-green-400" : isFail ? "text-red-400" : "text-gray-400"
-                  )}>
-                    {isOk ? "OK" : isFail ? "FAIL" : typeof val === "string" ? val : "?"}
-                  </span>
-                  <p className="text-[10px] text-gray-500 mt-0.5">{key.replace(/_/g, " ")}</p>
-                </div>
-              );
-            })}
+            {Object.entries(healthData)
+              .filter(([k]) => k !== "status")
+              .map(([key, val]) => {
+                const isOk =
+                  typeof val === "object" &&
+                  val !== null &&
+                  (val as Record<string, unknown>).status === "ok";
+                const isFail =
+                  typeof val === "object" &&
+                  val !== null &&
+                  (val as Record<string, unknown>).status !== "ok";
+                return (
+                  <div
+                    key={key}
+                    className={clsx(
+                      "p-2 rounded-lg text-center",
+                      isOk
+                        ? "bg-green-900/20"
+                        : isFail
+                          ? "bg-red-900/20"
+                          : "bg-dark-surface",
+                    )}
+                  >
+                    <span
+                      className={clsx(
+                        "text-xs font-medium",
+                        isOk
+                          ? "text-green-400"
+                          : isFail
+                            ? "text-red-400"
+                            : "text-gray-400",
+                      )}
+                    >
+                      {isOk
+                        ? "OK"
+                        : isFail
+                          ? "FAIL"
+                          : typeof val === "string"
+                            ? val
+                            : "?"}
+                    </span>
+                    <p className="text-[10px] text-gray-500 mt-0.5">
+                      {key.replace(/_/g, " ")}
+                    </p>
+                  </div>
+                );
+              })}
           </div>
         </div>
       )}
@@ -409,19 +459,31 @@ export default function Dashboard() {
           Actiuni Rapide
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Link to="/new-analysis" className="p-3 rounded-lg bg-dark-surface hover:bg-dark-hover transition-colors text-center">
+          <Link
+            to="/new-analysis"
+            className="p-3 rounded-lg bg-dark-surface hover:bg-dark-hover transition-colors text-center"
+          >
             <Building2 className="w-5 h-5 text-accent-primary mx-auto mb-1" />
             <span className="text-xs text-gray-400">Profil Firma</span>
           </Link>
-          <Link to="/new-analysis" className="p-3 rounded-lg bg-dark-surface hover:bg-dark-hover transition-colors text-center">
+          <Link
+            to="/new-analysis"
+            className="p-3 rounded-lg bg-dark-surface hover:bg-dark-hover transition-colors text-center"
+          >
             <FileText className="w-5 h-5 text-blue-400 mx-auto mb-1" />
             <span className="text-xs text-gray-400">Evaluare Risc</span>
           </Link>
-          <Link to="/companies" className="p-3 rounded-lg bg-dark-surface hover:bg-dark-hover transition-colors text-center">
+          <Link
+            to="/companies"
+            className="p-3 rounded-lg bg-dark-surface hover:bg-dark-hover transition-colors text-center"
+          >
             <CheckCircle className="w-5 h-5 text-green-400 mx-auto mb-1" />
             <span className="text-xs text-gray-400">Companii</span>
           </Link>
-          <Link to="/reports" className="p-3 rounded-lg bg-dark-surface hover:bg-dark-hover transition-colors text-center">
+          <Link
+            to="/reports"
+            className="p-3 rounded-lg bg-dark-surface hover:bg-dark-hover transition-colors text-center"
+          >
             <TrendingUp className="w-5 h-5 text-purple-400 mx-auto mb-1" />
             <span className="text-xs text-gray-400">Rapoarte</span>
           </Link>
@@ -431,7 +493,6 @@ export default function Dashboard() {
   );
 }
 
-
 function RiskMoversWidget() {
   const navigate = useNavigate();
   const [movers, setMovers] = useState<RiskMover[]>([]);
@@ -439,7 +500,8 @@ function RiskMoversWidget() {
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    api.getRiskMovers()
+    api
+      .getRiskMovers()
       .then((data) => setMovers((data.movers || []).slice(0, 5)))
       .catch(() => setError(true))
       .finally(() => setLoading(false));
@@ -474,17 +536,23 @@ function RiskMoversWidget() {
               className="w-full flex items-center justify-between p-3 bg-dark-surface rounded-lg hover:bg-dark-hover transition-colors text-left"
             >
               <div className="flex-1 min-w-0">
-                <p className="text-sm text-gray-300 font-medium truncate">{mover.name}</p>
+                <p className="text-sm text-gray-300 font-medium truncate">
+                  {mover.name}
+                </p>
                 {mover.cui && (
-                  <p className="text-[10px] text-gray-600 font-mono">CUI: {mover.cui}</p>
+                  <p className="text-[10px] text-gray-600 font-mono">
+                    CUI: {mover.cui}
+                  </p>
                 )}
               </div>
               <div className="flex items-center gap-3 shrink-0 ml-3">
-                <span className="text-sm font-mono text-gray-400">{mover.current_score}</span>
+                <span className="text-sm font-mono text-gray-400">
+                  {mover.current_score}
+                </span>
                 <span
                   className={clsx(
                     "flex items-center gap-0.5 text-xs font-medium",
-                    mover.delta < 0 ? "text-red-400" : "text-green-400"
+                    mover.delta < 0 ? "text-red-400" : "text-green-400",
                   )}
                 >
                   {mover.delta < 0 ? (
@@ -492,7 +560,8 @@ function RiskMoversWidget() {
                   ) : (
                     <ArrowUpRight className="w-3.5 h-3.5" />
                   )}
-                  {mover.delta > 0 ? "+" : ""}{mover.delta}
+                  {mover.delta > 0 ? "+" : ""}
+                  {mover.delta}
                 </span>
               </div>
             </button>
@@ -507,17 +576,30 @@ function TrendChart() {
   const [trend, setTrend] = useState<{ month: string; count: number }[]>([]);
 
   useEffect(() => {
-    api.getStatsTrend()
+    api
+      .getStatsTrend()
       .then((data) => setTrend(data.trend || []))
-      .catch(() => { /* trend chart optional — fail silently */ });
+      .catch(() => {
+        /* trend chart optional — fail silently */
+      });
   }, []);
 
   if (trend.length === 0) return null;
 
   const max = Math.max(...trend.map((t) => t.count), 1);
   const months = [
-    "Ian", "Feb", "Mar", "Apr", "Mai", "Iun",
-    "Iul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    "Ian",
+    "Feb",
+    "Mar",
+    "Apr",
+    "Mai",
+    "Iun",
+    "Iul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
   ];
 
   const formatMonth = (m: string) => {
@@ -532,7 +614,10 @@ function TrendChart() {
       </h2>
       <div className="flex items-end gap-3 h-32">
         {trend.map((t) => (
-          <div key={t.month} className="flex-1 flex flex-col items-center gap-1">
+          <div
+            key={t.month}
+            className="flex-1 flex flex-col items-center gap-1"
+          >
             <span className="text-xs text-gray-400 font-mono">{t.count}</span>
             <div
               className="w-full bg-accent-primary/80 rounded-t transition-all"
@@ -541,7 +626,9 @@ function TrendChart() {
                 minHeight: "4px",
               }}
             />
-            <span className="text-[10px] text-gray-500">{formatMonth(t.month)}</span>
+            <span className="text-[10px] text-gray-500">
+              {formatMonth(t.month)}
+            </span>
           </div>
         ))}
       </div>

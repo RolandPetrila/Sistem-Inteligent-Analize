@@ -6,14 +6,13 @@ Monitoring Service — Verifica periodic firmele monitorizate si trimite alerte.
 
 import asyncio
 import json
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 from loguru import logger
 
-from backend.database import db
 from backend.agents.tools.anaf_client import get_anaf_data
+from backend.database import db
 from backend.services.notification import send_telegram
-
 
 # Smart severity mapping (8E)
 SEVERITY_MAP = {
@@ -57,6 +56,11 @@ def _determine_combined_severity(changes: list[dict]) -> str:
     """Verifica daca combinatia de schimbari justifica escaladare la CRITICAL."""
     if not changes:
         return "INFO"
+
+    # F4-1: Orice 2+ RED flags independente = CRITICAL
+    red_count = sum(1 for c in changes if c.get("severity") == "RED")
+    if red_count >= 2:
+        return "CRITICAL"
 
     def _matches(change: dict, rule: dict) -> bool:
         if change.get("field") != rule.get("field"):
@@ -275,6 +279,21 @@ async def run_monitoring_check() -> list[dict]:
                     msg += f"Verificat: {datetime.now(UTC).strftime('%d.%m.%Y %H:%M')}"
                     delivered = await _send_telegram_with_retry(msg)
                     logger.info(f"[monitoring] Alert [{max_severity}] {'sent' if delivered else 'FAILED'} for {company_name}")
+
+                    # F4-2: Sync is_active in DB la detectie RADIAT/INACTIV
+                    for change in changes:
+                        if change.get("field") == "Stare" and any(
+                            kw in str(change.get("new", "")).upper() for kw in ["RADIAT", "INACTIV"]
+                        ):
+                            try:
+                                await db.execute(
+                                    "UPDATE companies SET is_active = 0 WHERE cui = ?",
+                                    (cui,)
+                                )
+                                logger.info(f"[monitoring] companies.is_active=0 sync pentru CUI {cui}")
+                            except Exception as _e:
+                                logger.debug(f"[monitoring] is_active sync error: {_e}")
+                            break
                 else:
                     logger.info(f"[monitoring] Alert [{max_severity}] throttled for {company_name}")
 

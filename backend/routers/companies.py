@@ -1,12 +1,10 @@
-import csv
-import io
 
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from loguru import logger
 
 from backend.database import db
-from backend.errors import RISError, ErrorCode
+from backend.errors import ErrorCode, RISError
 
 router = APIRouter()
 
@@ -100,6 +98,7 @@ async def search_companies_fts(
 async def import_companies_csv(file: UploadFile = File(...)):
     """F3-7: Import companii din CSV cu coloane cui, name. INSERT OR IGNORE — nu suprascrie date existente."""
     import uuid as _uuid
+
     from backend.agents.tools.cui_validator import validate_cui
 
     content = await file.read()
@@ -195,38 +194,40 @@ async def list_companies(
     return {"companies": [dict(r) for r in rows], "total": total}
 
 
+async def _stream_companies_csv():
+    """F7-2: Generator streaming CSV — evita fetch_all() in memorie pentru liste mari."""
+    header = "CUI,Denumire,CAEN Cod,CAEN Descriere,Judet,Oras,Nr Analize,Prima Analiza,Ultima Analiza\n"
+    yield header
+    offset = 0
+    chunk_size = 500
+    while True:
+        rows = await db.fetch_all(
+            "SELECT cui, name, caen_code, caen_description, county, city, "
+            "analysis_count, first_analyzed_at, last_analyzed_at "
+            f"FROM companies ORDER BY name LIMIT {chunk_size} OFFSET {offset}"
+        )
+        if not rows:
+            break
+        for row in rows:
+            r = dict(row)
+            # Escape commas in text fields using semicolon
+            def _esc(v):
+                return str(v or "").replace(",", ";").replace("\n", " ")
+            yield (
+                f"{_esc(r.get('cui'))},{_esc(r.get('name'))},{_esc(r.get('caen_code'))},"
+                f"{_esc(r.get('caen_description'))},{_esc(r.get('county'))},{_esc(r.get('city'))},"
+                f"{r.get('analysis_count', 0)},{_esc(r.get('first_analyzed_at'))},"
+                f"{_esc(r.get('last_analyzed_at'))}\n"
+            )
+        offset += chunk_size
+
+
 @router.get("/export/csv")
 async def export_companies_csv():
-    """DF7: Export toate companiile in format CSV (CRM-ready)."""
-    rows = await db.fetch_all(
-        "SELECT cui, name, caen_code, caen_description, county, city, "
-        "analysis_count, first_analyzed_at, last_analyzed_at "
-        "FROM companies ORDER BY name"
-    )
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow([
-        "CUI", "Denumire", "CAEN Cod", "CAEN Descriere",
-        "Judet", "Oras", "Nr Analize", "Prima Analiza", "Ultima Analiza",
-    ])
-    for row in rows:
-        r = dict(row)
-        writer.writerow([
-            r.get("cui", ""),
-            r.get("name", ""),
-            r.get("caen_code", ""),
-            r.get("caen_description", ""),
-            r.get("county", ""),
-            r.get("city", ""),
-            r.get("analysis_count", 0),
-            r.get("first_analyzed_at", ""),
-            r.get("last_analyzed_at", ""),
-        ])
-
-    output.seek(0)
+    """DF7: Export toate companiile in format CSV (CRM-ready).
+    F7-2: Streaming response — nu incarca toata lista in memorie."""
     return StreamingResponse(
-        iter([output.getvalue()]),
+        _stream_companies_csv(),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=companii_ris.csv"},
     )
@@ -428,3 +429,39 @@ async def get_score_trend(
         (company_id, limit),
     )
     return rows
+
+
+@router.get("/{cui}/predictive")
+async def get_predictive_scores(cui: str):
+    """F2-5: Calculeaza scoruri predictive financiare Altman/Piotroski/Beneish/Zmijewski.
+    Foloseste cel mai recent raport disponibil pentru CUI-ul dat."""
+    import json
+    from datetime import UTC, datetime
+
+    from backend.agents.verification.scoring import calculate_all_predictive_scores
+
+    # Gaseste cel mai recent raport pentru CUI
+    report = await db.fetch_one(
+        """
+        SELECT r.full_data FROM reports r
+        JOIN companies c ON c.id = r.company_id
+        WHERE c.cui = ?
+        ORDER BY r.created_at DESC
+        LIMIT 1
+        """,
+        (cui,),
+    )
+
+    if not report or not report["full_data"]:
+        raise HTTPException(status_code=404, detail=f"Nu exista raport pentru CUI {cui}")
+
+    try:
+        verified_data = json.loads(report["full_data"])
+    except Exception:
+        raise HTTPException(status_code=500, detail="Date raport invalide")
+
+    scores = calculate_all_predictive_scores(verified_data)
+    scores["cui"] = cui
+    scores["computed_at"] = datetime.now(UTC).isoformat()
+
+    return scores

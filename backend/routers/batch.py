@@ -9,18 +9,18 @@ import io
 import json
 import uuid
 import zipfile
-from datetime import datetime, date, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from loguru import logger
 
-from backend.database import db
-from backend.config import settings
 from backend.agents.tools.cui_validator import validate_cui
+from backend.config import settings
+from backend.database import db
+from backend.errors import ErrorCode, RISError
 from backend.rate_limiter import rate_limit_batch
-from backend.errors import RISError, ErrorCode
 
 router = APIRouter()
 
@@ -308,24 +308,17 @@ async def download_batch_zip(batch_id: str):
     )
 
 
-async def _extract_batch_summary_row(result: dict) -> list:
-    """8D: Extrage date sumar din raportul sub-job pentru Rich Summary CSV."""
+def _build_summary_row_from_data(result: dict, report_data: dict | None) -> list:
+    """Construieste un rand CSV din datele pre-fetch-uite (fara query DB)."""
     cui = result["cui"]
     status = result["status"]
     error = result.get("error", "")
 
-    if status != "OK":
+    if status != "OK" or not report_data:
         return [cui, "", "", "", "", "", "", "", "", status, error]
 
     try:
-        report = await db.fetch_one(
-            "SELECT full_data, risk_score FROM reports WHERE job_id = ? LIMIT 1",
-            (result["job_id"],),
-        )
-        if not report or not report["full_data"]:
-            return [cui, "", "", "", "", "", "", "", "", status, ""]
-
-        data = json.loads(report["full_data"])
+        data = json.loads(report_data["full_data"]) if isinstance(report_data["full_data"], str) else report_data["full_data"]
         company = data.get("company", {})
         financial = data.get("financial", {})
 
@@ -336,7 +329,6 @@ async def _extract_batch_summary_row(result: dict) -> list:
 
         denumire = _v(company.get("denumire", {}))
         caen = _v(company.get("caen_code", {}))
-        # D15 fix: Include CAEN description
         caen_desc = _v(company.get("caen_description", {}))
         ca = _v(financial.get("cifra_afaceri", {}))
         pn = _v(financial.get("profit_net", {}))
@@ -349,6 +341,20 @@ async def _extract_batch_summary_row(result: dict) -> list:
     except Exception as e:
         logger.warning(f"[batch] CSV row build: {e}")
         return [cui, "", "", "", "", "", "", "", "", status, ""]
+
+
+async def _bulk_fetch_reports(results: list[dict]) -> dict[str, dict]:
+    """F7-1: 1 query IN loc de N query-uri — pre-fetch toate rapoartele pentru batch CSV.
+    Returns: dict {job_id → report_row}"""
+    ok_job_ids = [r["job_id"] for r in results if r["status"] == "OK" and r.get("job_id")]
+    if not ok_job_ids:
+        return {}
+    placeholders = ",".join(["?" for _ in ok_job_ids])
+    rows = await db.fetch_all(
+        f"SELECT job_id, full_data, risk_score FROM reports WHERE job_id IN ({placeholders})",
+        ok_job_ids,
+    )
+    return {row["job_id"]: dict(row) for row in rows}
 
 
 async def _analyze_one_cui(
@@ -509,14 +515,16 @@ async def _run_batch_inner(
                         zf.write(file, arcname)
 
         # 8D: Rich Summary CSV — include CA, profit, risk score, CAEN
+        # F7-1: Pre-fetch toate rapoartele intr-un singur query (fix N+1)
+        reports_map = await _bulk_fetch_reports(results)
         summary = io.StringIO()
         writer = csv.writer(summary)
         # D15 fix: Added CAEN Descriere column
         writer.writerow(["CUI", "Denumire", "CAEN", "CAEN Descriere", "CA", "Profit Net", "Angajati",
                          "Scor Risc", "Culoare Risc", "Status", "Error"])
         for r in results:
-            # Extract data from sub-job report if available
-            row_data = await _extract_batch_summary_row(r)
+            report_data = reports_map.get(r.get("job_id", ""))
+            row_data = _build_summary_row_from_data(r, report_data)
             writer.writerow(row_data)
         zf.writestr("_sumar_batch.csv", summary.getvalue())
 
