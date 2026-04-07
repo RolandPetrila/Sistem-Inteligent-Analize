@@ -72,7 +72,7 @@ def _is_private_ip(hostname: str) -> bool:
     try:
         ip = ip_address(hostname)
         return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
-    except (AddressValueError, TypeError):
+    except (AddressValueError, ValueError, TypeError):
         pass
     try:
         resolved = socket.gethostbyname(hostname)

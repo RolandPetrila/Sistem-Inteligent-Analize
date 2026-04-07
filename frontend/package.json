@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "analyze": "ANALYZE=true tsc -b && ANALYZE=true vite build"
   },
   "dependencies": {
     "clsx": "^2.1.1",
@@ -26,6 +27,7 @@
     "autoprefixer": "^10.4.20",
     "jsdom": "^26.1.0",
     "postcss": "^8.5.3",
+    "rollup-plugin-visualizer": "^6.0.11",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.3",
     "vite": "^6.2.4",

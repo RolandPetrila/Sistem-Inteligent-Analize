@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import { VitePWA } from "vite-plugin-pwa";
+import { visualizer } from "rollup-plugin-visualizer";
 
 export default defineConfig({
   test: {
@@ -67,6 +68,20 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    // F8-3: Bundle analysis — ruleaza `npm run analyze` pentru raport vizual
+    rollupOptions: {
+      plugins: [
+        process.env.ANALYZE === "true" &&
+          visualizer({
+            open: true,
+            filename: "dist/stats.html",
+            gzipSize: true,
+            brotliSize: true,
+          }),
+      ].filter(Boolean),
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

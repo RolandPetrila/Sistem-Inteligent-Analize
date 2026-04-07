@@ -427,6 +427,22 @@ class VerificationAgent(BaseAgent):
                 f"Status: {bpi.get('status', 'N/A')}" if bpi.get("found") else "Nicio procedura gasita",
             )
 
+        # F1-1: Portal Just SOAP — dosare reale (prioritate peste Tavily estimation)
+        dosare_just = official.get("dosare_just", {})
+        if isinstance(dosare_just, dict) and dosare_just.get("found"):
+            risk["dosare_just"] = self._make_field(
+                {
+                    "total": dosare_just.get("total_dosare", 0),
+                    "reclamant": dosare_just.get("reclamant", 0),
+                    "parat": dosare_just.get("parat", 0),
+                    "dosare": dosare_just.get("dosare", [])[:5],
+                },
+                "portal.just.ro (SOAP)",
+                f"{dosare_just.get('total_dosare', 0)} dosare gasite (real-time SOAP)"
+                if dosare_just.get("total_dosare", 0) > 0
+                else "Niciun dosar gasit in portal.just.ro",
+            )
+
         # EP3: Risc fiscal derivat
         risc_fiscal = official.get("risc_fiscal", {})
         if isinstance(risc_fiscal, dict):

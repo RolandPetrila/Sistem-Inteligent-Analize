@@ -420,50 +420,46 @@ async def _run_batch(
         )
 
 
-async def _run_batch_inner(
+async def _setup_batch_run(batch_id: str, batch_dir: Path) -> tuple[int, int, list]:
+    """M2: Initializeaza starea batch — DB status, resume din progress existent."""
+    batch_dir.mkdir(parents=True, exist_ok=True)
+    await db.execute(
+        "UPDATE jobs SET status = 'RUNNING', started_at = ? WHERE id = ?",
+        (datetime.now(UTC).isoformat(), batch_id),
+    )
+    existing_progress = await _get_batch_progress(batch_id)
+    existing_results = existing_progress.get("results", [])
+    completed = sum(1 for r in existing_results if r.get("status") == "OK")
+    failed = sum(1 for r in existing_results if r.get("status") == "FAILED")
+    return completed, failed, list(existing_results)
+
+
+async def _process_batch_chunks(
     batch_id: str,
     cuis: list[str],
     analysis_type: str,
     report_level: int,
     ws_manager,
-    refresh: bool = False,
-):
-    """Inner batch execution — called by _run_batch with error protection."""
+    refresh: bool,
+    completed: int,
+    failed: int,
+    results: list,
+) -> tuple[int, int, list]:
+    """M2: Proceseaza CUI-urile in chunk-uri paralele cu checkpoint dupa fiecare chunk."""
     total = len(cuis)
-    batch_dir = Path(settings.outputs_dir) / batch_id
-    batch_dir.mkdir(parents=True, exist_ok=True)
-
-    await db.execute(
-        "UPDATE jobs SET status = 'RUNNING', started_at = ? WHERE id = ?",
-        (datetime.now(UTC).isoformat(), batch_id),
-    )
-
-    # C14 fix: Load existing results from progress (for resume scenarios)
-    existing_progress = await _get_batch_progress(batch_id)
-    existing_results = existing_progress.get("results", [])
-    completed = sum(1 for r in existing_results if r.get("status") == "OK")
-    failed = sum(1 for r in existing_results if r.get("status") == "FAILED")
-    results = list(existing_results)
-
-    # 10F M8.3: Parallel Analysis — process CUIs in chunks of MAX_PARALLEL_BATCH
     sem = asyncio.Semaphore(MAX_PARALLEL_BATCH)
 
     for chunk_start in range(0, total, MAX_PARALLEL_BATCH):
         chunk = cuis[chunk_start:chunk_start + MAX_PARALLEL_BATCH]
         chunk_end = min(chunk_start + len(chunk), total)
+        progress_pct = int((chunk_start / total) * 100)
 
         logger.info(f"[batch] {batch_id[:8]}: Processing chunk {chunk_start+1}-{chunk_end}/{total} — CUIs {chunk}")
 
-        progress_pct = int((chunk_start / total) * 100)
-
-        # 10E M8.1: State checkpoint — save last successful CUI index for crash recovery
+        # 10E M8.1: State checkpoint — crash recovery
         await _update_batch_progress(batch_id, {
-            "total": total,
-            "completed": completed,
-            "failed": failed,
-            "current_cui": ", ".join(chunk),
-            "last_index": chunk_start,
-            "results": results,
+            "total": total, "completed": completed, "failed": failed,
+            "current_cui": ", ".join(chunk), "last_index": chunk_start, "results": results,
         })
         await db.execute(
             "UPDATE jobs SET progress_percent = ?, current_step = ? WHERE id = ?",
@@ -471,26 +467,19 @@ async def _run_batch_inner(
         )
         if ws_manager:
             await ws_manager.broadcast(batch_id, {
-                "type": "progress",
-                "job_id": batch_id,
-                "percent": progress_pct,
+                "type": "progress", "job_id": batch_id, "percent": progress_pct,
                 "step": f"Analiza {chunk_start+1}-{chunk_end}/{total}: CUI {', '.join(chunk)}",
                 "status": "RUNNING",
             })
 
-        # 10F M8.3: Fire all CUIs in chunk in parallel via asyncio.gather
-        # B20 fix: return_exceptions=True so one failure doesn't crash entire batch
+        # 10F M8.3: Parallel gather — return_exceptions=True (B20 fix)
         chunk_results = await asyncio.gather(
-            *[
-                _analyze_one_cui(sem, cui, analysis_type, report_level, refresh)
-                for cui in chunk
-            ],
+            *[_analyze_one_cui(sem, cui, analysis_type, report_level, refresh) for cui in chunk],
             return_exceptions=True,
         )
 
         for idx, result in enumerate(chunk_results):
             if isinstance(result, BaseException):
-                # B20: Unhandled exception from gather — treat as failed
                 failed_cui = chunk[idx] if idx < len(chunk) else "unknown"
                 results.append({"cui": failed_cui, "job_id": "", "status": "FAILED", "error": str(result)[:200]})
                 failed += 1
@@ -501,8 +490,21 @@ async def _run_batch_inner(
                 else:
                     failed += 1
 
-    # Genereaza ZIP cu toate rapoartele
+    return completed, failed, results
+
+
+async def _finalize_batch_run(
+    batch_id: str,
+    batch_dir: Path,
+    results: list,
+    completed: int,
+    failed: int,
+    ws_manager,
+):
+    """M2: Genereaza ZIP + CSV sumar, actualizeaza DB la DONE, trimite WS final."""
+    total = len(results)
     zip_path = batch_dir / "batch_rapoarte.zip"
+
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for result in results:
             if result["status"] != "OK":
@@ -511,45 +513,48 @@ async def _run_batch_inner(
             if sub_dir.exists():
                 for file in sub_dir.iterdir():
                     if file.is_file():
-                        arcname = f"{result['cui']}/{file.name}"
-                        zf.write(file, arcname)
+                        zf.write(file, f"{result['cui']}/{file.name}")
 
-        # 8D: Rich Summary CSV — include CA, profit, risk score, CAEN
-        # F7-1: Pre-fetch toate rapoartele intr-un singur query (fix N+1)
+        # 8D: Rich Summary CSV (F7-1: batch fetch, no N+1)
         reports_map = await _bulk_fetch_reports(results)
         summary = io.StringIO()
         writer = csv.writer(summary)
-        # D15 fix: Added CAEN Descriere column
         writer.writerow(["CUI", "Denumire", "CAEN", "CAEN Descriere", "CA", "Profit Net", "Angajati",
                          "Scor Risc", "Culoare Risc", "Status", "Error"])
         for r in results:
-            report_data = reports_map.get(r.get("job_id", ""))
-            row_data = _build_summary_row_from_data(r, report_data)
-            writer.writerow(row_data)
+            writer.writerow(_build_summary_row_from_data(r, reports_map.get(r.get("job_id", ""))))
         zf.writestr("_sumar_batch.csv", summary.getvalue())
 
-    # Update final progress in DB
     await _update_batch_progress(batch_id, {
-        "total": total,
-        "completed": completed,
-        "failed": failed,
-        "current_cui": "",
-        "results": results,
+        "total": total, "completed": completed, "failed": failed,
+        "current_cui": "", "results": results,
     })
-
     await db.execute(
         "UPDATE jobs SET status = 'DONE', progress_percent = 100, "
         "current_step = ?, completed_at = ? WHERE id = ?",
         (f"Batch complet: {completed} OK, {failed} erori din {total}", datetime.now(UTC).isoformat(), batch_id),
     )
-
     if ws_manager:
         await ws_manager.broadcast(batch_id, {
-            "type": "progress",
-            "job_id": batch_id,
-            "percent": 100,
-            "step": f"Batch complet: {completed}/{total}",
-            "status": "DONE",
+            "type": "progress", "job_id": batch_id, "percent": 100,
+            "step": f"Batch complet: {completed}/{total}", "status": "DONE",
         })
-
     logger.info(f"[batch] {batch_id[:8]}: Done — {completed} OK, {failed} failed, ZIP: {zip_path}")
+
+
+async def _run_batch_inner(
+    batch_id: str,
+    cuis: list[str],
+    analysis_type: str,
+    report_level: int,
+    ws_manager,
+    refresh: bool = False,
+):
+    """Inner batch execution — orchestreaza setup + process + finalize (M2 refactor)."""
+    batch_dir = Path(settings.outputs_dir) / batch_id
+    completed, failed, results = await _setup_batch_run(batch_id, batch_dir)
+    completed, failed, results = await _process_batch_chunks(
+        batch_id, cuis, analysis_type, report_level, ws_manager, refresh,
+        completed, failed, results,
+    )
+    await _finalize_batch_run(batch_id, batch_dir, results, completed, failed, ws_manager)

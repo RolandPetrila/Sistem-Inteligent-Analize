@@ -447,27 +447,56 @@ def calculate_risk_score(verified: dict) -> dict:
         jur_reasons.append({"text": f"Procedura insolventa BPI activa ({bpi_status})", "impact": -40})
         risk_factors.append((f"Firma in procedura insolventa BPI ({bpi_status})", "CRITICAL"))
 
-    litigation = risk_data.get("litigation", {})
-    if isinstance(litigation, dict):
-        val = litigation.get("value", {})
-        if isinstance(val, dict):
-            lit_count = val.get("count", 0)
-            if lit_count > 5:
-                jur_score -= 30
-                jur_reasons.append({"text": f"Numar ridicat de litigii ({lit_count})", "impact": -30})
-                risk_factors.append(("Numar ridicat de litigii (5+)", "MEDIUM"))
-            elif lit_count > 3:
-                jur_score -= 15
-                jur_reasons.append({"text": f"Litigii multiple ({lit_count})", "impact": -15})
-                risk_factors.append(("Litigii multiple gasite", "LOW"))
-            elif val.get("found"):
-                jur_score -= 5
-                jur_reasons.append({"text": "Litigii gasite", "impact": -5})
-                risk_factors.append(("Litigii gasite", "LOW"))
+    # F1-1: Prioritate Portal Just SOAP (date reale) peste Tavily estimation
+    dosare_just = risk_data.get("dosare_just", {})
+    if isinstance(dosare_just, dict) and dosare_just.get("value"):
+        dval = dosare_just["value"] if isinstance(dosare_just.get("value"), dict) else {}
+        total_dosare = dval.get("total", 0)
+        parat = dval.get("parat", 0)
+        reclamant = dval.get("reclamant", 0)
+        if total_dosare > 10:
+            jur_score -= 25
+            jur_reasons.append({"text": f"Dosare judecatoresti: {total_dosare} (Portal Just SOAP)", "impact": -25})
+            risk_factors.append((f"Volum ridicat dosare judecatoresti ({total_dosare})", "MEDIUM"))
+        elif total_dosare > 5:
+            jur_score -= 15
+            jur_reasons.append({"text": f"Dosare judecatoresti: {total_dosare} (Portal Just)", "impact": -15})
+            risk_factors.append(("Dosare judecatoresti multiple", "LOW"))
+        elif total_dosare > 0:
+            # Predominant parat = mai rau
+            if parat > reclamant:
+                jur_score -= 10
+                jur_reasons.append({"text": f"Dosare judecatoresti: {total_dosare} (predominant parat)", "impact": -10})
+                risk_factors.append(("Firma predominant parata in dosare", "LOW"))
             else:
-                jur_reasons.append({"text": "Fara litigii identificate", "impact": 0})
+                jur_score -= 5
+                jur_reasons.append({"text": f"Dosare judecatoresti: {total_dosare}", "impact": -5})
+        else:
+            jur_score = min(100, jur_score + 5)
+            jur_reasons.append({"text": "Niciun dosar judecatoresc (Portal Just SOAP)", "impact": 5})
     else:
-        jur_reasons.append({"text": "Date juridice indisponibile", "impact": 0})
+        # Fallback la Tavily estimation daca Portal Just nu e disponibil
+        litigation = risk_data.get("litigation", {})
+        if isinstance(litigation, dict):
+            val = litigation.get("value", {})
+            if isinstance(val, dict):
+                lit_count = val.get("count", 0)
+                if lit_count > 5:
+                    jur_score -= 30
+                    jur_reasons.append({"text": f"Numar ridicat de litigii ({lit_count})", "impact": -30})
+                    risk_factors.append(("Numar ridicat de litigii (5+)", "MEDIUM"))
+                elif lit_count > 3:
+                    jur_score -= 15
+                    jur_reasons.append({"text": f"Litigii multiple ({lit_count})", "impact": -15})
+                    risk_factors.append(("Litigii multiple gasite", "LOW"))
+                elif val.get("found"):
+                    jur_score -= 5
+                    jur_reasons.append({"text": "Litigii gasite (estimat Tavily)", "impact": -5})
+                    risk_factors.append(("Litigii gasite", "LOW"))
+                else:
+                    jur_reasons.append({"text": "Fara litigii identificate", "impact": 0})
+        else:
+            jur_reasons.append({"text": "Date juridice indisponibile", "impact": 0})
 
     dimensions["juridic"] = {"score": max(0, min(100, jur_score)), "weight": 20, "reasons": jur_reasons}
 

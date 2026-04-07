@@ -146,23 +146,8 @@ export default function Companies() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => {
-    loadCompanies();
-  }, []);
-
-  // Auto-search on debounced value change
-  useEffect(() => {
-    setPage(0);
-    loadCompanies(debouncedSearch, 0);
-  }, [debouncedSearch]);
-
-  // Reload when sort changes
-  useEffect(() => {
-    setPage(0);
-    loadCompanies(debouncedSearch, 0, sort);
-  }, [sort]);
-
-  // Reload when advanced filters change
+  // M4: Consolidated — initial load + toate trigger-ele de reload intr-un singur effect
+  // (inlocuieste 5 useEffect separate: mount, search, sort, filters, favorites toggle)
   useEffect(() => {
     setPage(0);
     loadCompanies(
@@ -173,13 +158,14 @@ export default function Companies() {
       filterCaen,
       filterRiskScore,
     );
-  }, [filterCounty, filterCaen, filterRiskScore]);
-
-  // Reload when favorites filter changes
-  useEffect(() => {
-    setPage(0);
-    loadCompanies(debouncedSearch, 0);
-  }, [showFavoritesOnly]);
+  }, [
+    debouncedSearch,
+    sort,
+    filterCounty,
+    filterCaen,
+    filterRiskScore,
+    showFavoritesOnly,
+  ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
