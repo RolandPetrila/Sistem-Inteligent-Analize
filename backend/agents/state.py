@@ -1,10 +1,17 @@
-from typing import TypedDict, Optional, Annotated, Any
 from operator import add
+from typing import Annotated, Any, TypedDict
 
 
 def _last_value(a, b):
     """Reducer: pastreaza ultima valoare (pt campuri updatate concurent)."""
     return b
+
+
+def _merge_dicts(a: dict | None, b: dict | None) -> dict:
+    """Reducer: merge dicts (pt _agent_metrics updatat concurent de agenti paraleli)."""
+    result = dict(a or {})
+    result.update(b or {})
+    return result
 
 
 class SourceResult(TypedDict, total=False):
@@ -30,19 +37,19 @@ class AnalysisState(TypedDict, total=False):
     input_params: dict
 
     # Date colectate per agent
-    official_data: Optional[dict]
-    web_data: Optional[dict]
-    market_data: Optional[dict]
+    official_data: dict | None
+    web_data: dict | None
+    market_data: dict | None
 
     # Post-verificare
-    verified_data: Optional[dict]
+    verified_data: dict | None
 
     # Sinteza
-    report_sections: Optional[dict]
-    key_takeaways: Optional[str]  # F2-15: 3 concluzii cheie generate post-sinteza
+    report_sections: dict | None
+    key_takeaways: str | None  # F2-15: 3 concluzii cheie generate post-sinteza
 
     # Raport generat
-    report_paths: Optional[dict]
+    report_paths: dict | None
 
     # Control flow
     errors: Annotated[list[AgentError], add]
@@ -55,10 +62,10 @@ class AnalysisState(TypedDict, total=False):
 
     # Internal: ws_manager instance passed through state (avoids circular import from main.py)
     # Set by job_service before graph execution; used by orchestrator nodes for agent_start/complete messages.
-    _ws_manager: Optional[Any]
+    _ws_manager: Any | None
 
-    # Internal: timing metrics per agent (set by orchestrator nodes)
-    _agent_metrics: Optional[dict]
+    # Internal: timing metrics per agent (merged across parallel agents via _merge_dicts)
+    _agent_metrics: Annotated[dict | None, _merge_dicts]
 
 
 # Mapping: ce agenti trebuie per analysis_type + report_level
