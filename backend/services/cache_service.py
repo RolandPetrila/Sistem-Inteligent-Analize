@@ -22,7 +22,7 @@ MAX_CACHE_SIZE_MB = 100
 _hit_miss: dict[str, dict[str, int]] = {}
 
 
-def _track(source: str, hit: bool):
+def _track(source: str, hit: bool) -> None:
     """Track cache hit/miss per source."""
     if source not in _hit_miss:
         _hit_miss[source] = {"hits": 0, "misses": 0}
@@ -135,7 +135,7 @@ async def set(key: str, data: dict, source: str, ttl_hours: int | None = None) -
     await _enforce_size_limit()
 
 
-async def _enforce_size_limit():
+async def _enforce_size_limit() -> None:
     """10F M10.1: LRU eviction — keep cache under MAX_CACHE_SIZE_MB."""
     size = await db.fetch_one("SELECT SUM(LENGTH(data)) as bytes FROM data_cache")
     total_bytes = size["bytes"] or 0
