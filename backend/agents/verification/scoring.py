@@ -604,6 +604,27 @@ def calculate_risk_score(verified: dict) -> dict:
     else:
         rep_reasons.append({"text": "Prezenta online indisponibila", "impact": 0})
 
+    # F5-2: Google Maps rating bonus/malus
+    maps_data = verified.get("maps_rating", {})
+    if maps_data.get("found"):
+        try:
+            from backend.agents.tools.maps_client import score_from_rating
+            maps_bonus = score_from_rating(maps_data)
+            if maps_bonus > 0:
+                rep_score = min(100, rep_score + maps_bonus)
+                rep_reasons.append({
+                    "text": f"Google Maps: {maps_data.get('rating')}/5 ({maps_data.get('reviews_count')} recenzii)",
+                    "impact": maps_bonus,
+                })
+            elif maps_bonus < 0:
+                rep_score = max(0, rep_score + maps_bonus)
+                rep_reasons.append({
+                    "text": f"Rating Google Maps slab: {maps_data.get('rating')}/5",
+                    "impact": maps_bonus,
+                })
+        except Exception:
+            pass
+
     dimensions["reputational"] = {"score": max(0, min(100, rep_score)), "weight": 10, "reasons": rep_reasons}
 
     # --- PIATA (10%) ---

@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     fireworks_api_key: str = ""      # https://fireworks.ai/ (10 RPM permanent free, Llama 4 Scout/Maverick)
     sambanova_api_key: str = ""      # https://cloud.sambanova.ai/ (Llama 405B GRATUIT — unic)
 
+    # R8 — Maps & Geocoding
+    google_cloud_api_key: str = ""   # Google Maps Places API (billing activ pe proiect GCloud)
+
     # Notifications
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""

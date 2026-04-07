@@ -205,6 +205,27 @@ class OfficialAgent(BaseAgent):
                         "response_time_ms": 0,
                     })
 
+            # F5-2: Google Maps rating (daca e configurata cheia)
+            if company_name and settings.google_cloud_api_key:
+                try:
+                    from backend.agents.tools.maps_client import get_maps_rating
+                    address = official_data.get("address", {}).get("adresa", "") if isinstance(official_data.get("address"), dict) else ""
+                    maps_result = await asyncio.wait_for(
+                        get_maps_rating(company_name, address), timeout=8.0
+                    )
+                    official_data["maps_rating"] = maps_result
+                    if maps_result.get("found"):
+                        sources.append({
+                            "source_name": "google_maps",
+                            "source_url": "https://maps.google.com",
+                            "status": "OK",
+                            "data_found": True,
+                            "response_time_ms": 0,
+                        })
+                        logger.info(f"[official] Google Maps: {maps_result.get('name')} rating={maps_result.get('rating')}")
+                except Exception as _e:
+                    logger.debug(f"[official] maps error: {_e}")
+
             # EP2+EP3: Extract ANAF inactivi + risc fiscal (already in ANAF v9 response)
             if anaf_source["data_found"]:
                 anaf_data = anaf_source["data"]
