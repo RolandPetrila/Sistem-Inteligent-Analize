@@ -1,29 +1,23 @@
 @echo off
-:: ============================================================
-:: RIS — Gestionare Serviciu Windows
-:: Comenzi rapide: start / stop / restart / status / logs
-:: ============================================================
-set SERVICE_NAME=RIS-Backend
-set PROJECT_DIR=%~dp0
-set PROJECT_DIR=%PROJECT_DIR:~0,-1%
+:: RIS -- Gestionare serviciu Windows (start/stop/restart/status/logs)
+cd /d "%~dp0"
+set WINSW=tools\RIS-Backend.exe
 
-:: Daca e dat argument direct (sc start/stop/restart/status)
 if "%1"=="start"   goto do_start
 if "%1"=="stop"    goto do_stop
 if "%1"=="restart" goto do_restart
 if "%1"=="status"  goto do_status
 if "%1"=="logs"    goto do_logs
 
-:: Meniu interactiv
 echo.
-echo  RIS — Gestionare Serviciu
-echo  =========================
+echo  RIS -- Gestionare Serviciu
+echo  ===========================
 echo  1. Start
 echo  2. Stop
 echo  3. Restart
 echo  4. Status
 echo  5. Logs (ultimele 50 linii)
-echo  6. Deschide UI in browser
+echo  6. Deschide browser la localhost:8001
 echo  0. Iesire
 echo.
 set /p choice=Alegere:
@@ -38,37 +32,35 @@ if "%choice%"=="0" exit /b 0
 goto do_status
 
 :do_start
-echo Pornire %SERVICE_NAME%...
-sc start %SERVICE_NAME%
+echo Pornire RIS-Backend...
+%WINSW% start
 timeout /t 2 /nobreak >nul
 goto do_status
 
 :do_stop
-echo Oprire %SERVICE_NAME%...
-sc stop %SERVICE_NAME%
+echo Oprire RIS-Backend...
+%WINSW% stop
 goto end
 
 :do_restart
-echo Restart %SERVICE_NAME%...
-sc stop %SERVICE_NAME%
-timeout /t 3 /nobreak >nul
-sc start %SERVICE_NAME%
+echo Restart RIS-Backend...
+%WINSW% restart
 timeout /t 2 /nobreak >nul
 goto do_status
 
 :do_status
 echo.
-sc query %SERVICE_NAME%
+sc query RIS-Backend
 echo.
 goto end
 
 :do_logs
 echo.
 echo [stdout - ultimele 50 linii]
-powershell -Command "Get-Content '%PROJECT_DIR%\logs\ris_service_stdout.log' -Tail 50 -ErrorAction SilentlyContinue"
+powershell -NoProfile -Command "Get-Content 'logs\ris_service_stdout.log' -Tail 50 -ErrorAction SilentlyContinue"
 echo.
 echo [stderr - ultimele 20 linii]
-powershell -Command "Get-Content '%PROJECT_DIR%\logs\ris_service_stderr.log' -Tail 20 -ErrorAction SilentlyContinue"
+powershell -NoProfile -Command "Get-Content 'logs\ris_service_stderr.log' -Tail 20 -ErrorAction SilentlyContinue"
 goto end
 
 :do_open
