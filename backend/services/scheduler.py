@@ -5,7 +5,7 @@ Foloseste asyncio.create_task cu sleep loop (lightweight, fara dependinte extern
 """
 
 import asyncio
-from datetime import datetime, date, UTC
+from datetime import UTC, datetime
 
 from loguru import logger
 
@@ -15,6 +15,7 @@ from backend.config import settings
 MONITORING_INTERVAL = 6 * 3600  # 6 ore (verifica de 4 ori pe zi)
 BACKUP_INTERVAL = 24 * 3600     # 24 ore (o data pe zi)
 CACHE_CLEANUP_INTERVAL = 12 * 3600  # 12 ore
+AUTO_REANALYZE_INTERVAL = 6 * 3600  # 6 ore (verifica ce firme trebuie re-analizate)
 
 _running = True
 
@@ -66,7 +67,7 @@ async def start_scheduler() -> asyncio.Task:
     global _running, _task
     _running = True
     _task = asyncio.create_task(_scheduler_loop())
-    logger.info("[scheduler] Started — monitoring every 6h, backup every 24h, cache cleanup every 12h")
+    logger.info("[scheduler] Started — monitoring every 6h, backup every 24h, cache cleanup every 12h, auto-reanalyze every 6h")
     return _task
 
 
@@ -83,11 +84,12 @@ async def stop_scheduler(task: asyncio.Task):
 
 
 async def _scheduler_loop():
-    """Loop principal — ruleaza monitoring, backup si cache cleanup la intervale fixe."""
+    """Loop principal — ruleaza monitoring, backup, cache cleanup si auto-reanalyze la intervale fixe."""
     # 10A M9.3: Load last_run from DB checkpoints (survive restart)
     last_monitoring = await _get_checkpoint("monitoring")
     last_backup = await _get_checkpoint("backup")
     last_cache_cleanup = await _get_checkpoint("cache_cleanup")
+    last_auto_reanalyze = await _get_checkpoint("auto_reanalyze")
 
     # Asteapta 30s dupa startup (sa fie totul initializat)
     await asyncio.sleep(30)
@@ -113,6 +115,12 @@ async def _scheduler_loop():
             last_cache_cleanup = now
             await _save_checkpoint("cache_cleanup")
 
+        # F6-6: Auto re-analyze companies cu auto_reanalyze=1
+        if now - last_auto_reanalyze >= AUTO_REANALYZE_INTERVAL:
+            await _auto_reanalyze_job()
+            last_auto_reanalyze = now
+            await _save_checkpoint("auto_reanalyze")
+
         # Sleep 60s intre verificari
         await asyncio.sleep(60)
 
@@ -120,8 +128,8 @@ async def _scheduler_loop():
 async def _run_monitoring_safe():
     """Ruleaza monitoring check cu error handling."""
     try:
-        from backend.services.monitoring_service import run_monitoring_check
         from backend.database import db
+        from backend.services.monitoring_service import run_monitoring_check
 
         # Verifica daca sunt alerte active
         count = await db.fetch_one(
@@ -147,6 +155,83 @@ async def _run_cache_cleanup_safe():
         logger.info(f"[scheduler] Cache cleanup: {count} expired entries removed")
     except Exception as e:
         logger.error(f"[scheduler] Cache cleanup error: {e}")
+
+
+async def _auto_reanalyze_job():
+    """F6-6: Re-analizeaza automat companiile cu auto_reanalyze=1 care depasesc intervalul.
+    Creeaza un nou job pentru fiecare firma eligibila si il porneste imediat.
+    """
+    try:
+        import json
+        import uuid
+
+        from backend.database import db
+
+        # Ensure columns exist (idempotent — poate fi primul run)
+        for alter_sql in [
+            "ALTER TABLE companies ADD COLUMN auto_reanalyze INTEGER DEFAULT 0",
+            "ALTER TABLE companies ADD COLUMN reanalyze_interval_days INTEGER DEFAULT 30",
+        ]:
+            try:
+                await db.execute(alter_sql)
+            except Exception:
+                pass  # Column already exists
+
+        # Selecteaza firmele eligibile:
+        # - auto_reanalyze = 1
+        # - last_analyzed_at < now - reanalyze_interval_days
+        rows = await db.fetch_all(
+            """
+            SELECT c.id, c.cui, c.name, c.caen_code,
+                   COALESCE(c.reanalyze_interval_days, 30) as interval_days,
+                   c.last_analyzed_at
+            FROM companies c
+            WHERE c.auto_reanalyze = 1
+              AND (
+                c.last_analyzed_at IS NULL
+                OR datetime(c.last_analyzed_at, '+' || COALESCE(c.reanalyze_interval_days, 30) || ' days') <= datetime('now')
+              )
+            LIMIT 10
+            """
+        )
+
+        if not rows:
+            logger.debug("[scheduler] auto-reanalyze: nicio firma eligibila")
+            return
+
+        logger.info(f"[scheduler] auto-reanalyze: {len(rows)} firme eligibile")
+
+        for row in rows:
+            company_id = row["id"]
+            cui = row["cui"]
+            name = row["name"] or f"Firma {cui}"
+
+            if not cui:
+                logger.debug(f"[scheduler] auto-reanalyze: skip company {company_id} (fara CUI)")
+                continue
+
+            try:
+                job_id = str(uuid.uuid4())
+                input_params = {"cui": cui, "company_name": name}
+
+                # Creeaza job in DB
+                await db.execute(
+                    "INSERT INTO jobs (id, type, status, report_level, input_data, created_at) "
+                    "VALUES (?, ?, 'PENDING', 2, ?, datetime('now'))",
+                    (job_id, "FULL_COMPANY_PROFILE", json.dumps(input_params, ensure_ascii=False)),
+                )
+
+                # Porneste job-ul in background (fara WS — scheduler nu are conexiune WS)
+                from backend.services.job_service import run_analysis_job
+                asyncio.create_task(run_analysis_job(job_id, ws_manager=None))
+
+                logger.info(f"[scheduler] auto-reanalyze: job {job_id} creat pentru {name} (CUI {cui})")
+
+            except Exception as e:
+                logger.error(f"[scheduler] auto-reanalyze: eroare la crearea job pentru {cui}: {e}")
+
+    except Exception as e:
+        logger.error(f"[scheduler] auto-reanalyze job error: {e}")
 
 
 async def _run_backup_safe():
@@ -184,7 +269,7 @@ async def _run_backup_safe():
         src.close()
         logger.info(f"[scheduler] DB backup created: {backup_path}")
 
-        # Incremental VACUUM — recupareaza spatiu dupa DELETE-uri (non-blocking)
+        # Incremental VACUUM — recupereaza spatiu dupa DELETE-uri (non-blocking)
         async with aiosqlite.connect(str(db_path)) as conn:
             await conn.execute("PRAGMA incremental_vacuum(100)")
             logger.debug("[scheduler] Incremental vacuum completed")

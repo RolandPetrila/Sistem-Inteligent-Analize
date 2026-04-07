@@ -357,6 +357,131 @@ def _build_financial_ratios_html(risk_score: dict) -> str:
     </section>'''
 
 
+def _build_company_network_html(verified_data: dict) -> str:
+    """F1-6: Sectiunea 'Reteaua de Firme' — persoane comune, firme conexe, risk flags."""
+    network = verified_data.get("company_network", {})
+    if not network:
+        return ""
+
+    stats = network.get("stats", {})
+    total_persons = stats.get("total_persons", 0)
+    total_firms = stats.get("total_firms", 0)
+    inactive_firms = stats.get("inactive_firms", 0)
+
+    if total_persons == 0 and total_firms == 0:
+        return '''
+    <section id="network" class="report-section">
+        <h2>Reteaua de Firme</h2>
+        <div style="color:#64748b;font-style:italic;padding:16px 0">Date retea indisponibile</div>
+    </section>'''
+
+    # ── Risk flags badges ─────────────────────────────────────────────────────
+    risk_flags = network.get("risk_flags", [])
+    flags_html = ""
+    FLAG_COLORS = {
+        "ASOCIAT_FIRMA_INACTIVA": ("#ef4444", "#ef444420"),   # ROSU
+        "RETEA_EXTINSA": ("#eab308", "#eab30820"),             # GALBEN
+        "ASOCIAT_INSOLVENTA": ("#ef4444", "#ef444420"),        # ROSU
+        "ADMINISTRATOR_MULTIPLU": ("#f97316", "#f9731620"),    # PORTOCALIU
+    }
+    for flag in risk_flags:
+        fg, bg = FLAG_COLORS.get(flag, ("#94a3b8", "#94a3b820"))
+        flags_html += (
+            f'<span style="display:inline-block;padding:3px 10px;border-radius:12px;'
+            f'font-size:0.78em;font-weight:700;background:{bg};color:{fg};'
+            f'border:1px solid {fg}40;margin:2px 4px 2px 0">{_escape(flag)}</span>'
+        )
+
+    # ── Stats summary ─────────────────────────────────────────────────────────
+    stats_html = (
+        f'<div style="display:flex;gap:24px;flex-wrap:wrap;margin:16px 0">'
+        f'<div style="background:#16213e;border-radius:8px;padding:12px 20px;text-align:center">'
+        f'<div style="font-size:1.5em;font-weight:700;color:#a5b4fc">{total_firms}</div>'
+        f'<div style="font-size:0.78em;color:#64748b;margin-top:2px">Firme conexe</div></div>'
+        f'<div style="background:#16213e;border-radius:8px;padding:12px 20px;text-align:center">'
+        f'<div style="font-size:1.5em;font-weight:700;color:{"#ef4444" if inactive_firms > 0 else "#22c55e"}">{inactive_firms}</div>'
+        f'<div style="font-size:0.78em;color:#64748b;margin-top:2px">Firme inactive</div></div>'
+        f'<div style="background:#16213e;border-radius:8px;padding:12px 20px;text-align:center">'
+        f'<div style="font-size:1.5em;font-weight:700;color:#a5b4fc">{total_persons}</div>'
+        f'<div style="font-size:0.78em;color:#64748b;margin-top:2px">Persoane comune</div></div>'
+        f'</div>'
+    )
+
+    # ── Tabel persoane comune ─────────────────────────────────────────────────
+    persons = network.get("persons", [])
+    persons_html = ""
+    if persons:
+        rows = ""
+        for p in persons:
+            name = _escape(str(p.get("name") or p.get("nume") or "N/A"))
+            role = _escape(str(p.get("role") or p.get("rol") or "—"))
+            ownership = p.get("ownership") or p.get("ownership_percent") or p.get("cota_participare")
+            own_str = f"{ownership}%" if ownership is not None else "—"
+            rows += (
+                f'<tr>'
+                f'<td style="padding:8px 12px;color:#e2e8f0;font-weight:500">{name}</td>'
+                f'<td style="padding:8px 12px;color:#94a3b8">{role}</td>'
+                f'<td style="padding:8px 12px;color:#a5b4fc;text-align:right">{own_str}</td>'
+                f'</tr>'
+            )
+        persons_html = f'''
+        <h3 style="color:#818cf8;margin:20px 0 10px;font-size:1em">Persoane cu functii in mai multe firme</h3>
+        <table style="width:100%;border-collapse:collapse;font-size:0.9em">
+            <thead><tr style="border-bottom:2px solid #2a3a5c">
+                <th style="padding:8px 12px;text-align:left;color:#94a3b8;font-size:0.85em">Nume</th>
+                <th style="padding:8px 12px;text-align:left;color:#94a3b8;font-size:0.85em">Rol</th>
+                <th style="padding:8px 12px;text-align:right;color:#94a3b8;font-size:0.85em">Participare</th>
+            </tr></thead>
+            <tbody>{rows}</tbody>
+        </table>'''
+
+    # ── Tabel firme conexe ────────────────────────────────────────────────────
+    related_firms = network.get("related_firms", [])
+    firms_html = ""
+    if related_firms:
+        rows = ""
+        for f in related_firms:
+            den = _escape(str(f.get("denumire") or f.get("name") or "N/A"))
+            cui_val = _escape(str(f.get("cui") or "—"))
+            is_active = f.get("activ") if f.get("activ") is not None else f.get("status_activ")
+            if is_active is True or str(is_active).lower() in ("activ", "true", "1"):
+                status_badge = '<span style="color:#22c55e;font-weight:700">ACTIV</span>'
+            elif is_active is False or str(is_active).lower() in ("inactiv", "false", "0"):
+                status_badge = '<span style="color:#ef4444;font-weight:700">INACTIV</span>'
+            else:
+                status_badge = '<span style="color:#64748b">N/A</span>'
+            ownership = f.get("ownership") or f.get("ownership_percent") or f.get("cota_participare")
+            own_str = f"{ownership}%" if ownership is not None else "—"
+            rows += (
+                f'<tr>'
+                f'<td style="padding:8px 12px;color:#e2e8f0;font-weight:500">{den}</td>'
+                f'<td style="padding:8px 12px;color:#94a3b8;font-size:0.85em">{cui_val}</td>'
+                f'<td style="padding:8px 12px;text-align:center">{status_badge}</td>'
+                f'<td style="padding:8px 12px;color:#a5b4fc;text-align:right">{own_str}</td>'
+                f'</tr>'
+            )
+        firms_html = f'''
+        <h3 style="color:#818cf8;margin:20px 0 10px;font-size:1em">Firme conexe prin persoane comune</h3>
+        <table style="width:100%;border-collapse:collapse;font-size:0.9em">
+            <thead><tr style="border-bottom:2px solid #2a3a5c">
+                <th style="padding:8px 12px;text-align:left;color:#94a3b8;font-size:0.85em">Denumire</th>
+                <th style="padding:8px 12px;text-align:left;color:#94a3b8;font-size:0.85em">CUI</th>
+                <th style="padding:8px 12px;text-align:center;color:#94a3b8;font-size:0.85em">Status</th>
+                <th style="padding:8px 12px;text-align:right;color:#94a3b8;font-size:0.85em">Participare</th>
+            </tr></thead>
+            <tbody>{rows}</tbody>
+        </table>'''
+
+    return f'''
+    <section id="network" class="report-section">
+        <h2>Reteaua de Firme</h2>
+        {f'<div style="margin-bottom:12px">{flags_html}</div>' if flags_html else ''}
+        {stats_html}
+        {persons_html}
+        {firms_html}
+    </section>'''
+
+
 def generate_html(report_sections: dict, meta: dict, verified_data: dict, output_path: str):
     """Genereaza HTML single-file din report_sections + verified_data."""
     company = _escape(meta.get("company_name", "N/A"))
@@ -473,6 +598,11 @@ def generate_html(report_sections: dict, meta: dict, verified_data: dict, output
         </section>'''
         nav_items += '<a href="#warnings" class="nav-link">Avertizari</a>\n'
 
+    # F1-6: Company Network section
+    company_network_html = _build_company_network_html(verified_data)
+    if company_network_html:
+        nav_items += '<a href="#network" class="nav-link">Retea Firme</a>\n'
+
     # Diagnostics section (per-source from agent_official)
     diag = verified_data.get("diagnostics") if "diagnostics" in verified_data else None
     if not diag:
@@ -554,6 +684,7 @@ body{{font-family:'Segoe UI',system-ui,sans-serif;background:#1a1a2e;color:#e2e8
     {charts_html}
     {sections_html}
     {early_warnings_html}
+    {company_network_html}
     {completeness_html}
     <div class="sources">
         <h2>Surse Utilizate</h2>

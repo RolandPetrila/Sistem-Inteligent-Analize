@@ -8,26 +8,28 @@ Flux: Agent 1 -> [Agent 2 + 3 paralel] -> Agent 4 -> Agent 5 (Synthesis) -> Repo
 """
 import asyncio
 import time
+from datetime import UTC, datetime
 
-from langgraph.graph import StateGraph, START, END
-
+from langgraph.graph import END, START, StateGraph
 from loguru import logger
 
-from backend.agents.state import AnalysisState, get_agents_needed
 from backend.agents.agent_official import official_agent
-from backend.agents.agent_verification import verification_agent
 from backend.agents.agent_synthesis import synthesis_agent
-from backend.reports.generator import generate_all_reports
-from backend.services.job_logger import (
-    get_job_logger, log_agent_start, log_agent_end, log_source_result,
-)
-
+from backend.agents.agent_verification import verification_agent
 
 # --- T8: Provider Health Tracking (moved to circuit_breaker.py) ---
 from backend.agents.circuit_breaker import (  # noqa: F401 — re-export for backwards compat
-    is_provider_circuit_open, record_provider_failure, reset_provider_circuit,
+    is_provider_circuit_open,
+    record_provider_failure,
+    reset_provider_circuit,
 )
-
+from backend.agents.state import AnalysisState
+from backend.reports.generator import generate_all_reports
+from backend.services.job_logger import (
+    log_agent_end,
+    log_agent_start,
+    log_source_result,
+)
 
 # --- 10F M5.1: Request Deduplication ---
 # Track CUIs currently being analyzed to avoid duplicate work.
@@ -41,7 +43,7 @@ async def deduplicate_job(cui: str) -> dict | None:
         logger.info(f"[orchestrator] Dedup: CUI {cui} already in-flight, waiting...")
         try:
             await asyncio.wait_for(_in_flight[cui].wait(), timeout=300)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(f"[orchestrator] Dedup wait timeout 300s for {cui}, proceeding with new analysis")
             return None
         return _in_flight_results.get(cui)
@@ -75,6 +77,7 @@ def complete_in_flight(cui: str, result: dict):
 async def _save_checkpoint(job_id: str, agent_name: str, state_data: dict):
     """10F M5.4: Save checkpoint after each agent for crash recovery."""
     import json
+
     from backend.database import db
     try:
         await db.execute(
@@ -110,7 +113,7 @@ async def run_official(state: AnalysisState) -> dict:
         elapsed = time.time() - t0
         logger.error(f"[orchestrator] Agent 1 (Official) CRITICAL error boundary: {e} ({elapsed:.1f}s)")
         result = {
-            "official_data": {"error": str(e), "timestamp": __import__("datetime").datetime.now(__import__("datetime").UTC).isoformat()},
+            "official_data": {"error": str(e), "timestamp": datetime.now(UTC).isoformat()},
             "sources": [],
             "errors": [{"agent": "official", "error": str(e)}],
         }

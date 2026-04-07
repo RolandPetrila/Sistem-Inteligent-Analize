@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   Loader2,
   Download,
+  RefreshCw,
 } from "lucide-react";
 import clsx from "clsx";
 import { api } from "@/lib/api";
@@ -57,17 +58,25 @@ interface CompanyFull {
 }
 
 // F2-4: SVG Sparkline pentru istoricul scorului (zero dependinte externe)
-function ScoreSparkline({ history }: { history: Array<{ numeric_score: number; recorded_at: string }> }) {
+function ScoreSparkline({
+  history,
+}: {
+  history: Array<{ numeric_score: number; recorded_at: string }>;
+}) {
   if (!history || history.length < 2) return null;
-  const scores = history.map(h => h.numeric_score ?? 0);
+  const scores = history.map((h) => h.numeric_score ?? 0);
   const min = Math.min(...scores);
   const max = Math.max(...scores);
-  const W = 200, H = 60, PAD = 4;
-  const points = scores.map((s, i) => {
-    const x = PAD + (i / (scores.length - 1)) * (W - PAD * 2);
-    const y = H - PAD - ((s - min) / (max - min || 1)) * (H - PAD * 2);
-    return `${x},${y}`;
-  }).join(" ");
+  const W = 200,
+    H = 60,
+    PAD = 4;
+  const points = scores
+    .map((s, i) => {
+      const x = PAD + (i / (scores.length - 1)) * (W - PAD * 2);
+      const y = H - PAD - ((s - min) / (max - min || 1)) * (H - PAD * 2);
+      return `${x},${y}`;
+    })
+    .join(" ");
   const last = scores[scores.length - 1];
   const color = last >= 70 ? "#22c55e" : last >= 40 ? "#eab308" : "#ef4444";
   return (
@@ -99,6 +108,9 @@ export default function CompanyDetail() {
   const [loading, setLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
   const [monitoringLoading, setMonitoringLoading] = useState(false);
+  // F6-6: Auto re-analyze
+  const [autoReanalyze, setAutoReanalyze] = useState(false);
+  const [autoReanalyzeLoading, setAutoReanalyzeLoading] = useState(false);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
   // F3-3: Tags & Note
@@ -115,7 +127,8 @@ export default function CompanyDetail() {
         setCompany(full);
         // Check if is_favorite field exists (backend may return 0/1 integer or boolean)
         const maybeFav = (c as unknown as Record<string, unknown>).is_favorite;
-        if (maybeFav !== undefined && maybeFav !== null) setIsFavorite(Boolean(maybeFav));
+        if (maybeFav !== undefined && maybeFav !== null)
+          setIsFavorite(Boolean(maybeFav));
         logAction("CompanyDetail", "open", { companyId: id, name: full.name });
       })
       .catch(() => toast("Eroare la incarcarea companiei", "error"))
@@ -123,9 +136,12 @@ export default function CompanyDetail() {
 
     // N4: Fetch timeline
     setTimelineLoading(true);
-    api.getCompanyTimeline(id)
+    api
+      .getCompanyTimeline(id)
       .then((res) => setTimeline(res.events))
-      .catch(() => { /* timeline is optional */ })
+      .catch(() => {
+        /* timeline is optional */
+      })
       .finally(() => setTimelineLoading(false));
 
     // F3-3: Fetch tags & note
@@ -140,25 +156,37 @@ export default function CompanyDetail() {
 
   const handleToggleFavorite = () => {
     if (!id) return;
-    api.toggleFavorite(id)
+    api
+      .toggleFavorite(id)
       .then((res) => {
         setIsFavorite(res.is_favorite);
-        toast(res.is_favorite ? "Adaugat la favorite" : "Eliminat din favorite", "success");
-        logAction("CompanyDetail", "toggleFavorite", { companyId: id, isFavorite: res.is_favorite });
+        toast(
+          res.is_favorite ? "Adaugat la favorite" : "Eliminat din favorite",
+          "success",
+        );
+        logAction("CompanyDetail", "toggleFavorite", {
+          companyId: id,
+          isFavorite: res.is_favorite,
+        });
       })
       .catch(() => toast("Eroare la actualizarea favoritelor", "error"));
   };
 
   const handleNewAnalysis = () => {
     if (!company?.cui) return;
-    navigate(`/new-analysis?cui=${company.cui}&name=${encodeURIComponent(company.name)}`);
+    navigate(
+      `/new-analysis?cui=${company.cui}&name=${encodeURIComponent(company.name)}`,
+    );
   };
 
   // F3-3: Tag handlers
   const handleAddTag = async () => {
     const trimmed = newTag.trim();
     if (!trimmed || !id) return;
-    if (tags.includes(trimmed)) { setNewTag(""); return; }
+    if (tags.includes(trimmed)) {
+      setNewTag("");
+      return;
+    }
     try {
       await api.addCompanyTag(id, trimmed);
       setTags([trimmed, ...tags]);
@@ -238,19 +266,25 @@ export default function CompanyDetail() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold text-white">{company.name}</h1>
+                <h1 className="text-2xl font-bold text-white">
+                  {company.name}
+                </h1>
                 <button
                   onClick={handleToggleFavorite}
                   className="p-1 rounded hover:bg-dark-hover transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
-                  aria-label={isFavorite ? "Elimina din favorite" : "Adauga la favorite"}
-                  title={isFavorite ? "Sterge din favorite" : "Adauga la favorite"}
+                  aria-label={
+                    isFavorite ? "Elimina din favorite" : "Adauga la favorite"
+                  }
+                  title={
+                    isFavorite ? "Sterge din favorite" : "Adauga la favorite"
+                  }
                 >
                   <Star
                     className={clsx(
                       "w-5 h-5 transition-colors",
                       isFavorite
                         ? "text-yellow-400 fill-yellow-400"
-                        : "text-gray-600 hover:text-yellow-400"
+                        : "text-gray-600 hover:text-yellow-400",
                     )}
                   />
                 </button>
@@ -260,7 +294,8 @@ export default function CompanyDetail() {
                 {company.caen_code && (
                   <span>
                     CAEN: {company.caen_code}
-                    {company.caen_description && ` — ${company.caen_description}`}
+                    {company.caen_description &&
+                      ` — ${company.caen_description}`}
                   </span>
                 )}
                 {(company.city || company.county) && (
@@ -282,13 +317,35 @@ export default function CompanyDetail() {
               <PlusCircle className="w-4 h-4" />
               Re-analiza
             </button>
+            {company.cui && (
+              <a
+                href={`/api/companies/${company.cui}/timeline-report/pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-secondary flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+                aria-label="Descarca raport PDF cu evolutia multi-an a firmei"
+                title="Genereaza PDF cu evolutia CA, Profit, Angajati si Scor Risc pe mai multi ani"
+              >
+                <TrendingUp className="w-4 h-4" />
+                Raport Evolutie
+              </a>
+            )}
             <button
               onClick={() => {
-                if (!company.cui) { toast("CUI indisponibil", "warning"); return; }
+                if (!company.cui) {
+                  toast("CUI indisponibil", "warning");
+                  return;
+                }
                 setMonitoringLoading(true);
-                api.createMonitoring({ company_id: company.id, telegram_notify: true })
+                api
+                  .createMonitoring({
+                    company_id: company.id,
+                    telegram_notify: true,
+                  })
                   .then(() => toast("Monitorizare activata!", "success"))
-                  .catch(() => toast("Eroare la activarea monitorizarii", "error"))
+                  .catch(() =>
+                    toast("Eroare la activarea monitorizarii", "error"),
+                  )
                   .finally(() => setMonitoringLoading(false));
               }}
               disabled={monitoringLoading}
@@ -304,7 +361,10 @@ export default function CompanyDetail() {
             </button>
             <button
               onClick={() => {
-                if (!company.cui) { toast("CUI indisponibil", "warning"); return; }
+                if (!company.cui) {
+                  toast("CUI indisponibil", "warning");
+                  return;
+                }
                 navigate(`/compare?cui=${company.cui}`);
               }}
               className="btn-secondary flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
@@ -315,7 +375,9 @@ export default function CompanyDetail() {
             </button>
             {company.caen_code && (
               <button
-                onClick={() => navigate(`/companies?search=${company.caen_code}`)}
+                onClick={() =>
+                  navigate(`/companies?search=${company.caen_code}`)
+                }
                 className="btn-secondary flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
                 aria-label={`Cauta firme similare cu CAEN ${company.caen_code}`}
               >
@@ -323,6 +385,41 @@ export default function CompanyDetail() {
                 Firme similare
               </button>
             )}
+            {/* F6-6: Auto Re-analyze toggle */}
+            <button
+              onClick={() => {
+                if (!id || autoReanalyzeLoading) return;
+                setAutoReanalyzeLoading(true);
+                api.toggleAutoReanalyze(id)
+                  .then((res) => {
+                    setAutoReanalyze(res.auto_reanalyze);
+                    toast(res.auto_reanalyze ? "Re-analiza automata activata" : "Re-analiza automata dezactivata", "success");
+                  })
+                  .catch(() => toast("Eroare la actualizarea re-analizei automate", "error"))
+                  .finally(() => setAutoReanalyzeLoading(false));
+              }}
+              disabled={autoReanalyzeLoading}
+              className="btn-secondary flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+              aria-label={autoReanalyze ? "Dezactiveaza re-analiza automata" : "Activeaza re-analiza automata"}
+              title={autoReanalyze ? "Re-analiza automata ACTIVA — click pentru dezactivare" : "Activeaza re-analiza automata periodica"}
+            >
+              {autoReanalyzeLoading ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4" />
+              )}
+              Re-analiza Auto
+              {autoReanalyze && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 font-semibold">
+                  ACTIV
+                </span>
+              )}
+              {!autoReanalyze && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-400">
+                  INACTIV
+                </span>
+              )}
+            </button>
           </div>
         </div>
       </div>
@@ -342,7 +439,7 @@ export default function CompanyDetail() {
                 <span
                   className={clsx(
                     "text-xs flex items-center gap-0.5 mt-1",
-                    scoreDelta > 0 ? "text-green-400" : "text-red-400"
+                    scoreDelta > 0 ? "text-green-400" : "text-red-400",
                   )}
                 >
                   {scoreDelta > 0 ? (
@@ -399,7 +496,9 @@ export default function CompanyDetail() {
           <h3 className="text-sm font-semibold text-gray-400 uppercase mb-3">
             Scor pe Dimensiuni
           </h3>
-          <p className="text-[10px] text-gray-600 mb-3">Hover pe o dimensiune pentru a vedea explicatia scorului</p>
+          <p className="text-[10px] text-gray-600 mb-3">
+            Hover pe o dimensiune pentru a vedea explicatia scorului
+          </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {Object.entries(dimensions).map(([key, dim]) => {
               const barColor =
@@ -410,12 +509,20 @@ export default function CompanyDetail() {
                     : "bg-red-400";
               const hasReasons = dim.reasons && dim.reasons.length > 0;
               return (
-                <div key={key} className="relative group bg-dark-surface rounded-lg p-3">
+                <div
+                  key={key}
+                  className="relative group bg-dark-surface rounded-lg p-3"
+                >
                   <div className="flex justify-between items-center mb-1.5">
                     <span className="text-xs text-gray-400 capitalize flex items-center gap-1">
                       {key}
                       {hasReasons && (
-                        <span className="text-gray-600 text-[9px]" title="Click pentru detalii">ⓘ</span>
+                        <span
+                          className="text-gray-600 text-[9px]"
+                          title="Click pentru detalii"
+                        >
+                          ⓘ
+                        </span>
                       )}
                     </span>
                     <span className="text-sm font-mono font-medium text-gray-300">
@@ -424,7 +531,10 @@ export default function CompanyDetail() {
                   </div>
                   <div className="w-full h-2 bg-dark-border rounded-full overflow-hidden">
                     <div
-                      className={clsx("h-full rounded-full transition-all", barColor)}
+                      className={clsx(
+                        "h-full rounded-full transition-all",
+                        barColor,
+                      )}
                       style={{ width: `${dim.score}%` }}
                     />
                   </div>
@@ -445,16 +555,24 @@ export default function CompanyDetail() {
                       </p>
                       <div className="space-y-1.5">
                         {dim.reasons!.map((r, i) => (
-                          <div key={i} className="flex justify-between items-start gap-2 text-xs">
-                            <span className="text-gray-300 flex-1 leading-tight">{r.text}</span>
+                          <div
+                            key={i}
+                            className="flex justify-between items-start gap-2 text-xs"
+                          >
+                            <span className="text-gray-300 flex-1 leading-tight">
+                              {r.text}
+                            </span>
                             {r.impact !== 0 && (
                               <span
                                 className={clsx(
                                   "font-mono font-bold whitespace-nowrap shrink-0",
-                                  r.impact > 0 ? "text-green-400" : "text-red-400"
+                                  r.impact > 0
+                                    ? "text-green-400"
+                                    : "text-red-400",
                                 )}
                               >
-                                {r.impact > 0 ? "+" : ""}{r.impact}
+                                {r.impact > 0 ? "+" : ""}
+                                {r.impact}
                               </span>
                             )}
                           </div>
@@ -483,14 +601,17 @@ export default function CompanyDetail() {
           {/* F2-4: Sparkline SVG trend */}
           <div className="mb-4 flex items-center gap-3">
             <ScoreSparkline
-              history={[...company.score_history].reverse().map(e => ({
+              history={[...company.score_history].reverse().map((e) => ({
                 numeric_score: e.numeric_score ?? 0,
                 recorded_at: e.recorded_at,
               }))}
             />
             <div className="text-xs text-gray-600 leading-relaxed">
               <p>Evolutie scor</p>
-              <p className="font-mono">{[...company.score_history].reverse()[0]?.numeric_score ?? "—"} → {company.score_history[0]?.numeric_score ?? "—"}</p>
+              <p className="font-mono">
+                {[...company.score_history].reverse()[0]?.numeric_score ?? "—"}{" "}
+                → {company.score_history[0]?.numeric_score ?? "—"}
+              </p>
             </div>
           </div>
           <div className="flex items-end gap-1 h-24">
@@ -503,8 +624,13 @@ export default function CompanyDetail() {
                     ? "bg-yellow-400"
                     : "bg-red-400";
               return (
-                <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                  <span className="text-[10px] text-gray-500 font-mono">{score}</span>
+                <div
+                  key={i}
+                  className="flex-1 flex flex-col items-center gap-1"
+                >
+                  <span className="text-[10px] text-gray-500 font-mono">
+                    {score}
+                  </span>
                   <div
                     className={clsx("w-full rounded-t", barColor)}
                     style={{ height: `${Math.max(score, 4)}%` }}
@@ -564,13 +690,13 @@ export default function CompanyDetail() {
                   {/* F2-5: Download direct PDF/Excel/HTML */}
                   <div className="flex items-center gap-1">
                     <Download className="w-3 h-3 text-gray-600" />
-                    {(["pdf", "excel", "html"] as const).map(fmt => (
+                    {(["pdf", "excel", "html"] as const).map((fmt) => (
                       <a
                         key={fmt}
                         href={`/api/reports/${report.id}/download/${fmt}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        onClick={e => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
                         className="text-xs text-gray-500 hover:text-white uppercase px-1 py-0.5 rounded hover:bg-dark-border/50 transition-colors"
                         title={`Descarca ${fmt.toUpperCase()}`}
                       >
@@ -582,7 +708,7 @@ export default function CompanyDetail() {
                     <span
                       className={clsx(
                         "text-xs font-medium px-2 py-0.5 rounded border",
-                        riskBadge(report.risk_score)
+                        riskBadge(report.risk_score),
                       )}
                     >
                       {report.risk_score}
@@ -597,7 +723,9 @@ export default function CompanyDetail() {
 
       {/* F3-3: Note & Tag-uri */}
       <div className="card space-y-4">
-        <h3 className="text-sm font-semibold text-gray-400 uppercase">Note &amp; Tag-uri</h3>
+        <h3 className="text-sm font-semibold text-gray-400 uppercase">
+          Note &amp; Tag-uri
+        </h3>
 
         {/* Tags */}
         <div className="space-y-2">
@@ -618,7 +746,9 @@ export default function CompanyDetail() {
               </span>
             ))}
             {tags.length === 0 && (
-              <span className="text-xs text-gray-600 italic">Niciun tag adaugat</span>
+              <span className="text-xs text-gray-600 italic">
+                Niciun tag adaugat
+              </span>
             )}
           </div>
           <div className="flex gap-2">
@@ -651,7 +781,9 @@ export default function CompanyDetail() {
             maxLength={2000}
             className="w-full bg-dark-surface border border-dark-border rounded px-3 py-2 text-sm text-white resize-none placeholder-gray-600 focus:outline-none focus:border-accent-primary"
           />
-          <p className="text-xs text-gray-600">{note.length}/2000 — salvat automat la pierderea focusului</p>
+          <p className="text-xs text-gray-600">
+            {note.length}/2000 — salvat automat la pierderea focusului
+          </p>
         </div>
       </div>
 
@@ -677,24 +809,39 @@ export default function CompanyDetail() {
             <div className="space-y-4">
               {timeline.map((event, i) => {
                 const TimelineIcon =
-                  event.type === "report" ? FileText
-                  : event.type === "score_change"
-                    ? (event.detail?.includes("-") || event.detail?.includes("scadere") ? TrendingDown : TrendingUp)
-                    : AlertTriangle;
+                  event.type === "report"
+                    ? FileText
+                    : event.type === "score_change"
+                      ? event.detail?.includes("-") ||
+                        event.detail?.includes("scadere")
+                        ? TrendingDown
+                        : TrendingUp
+                      : AlertTriangle;
                 const iconColor =
-                  event.type === "report" ? "text-blue-400 bg-blue-500/10"
-                  : event.type === "score_change"
-                    ? (event.detail?.includes("-") || event.detail?.includes("scadere") ? "text-red-400 bg-red-500/10" : "text-green-400 bg-green-500/10")
-                    : "text-yellow-400 bg-yellow-500/10";
+                  event.type === "report"
+                    ? "text-blue-400 bg-blue-500/10"
+                    : event.type === "score_change"
+                      ? event.detail?.includes("-") ||
+                        event.detail?.includes("scadere")
+                        ? "text-red-400 bg-red-500/10"
+                        : "text-green-400 bg-green-500/10"
+                      : "text-yellow-400 bg-yellow-500/10";
 
                 return (
                   <div key={i} className="flex items-start gap-4 pl-1">
-                    <div className={clsx("w-7 h-7 rounded-full flex items-center justify-center shrink-0 z-10", iconColor)}>
+                    <div
+                      className={clsx(
+                        "w-7 h-7 rounded-full flex items-center justify-center shrink-0 z-10",
+                        iconColor,
+                      )}
+                    >
                       <TimelineIcon className="w-3.5 h-3.5" />
                     </div>
                     <div className="flex-1 min-w-0 pb-2">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm text-gray-300 font-medium">{event.title}</p>
+                        <p className="text-sm text-gray-300 font-medium">
+                          {event.title}
+                        </p>
                         <span className="text-[10px] text-gray-600 shrink-0">
                           {new Date(event.date).toLocaleDateString("ro-RO", {
                             day: "2-digit",
@@ -704,7 +851,9 @@ export default function CompanyDetail() {
                         </span>
                       </div>
                       {event.detail && (
-                        <p className="text-xs text-gray-500 mt-0.5">{event.detail}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {event.detail}
+                        </p>
                       )}
                     </div>
                   </div>

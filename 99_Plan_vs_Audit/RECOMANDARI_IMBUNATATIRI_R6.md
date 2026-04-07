@@ -280,7 +280,7 @@
   - **Verificare:** Endpoint returneaza 200 cu date valide pentru CUI cunoscut
   - Sursa: Audit_Intern_Roland.md §13.5 | **IMPLEMENTAT 2026-04-07**
 
-- [ ] **F2-6** `[T]` Tab "Scoruri Predictive" in ReportView
+- [x] **F2-6** `[T]` Tab "Scoruri Predictive" in ReportView | **IMPLEMENTAT 2026-04-07**
   - **Fisier:** `frontend/src/pages/ReportView.tsx`
   - **Continut tab:** 4 carduri (Altman/Piotroski/Beneish/Zmijewski) + interpretare + disclaimer
   - **Visual:** Gauge/badge colorat (Verde/Galben/Rosu) per model + valoare numerica
@@ -389,7 +389,7 @@
   - **Verificare:** Raport cu CA diferit in executive vs financiar → nota de coerenta adaugata
   - Sursa: Audit_Intern_Roland.md §12.2 | **IMPLEMENTAT 2026-04-07**
 
-- [ ] **F3-7** `[T]` Section-level regeneration — endpoint + cache
+- [x] **F3-7** `[T]` Section-level regeneration — endpoint + cache | **IMPLEMENTAT 2026-04-07**
   - **Fisier:** `backend/routers/jobs.py`
   - **Endpoint nou:** `POST /api/jobs/{job_id}/section/{section_key}/regenerate`
   - **Logica:** Citeste state din checkpoint DB → re-ruleaza sinteza DOAR pentru sectiunea ceruta → salveaza rezultat nou
@@ -566,7 +566,7 @@
   - **Verificare:** Cardul afiseaza badge Verde/Galben/Rosu consistent cu scorul
   - Sursa: Audit_Intern_Roland.md §14.3 | **IMPLEMENTAT 2026-04-07**
 
-- [ ] **F6-2** `[T]` Radar Chart — 6 dimensiuni scoring in ReportView
+- [x] **F6-2** `[T]` Radar Chart — 6 dimensiuni scoring in ReportView | **IMPLEMENTAT 2026-04-07**
   - **Fisier:** `frontend/src/pages/ReportView.tsx`
   - **Implementare:** SVG pur (zero dependinte noi) — hexagon cu 6 axe, o linie per firma
   - **Date:** 6 dimensiuni din `report.risk.dimensions` (Financiar, Juridic, Fiscal, Operational, Reputational, Piata)
@@ -593,7 +593,7 @@
   - **Verificare:** Raport cu completeness 40% afiseaza banner galben vizibil
   - Sursa: Audit_Intern_Roland.md §14.2 | **IMPLEMENTAT 2026-04-07**
 
-- [ ] **F6-4** `[T]` Sector Benchmark Bar in ReportView
+- [x] **F6-4** `[T]` Sector Benchmark Bar in ReportView | **IMPLEMENTAT 2026-04-07**
   - **Fisier:** `frontend/src/pages/ReportView.tsx` tab "Risk" sau "Financiar"
   - **Date:** `report.risk.sector_position` (percentila calculata in backend, neafisata in UI)
   - **Visual:** Bar orizontala cu pozitia firmei vs percentila sector (ex: "Top 30% in sectorul tau")
@@ -683,20 +683,20 @@
   - **Verificare:** Export 5000+ companii nu creste RAM peste 50MB
   - Sursa: R4 F5.4 [P1] | **IMPLEMENTAT 2026-04-07** (StreamingResponse)
 
-- [ ] **F7-3** `[T]` Type hints pe functii publice principale
+- [x] **F7-3** `[T]` Type hints pe functii publice principale | **IMPLEMENTAT 2026-04-07**
   - **Fisiere:** `backend/agents/agent_official.py`, `backend/agents/agent_synthesis.py`, `backend/services/cache_service.py`
   - **Actiune:** Adauga return type annotations pe ~20 functii publice fara hints
   - **Verificare:** `mypy backend/ --ignore-missing-imports` returneaza 0 erori noi
   - Sursa: R4 F6.4 [P1]
 
-- [ ] **F7-4** `[T]` FUNCTII_SISTEM.md — actualizare completa
+- [x] **F7-4** `[T]` FUNCTII_SISTEM.md — actualizare completa | **IMPLEMENTAT 2026-04-07**
   - **Fisier:** `FUNCTII_SISTEM.md`
   - **Problema:** Data "2026-03-22", "37 endpoints" (actual: 42+)
   - **Fix:** Regenereaza complet — data 2026-04-07, Version R6, toate endpoint-urile noi (inclusiv cele din F1-F6), 12 pagini frontend, AI providers activi
   - **Verificare:** Nr endpoints in document = nr real din `main.py` + routere
   - Sursa: R4 F5.2 [P1]
 
-- [ ] **F7-5** `[T]` lucide-react upgrade la latest stable
+- [x] **F7-5** `[T]` lucide-react upgrade la latest stable | **IMPLEMENTAT 2026-04-07**
   - **Fisier:** `frontend/package.json`
   - **Comanda:** `npm install lucide-react@latest`
   - **Verificare:** `npm run build` fara erori; UI-ul afiseaza iconitele corect
@@ -750,7 +750,7 @@
   - **Verificare:** Niciun chunk > 200KB; pagini lazy-loaded confirmate
   - Sursa: R5 F4-4 [ ], info.txt [P1]
 
-- [ ] **F8-4** `[T]` Test integrare Portal Just — mock SOAP
+- [x] **F8-4** `[T]` Test integrare Portal Just — mock SOAP | **IMPLEMENTAT 2026-04-07**
   - **Fisier nou:** `tests/test_just_client.py`
   - **Mock:** `unittest.mock.patch("zeep.Client")` → raspuns simulat cu 3 dosare
   - **Scenarii:** 0 dosare, 1 dosar reclamant, 5 dosare mixte, timeout 30s, SOAP error

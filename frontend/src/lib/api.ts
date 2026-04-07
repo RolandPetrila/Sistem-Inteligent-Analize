@@ -19,7 +19,11 @@ const HTTP_ERROR_MESSAGES: Record<number, string> = {
 
 // D21: Auto-retry with exponential backoff for 429 and transient errors
 // R2 Fix #8: Create NEW AbortController per attempt (not reused across retries)
-async function request<T>(path: string, options?: RequestInit, _attempt = 0): Promise<T> {
+async function request<T>(
+  path: string,
+  options?: RequestInit,
+  _attempt = 0,
+): Promise<T> {
   const method = options?.method || "GET";
   const start = performance.now();
 
@@ -40,10 +44,18 @@ async function request<T>(path: string, options?: RequestInit, _attempt = 0): Pr
     // Check if it was an abort (timeout)
     if (netErr instanceof DOMException && netErr.name === "AbortError") {
       logApi(method, path, 0, ms, "Request timeout");
-      throw new ApiError("Cererea a expirat. Incearca din nou.", "TIMEOUT", 408);
+      throw new ApiError(
+        "Cererea a expirat. Incearca din nou.",
+        "TIMEOUT",
+        408,
+      );
     }
     logApi(method, path, 0, ms, `Network error: ${netErr}`);
-    throw new ApiError("Eroare de retea. Verifica conexiunea.", "NETWORK_ERROR", 0);
+    throw new ApiError(
+      "Eroare de retea. Verifica conexiunea.",
+      "NETWORK_ERROR",
+      0,
+    );
   } finally {
     clearTimeout(timeoutId);
   }
@@ -52,7 +64,13 @@ async function request<T>(path: string, options?: RequestInit, _attempt = 0): Pr
 
   // D21: Auto-retry on 429 (rate limit) — up to 2 retries with backoff
   if (res.status === 429 && _attempt < 2) {
-    logApi(method, path, 429, durationMs, `Rate limited, retry ${_attempt + 1}`);
+    logApi(
+      method,
+      path,
+      429,
+      durationMs,
+      `Rate limited, retry ${_attempt + 1}`,
+    );
     const retryAfter = parseInt(res.headers.get("Retry-After") || "3", 10);
     const delay = Math.min(retryAfter * 1000, 10_000);
     await new Promise((r) => setTimeout(r, delay));
@@ -60,11 +78,22 @@ async function request<T>(path: string, options?: RequestInit, _attempt = 0): Pr
   }
 
   if (res.status === 429) {
-    logApi(method, path, 429, durationMs, "Rate limited, max retries exhausted");
+    logApi(
+      method,
+      path,
+      429,
+      durationMs,
+      "Rate limited, max retries exhausted",
+    );
     const retryAfter = parseInt(res.headers.get("Retry-After") || "5", 10);
     const err = await res.json().catch(() => ({}));
     const code = err.error_code || "RATE_LIMITED";
-    throw new ApiError(`Prea multe cereri. Reincercati in ${retryAfter}s.`, code, res.status, retryAfter);
+    throw new ApiError(
+      `Prea multe cereri. Reincercati in ${retryAfter}s.`,
+      code,
+      res.status,
+      retryAfter,
+    );
   }
 
   // D21: Auto-retry on 503 (service unavailable) — 1 retry after 2s
@@ -98,7 +127,12 @@ export class ApiError extends Error {
   code: string;
   status: number;
   retryAfter?: number;
-  constructor(message: string, code: string, status: number, retryAfter?: number) {
+  constructor(
+    message: string,
+    code: string,
+    status: number,
+    retryAfter?: number,
+  ) {
     super(message);
     this.code = code;
     this.status = status;
@@ -119,7 +153,7 @@ export const api = {
     if (params?.offset) q.set("offset", String(params.offset));
     const qs = q.toString();
     return request<{ jobs: import("./types").Job[]; total: number }>(
-      `/jobs${qs ? `?${qs}` : ""}`
+      `/jobs${qs ? `?${qs}` : ""}`,
     );
   },
   getJob: (id: string) => request<import("./types").Job>(`/jobs/${id}`),
@@ -127,7 +161,11 @@ export const api = {
     analysis_type: string;
     report_level: number;
     input_params: Record<string, unknown>;
-  }) => request<import("./types").Job>("/jobs", { method: "POST", body: JSON.stringify(data) }),
+  }) =>
+    request<import("./types").Job>("/jobs", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
   startJob: (id: string) =>
     request<{ status: string }>(`/jobs/${id}/start`, { method: "POST" }),
   cancelJob: (id: string) =>
@@ -137,25 +175,44 @@ export const api = {
   getLatestDiagnostics: () =>
     request<Record<string, unknown>>("/jobs/diagnostics/latest"),
   retrySource: (jobId: string, source: string) =>
-    request<{ job_id: string; source: string; success: boolean; data?: unknown; error?: string }>(
-      `/jobs/${jobId}/retry-source/${source}`, { method: "POST" }
-    ),
+    request<{
+      job_id: string;
+      source: string;
+      success: boolean;
+      data?: unknown;
+      error?: string;
+    }>(`/jobs/${jobId}/retry-source/${source}`, { method: "POST" }),
 
   // Reports
-  listReports: (params?: { report_type?: string; limit?: number; offset?: number }) => {
+  listReports: (params?: {
+    report_type?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
     const q = new URLSearchParams();
     if (params?.report_type) q.set("report_type", params.report_type);
     if (params?.limit) q.set("limit", String(params.limit));
     if (params?.offset) q.set("offset", String(params.offset));
     const qs = q.toString();
     return request<{ reports: import("./types").Report[]; total: number }>(
-      `/reports${qs ? `?${qs}` : ""}`
+      `/reports${qs ? `?${qs}` : ""}`,
     );
   },
-  getReport: (id: string) => request<import("./types").Report & { full_data: unknown; sources: unknown[] }>(`/reports/${id}`),
+  getReport: (id: string) =>
+    request<
+      import("./types").Report & { full_data: unknown; sources: unknown[] }
+    >(`/reports/${id}`),
 
   // Companies
-  listCompanies: (params?: { search?: string; limit?: number; offset?: number; sort?: string; county?: string; caen?: string; risk_score?: string }) => {
+  listCompanies: (params?: {
+    search?: string;
+    limit?: number;
+    offset?: number;
+    sort?: string;
+    county?: string;
+    caen?: string;
+    risk_score?: string;
+  }) => {
     const q = new URLSearchParams();
     if (params?.search) q.set("search", params.search);
     if (params?.limit) q.set("limit", String(params.limit));
@@ -166,16 +223,30 @@ export const api = {
     if (params?.risk_score) q.set("risk_score", params.risk_score);
     const qs = q.toString();
     return request<{ companies: import("./types").Company[]; total: number }>(
-      `/companies${qs ? `?${qs}` : ""}`
+      `/companies${qs ? `?${qs}` : ""}`,
     );
   },
 
   // N4: Company detail page
   getCompany: (id: string) =>
-    request<import("./types").Company & {
-      reports: { id: string; report_type: string; report_level: number; title: string | null; summary: string | null; risk_score: string | null; created_at: string }[];
-      score_history: { numeric_score: number | null; dimensions: string | null; recorded_at: string }[];
-    }>(`/companies/${id}`),
+    request<
+      import("./types").Company & {
+        reports: {
+          id: string;
+          report_type: string;
+          report_level: number;
+          title: string | null;
+          summary: string | null;
+          risk_score: string | null;
+          created_at: string;
+        }[];
+        score_history: {
+          numeric_score: number | null;
+          dimensions: string | null;
+          recorded_at: string;
+        }[];
+      }
+    >(`/companies/${id}`),
 
   exportCompaniesCSV: async () => {
     const res = await fetch(`${BASE}/companies/export/csv`);
@@ -193,22 +264,28 @@ export const api = {
     request<import("./types").AnalysisTypeInfo[]>("/analysis/types"),
 
   parseQuery: (query: string) =>
-    request<{ analysis_type: string; input_params: Record<string, unknown>; confidence: number; suggestion: string }>(
-      "/analysis/parse-query",
-      { method: "POST", body: JSON.stringify({ query }) }
-    ),
+    request<{
+      analysis_type: string;
+      input_params: Record<string, unknown>;
+      confidence: number;
+      suggestion: string;
+    }>("/analysis/parse-query", {
+      method: "POST",
+      body: JSON.stringify({ query }),
+    }),
 
   // Settings
-  getSettings: () => request<{
-    fields: Record<string, string>;
-    synthesis_mode: string;
-    has_tavily: boolean;
-    has_gemini: boolean;
-    has_groq: boolean;
-    has_cerebras: boolean;
-    has_telegram: boolean;
-    has_email: boolean;
-  }>("/settings"),
+  getSettings: () =>
+    request<{
+      fields: Record<string, string>;
+      synthesis_mode: string;
+      has_tavily: boolean;
+      has_gemini: boolean;
+      has_groq: boolean;
+      has_cerebras: boolean;
+      has_telegram: boolean;
+      has_email: boolean;
+    }>("/settings"),
 
   updateSettings: (fields: Record<string, string>) =>
     request<{ updated: string[]; count: number }>("/settings", {
@@ -217,7 +294,9 @@ export const api = {
     }),
 
   testTelegram: () =>
-    request<{ success: boolean }>("/settings/test-telegram", { method: "POST" }),
+    request<{ success: boolean }>("/settings/test-telegram", {
+      method: "POST",
+    }),
 
   // Compare (C24 fix: match backend CompareRequest/SectorRequest schemas)
   compareCompanies: (cui_list: string[]) =>
@@ -245,15 +324,25 @@ export const api = {
     }>(`/batch/${batchId}`),
 
   resumeBatch: (batchId: string) =>
-    request<{ batch_id: string; resumed: number; cuis: string[]; status: string }>(
-      `/batch/${batchId}/resume`, { method: "POST" }
-    ),
+    request<{
+      batch_id: string;
+      resumed: number;
+      cuis: string[];
+      status: string;
+    }>(`/batch/${batchId}/resume`, { method: "POST" }),
 
   // Monitoring (C24 fix: match backend MonitoringCreate schema)
-  listMonitoring: () =>
-    request<{ alerts: unknown[] }>("/monitoring"),
-  createMonitoring: (data: { company_id: string; alert_type?: string; check_frequency?: string; telegram_notify?: boolean }) =>
-    request<unknown>("/monitoring", { method: "POST", body: JSON.stringify(data) }),
+  listMonitoring: () => request<{ alerts: unknown[] }>("/monitoring"),
+  createMonitoring: (data: {
+    company_id: string;
+    alert_type?: string;
+    check_frequency?: string;
+    telegram_notify?: boolean;
+  }) =>
+    request<unknown>("/monitoring", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
   deleteMonitoring: (id: string) =>
     request<unknown>(`/monitoring/${id}`, { method: "DELETE" }),
   checkMonitoringNow: () =>
@@ -267,12 +356,23 @@ export const api = {
   healthDeep: () => request<Record<string, unknown>>("/health/deep"),
 
   // Batch upload (FormData — not JSON, needs custom fetch with logging)
-  uploadBatch: async (file: File, analysisType = "FULL_COMPANY_PROFILE", reportLevel = 2) => {
+  uploadBatch: async (
+    file: File,
+    analysisType = "FULL_COMPANY_PROFILE",
+    reportLevel = 2,
+  ) => {
     const start = performance.now();
-    const res = await fetch(`${BASE}/batch?analysis_type=${analysisType}&report_level=${reportLevel}`, {
-      method: "POST",
-      body: (() => { const fd = new FormData(); fd.append("file", file); return fd; })(),
-    });
+    const res = await fetch(
+      `${BASE}/batch?analysis_type=${analysisType}&report_level=${reportLevel}`,
+      {
+        method: "POST",
+        body: (() => {
+          const fd = new FormData();
+          fd.append("file", file);
+          return fd;
+        })(),
+      },
+    );
     const ms = Math.round(performance.now() - start);
     if (!res.ok) {
       logApi("POST", "/batch", res.status, ms, "Upload failed");
@@ -293,7 +393,13 @@ export const api = {
     });
     const ms = Math.round(performance.now() - start);
     if (!res.ok) {
-      logApi("POST", "/compare/report", res.status, ms, "PDF generation failed");
+      logApi(
+        "POST",
+        "/compare/report",
+        res.status,
+        ms,
+        "PDF generation failed",
+      );
       throw new ApiError("PDF generation failed", "", res.status);
     }
     logApi("POST", "/compare/report", res.status, ms);
@@ -310,29 +416,41 @@ export const api = {
     if (params?.unread_only) q.set("unread_only", "true");
     if (params?.limit) q.set("limit", String(params.limit));
     const qs = q.toString();
-    return request<{ notifications: import("./types").Notification[]; unread_count: number }>(
-      `/notifications${qs ? `?${qs}` : ""}`
-    );
+    return request<{
+      notifications: import("./types").Notification[];
+      unread_count: number;
+    }>(`/notifications${qs ? `?${qs}` : ""}`);
   },
   markNotificationRead: (id: string) =>
-    request<{ success: boolean }>(`/notifications/${id}/read`, { method: "PUT" }),
+    request<{ success: boolean }>(`/notifications/${id}/read`, {
+      method: "PUT",
+    }),
   markAllNotificationsRead: () =>
     request<{ success: boolean }>("/notifications/read-all", { method: "PUT" }),
 
   // Company favorites
   toggleFavorite: (id: string) =>
-    request<{ is_favorite: boolean }>(`/companies/${id}/favorite`, { method: "PUT" }),
+    request<{ is_favorite: boolean }>(`/companies/${id}/favorite`, {
+      method: "PUT",
+    }),
 
   // Risk movers
   getRiskMovers: () =>
-    request<{ movers: import("./types").RiskMover[] }>("/companies/stats/risk-movers"),
+    request<{ movers: import("./types").RiskMover[] }>(
+      "/companies/stats/risk-movers",
+    ),
 
   // Company timeline
   getCompanyTimeline: (id: string) =>
-    request<{ events: import("./types").TimelineEvent[] }>(`/companies/${id}/timeline`),
+    request<{ events: import("./types").TimelineEvent[] }>(
+      `/companies/${id}/timeline`,
+    ),
 
   // Report email
-  sendReportEmail: (reportId: string, data: { to: string; subject: string; message: string }) =>
+  sendReportEmail: (
+    reportId: string,
+    data: { to: string; subject: string; message: string },
+  ) =>
     request<{ success: boolean }>(`/reports/${reportId}/send-email`, {
       method: "POST",
       body: JSON.stringify(data),
@@ -341,14 +459,16 @@ export const api = {
   // Download report in any format (PDF, DOCX, HTML, Excel, PPTX)
   downloadReport: async (reportId: string, format: string): Promise<Blob> => {
     const res = await fetch(`${BASE}/reports/${reportId}/download/${format}`);
-    if (!res.ok) throw new ApiError(`Download ${format} failed`, "", res.status);
+    if (!res.ok)
+      throw new ApiError(`Download ${format} failed`, "", res.status);
     return res.blob();
   },
 
   // Download one-pager PDF
   downloadOnePager: async (reportId: string): Promise<Blob> => {
     const res = await fetch(`${BASE}/reports/${reportId}/download/one_pager`);
-    if (!res.ok) throw new ApiError("Download one-pager failed", "", res.status);
+    if (!res.ok)
+      throw new ApiError("Download one-pager failed", "", res.status);
     return res.blob();
   },
 
@@ -359,12 +479,16 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cui_1: cui1, cui_2: cui2 }),
     });
-    if (!res.ok) throw new ApiError("Compare report generation failed", "", res.status);
+    if (!res.ok)
+      throw new ApiError("Compare report generation failed", "", res.status);
     return res.blob();
   },
 
   // Get report data (lazy-load full JSON)
-  getReportData: (reportId: string, section?: string): Promise<Record<string, unknown>> => {
+  getReportData: (
+    reportId: string,
+    section?: string,
+  ): Promise<Record<string, unknown>> => {
     const url = section
       ? `/reports/${reportId}/data?section=${section}`
       : `/reports/${reportId}/data`;
@@ -376,20 +500,28 @@ export const api = {
     request(`/reports/${reportId}/delta`),
 
   // List favorites
-  listFavorites: (): Promise<{ companies: import("./types").Company[]; total: number }> =>
-    request("/companies/favorites"),
+  listFavorites: (): Promise<{
+    companies: import("./types").Company[];
+    total: number;
+  }> => request("/companies/favorites"),
 
   // Score trend with SQL window functions
-  getScoreTrend: (companyId: number): Promise<import("./types").ScoreTrendPoint[]> =>
+  getScoreTrend: (
+    companyId: number,
+  ): Promise<import("./types").ScoreTrendPoint[]> =>
     request(`/companies/${companyId}/score-trend`),
 
   // Monitoring history
   getMonitoringHistory: (limit = 20) =>
-    request<{ history: Record<string, unknown>[] }>(`/monitoring/history?limit=${limit}`),
+    request<{ history: Record<string, unknown>[] }>(
+      `/monitoring/history?limit=${limit}`,
+    ),
 
   // Settings — test individual service
   testService: (service: string) =>
-    request<{ ok: boolean; message: string }>(`/settings/test/${service}`, { method: "POST" }),
+    request<{ ok: boolean; message: string }>(`/settings/test/${service}`, {
+      method: "POST",
+    }),
 
   // Company tags (F3-3)
   getCompanyTags: (companyId: string) =>
@@ -400,13 +532,18 @@ export const api = {
       body: JSON.stringify({ tag }),
     }),
   removeCompanyTag: (companyId: string, tag: string) =>
-    request<{ ok: boolean }>(`/companies/${companyId}/tags/${encodeURIComponent(tag)}`, {
-      method: "DELETE",
-    }),
+    request<{ ok: boolean }>(
+      `/companies/${companyId}/tags/${encodeURIComponent(tag)}`,
+      {
+        method: "DELETE",
+      },
+    ),
 
   // Company notes (F3-3)
   getCompanyNote: (companyId: string) =>
-    request<{ note: string; updated_at: string | null }>(`/companies/${companyId}/note`),
+    request<{ note: string; updated_at: string | null }>(
+      `/companies/${companyId}/note`,
+    ),
   upsertCompanyNote: (companyId: string, note: string) =>
     request<{ ok: boolean }>(`/companies/${companyId}/note`, {
       method: "PUT",
@@ -415,16 +552,23 @@ export const api = {
 
   // Compare templates (F3-8)
   listCompareTemplates: () =>
-    request<{ templates: { id: string; name: string; cuis: string[]; created_at: string }[] }>(
-      "/compare/templates"
-    ),
+    request<{
+      templates: {
+        id: string;
+        name: string;
+        cuis: string[];
+        created_at: string;
+      }[];
+    }>("/compare/templates"),
   saveCompareTemplate: (name: string, cuis: string[]) =>
     request<{ ok: boolean; id: string }>("/compare/templates", {
       method: "POST",
       body: JSON.stringify({ name, cuis }),
     }),
   deleteCompareTemplate: (templateId: string) =>
-    request<{ ok: boolean }>(`/compare/templates/${templateId}`, { method: "DELETE" }),
+    request<{ ok: boolean }>(`/compare/templates/${templateId}`, {
+      method: "DELETE",
+    }),
 
   // Sector CAEN dashboard (F3-6)
   getSectorDashboard: (caenCode: string) =>
@@ -432,15 +576,33 @@ export const api = {
       caen_code: string;
       caen_description: string;
       stats: Record<string, number | null>;
-      top_companies: { id: string; name: string; cui: string; score: number; county: string }[];
+      top_companies: {
+        id: string;
+        name: string;
+        cui: string;
+        score: number;
+        county: string;
+      }[];
     }>(`/compare/sector/${caenCode}/dashboard`),
+
+  // F6-6: Auto re-analyze toggle
+  toggleAutoReanalyze: (companyId: string) =>
+    request<{ ok: boolean; auto_reanalyze: boolean }>(
+      `/companies/${companyId}/auto-reanalyze`,
+      {
+        method: "POST",
+      },
+    ),
 
   // Batch preview CSV
   previewBatch: async (file: File) => {
     const start = performance.now();
     const fd = new FormData();
     fd.append("file", file);
-    const res = await fetch(`${BASE}/batch/preview`, { method: "POST", body: fd });
+    const res = await fetch(`${BASE}/batch/preview`, {
+      method: "POST",
+      body: fd,
+    });
     const ms = Math.round(performance.now() - start);
     if (!res.ok) {
       logApi("POST", "/batch/preview", res.status, ms, "Preview failed");

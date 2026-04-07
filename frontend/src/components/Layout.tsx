@@ -1,5 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Outlet, NavLink, useLocation, Link, useNavigate } from "react-router-dom";
+import {
+  Outlet,
+  NavLink,
+  useLocation,
+  Link,
+  useNavigate,
+} from "react-router-dom";
 import {
   LayoutDashboard,
   PlusCircle,
@@ -18,6 +24,8 @@ import {
   AlertTriangle,
   CheckCircle,
   Info,
+  Moon,
+  Sun,
 } from "lucide-react";
 import clsx from "clsx";
 import GlobalSearch from "./GlobalSearch";
@@ -26,16 +34,16 @@ import type { Notification } from "@/lib/types";
 
 const ROUTE_LABELS: Record<string, string> = {
   "": "Dashboard",
-  "companies": "Companii",
-  "company": "Companie",
-  "reports": "Rapoarte",
-  "report": "Raport",
-  "compare": "Comparator",
-  "monitoring": "Monitorizare",
-  "settings": "Setari",
+  companies: "Companii",
+  company: "Companie",
+  reports: "Rapoarte",
+  report: "Raport",
+  compare: "Comparator",
+  monitoring: "Monitorizare",
+  settings: "Setari",
   "new-analysis": "Analiza Noua",
-  "batch": "Batch",
-  "analysis": "Progres Analiza",
+  batch: "Batch",
+  analysis: "Progres Analiza",
 };
 
 function Breadcrumbs() {
@@ -60,7 +68,10 @@ function Breadcrumbs() {
 
   return (
     <nav className="flex items-center gap-1.5 text-xs text-gray-500 mb-4">
-      <Link to="/" className="flex items-center gap-1 hover:text-gray-300 transition-colors">
+      <Link
+        to="/"
+        className="flex items-center gap-1 hover:text-gray-300 transition-colors"
+      >
         <Home className="w-3 h-3" />
         <span>Dashboard</span>
       </Link>
@@ -70,7 +81,10 @@ function Breadcrumbs() {
           {i === crumbs.length - 1 ? (
             <span className="text-gray-300">{crumb.label}</span>
           ) : (
-            <Link to={crumb.to} className="hover:text-gray-300 transition-colors">
+            <Link
+              to={crumb.to}
+              className="hover:text-gray-300 transition-colors"
+            >
               {crumb.label}
             </Link>
           )}
@@ -113,12 +127,15 @@ function NotificationBell() {
   const panelRef = useRef<HTMLDivElement>(null);
 
   const fetchNotifications = useCallback(() => {
-    api.listNotifications({ unread_only: true, limit: 10 })
+    api
+      .listNotifications({ unread_only: true, limit: 10 })
       .then((res) => {
         setNotifications(res.notifications);
         setUnreadCount(res.unread_count);
       })
-      .catch(() => { /* fail silently */ });
+      .catch(() => {
+        /* fail silently */
+      });
   }, []);
 
   // Fetch on mount + poll every 60s
@@ -210,10 +227,16 @@ function NotificationBell() {
                     className="w-full text-left px-4 py-3 hover:bg-dark-hover transition-colors border-b border-dark-border/50 last:border-0"
                   >
                     <div className="flex items-start gap-3">
-                      <Icon className={clsx("w-4 h-4 mt-0.5 shrink-0", color)} />
+                      <Icon
+                        className={clsx("w-4 h-4 mt-0.5 shrink-0", color)}
+                      />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-200 font-medium truncate">{notif.title}</p>
-                        <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{notif.message}</p>
+                        <p className="text-sm text-gray-200 font-medium truncate">
+                          {notif.title}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                          {notif.message}
+                        </p>
                       </div>
                       <span className="text-[10px] text-gray-600 shrink-0 mt-0.5">
                         {formatTime(notif.created_at)}
@@ -238,6 +261,38 @@ function NotificationBell() {
         </div>
       )}
     </div>
+  );
+}
+
+function ThemeToggle() {
+  const [isDark, setIsDark] = useState(() => {
+    return localStorage.getItem("ris_theme") !== "light";
+  });
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", isDark);
+    localStorage.setItem("ris_theme", isDark ? "dark" : "light");
+  }, [isDark]);
+
+  return (
+    <button
+      onClick={() => setIsDark((d) => !d)}
+      className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-gray-500 bg-dark-card rounded-lg border border-dark-border hover:border-gray-600 hover:text-gray-400 transition-colors"
+      title={isDark ? "Comuta la tema Light" : "Comuta la tema Dark"}
+      aria-label={isDark ? "Comuta la tema Light" : "Comuta la tema Dark"}
+    >
+      {isDark ? (
+        <>
+          <Sun className="w-3.5 h-3.5" />
+          <span className="flex-1 text-left">Tema Light</span>
+        </>
+      ) : (
+        <>
+          <Moon className="w-3.5 h-3.5" />
+          <span className="flex-1 text-left">Tema Dark</span>
+        </>
+      )}
+    </button>
   );
 }
 
@@ -288,13 +343,20 @@ export default function Layout() {
       {/* Footer */}
       <div className="p-4 border-t border-dark-border space-y-2">
         <button
-          onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }))}
+          onClick={() =>
+            window.dispatchEvent(
+              new KeyboardEvent("keydown", { key: "k", ctrlKey: true }),
+            )
+          }
           className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-gray-500 bg-dark-card rounded-lg border border-dark-border hover:border-gray-600 hover:text-gray-400 transition-colors"
         >
           <Search className="w-3.5 h-3.5" />
           <span className="flex-1 text-left">Cauta...</span>
-          <kbd className="text-[10px] bg-dark-surface px-1 py-0.5 rounded border border-dark-border/50">Ctrl+K</kbd>
+          <kbd className="text-[10px] bg-dark-surface px-1 py-0.5 rounded border border-dark-border/50">
+            Ctrl+K
+          </kbd>
         </button>
+        <ThemeToggle />
         <p className="text-[10px] text-gray-600">
           Roland Intelligence System v3.0
         </p>
@@ -323,7 +385,7 @@ export default function Layout() {
         className={clsx(
           "fixed inset-y-0 left-0 z-50 w-64 bg-dark-surface border-r border-dark-border flex flex-col",
           "transform transition-transform duration-200 ease-in-out md:hidden",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          sidebarOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
         {sidebar}

@@ -6,11 +6,20 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, field_validator
-from backend.rate_limiter import rate_limit_downloads
 
-from backend.database import db
 from backend.config import settings
-from backend.errors import RISError, ErrorCode
+from backend.database import db
+from backend.errors import ErrorCode, RISError
+from backend.rate_limiter import rate_limit_downloads
+from backend.services.report_service import (
+    get_report_by_id,
+)
+from backend.services.report_service import (
+    get_report_data as _get_report_data,
+)
+from backend.services.report_service import (
+    list_reports as _list_reports,
+)
 
 router = APIRouter()
 
@@ -22,92 +31,20 @@ async def list_reports(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ):
-    conditions = []
-    params: list = []
-
-    if report_type:
-        conditions.append("report_type = ?")
-        params.append(report_type)
-    if company_id:
-        conditions.append("company_id = ?")
-        params.append(company_id)
-
-    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-
-    total_row = await db.fetch_one(
-        f"SELECT COUNT(*) as c FROM reports {where}", tuple(params)
+    return await _list_reports(
+        report_type=report_type,
+        company_id=company_id,
+        limit=limit,
+        offset=offset,
     )
-    total = total_row["c"] if total_row else 0
-
-    rows = await db.fetch_all(
-        f"SELECT * FROM reports {where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
-        tuple(params + [limit, offset]),
-    )
-
-    reports = []
-    for row in rows:
-        formats = []
-        for fmt in ["pdf", "docx", "excel", "html", "pptx"]:
-            if row.get(f"{fmt}_path"):
-                formats.append(fmt)
-        # Check if one_pager exists on disk
-        one_pager = Path(settings.outputs_dir) / row["job_id"] / "raport_executiv.pdf"
-        if one_pager.exists():
-            formats.append("one_pager")
-        reports.append({
-            "id": row["id"],
-            "job_id": row["job_id"],
-            "company_id": row["company_id"],
-            "report_type": row["report_type"],
-            "report_level": row["report_level"],
-            "title": row["title"],
-            "summary": row["summary"],
-            "risk_score": row["risk_score"],
-            "created_at": row["created_at"],
-            "formats_available": formats,
-        })
-
-    return {"reports": reports, "total": total}
 
 
 @router.get("/{report_id}")
 async def get_report(report_id: str):
-    row = await db.fetch_one("SELECT * FROM reports WHERE id = ?", (report_id,))
-    if not row:
+    result = await get_report_by_id(report_id)
+    if not result:
         raise HTTPException(status_code=404, detail="Report not found")
-
-    full_data = None
-    if row["full_data"]:
-        try:
-            full_data = json.loads(row["full_data"])
-        except (json.JSONDecodeError, TypeError):
-            full_data = None
-
-    formats = []
-    for fmt in ["pdf", "docx", "excel", "html", "pptx"]:
-        if row.get(f"{fmt}_path"):
-            formats.append(fmt)
-
-    # Get sources
-    sources = await db.fetch_all(
-        "SELECT * FROM report_sources WHERE report_id = ? ORDER BY accessed_at",
-        (report_id,),
-    )
-
-    return {
-        "id": row["id"],
-        "job_id": row["job_id"],
-        "company_id": row["company_id"],
-        "report_type": row["report_type"],
-        "report_level": row["report_level"],
-        "title": row["title"],
-        "summary": row["summary"],
-        "full_data": full_data,
-        "risk_score": row["risk_score"],
-        "created_at": row["created_at"],
-        "formats_available": formats,
-        "sources": [dict(s) for s in sources],
-    }
+    return result
 
 
 @router.get("/{report_id}/download/one_pager", dependencies=[Depends(rate_limit_downloads)])
@@ -180,15 +117,13 @@ async def get_report_data(
 ):
     """FIX #34: Returneaza full_data JSON, optional filtrat per sectiune.
     Evita payload >500KB pe GET /{report_id} principal."""
-    row = await db.fetch_one(
-        "SELECT full_data FROM reports WHERE id = ?", (report_id,)
-    )
-    if not row:
+    try:
+        result = await _get_report_data(report_id, section)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if result is None:
         raise HTTPException(status_code=404, detail="Report not found")
-    data = json.loads(row["full_data"]) if row.get("full_data") else {}
-    if section:
-        return {section: data.get(section)}
-    return data
+    return result
 
 
 @router.get("/{report_id}/delta")
@@ -222,6 +157,7 @@ async def get_report_delta(report_id: str):
 async def export_seap_calendar(report_id: str):
     """F3-5: Exporta licitatii SEAP din raport ca fisier .ics (iCalendar)."""
     import uuid as _uuid
+
     from fastapi.responses import Response as FastAPIResponse
 
     report = await db.fetch_one("SELECT full_data FROM reports WHERE id = ?", (report_id,))

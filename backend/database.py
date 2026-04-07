@@ -1,6 +1,7 @@
-import aiosqlite
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+import aiosqlite
 from loguru import logger
 
 from backend.config import settings
@@ -24,6 +25,14 @@ class Database:
         await self._db.execute("PRAGMA mmap_size=268435456")
         await self._db.execute("PRAGMA temp_store=MEMORY")
         self._db.row_factory = aiosqlite.Row
+        # H3: Indexuri lipsă identificate în audit R16
+        await self._db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_score_history_recorded ON score_history(recorded_at)"
+        )
+        await self._db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_reports_job_id ON reports(job_id)"
+        )
+        await self._db.commit()
         logger.info(f"Database connected: {self.db_path}")
 
     async def close(self):

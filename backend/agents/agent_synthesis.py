@@ -194,10 +194,16 @@ Reguli:
 
     def _estimate_prompt_tokens(self, data: dict, word_target: int) -> int:
         """Pre-check: estimate token count before building the full prompt.
-        Formula: base_tokens(500) + data_chars/4 + word_target*2.
+        Foloseste tiktoken (cl100k_base) pentru precizie; fallback len/4.
         Useful for early budget checks before expensive prompt construction."""
-        data_chars = len(json.dumps(data, ensure_ascii=False, default=str))
-        return 500 + data_chars // 4 + word_target * 2
+        data_str = json.dumps(data, ensure_ascii=False, default=str)
+        try:
+            import tiktoken
+            enc = tiktoken.get_encoding("cl100k_base")
+            data_tokens = len(enc.encode(data_str))
+        except Exception:
+            data_tokens = len(data_str) // 4  # fallback: 1 token ~ 4 chars
+        return 500 + data_tokens + word_target * 2
 
     def _build_section_prompt(self, section: dict, verified_data: dict, provider: str = "claude") -> str:
         """Construieste prompt-ul optimizat per provider AI.
@@ -1108,8 +1114,14 @@ Reguli:
     def _check_token_budget(self, prompt: str, provider: str) -> str:
         """Verifica daca prompt-ul incape in 70% din contextul provider-ului.
         Daca nu incape, recomanda un provider cu context mai mare.
-        Returneaza provider-ul recomandat (poate fi acelasi sau altul)."""
-        estimated_tokens = len(prompt) / 4  # rough estimate: 1 token ~ 4 chars
+        Returneaza provider-ul recomandat (poate fi acelasi sau altul).
+        Foloseste tiktoken (cl100k_base) pentru numarare precisa; fallback len/4."""
+        try:
+            import tiktoken
+            enc = tiktoken.get_encoding("cl100k_base")
+            estimated_tokens = len(enc.encode(prompt))
+        except Exception:
+            estimated_tokens = len(prompt) / 4  # rough estimate: 1 token ~ 4 chars
         max_ctx = self._PROVIDER_MAX_CONTEXT.get(provider, 12_000)
         threshold = max_ctx * 0.7
 

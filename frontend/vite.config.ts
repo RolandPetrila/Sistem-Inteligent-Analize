@@ -4,6 +4,12 @@ import path from "path";
 import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
+  test: {
+    environment: "jsdom",
+    globals: true,
+    setupFiles: ["./src/__tests__/setup.ts"],
+    css: false,
+  },
   plugins: [
     react(),
     VitePWA({
@@ -12,7 +18,8 @@ export default defineConfig({
       manifest: {
         name: "Roland Intelligence System",
         short_name: "RIS",
-        description: "Business Intelligence cu date publice romanesti — ANAF, ONRC, SEAP, BNR",
+        description:
+          "Business Intelligence cu date publice romanesti — ANAF, ONRC, SEAP, BNR",
         theme_color: "#1a1a2e",
         background_color: "#1a1a2e",
         display: "standalone",
@@ -66,7 +73,7 @@ export default defineConfig({
     },
   },
   server: {
-    host: true,  // 0.0.0.0 — accesibil via Tailscale in dev mode
+    host: true, // 0.0.0.0 — accesibil via Tailscale in dev mode
     port: 5173,
     proxy: {
       "/api": {

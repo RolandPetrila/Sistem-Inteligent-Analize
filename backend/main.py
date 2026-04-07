@@ -3,25 +3,28 @@ import json
 import re
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import UTC, datetime
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Response
+# Runtime log — captures startup, shutdown, 500 errors (not per-job)
+from pathlib import Path as _Path
+
+import aiofiles
+from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
 from loguru import logger
+from starlette.middleware.base import BaseHTTPMiddleware
 
+from backend import http_client
 from backend.config import settings
 from backend.database import db
-from backend import http_client
-from backend.errors import RISError, ERROR_HTTP_STATUS
-from backend.ws import ws_manager, ConnectionManager
-from backend.routers import jobs, reports, companies, analysis, settings as settings_router, compare, monitoring, batch, notifications
+from backend.errors import ERROR_HTTP_STATUS, RISError
+from backend.routers import analysis, batch, companies, compare, jobs, monitoring, notifications, reports
+from backend.routers import settings as settings_router
+from backend.ws import ws_manager
 
-# Runtime log — captures startup, shutdown, 500 errors (not per-job)
-from pathlib import Path as _Path
 _LOGS_DIR = _Path("logs")
 _LOGS_DIR.mkdir(exist_ok=True)
 if settings.log_format == "json":
@@ -300,7 +303,8 @@ async def frontend_log(request: Request):
         body = await request.json()
         entries = body if isinstance(body, list) else [body]
 
-        with open(_FRONTEND_LOG, "a", encoding="utf-8") as f:
+        # H4: aiofiles async — evita blocarea event loop la logging intens
+        async with aiofiles.open(_FRONTEND_LOG, "a", encoding="utf-8") as f:
             for entry in entries:
                 ts = entry.get("ts", "")
                 level = entry.get("level", "INFO")
@@ -310,20 +314,20 @@ async def frontend_log(request: Request):
 
                 # Session markers get special formatting
                 if level == "SESSION":
-                    f.write(f"\n{'=' * 60}\n")
-                    f.write(f"SESSION | {ts} | {message}\n")
+                    await f.write(f"\n{'=' * 60}\n")
+                    await f.write(f"SESSION | {ts} | {message}\n")
                     if details:
-                        f.write(f"  {details}\n")
-                    f.write(f"{'=' * 60}\n\n")
+                        await f.write(f"  {details}\n")
+                    await f.write(f"{'=' * 60}\n\n")
                 else:
                     line = f"[{ts}] {level: <8} | {page: <20} | {message}"
                     if details:
                         line += f" | {details}"
-                    f.write(line + "\n")
+                    await f.write(line + "\n")
                     # Multi-line details for errors (stack traces)
                     if entry.get("stack"):
                         for sline in str(entry["stack"]).split("\n")[:5]:
-                            f.write(f"{'': <12} | {'': <20} | {sline.strip()}\n")
+                            await f.write(f"{'': <12} | {'': <20} | {sline.strip()}\n")
 
         return {"ok": True}
     except Exception as e:
@@ -412,11 +416,11 @@ async def health_check_deep():
 @app.get("/health/status", include_in_schema=False)
 async def health_status_page():
     """F3-13: Status page publica — nu include date sensibile, fara autentificare."""
-    from datetime import timezone
     db_ok = True
     try:
         await db.fetch_one("SELECT 1 as ok")
-    except Exception:
+    except Exception as e:
+        logger.warning(f"[health] DB check failed: {e}")
         db_ok = False
     recent_jobs = await db.fetch_all(
         "SELECT status, completed_at FROM jobs ORDER BY created_at DESC LIMIT 5"
@@ -425,11 +429,12 @@ async def health_status_page():
     scheduler_info: dict = {}
     try:
         scheduler_info = await get_scheduler_status()
-    except Exception:
+    except Exception as e:
+        logger.warning(f"[health] Scheduler check failed: {e}")
         scheduler_info = {"status": "unknown"}
     return {
         "status": "ok" if db_ok else "degraded",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "components": {
             "api": "ok",
             "database": "ok" if db_ok else "error",
@@ -529,8 +534,8 @@ async def websocket_job_progress(websocket: WebSocket, job_id: str):
 _FRONTEND_DIST = _Path(__file__).parent.parent / "frontend" / "dist"
 
 if _FRONTEND_DIST.exists():
+    from fastapi.responses import FileResponse as _FileResponse
     from fastapi.staticfiles import StaticFiles
-    from fastapi.responses import FileResponse as _FileResponse, HTMLResponse as _HTMLResponse
 
     # /assets/* — JS, CSS bundles (content-hashed, safe to cache)
     _assets_dir = _FRONTEND_DIST / "assets"
@@ -569,6 +574,7 @@ else:
 
 if __name__ == "__main__":
     import os
+
     import uvicorn
     is_dev = os.environ.get("RIS_ENV", "development") == "development"
     uvicorn.run(

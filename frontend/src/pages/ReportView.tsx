@@ -1,17 +1,9 @@
 import { useEffect, useState, useMemo } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import {
-  ArrowLeft,
-  Download,
-  Shield,
   ChevronDown,
   ChevronRight,
   ExternalLink,
-  RefreshCw,
-  Database,
-  Calendar,
-  Layers,
-  GitCompare,
   Mail,
   X,
   Loader2,
@@ -22,6 +14,10 @@ import { useToast } from "@/components/Toast";
 import { logAction, logValidation, validateReportData } from "@/lib/logger";
 import { ANALYSIS_TYPE_LABELS } from "@/lib/constants";
 import type { ReportDelta, AnalysisType } from "@/lib/types";
+import { ReportHeader } from "@/components/report/ReportHeader";
+import { ReportTabs } from "@/components/report/ReportTabs";
+import { PredictiveScoresTab } from "@/components/report/PredictiveScoresTab";
+import { RadarChartSVG } from "@/components/report/RadarChartSVG";
 
 interface ReportFull {
   id: string;
@@ -222,7 +218,6 @@ export default function ReportView() {
       .then((r) => {
         const rep = r as unknown as ReportFull;
         setReport(rep);
-        // Componenta 4: Validate report data
         const issues = validateReportData(
           rep.full_data as Record<string, unknown> | null,
         );
@@ -239,7 +234,6 @@ export default function ReportView() {
           sources: rep.sources?.length,
         });
 
-        // F2-6: Fetch predictive scores dupa ce avem CUI din raport
         const cui = rep.full_data?.company?.cui?.value as string | undefined;
         if (cui) {
           setPredictiveLoading(true);
@@ -254,8 +248,6 @@ export default function ReportView() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  // F2-12: Date financiare multi-an pentru grafice SVG
-  // NOTE: useMemo trebuie inainte de orice early return (React Rules of Hooks)
   const financialChartData = useMemo(() => {
     if (!report?.full_data?.financial) return null;
     const fin = report.full_data.financial as Record<
@@ -327,7 +319,6 @@ export default function ReportView() {
     piata: { weight: 10, label: "Piata", desc: "Competitie, SEAP, benchmark" },
   };
 
-  // Extrage dimensiunile din structura raportului
   const scoringDimensions:
     | Record<string, { score: number; weight: number }>
     | undefined =
@@ -347,6 +338,7 @@ export default function ReportView() {
           }
         | undefined
     )?.scoring_dimensions;
+
   const riskColor =
     {
       Verde: "text-risk-verde border-risk-verde/30 bg-risk-verde/5",
@@ -365,128 +357,42 @@ export default function ReportView() {
     { key: "raw", label: "Date JSON" },
   ];
 
+  const handleReanalyze = async () => {
+    if (reanalyzing) return;
+    const cui = data?.company?.cui?.value || data?.company?.denumire?.value;
+    if (!cui) {
+      toast("CUI indisponibil pentru re-analiza", "error");
+      return;
+    }
+    setReanalyzing(true);
+    try {
+      const job = await api.createJob({
+        analysis_type: report.report_type as AnalysisType,
+        report_level: report.report_level as number,
+        input_params: {
+          cui: String(typeof cui === "object" ? "" : cui),
+        },
+      });
+      await api.startJob(job.id);
+      navigate(`/analysis/${job.id}`);
+    } catch {
+      toast("Eroare la pornirea re-analizei", "error");
+      setReanalyzing(false);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-4xl">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <Link
-            to="/reports"
-            className="text-xs text-gray-500 hover:text-gray-300 flex items-center gap-1 mb-2"
-          >
-            <ArrowLeft className="w-3 h-3" /> Inapoi la rapoarte
-          </Link>
-          <h1 className="text-xl font-bold text-white">
-            {report.title ||
-              ANALYSIS_TYPE_LABELS[report.report_type] ||
-              "Raport"}
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Nivel {report.report_level} |{" "}
-            {new Date(report.created_at).toLocaleDateString("ro-RO")}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* E13: Re-analyze button */}
-          <button
-            onClick={async () => {
-              if (reanalyzing) return;
-              const cui =
-                data?.company?.cui?.value || data?.company?.denumire?.value;
-              if (!cui) {
-                toast("CUI indisponibil pentru re-analiza", "error");
-                return;
-              }
-              setReanalyzing(true);
-              try {
-                const job = await api.createJob({
-                  analysis_type: report.report_type as AnalysisType,
-                  report_level: report.report_level as number,
-                  input_params: {
-                    cui: String(typeof cui === "object" ? "" : cui),
-                  },
-                });
-                await api.startJob(job.id);
-                navigate(`/analysis/${job.id}`);
-              } catch {
-                toast("Eroare la pornirea re-analizei", "error");
-                setReanalyzing(false);
-              }
-            }}
-            disabled={reanalyzing}
-            className="btn-primary flex items-center gap-1.5 text-sm"
-          >
-            <RefreshCw
-              className={clsx("w-3.5 h-3.5", reanalyzing && "animate-spin")}
-            />
-            {reanalyzing ? "Se porneste..." : "Re-analiza"}
-          </button>
-          {report.formats_available.map((fmt) => (
-            <a
-              key={fmt}
-              href={`/api/reports/${report.id}/download/${fmt}`}
-              onClick={() =>
-                logAction("ReportView", "download", {
-                  reportId: report.id,
-                  format: fmt,
-                })
-              }
-              className="btn-secondary flex items-center gap-1.5 text-sm"
-            >
-              <Download className="w-3.5 h-3.5" />
-              {fmt.toUpperCase()}
-            </a>
-          ))}
-          <button
-            onClick={() => setEmailModalOpen(true)}
-            className="btn-secondary flex items-center gap-1.5 text-sm"
-          >
-            <Mail className="w-3.5 h-3.5" />
-            Trimite email
-          </button>
-        </div>
-      </div>
-
-      {/* Report Metadata Bar */}
-      <div className="flex flex-wrap items-center gap-3 text-xs">
-        {/* Sources OK/total */}
-        {report.sources && report.sources.length > 0 && (
-          <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-dark-surface text-gray-400">
-            <Database className="w-3.5 h-3.5" />
-            Surse: {report.sources.filter((s) => s.data_found).length}/
-            {report.sources.length} OK
-          </span>
-        )}
-        {/* Generation date */}
-        <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-dark-surface text-gray-400">
-          <Calendar className="w-3.5 h-3.5" />
-          {new Date(report.created_at).toLocaleDateString("ro-RO", {
-            day: "2-digit",
-            month: "long",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
-        </span>
-        {/* Report level */}
-        <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-dark-surface text-gray-400">
-          <Layers className="w-3.5 h-3.5" />
-          Nivel {report.report_level}
-        </span>
-        {/* Delta / previous report reference */}
-        {Boolean(data?.delta_info) && (
-          <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-accent-primary/10 text-accent-secondary border border-accent-primary/20">
-            <GitCompare className="w-3.5 h-3.5" />
-            vs anterior
-          </span>
-        )}
-        {Boolean(data?.previous_report_id) && !data?.delta_info && (
-          <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
-            <GitCompare className="w-3.5 h-3.5" />
-            vs anterior
-          </span>
-        )}
-      </div>
+      {/* Header + Risk Score Card (extracted component) */}
+      <ReportHeader
+        report={report}
+        fullData={data}
+        riskScore={riskScore}
+        riskColor={riskColor}
+        reanalyzing={reanalyzing}
+        onReanalyze={handleReanalyze}
+        onEmailOpen={() => setEmailModalOpen(true)}
+      />
 
       {/* F6-3: Completeness warning banner */}
       {report &&
@@ -503,102 +409,12 @@ export default function ReportView() {
           </div>
         )}
 
-      {/* Risk Score Card */}
-      {riskScore && (
-        <div className={clsx("card border", riskColor)}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Shield className="w-6 h-6" />
-              <div>
-                <p className="text-lg font-bold">
-                  Scor Risc: {riskScore.score}
-                  {riskScore.numeric_score !== undefined && (
-                    <span className="ml-2 text-2xl font-mono">
-                      {riskScore.numeric_score}/100
-                    </span>
-                  )}
-                </p>
-                <p className="text-sm opacity-80">{riskScore.recommendation}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Dimensions breakdown */}
-          {riskScore.dimensions && (
-            <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {Object.entries(riskScore.dimensions).map(([key, dim]) => {
-                const d = dim as { score: number; weight: number };
-                const barColor =
-                  d.score >= 70
-                    ? "bg-green-400"
-                    : d.score >= 40
-                      ? "bg-yellow-400"
-                      : "bg-red-400";
-                return (
-                  <div key={key} className="bg-dark-surface/50 rounded-lg p-2">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-[10px] text-gray-500 uppercase">
-                        {key} ({d.weight}%)
-                      </span>
-                      <span className="text-xs font-mono text-gray-300">
-                        {d.score}
-                      </span>
-                    </div>
-                    <div className="w-full h-1.5 bg-dark-border rounded-full overflow-hidden">
-                      <div
-                        className={clsx(
-                          "h-full rounded-full transition-all",
-                          barColor,
-                        )}
-                        style={{ width: `${d.score}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {riskScore.factors && riskScore.factors.length > 0 && (
-            <div className="mt-3 space-y-1">
-              {riskScore.factors.map(([factor, severity], i) => (
-                <div key={i} className="text-xs flex items-center gap-2">
-                  <span
-                    className={clsx(
-                      "px-1.5 py-0.5 rounded text-[10px] font-mono",
-                      severity === "HIGH" && "bg-red-500/20 text-red-400",
-                      severity === "MEDIUM" &&
-                        "bg-yellow-500/20 text-yellow-400",
-                      severity === "LOW" && "bg-blue-500/20 text-blue-400",
-                    )}
-                  >
-                    {severity}
-                  </span>
-                  <span className="text-gray-400">{factor}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-dark-border">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={clsx(
-              "px-4 py-2.5 text-sm font-medium transition-colors border-b-2",
-              activeTab === tab.key
-                ? "text-accent-secondary border-accent-primary"
-                : "text-gray-500 border-transparent hover:text-gray-300",
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {/* Tabs (extracted component) */}
+      <ReportTabs
+        tabs={tabs}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      />
 
       {/* Tab Content */}
       <div className="card min-h-[200px]">
@@ -737,127 +553,11 @@ export default function ReportView() {
               </div>
             )}
 
-            {/* F6-2: Radar Chart SVG — 6 dimensiuni scoring */}
+            {/* F6-2: Radar Chart SVG (extracted component) */}
             {scoringDimensions &&
-              Object.keys(scoringDimensions).length >= 3 &&
-              (() => {
-                const dims = [
-                  "financiar",
-                  "juridic",
-                  "fiscal",
-                  "operational",
-                  "reputational",
-                  "piata",
-                ];
-                const labels = [
-                  "Financiar",
-                  "Juridic",
-                  "Fiscal",
-                  "Operational",
-                  "Reputational",
-                  "Piata",
-                ];
-                const n = dims.length;
-                const cx = 120,
-                  cy = 120,
-                  r = 90;
-                const points = dims.map((d, i) => {
-                  const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
-                  const val = ((scoringDimensions[d]?.score ?? 50) / 100) * r;
-                  return [
-                    cx + val * Math.cos(angle),
-                    cy + val * Math.sin(angle),
-                  ];
-                });
-                const gridLevels = [0.25, 0.5, 0.75, 1.0];
-                return (
-                  <div className="p-3 bg-dark-surface rounded-lg mb-4">
-                    <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-                      Profil Risc Radar
-                    </h4>
-                    <div className="flex justify-center">
-                      <svg width="240" height="240" viewBox="0 0 240 240">
-                        {/* Grid circles */}
-                        {gridLevels.map((lvl, gi) => {
-                          const gridPts = dims
-                            .map((_, i) => {
-                              const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
-                              return `${cx + lvl * r * Math.cos(angle)},${cy + lvl * r * Math.sin(angle)}`;
-                            })
-                            .join(" ");
-                          return (
-                            <polygon
-                              key={gi}
-                              points={gridPts}
-                              fill="none"
-                              stroke="#374151"
-                              strokeWidth="1"
-                            />
-                          );
-                        })}
-                        {/* Axes */}
-                        {dims.map((_, i) => {
-                          const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
-                          return (
-                            <line
-                              key={i}
-                              x1={cx}
-                              y1={cy}
-                              x2={cx + r * Math.cos(angle)}
-                              y2={cy + r * Math.sin(angle)}
-                              stroke="#374151"
-                              strokeWidth="1"
-                            />
-                          );
-                        })}
-                        {/* Data polygon */}
-                        <polygon
-                          points={points.map((p) => p.join(",")).join(" ")}
-                          fill="rgba(99,102,241,0.25)"
-                          stroke="#6366f1"
-                          strokeWidth="2"
-                        />
-                        {/* Labels */}
-                        {labels.map((lbl, i) => {
-                          const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
-                          const lx = cx + (r + 18) * Math.cos(angle);
-                          const ly = cy + (r + 18) * Math.sin(angle);
-                          return (
-                            <text
-                              key={i}
-                              x={lx}
-                              y={ly}
-                              textAnchor="middle"
-                              dominantBaseline="middle"
-                              fill="#9ca3af"
-                              fontSize="9"
-                            >
-                              {lbl}
-                            </text>
-                          );
-                        })}
-                        {/* Score dots pe axe */}
-                        {dims.map((d, i) => {
-                          const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
-                          const score = scoringDimensions[d]?.score ?? 0;
-                          const val = (score / 100) * r;
-                          const px = cx + val * Math.cos(angle);
-                          const py = cy + val * Math.sin(angle);
-                          return (
-                            <circle
-                              key={i}
-                              cx={px}
-                              cy={py}
-                              r="3"
-                              fill="#6366f1"
-                            />
-                          );
-                        })}
-                      </svg>
-                    </div>
-                  </div>
-                );
-              })()}
+              Object.keys(scoringDimensions).length >= 3 && (
+                <RadarChartSVG scoringDimensions={scoringDimensions} />
+              )}
 
             {/* F6-4: Sector Benchmark Bar */}
             {(() => {
@@ -978,204 +678,12 @@ export default function ReportView() {
           </div>
         )}
 
-        {/* F2-6: Tab Scoruri Predictive */}
+        {/* F2-6: Tab Scoruri Predictive (extracted component) */}
         {activeTab === "predictive" && (
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-400 uppercase mb-3">
-              Scoruri Predictive Financiare
-            </h3>
-
-            {predictiveLoading && (
-              <div className="card animate-pulse">
-                <div className="h-4 bg-gray-700 rounded w-1/3 mb-2" />
-                <div className="h-6 bg-gray-700 rounded w-1/2" />
-              </div>
-            )}
-
-            {!predictiveLoading && !predictiveScores && (
-              <div className="card text-center py-6">
-                <p className="text-gray-500 text-sm">
-                  Date predictive indisponibile pentru acest raport
-                </p>
-              </div>
-            )}
-
-            {!predictiveLoading && predictiveScores && (
-              <div className="space-y-3">
-                {/* Summary badge */}
-                <div
-                  className={clsx(
-                    "p-3 rounded-lg border text-sm",
-                    predictiveScores.distress_signals >= 3
-                      ? "border-red-600 bg-red-900/20 text-red-300"
-                      : predictiveScores.distress_signals >= 2
-                        ? "border-yellow-600 bg-yellow-900/20 text-yellow-300"
-                        : predictiveScores.distress_signals >= 1
-                          ? "border-yellow-700 bg-yellow-900/10 text-yellow-400"
-                          : "border-green-700 bg-green-900/10 text-green-400",
-                  )}
-                >
-                  <strong>Concluzie:</strong> {predictiveScores.summary}
-                  {predictiveScores.distress_signals > 0 && (
-                    <span className="ml-2 text-xs">
-                      ({predictiveScores.distress_signals} semnale de distres)
-                    </span>
-                  )}
-                </div>
-
-                {/* 4 model cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Altman Z */}
-                  {predictiveScores.altman_z && (
-                    <div className="p-4 bg-dark-surface rounded-lg border border-dark-border">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-sm font-semibold text-gray-300">
-                          Altman Z''-EMS
-                        </h4>
-                        <span
-                          className={clsx(
-                            "px-2 py-0.5 text-xs rounded font-medium",
-                            predictiveScores.altman_z.zone === "SAFE"
-                              ? "bg-green-900 text-green-300"
-                              : predictiveScores.altman_z.zone === "GREY"
-                                ? "bg-yellow-900 text-yellow-300"
-                                : predictiveScores.altman_z.zone === "DISTRESS"
-                                  ? "bg-red-900 text-red-300"
-                                  : "bg-gray-700 text-gray-400",
-                          )}
-                        >
-                          {predictiveScores.altman_z.zone || "N/A"}
-                        </span>
-                      </div>
-                      <p className="text-2xl font-bold font-mono text-white">
-                        {predictiveScores.altman_z.z_score ?? "—"}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Predictie insolventa (Safe &gt;2.60)
-                      </p>
-                      {predictiveScores.altman_z.disclaimer && (
-                        <p className="text-xs text-gray-600 mt-2 italic">
-                          {predictiveScores.altman_z.disclaimer}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Piotroski F */}
-                  {predictiveScores.piotroski_f && (
-                    <div className="p-4 bg-dark-surface rounded-lg border border-dark-border">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-sm font-semibold text-gray-300">
-                          Piotroski F-Score
-                        </h4>
-                        <span
-                          className={clsx(
-                            "px-2 py-0.5 text-xs rounded font-medium",
-                            predictiveScores.piotroski_f.grade === "STRONG"
-                              ? "bg-green-900 text-green-300"
-                              : predictiveScores.piotroski_f.grade === "AVERAGE"
-                                ? "bg-yellow-900 text-yellow-300"
-                                : predictiveScores.piotroski_f.grade === "WEAK"
-                                  ? "bg-red-900 text-red-300"
-                                  : "bg-gray-700 text-gray-400",
-                          )}
-                        >
-                          {predictiveScores.piotroski_f.grade || "N/A"}
-                        </span>
-                      </div>
-                      <p className="text-2xl font-bold font-mono text-white">
-                        {predictiveScores.piotroski_f.f_score ?? "—"}
-                        <span className="text-sm text-gray-500 ml-1">
-                          / {predictiveScores.piotroski_f.max_possible ?? 9}
-                        </span>
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Sanatate financiara (Strong ≥7)
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Beneish M */}
-                  {predictiveScores.beneish_m && (
-                    <div className="p-4 bg-dark-surface rounded-lg border border-dark-border">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-sm font-semibold text-gray-300">
-                          Beneish M-Score
-                        </h4>
-                        <span
-                          className={clsx(
-                            "px-2 py-0.5 text-xs rounded font-medium",
-                            !predictiveScores.beneish_m.available
-                              ? "bg-gray-700 text-gray-400"
-                              : predictiveScores.beneish_m.risk === "OK"
-                                ? "bg-green-900 text-green-300"
-                                : predictiveScores.beneish_m.risk ===
-                                    "INVESTIGAT"
-                                  ? "bg-yellow-900 text-yellow-300"
-                                  : "bg-red-900 text-red-300",
-                          )}
-                        >
-                          {predictiveScores.beneish_m.available
-                            ? predictiveScores.beneish_m.risk || "N/A"
-                            : "INDISPONIBIL"}
-                        </span>
-                      </div>
-                      <p className="text-2xl font-bold font-mono text-white">
-                        {predictiveScores.beneish_m.m_score?.toFixed(2) ?? "—"}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Detectie manipulare contabila
-                      </p>
-                      {!predictiveScores.beneish_m.available && (
-                        <p className="text-xs text-gray-600 mt-1 italic">
-                          Necesita 2 ani de bilant
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Zmijewski X */}
-                  {predictiveScores.zmijewski_x && (
-                    <div className="p-4 bg-dark-surface rounded-lg border border-dark-border">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-sm font-semibold text-gray-300">
-                          Zmijewski X-Score
-                        </h4>
-                        <span
-                          className={clsx(
-                            "px-2 py-0.5 text-xs rounded font-medium",
-                            !predictiveScores.zmijewski_x.available
-                              ? "bg-gray-700 text-gray-400"
-                              : predictiveScores.zmijewski_x.distress
-                                ? "bg-red-900 text-red-300"
-                                : "bg-green-900 text-green-300",
-                          )}
-                        >
-                          {!predictiveScores.zmijewski_x.available
-                            ? "N/A"
-                            : predictiveScores.zmijewski_x.distress
-                              ? "DISTRES"
-                              : "STABIL"}
-                        </span>
-                      </div>
-                      <p className="text-2xl font-bold font-mono text-white">
-                        {predictiveScores.zmijewski_x.x_score?.toFixed(2) ??
-                          "—"}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Probabilitate distres (X &gt;0 = risc)
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                <p className="text-xs text-gray-600 italic text-center">
-                  Modele predictive calibrate pe piata americana — interpretati
-                  cu prudenta pentru firme romanesti
-                </p>
-              </div>
-            )}
-          </div>
+          <PredictiveScoresTab
+            loading={predictiveLoading}
+            scores={predictiveScores}
+          />
         )}
 
         {activeTab === "raw" && (

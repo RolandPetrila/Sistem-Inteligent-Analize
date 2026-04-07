@@ -1,4 +1,6 @@
 
+import json
+
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from loguru import logger
@@ -14,7 +16,7 @@ async def list_favorites():
     """Return only companies marked as favorite."""
     try:
         rows = await db.fetch_all(
-            "SELECT * FROM companies WHERE is_favorite = 1 ORDER BY last_analyzed_at DESC"
+            "SELECT id, cui, name, caen_code, county, is_active, is_favorite, last_analyzed_at, risk_score, tag, note FROM companies WHERE is_favorite = 1 ORDER BY last_analyzed_at DESC LIMIT 500"
         )
         return {"companies": [dict(r) for r in rows], "total": len(rows)}
     except Exception as e:
@@ -187,7 +189,7 @@ async def list_companies(
     total = total_row["c"] if total_row else 0
 
     rows = await db.fetch_all(
-        f"SELECT * FROM companies {where} ORDER BY {order_by} LIMIT ? OFFSET ?",
+        f"SELECT id, cui, name, caen_code, county, is_active, is_favorite, last_analyzed_at, risk_score, tag, note FROM companies {where} ORDER BY {order_by} LIMIT ? OFFSET ?",
         tuple(params + [limit, offset]),
     )
 
@@ -298,7 +300,7 @@ async def upsert_company_note(company_id: str, body: dict):
 
 @router.get("/{company_id}")
 async def get_company(company_id: str):
-    row = await db.fetch_one("SELECT * FROM companies WHERE id = ?", (company_id,))
+    row = await db.fetch_one("SELECT id, cui, name, caen_code, county, is_active, is_favorite, last_analyzed_at, risk_score, tag, note FROM companies WHERE id = ?", (company_id,))
     if not row:
         raise HTTPException(status_code=404, detail="Company not found")
 
@@ -349,6 +351,35 @@ async def toggle_favorite(company_id: str):
     return {"ok": True, "is_favorite": bool(new_val)}
 
 
+@router.post("/{company_id}/auto-reanalyze")
+async def toggle_auto_reanalyze(company_id: str):
+    """F6-6: Toggle auto_reanalyze flag pe companie.
+    Scheduler-ul va re-analiza automat la intervalul configurat (default 30 zile)."""
+    row = await db.fetch_one("SELECT id FROM companies WHERE id = ?", (company_id,))
+    if not row:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    # Ensure columns exist (idempotent ALTER TABLE)
+    for alter_sql in [
+        "ALTER TABLE companies ADD COLUMN auto_reanalyze INTEGER DEFAULT 0",
+        "ALTER TABLE companies ADD COLUMN reanalyze_interval_days INTEGER DEFAULT 30",
+    ]:
+        try:
+            await db.execute(alter_sql)
+        except Exception:
+            pass  # Column already exists
+
+    current = await db.fetch_one(
+        "SELECT auto_reanalyze FROM companies WHERE id = ?", (company_id,)
+    )
+    new_val = 0 if current and current.get("auto_reanalyze") else 1
+    await db.execute(
+        "UPDATE companies SET auto_reanalyze = ? WHERE id = ?", (new_val, company_id)
+    )
+    logger.info(f"[companies] auto_reanalyze={bool(new_val)} pentru company_id={company_id}")
+    return {"ok": True, "auto_reanalyze": bool(new_val)}
+
+
 @router.get("/{company_id}/timeline")
 async def company_timeline(company_id: str):
     """Chronological list of events: reports, score changes, monitoring alerts."""
@@ -356,59 +387,50 @@ async def company_timeline(company_id: str):
     if not row:
         raise HTTPException(status_code=404, detail="Company not found")
 
-    events: list[dict] = []
-
-    # Reports generated
-    reports = await db.fetch_all(
-        "SELECT id, title, report_type, risk_score, created_at "
-        "FROM reports WHERE company_id = ? ORDER BY created_at DESC LIMIT 20",
-        (company_id,),
-    )
-    for r in reports:
-        events.append({
-            "type": "report",
-            "title": r.get("title", "Raport"),
-            "detail": f"Tip: {r.get('report_type', 'N/A')} | Risc: {r.get('risk_score', 'N/A')}",
-            "date": r.get("created_at", ""),
-            "link": f"/reports/{r['id']}",
-        })
-
-    # Score changes
-    scores = await db.fetch_all(
-        "SELECT numeric_score, recorded_at "
-        "FROM score_history WHERE company_id = ? ORDER BY recorded_at DESC LIMIT 20",
-        (company_id,),
-    )
-    for s in scores:
-        events.append({
-            "type": "score",
-            "title": f"Scor actualizat: {s.get('numeric_score', 'N/A')}/100",
-            "detail": "",
-            "date": s.get("recorded_at", ""),
-            "link": "",
-        })
-
-    # Monitoring alerts
+    # H5: Single UNION query — eliminam 3 round-trips DB
+    TIMELINE_SQL = """
+        SELECT 'report' as type,
+               id as ref_id,
+               title as title,
+               report_type || ' | Risc: ' || COALESCE(CAST(risk_score AS TEXT), 'N/A') as detail,
+               created_at as event_date,
+               '/reports/' || id as link
+        FROM reports WHERE company_id = ? AND created_at IS NOT NULL
+        UNION ALL
+        SELECT 'score' as type,
+               CAST(id AS TEXT) as ref_id,
+               'Scor actualizat: ' || CAST(numeric_score AS TEXT) || '/100' as title,
+               '' as detail,
+               recorded_at as event_date,
+               '' as link
+        FROM score_history WHERE company_id = ? AND recorded_at IS NOT NULL
+        UNION ALL
+        SELECT 'alert' as type,
+               CAST(id AS TEXT) as ref_id,
+               'Alertă [' || severity || ']' as title,
+               message as detail,
+               created_at as event_date,
+               '' as link
+        FROM monitoring_audit WHERE company_id = ? AND created_at IS NOT NULL
+        ORDER BY event_date DESC
+        LIMIT 50
+    """
     try:
-        alerts = await db.fetch_all(
-            "SELECT message, severity, created_at "
-            "FROM monitoring_audit WHERE company_id = ? ORDER BY created_at DESC LIMIT 20",
-            (company_id,),
-        )
-        for a in alerts:
-            events.append({
-                "type": "alert",
-                "title": f"Alerta [{a.get('severity', 'INFO')}]",
-                "detail": a.get("message", ""),
-                "date": a.get("created_at", ""),
-                "link": "",
-            })
+        rows = await db.fetch_all(TIMELINE_SQL, (company_id, company_id, company_id))
+        events = [
+            {
+                "type": r["type"],
+                "title": r["title"] or "",
+                "detail": r["detail"] or "",
+                "date": r["event_date"] or "",
+                "link": r["link"] or "",
+            }
+            for r in rows
+        ]
     except Exception as e:
-        logger.debug(f"[companies] monitoring check: {e}")
-
-    # Sort by date descending
-    events.sort(key=lambda e: e.get("date", ""), reverse=True)
-    return {"timeline": events[:50]}
+        logger.debug(f"[companies] timeline UNION error: {e}")
+        events = []
+    return {"timeline": events}
 
 
 @router.get("/{company_id}/score-trend")
@@ -435,7 +457,6 @@ async def get_score_trend(
 async def get_predictive_scores(cui: str):
     """F2-5: Calculeaza scoruri predictive financiare Altman/Piotroski/Beneish/Zmijewski.
     Foloseste cel mai recent raport disponibil pentru CUI-ul dat."""
-    import json
     from datetime import UTC, datetime
 
     from backend.agents.verification.scoring import calculate_all_predictive_scores
@@ -465,3 +486,165 @@ async def get_predictive_scores(cui: str):
     scores["computed_at"] = datetime.now(UTC).isoformat()
 
     return scores
+
+
+# ---------------------------------------------------------------------------
+# F6-7: Raport Evolutie Multi-An (aceeasi firma, mai multe rapoarte)
+# ---------------------------------------------------------------------------
+
+def _extract_ca_from_full(data: dict):
+    """Extrage CA din full_data al unui raport."""
+    fin = data.get("financial", {})
+    ca = fin.get("cifra_afaceri", {})
+    if isinstance(ca, dict):
+        return ca.get("value")
+    return None
+
+
+def _extract_profit_from_full(data: dict):
+    fin = data.get("financial", {})
+    p = fin.get("profit_net", {})
+    if isinstance(p, dict):
+        return p.get("value")
+    return None
+
+
+def _extract_angajati_from_full(data: dict):
+    fin = data.get("financial", {})
+    e = fin.get("numar_angajati", {})
+    if isinstance(e, dict):
+        return e.get("value")
+    return None
+
+
+def _extract_risk_score_from_full(data: dict):
+    rs = data.get("risk_score", {})
+    if isinstance(rs, dict):
+        return rs.get("numeric_score")
+    return None
+
+
+@router.get("/{cui}/timeline-report")
+async def get_company_timeline_report(
+    cui: str,
+    max_reports: int = Query(default=5, ge=2, le=10),
+):
+    """F6-7: Returneaza evolutia multi-an a aceleiasi firme (ultimele N rapoarte).
+    Extrage CA, Profit, Angajati, Scor Risc din fiecare raport si calculeaza trendurii."""
+    company_row = await db.fetch_one(
+        "SELECT id, name FROM companies WHERE cui = ? LIMIT 1", (cui,)
+    )
+    if not company_row:
+        raise HTTPException(status_code=404, detail=f"Firma cu CUI {cui} nu a fost gasita")
+
+    company_id = company_row["id"]
+    company_name = company_row["name"]
+
+    rows = await db.fetch_all(
+        "SELECT full_data, created_at FROM reports "
+        "WHERE company_id = ? ORDER BY created_at DESC LIMIT ?",
+        (company_id, max_reports),
+    )
+
+    if not rows:
+        raise HTTPException(status_code=404, detail="Nu exista rapoarte pentru aceasta firma")
+
+    years = []
+    ca_values = []
+    profit_values = []
+    risk_values = []
+
+    for row in reversed(rows):  # cel mai vechi primul
+        data: dict = {}
+        try:
+            data = json.loads(row["full_data"]) if row["full_data"] else {}
+        except (json.JSONDecodeError, TypeError):
+            data = {}
+
+        analyzed_at = row["created_at"] or ""
+        year_label = analyzed_at[:4] if analyzed_at else "?"
+        ca = _extract_ca_from_full(data)
+        profit = _extract_profit_from_full(data)
+        angajati = _extract_angajati_from_full(data)
+        risk = _extract_risk_score_from_full(data)
+
+        years.append({
+            "year": year_label,
+            "ca": ca,
+            "profit": profit,
+            "angajati": angajati,
+            "risk_score": risk,
+            "analyzed_at": analyzed_at,
+        })
+        ca_values.append(ca)
+        profit_values.append(profit)
+        risk_values.append(risk)
+
+    def _pct_growth(vals: list) -> float | None:
+        valids = [v for v in vals if v is not None]
+        if len(valids) < 2 or valids[0] == 0:
+            return None
+        return round(((valids[-1] - valids[0]) / abs(valids[0])) * 100, 1)
+
+    def _trend_label(vals: list) -> str:
+        valids = [v for v in vals if v is not None]
+        if len(valids) < 2:
+            return "DATE INSUFICIENTE"
+        first, last = valids[0], valids[-1]
+        pct = ((last - first) / abs(first)) * 100 if first != 0 else (last - first)
+        if pct > 5:
+            return "IN CRESTERE"
+        elif pct < -5:
+            return "IN SCADERE"
+        return "STABIL"
+
+    def _risk_trend_label(vals: list) -> str:
+        valids = [v for v in vals if v is not None]
+        if len(valids) < 2:
+            return "DATE INSUFICIENTE"
+        delta = valids[-1] - valids[0]
+        if delta > 5:
+            return "IN IMBUNATATIRE"
+        elif delta < -5:
+            return "IN DETERIORARE"
+        return "STABIL"
+
+    return {
+        "cui": cui,
+        "company_name": company_name,
+        "reports_count": len(rows),
+        "years": years,
+        "trends": {
+            "ca_growth_pct": _pct_growth(ca_values),
+            "profit_trend": _trend_label(profit_values),
+            "risk_trend": _risk_trend_label(risk_values),
+        },
+    }
+
+
+@router.get("/{cui}/timeline-report/pdf")
+async def download_company_timeline_pdf(
+    cui: str,
+    max_reports: int = Query(default=5, ge=2, le=10),
+):
+    """F6-7: Genereaza si descarca PDF cu evolutia multi-an a aceleiasi firme."""
+    from backend.reports.timeline_generator import generate_timeline_pdf
+
+    timeline_data = await get_company_timeline_report(cui=cui, max_reports=max_reports)
+
+    outputs_root = os.path.abspath(settings.outputs_dir)
+    os.makedirs(outputs_root, exist_ok=True)
+
+    tmp_path = os.path.join(outputs_root, f"timeline_{cui}_{os.getpid()}.pdf")
+    try:
+        generate_timeline_pdf(timeline_data, tmp_path)
+        return FileResponse(
+            tmp_path,
+            media_type="application/pdf",
+            filename=f"evolutie_{cui}.pdf",
+        )
+    except Exception as e:
+        logger.error(f"[timeline_pdf] eroare generare pentru CUI {cui}: {e}")
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise HTTPException(status_code=500, detail=f"Eroare generare PDF evolutie: {str(e)}")

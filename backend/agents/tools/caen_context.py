@@ -4,6 +4,7 @@ Foloseste dictionar local CAEN (fiabil) + INS TEMPO API (optional, pentru numar 
 """
 
 from loguru import logger
+
 from backend.http_client import get_client
 
 # Dictionar CAEN complet (top 100 cele mai comune coduri)
@@ -200,6 +201,73 @@ CAEN_BENCHMARK = {
     "86": {"ca_medie": 1_200_000, "angajati_medii": 15, "nr_firme": 9_500},
     "96": {"ca_medie": 200_000, "angajati_medii": 3, "nr_firme": 18_000},
 }
+
+
+# CAEN Rev.3 — intrat în vigoare 2025, obligatoriu ANAF din 25 septembrie 2026
+# Sursa: ONRC / Ordinul INS nr. 604/2024 privind actualizarea CAEN Rev.3
+CAEN_REV3_CODES = {
+    # IT & Software (cele mai frecvente in Romania)
+    "6201": "Activitati de realizare a software-ului la comanda",
+    "6202": "Activitati de consultanta in tehnologia informatiei",
+    "6203": "Activitati de management al resurselor informatice",
+    "6209": "Alte activitati de servicii privind tehnologia informatiei",
+    "6311": "Prelucrarea datelor, administrarea paginilor web si activitati conexe",
+    "6312": "Portaluri web",
+    "6391": "Activitati ale agentiilor de stiri",
+    "6399": "Alte activitati de servicii informationale n.c.a.",
+    # Comert
+    "4711": "Comert cu amanuntul in magazine nespecializate, cu vanzare predominanta de produse alimentare, bauturi si tutun",
+    "4719": "Comert cu amanuntul in magazine nespecializate, cu vanzare predominanta de produse nealimentare",
+    "4791": "Comert cu amanuntul prin intermediul caselor de comenzi sau prin Internet",
+    "4669": "Comert cu ridicata al altor masini si echipamente",
+    "4690": "Comert cu ridicata nespecializat",
+    # Constructii
+    "4120": "Lucrari de constructii a cladirilor rezidentiale si nerezidentiale",
+    "4321": "Lucrari de instalatii electrice",
+    "4322": "Lucrari de instalatii sanitare, de incalzire si de aer conditionat",
+    "4399": "Alte lucrari speciale de constructii n.c.a.",
+    # Consultanta & Management
+    "7022": "Activitati de consultanta pentru afaceri si management",
+    "6920": "Activitati de contabilitate si audit financiar; consultanta in domeniul fiscal",
+    "7112": "Activitati de inginerie si consultanta tehnica legate de acestea",
+    # Imobiliare
+    "6820": "Inchirierea si subinchirierea bunurilor imobiliare proprii sau inchiriate",
+    "6810": "Cumpararea si vanzarea de bunuri imobiliare proprii",
+    "6831": "Agentii imobiliare",
+    # Transport
+    "4941": "Transporturi rutiere de marfuri",
+    "5229": "Alte activitati anexe transporturilor",
+    # HoReCa
+    "5610": "Restaurante",
+    "5510": "Hoteluri si alte facilitati de cazare similare",
+}
+
+# Mapare retrocompatibilitate Rev.2 → Rev.3 (coduri care s-au modificat sau divizat)
+# Acolo unde codul a ramas identic, nu e necesar in dictionar.
+# Codul Rev.2 ca cheie → codul Rev.3 echivalent ca valoare
+REV2_TO_REV3: dict[str, str] = {
+    # Exemple de reclasificari tipice in Rev.3 (coduri cu structura modificata)
+    "6200": "6201",   # Software generic → software la comanda
+    "6312": "6311",   # Web portals → data processing (unificat in Rev.3)
+    "7490": "7499",   # Alte activitati profesionale (re-numerotare Rev.3)
+    "8299": "8291",   # Alte activitati suport (consolidare)
+    "9609": "9601",   # Alte servicii (re-alocare)
+}
+
+
+def get_caen_rev3_description(code: str) -> str:
+    """Returneaza descrierea CAEN Rev.3 pentru un cod dat.
+    Fallback automat la Rev.2 daca codul nu exista in Rev.3.
+    Util post-25 septembrie 2026 cand ANAF trece exclusiv la Rev.3."""
+    code = str(code).strip()
+    if code in CAEN_REV3_CODES:
+        return CAEN_REV3_CODES[code]
+    # Incearca mapare Rev.2 → Rev.3
+    rev3_code = REV2_TO_REV3.get(code)
+    if rev3_code and rev3_code in CAEN_REV3_CODES:
+        return CAEN_REV3_CODES[rev3_code]
+    # Fallback la Rev.2
+    return get_caen_description(code)
 
 
 def get_caen_description(caen_code: str) -> str:
