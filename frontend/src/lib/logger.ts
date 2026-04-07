@@ -51,11 +51,15 @@ function _enqueue(entry: LogEntry): void {
 
 function _sendSessionStart(): void {
   const ua = navigator.userAgent;
-  const browser =
-    ua.includes("Chrome") ? "Chrome" :
-    ua.includes("Firefox") ? "Firefox" :
-    ua.includes("Safari") ? "Safari" :
-    ua.includes("Edge") ? "Edge" : "Other";
+  const browser = ua.includes("Chrome")
+    ? "Chrome"
+    : ua.includes("Firefox")
+      ? "Firefox"
+      : ua.includes("Safari")
+        ? "Safari"
+        : ua.includes("Edge")
+          ? "Edge"
+          : "Other";
   const resolution = `${window.innerWidth}x${window.innerHeight}`;
   const platform = navigator.platform || "unknown";
 
@@ -79,7 +83,12 @@ function _setupConsoleInterception(): void {
     const msg = args.map(String).join(" ").slice(0, 200);
     // Skip React internal noise (StrictMode double-renders)
     if (!msg.includes("findDOMNode") && !msg.includes("UNSAFE_")) {
-      _enqueue({ ts: _now(), level: "CONSOLE", page: _currentPage, message: `WARN: ${msg}` });
+      _enqueue({
+        ts: _now(),
+        level: "CONSOLE",
+        page: _currentPage,
+        message: `WARN: ${msg}`,
+      });
     }
   };
 
@@ -88,7 +97,12 @@ function _setupConsoleInterception(): void {
     const msg = args.map(String).join(" ").slice(0, 200);
     // Skip errors already captured by window.onerror
     if (!msg.includes("The above error occurred")) {
-      _enqueue({ ts: _now(), level: "CONSOLE", page: _currentPage, message: `ERROR: ${msg}` });
+      _enqueue({
+        ts: _now(),
+        level: "CONSOLE",
+        page: _currentPage,
+        message: `ERROR: ${msg}`,
+      });
     }
   };
 }
@@ -111,8 +125,7 @@ function _setupErrorHandlers(): void {
 
   window.addEventListener("unhandledrejection", (event) => {
     const reason = event.reason;
-    const message =
-      reason instanceof Error ? reason.message : String(reason);
+    const message = reason instanceof Error ? reason.message : String(reason);
     _enqueue({
       ts: _now(),
       level: "ERROR",
@@ -125,10 +138,46 @@ function _setupErrorHandlers(): void {
 
 // --- Public API ---
 
+// --- Componenta 6: Click Tracker global ---
+
+function _setupClickTracker(): void {
+  document.addEventListener(
+    "click",
+    (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // Find nearest button/anchor/[data-log] element
+      const el = target.closest("button, a, [data-log]") as HTMLElement | null;
+      if (!el) return;
+
+      const label =
+        el.getAttribute("aria-label") ||
+        el.getAttribute("title") ||
+        el.getAttribute("data-log") ||
+        el.textContent?.trim().slice(0, 60) ||
+        el.tagName;
+
+      const href =
+        (el as HTMLAnchorElement).href || el.getAttribute("href") || "";
+      const details: Record<string, string> = { element: el.tagName };
+      if (href) details.href = href.replace(window.location.origin, "");
+
+      _enqueue({
+        ts: _now(),
+        level: "CLICK",
+        page: _currentPage,
+        message: label,
+        details: JSON.stringify(details),
+      });
+    },
+    { capture: true, passive: true },
+  );
+}
+
 /** Initialize logger — call once in main.tsx */
 export function initLogger(): void {
   _setupErrorHandlers();
   _setupConsoleInterception();
+  _setupClickTracker();
   _sendSessionStart();
   setInterval(_flush, BATCH_INTERVAL);
 
@@ -192,10 +241,7 @@ export function logApi(
 }
 
 /** Componenta 4: Data Validator — log missing/malformed fields */
-export function logValidation(
-  page: string,
-  issues: string[],
-): void {
+export function logValidation(page: string, issues: string[]): void {
   if (issues.length === 0) return;
   _enqueue({
     ts: _now(),
@@ -248,9 +294,7 @@ export function validateReportData(
 /**
  * Componenta 4: Validate compare data and log issues.
  */
-export function validateCompareData(
-  data: unknown,
-): string[] {
+export function validateCompareData(data: unknown): string[] {
   const issues: string[] = [];
   if (!data) {
     issues.push("compare data is null");
@@ -266,16 +310,15 @@ export function validateCompareData(
 /** G5: Get recent log entries as text (for copy-to-clipboard button) */
 export function getLogBuffer(): string {
   return _queue
-    .map((e) => `[${e.ts}] ${e.level.padEnd(8)} | ${e.page} | ${e.message}${e.details ? ` | ${e.details}` : ""}`)
+    .map(
+      (e) =>
+        `[${e.ts}] ${e.level.padEnd(8)} | ${e.page} | ${e.message}${e.details ? ` | ${e.details}` : ""}`,
+    )
     .join("\n");
 }
 
 /** G4: WebSocket event logging */
-export function logWs(
-  jobId: string,
-  event: string,
-  details?: string,
-): void {
+export function logWs(jobId: string, event: string, details?: string): void {
   _enqueue({
     ts: _now(),
     level: "WS",

@@ -23,7 +23,11 @@ export class WidgetErrorBoundary extends Component<WidgetProps, WidgetState> {
   }
 
   componentDidCatch(error: Error) {
-    logError("WidgetErrorBoundary", error, `Widget crash: ${this.props.label ?? "unknown"}`);
+    logError(
+      "WidgetErrorBoundary",
+      error,
+      `Widget crash: ${this.props.label ?? "unknown"}`,
+    );
   }
 
   render() {
@@ -58,8 +62,12 @@ export default class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error) {
-    logError("ErrorBoundary", error, "React render crash");
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    logError(
+      "ErrorBoundary",
+      error,
+      `React render crash | Component: ${info.componentStack?.split("\n")[1]?.trim() ?? "unknown"}`,
+    );
   }
 
   render() {
@@ -76,6 +84,9 @@ export default class ErrorBoundary extends Component<Props, State> {
             </p>
             <p className="text-xs text-gray-600 font-mono bg-dark-surface rounded p-2 break-all">
               {this.state.error?.message || "Eroare necunoscuta"}
+            </p>
+            <p className="text-xs text-gray-700 font-mono">
+              Eroarea a fost salvata in logs/ris_frontend.log
             </p>
             <button
               onClick={() => {

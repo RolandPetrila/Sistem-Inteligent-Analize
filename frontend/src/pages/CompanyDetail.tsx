@@ -138,7 +138,7 @@ export default function CompanyDetail() {
     setTimelineLoading(true);
     api
       .getCompanyTimeline(id)
-      .then((res) => setTimeline(res.events))
+      .then((res) => setTimeline(res.events ?? []))
       .catch(() => {
         /* timeline is optional */
       })
@@ -174,6 +174,10 @@ export default function CompanyDetail() {
 
   const handleNewAnalysis = () => {
     if (!company?.cui) return;
+    logAction("CompanyDetail", "newAnalysis", {
+      companyId: id,
+      cui: company.cui,
+    });
     navigate(
       `/new-analysis?cui=${company.cui}&name=${encodeURIComponent(company.name)}`,
     );
@@ -230,9 +234,10 @@ export default function CompanyDetail() {
     return <p className="text-gray-500">Compania nu a fost gasita.</p>;
   }
 
-  // Parse latest score from score_history
-  const latestScore = company.score_history[0];
-  const prevScore = company.score_history[1];
+  // Parse latest score from score_history (defensive: backend may omit field)
+  const scoreHistory = company.score_history ?? [];
+  const latestScore = scoreHistory[0];
+  const prevScore = scoreHistory[1];
   const scoreDelta =
     latestScore?.numeric_score != null && prevScore?.numeric_score != null
       ? latestScore.numeric_score - prevScore.numeric_score
@@ -390,18 +395,37 @@ export default function CompanyDetail() {
               onClick={() => {
                 if (!id || autoReanalyzeLoading) return;
                 setAutoReanalyzeLoading(true);
-                api.toggleAutoReanalyze(id)
+                api
+                  .toggleAutoReanalyze(id)
                   .then((res) => {
                     setAutoReanalyze(res.auto_reanalyze);
-                    toast(res.auto_reanalyze ? "Re-analiza automata activata" : "Re-analiza automata dezactivata", "success");
+                    toast(
+                      res.auto_reanalyze
+                        ? "Re-analiza automata activata"
+                        : "Re-analiza automata dezactivata",
+                      "success",
+                    );
                   })
-                  .catch(() => toast("Eroare la actualizarea re-analizei automate", "error"))
+                  .catch(() =>
+                    toast(
+                      "Eroare la actualizarea re-analizei automate",
+                      "error",
+                    ),
+                  )
                   .finally(() => setAutoReanalyzeLoading(false));
               }}
               disabled={autoReanalyzeLoading}
               className="btn-secondary flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
-              aria-label={autoReanalyze ? "Dezactiveaza re-analiza automata" : "Activeaza re-analiza automata"}
-              title={autoReanalyze ? "Re-analiza automata ACTIVA — click pentru dezactivare" : "Activeaza re-analiza automata periodica"}
+              aria-label={
+                autoReanalyze
+                  ? "Dezactiveaza re-analiza automata"
+                  : "Activeaza re-analiza automata"
+              }
+              title={
+                autoReanalyze
+                  ? "Re-analiza automata ACTIVA — click pentru dezactivare"
+                  : "Activeaza re-analiza automata periodica"
+              }
             >
               {autoReanalyzeLoading ? (
                 <RefreshCw className="w-4 h-4 animate-spin" />
@@ -593,15 +617,15 @@ export default function CompanyDetail() {
       )}
 
       {/* Score History */}
-      {company.score_history.length > 1 && (
+      {scoreHistory.length > 1 && (
         <div className="card">
           <h3 className="text-sm font-semibold text-gray-400 uppercase mb-3">
-            Istoric Scor ({company.score_history.length} inregistrari)
+            Istoric Scor ({scoreHistory.length} inregistrari)
           </h3>
           {/* F2-4: Sparkline SVG trend */}
           <div className="mb-4 flex items-center gap-3">
             <ScoreSparkline
-              history={[...company.score_history].reverse().map((e) => ({
+              history={[...scoreHistory].reverse().map((e) => ({
                 numeric_score: e.numeric_score ?? 0,
                 recorded_at: e.recorded_at,
               }))}
@@ -609,13 +633,13 @@ export default function CompanyDetail() {
             <div className="text-xs text-gray-600 leading-relaxed">
               <p>Evolutie scor</p>
               <p className="font-mono">
-                {[...company.score_history].reverse()[0]?.numeric_score ?? "—"}{" "}
-                → {company.score_history[0]?.numeric_score ?? "—"}
+                {[...scoreHistory].reverse()[0]?.numeric_score ?? "—"} →{" "}
+                {scoreHistory[0]?.numeric_score ?? "—"}
               </p>
             </div>
           </div>
           <div className="flex items-end gap-1 h-24">
-            {[...company.score_history].reverse().map((entry, i) => {
+            {[...scoreHistory].reverse().map((entry, i) => {
               const score = entry.numeric_score ?? 0;
               const barColor =
                 score >= 70
@@ -653,17 +677,17 @@ export default function CompanyDetail() {
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-gray-400 uppercase">
-            Rapoarte ({company.reports.length})
+            Rapoarte ({(company.reports ?? []).length})
           </h3>
         </div>
 
-        {company.reports.length === 0 ? (
+        {(company.reports ?? []).length === 0 ? (
           <p className="text-gray-600 text-sm py-4 text-center">
             Niciun raport generat inca.
           </p>
         ) : (
           <div className="space-y-2">
-            {company.reports.map((report) => (
+            {(company.reports ?? []).map((report) => (
               <div
                 key={report.id}
                 className="flex items-center justify-between p-3 bg-dark-surface rounded-lg hover:bg-dark-hover transition-colors group"

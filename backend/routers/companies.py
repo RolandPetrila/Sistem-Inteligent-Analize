@@ -430,7 +430,7 @@ async def company_timeline(company_id: str):
     except Exception as e:
         logger.debug(f"[companies] timeline UNION error: {e}")
         events = []
-    return {"timeline": events}
+    return {"events": events}
 
 
 @router.get("/{company_id}/score-trend")

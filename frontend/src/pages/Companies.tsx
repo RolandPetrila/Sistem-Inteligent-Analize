@@ -138,8 +138,8 @@ export default function Companies() {
         });
     fetchFn
       .then((res) => {
-        setCompanies(res.companies);
-        setTotal(res.total);
+        setCompanies(res.companies ?? []);
+        setTotal(res.total ?? 0);
         logAction("Companies", "loaded", { total: res.total, sort: sortParam });
       })
       .catch(() => toast("Eroare la incarcarea companiilor", "error"))

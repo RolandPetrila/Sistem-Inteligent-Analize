@@ -1,5 +1,15 @@
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Search, ArrowUpDown, CheckCircle, XCircle, Download, BookmarkPlus, FolderOpen } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Search,
+  ArrowUpDown,
+  CheckCircle,
+  XCircle,
+  Download,
+  BookmarkPlus,
+  FolderOpen,
+} from "lucide-react";
 import { validateCUI } from "@/lib/cui-validator";
 import { logAction } from "@/lib/logger";
 import { api } from "@/lib/api";
@@ -61,9 +71,12 @@ export default function CompareCompanies() {
   const [showSaveForm, setShowSaveForm] = useState(false);
 
   useEffect(() => {
-    api.listCompareTemplates()
+    api
+      .listCompareTemplates()
       .then((res) => setTemplates(res.templates || []))
-      .catch(() => { /* templates optional */ });
+      .catch(() => {
+        /* templates optional */
+      });
   }, []);
 
   const loadTemplate = (tpl: CompareTemplate) => {
@@ -71,14 +84,23 @@ export default function CompareCompanies() {
     setResult(null);
     setError(null);
     toast(`Template "${tpl.name}" incarcat`, "success");
-    logAction("Compare", "loadTemplate", { templateId: tpl.id, name: tpl.name });
+    logAction("Compare", "loadTemplate", {
+      templateId: tpl.id,
+      name: tpl.name,
+    });
   };
 
   const handleSaveTemplate = async () => {
     const name = templateName.trim();
     const validCuis = cuis.filter((c) => c.trim().length >= 2);
-    if (!name) { toast("Introdu un nume pentru template", "warning"); return; }
-    if (validCuis.length < 2) { toast("Introdu cel putin 2 CUI-uri", "warning"); return; }
+    if (!name) {
+      toast("Introdu un nume pentru template", "warning");
+      return;
+    }
+    if (validCuis.length < 2) {
+      toast("Introdu cel putin 2 CUI-uri", "warning");
+      return;
+    }
     try {
       await api.saveCompareTemplate(name, validCuis);
       const res = await api.listCompareTemplates();
@@ -127,7 +149,7 @@ export default function CompareCompanies() {
     setError(null);
     logAction("Compare", "start", { cuis: valid });
     try {
-      const data = await api.compareCompanies(valid) as CompareResult;
+      const data = (await api.compareCompanies(valid)) as CompareResult;
       setResult(data);
       logAction("Compare", "done", { companies: data.companies?.length });
     } catch (e: unknown) {
@@ -141,11 +163,15 @@ export default function CompareCompanies() {
 
   const exportCSV = () => {
     if (!result) return;
-    const headers = ["Indicator", ...result.companies.map((c) => c.denumire || `CUI ${c.cui}`)];
+    const companies = result.companies ?? [];
+    const headers = [
+      "Indicator",
+      ...companies.map((c) => c.denumire || `CUI ${c.cui}`),
+    ];
     const rows: string[][] = [];
     for (const ind of indicators) {
       const row = [ind.label];
-      for (const c of result.companies) {
+      for (const c of companies) {
         const val = c[ind.key];
         if (ind.format === "number" && typeof val === "number") {
           row.push(String(val));
@@ -157,18 +183,26 @@ export default function CompareCompanies() {
       }
       rows.push(row);
     }
-    const csvContent = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const csvContent = [headers, ...rows]
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob(["\uFEFF" + csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `comparatie_${result.companies.map((c) => c.cui).join("_")}.csv`;
+    a.download = `comparatie_${companies.map((c) => c.cui).join("_")}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    logAction("Compare", "exportCSV", { companies: result.companies.length });
+    logAction("Compare", "exportCSV", { companies: companies.length });
   };
 
-  const indicators: { key: keyof CompanyResult; label: string; format?: "number" | "bool" }[] = [
+  const indicators: {
+    key: keyof CompanyResult;
+    label: string;
+    format?: "number" | "bool";
+  }[] = [
     { key: "denumire", label: "Denumire" },
     { key: "caen_code", label: "CAEN" },
     { key: "stare", label: "Stare ANAF" },
@@ -185,7 +219,8 @@ export default function CompareCompanies() {
       <div>
         <h1 className="text-2xl font-bold text-white">Comparator Firme</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Introdu 2-5 CUI-uri pentru comparatie side-by-side (date ANAF + Bilant)
+          Introdu 2-5 CUI-uri pentru comparatie side-by-side (date ANAF +
+          Bilant)
         </p>
       </div>
 
@@ -216,21 +251,41 @@ export default function CompareCompanies() {
                 maxLength={50}
                 className="flex-1 bg-dark-bg border border-dark-border rounded px-2 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-primary"
               />
-              <button onClick={handleSaveTemplate} className="btn-primary text-sm px-3">Salveaza</button>
-              <button onClick={() => setShowSaveForm(false)} className="text-gray-500 hover:text-white text-sm px-2">Anuleaza</button>
+              <button
+                onClick={handleSaveTemplate}
+                className="btn-primary text-sm px-3"
+              >
+                Salveaza
+              </button>
+              <button
+                onClick={() => setShowSaveForm(false)}
+                className="text-gray-500 hover:text-white text-sm px-2"
+              >
+                Anuleaza
+              </button>
             </div>
           )}
 
           {/* Lista templates */}
           {templates.length === 0 ? (
-            <p className="text-xs text-gray-600 italic">Niciun template salvat inca. Compara firme si salveaza comparatia pentru reutilizare.</p>
+            <p className="text-xs text-gray-600 italic">
+              Niciun template salvat inca. Compara firme si salveaza comparatia
+              pentru reutilizare.
+            </p>
           ) : (
             <div className="space-y-1.5">
               {templates.map((tpl) => (
-                <div key={tpl.id} className="flex items-center justify-between p-2.5 bg-dark-surface rounded-lg hover:bg-dark-hover transition-colors">
+                <div
+                  key={tpl.id}
+                  className="flex items-center justify-between p-2.5 bg-dark-surface rounded-lg hover:bg-dark-hover transition-colors"
+                >
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-300 font-medium truncate">{tpl.name}</p>
-                    <p className="text-xs text-gray-600">{tpl.cuis.join(", ")}</p>
+                    <p className="text-sm text-gray-300 font-medium truncate">
+                      {tpl.name}
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      {tpl.cuis.join(", ")}
+                    </p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0 ml-2">
                     <button
@@ -259,44 +314,54 @@ export default function CompareCompanies() {
         {cuis.map((cui, i) => {
           const cuiResult = cui.length >= 2 ? validateCUI(cui) : null;
           return (
-          <div key={i} className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 w-6">{i + 1}.</span>
-            <div className="flex-1 relative">
-              <input
-                type="text"
-                value={cui}
-                onChange={(e) => updateCui(i, e.target.value)}
-                placeholder="Introdu CUI (ex: 18189442)"
-                className={clsx(
-                  "w-full bg-dark-surface border rounded-lg px-3 py-2 pr-8",
-                  "text-white text-sm placeholder-gray-600 focus:outline-none",
-                  cuiResult === null ? "border-dark-border focus:border-accent-primary"
-                    : cuiResult.valid ? "border-green-600 focus:border-green-500"
-                    : "border-red-600 focus:border-red-500"
+            <div key={i} className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 w-6">{i + 1}.</span>
+              <div className="flex-1 relative">
+                <input
+                  type="text"
+                  value={cui}
+                  onChange={(e) => updateCui(i, e.target.value)}
+                  placeholder="Introdu CUI (ex: 18189442)"
+                  className={clsx(
+                    "w-full bg-dark-surface border rounded-lg px-3 py-2 pr-8",
+                    "text-white text-sm placeholder-gray-600 focus:outline-none",
+                    cuiResult === null
+                      ? "border-dark-border focus:border-accent-primary"
+                      : cuiResult.valid
+                        ? "border-green-600 focus:border-green-500"
+                        : "border-red-600 focus:border-red-500",
+                  )}
+                  onKeyDown={(e) => e.key === "Enter" && compare()}
+                />
+                {/* 10C M12.2: Real-time CUI validation indicator */}
+                {cuiResult && (
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2">
+                    {cuiResult.valid ? (
+                      <CheckCircle className="w-4 h-4 text-green-400" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-red-400" />
+                    )}
+                  </span>
                 )}
-                onKeyDown={(e) => e.key === "Enter" && compare()}
-              />
-              {/* 10C M12.2: Real-time CUI validation indicator */}
-              {cuiResult && (
-                <span className="absolute right-2 top-1/2 -translate-y-1/2">
-                  {cuiResult.valid
-                    ? <CheckCircle className="w-4 h-4 text-green-400" />
-                    : <XCircle className="w-4 h-4 text-red-400" />}
-                </span>
+              </div>
+              {cuis.length > 2 && (
+                <button
+                  onClick={() => removeCui(i)}
+                  className="p-1.5 text-gray-600 hover:text-red-400"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               )}
             </div>
-            {cuis.length > 2 && (
-              <button onClick={() => removeCui(i)} className="p-1.5 text-gray-600 hover:text-red-400">
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
-          </div>
           );
         })}
 
         <div className="flex items-center gap-3 pt-2">
           {cuis.length < 5 && (
-            <button onClick={addCui} className="btn-secondary flex items-center gap-1.5 text-sm">
+            <button
+              onClick={addCui}
+              className="btn-secondary flex items-center gap-1.5 text-sm"
+            >
               <Plus className="w-3.5 h-3.5" /> Adauga CUI
             </button>
           )}
@@ -327,12 +392,18 @@ export default function CompareCompanies() {
               >
                 <Download className="w-3.5 h-3.5" /> Export CSV
               </button>
-              {result.companies.length === 2 && (
+              {(result.companies?.length ?? 0) === 2 && (
                 <button
                   onClick={async () => {
                     try {
-                      logAction("Compare", "downloadPDF", { cui1: result.companies[0].cui, cui2: result.companies[1].cui });
-                      const blob = await api.compareReport(result.companies[0].cui, result.companies[1].cui);
+                      logAction("Compare", "downloadPDF", {
+                        cui1: result.companies![0].cui,
+                        cui2: result.companies![1].cui,
+                      });
+                      const blob = await api.compareReport(
+                        result.companies[0].cui,
+                        result.companies[1].cui,
+                      );
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement("a");
                       a.href = url;
@@ -354,19 +425,28 @@ export default function CompareCompanies() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-dark-border">
-                <th className="text-left py-2 px-3 text-gray-500 text-xs uppercase">Indicator</th>
-                {result.companies.map((c, i) => (
-                  <th key={i} className="text-right py-2 px-3 text-gray-400 text-xs uppercase">
-                    {c.denumire?.split(" ").slice(0, 3).join(" ") || `CUI ${c.cui}`}
+                <th className="text-left py-2 px-3 text-gray-500 text-xs uppercase">
+                  Indicator
+                </th>
+                {(result.companies ?? []).map((c, i) => (
+                  <th
+                    key={i}
+                    className="text-right py-2 px-3 text-gray-400 text-xs uppercase"
+                  >
+                    {c.denumire?.split(" ").slice(0, 3).join(" ") ||
+                      `CUI ${c.cui}`}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {indicators.map((ind) => (
-                <tr key={ind.key} className="border-b border-dark-border/50 hover:bg-dark-hover/30">
+                <tr
+                  key={ind.key}
+                  className="border-b border-dark-border/50 hover:bg-dark-hover/30"
+                >
                   <td className="py-2.5 px-3 text-gray-400">{ind.label}</td>
-                  {result.companies.map((c, i) => {
+                  {(result.companies ?? []).map((c, i) => {
                     const val = c[ind.key];
                     const isBest = result.best_per_indicator[ind.key] === i;
                     const isRisk = ind.key === "scor_risc";
@@ -377,7 +457,8 @@ export default function CompareCompanies() {
                     } else if (ind.format === "bool") {
                       display = val ? "Da" : "Nu";
                     } else {
-                      display = val !== undefined && val !== null ? String(val) : "N/A";
+                      display =
+                        val !== undefined && val !== null ? String(val) : "N/A";
                     }
 
                     return (
@@ -387,13 +468,17 @@ export default function CompareCompanies() {
                           "py-2.5 px-3 text-right font-mono text-sm",
                           isBest && !isRisk && "text-green-400 font-bold",
                           isRisk && riskColor(val as number),
-                          !isBest && !isRisk && "text-gray-300"
+                          !isBest && !isRisk && "text-gray-300",
                         )}
                       >
                         {display}
                         {isRisk && typeof val === "number" && (
                           <span className="ml-1 text-[10px]">
-                            {val >= 70 ? "Verde" : val >= 40 ? "Galben" : "Rosu"}
+                            {val >= 70
+                              ? "Verde"
+                              : val >= 40
+                                ? "Galben"
+                                : "Rosu"}
                           </span>
                         )}
                       </td>

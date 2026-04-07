@@ -523,6 +523,12 @@ export const api = {
       method: "POST",
     }),
 
+  // Frontend log viewer (returns recent log lines from ris_frontend.log)
+  getFrontendLogs: (lines = 200) =>
+    request<{ lines: string[]; total: number }>(
+      `/frontend-log/recent?lines=${lines}`,
+    ),
+
   // Company tags (F3-3)
   getCompanyTags: (companyId: string) =>
     request<{ tags: string[] }>(`/companies/${companyId}/tags`),

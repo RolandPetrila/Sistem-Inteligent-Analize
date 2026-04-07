@@ -335,6 +335,22 @@ async def frontend_log(request: Request):
         return {"ok": False}
 
 
+@app.get("/api/frontend-log/recent")
+async def get_frontend_log(lines: int = 200):
+    """Returns last N lines from ris_frontend.log for in-app log viewer."""
+    try:
+        if not _FRONTEND_LOG.exists():
+            return {"lines": [], "total": 0}
+        async with aiofiles.open(_FRONTEND_LOG, encoding="utf-8", errors="replace") as f:
+            content = await f.read()
+        all_lines = content.splitlines()
+        tail = all_lines[-lines:] if len(all_lines) > lines else all_lines
+        return {"lines": tail, "total": len(all_lines)}
+    except Exception as e:
+        logger.debug(f"[frontend-log] read error: {e}")
+        return {"lines": [], "total": 0}
+
+
 @app.get("/api/health")
 async def health_check():
     """Health check simplu — raspuns rapid."""
