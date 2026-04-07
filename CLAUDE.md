@@ -180,13 +180,45 @@ Fisiere feedback loop:
 - Limba UI: Romana
 - Limba cod: Engleza (variabile, functii, comentarii tehnice)
 - Port backend: 8001
-- Port frontend: 5173
+- Port frontend: 5173 (dev) / 8001 (productie — dist/ servit de backend)
 - Database: ./data/ris.db (WAL mode)
 - Outputs: ./outputs/[job_id]/
 - Backups: ./backups/ris_YYYY-MM-DD.db (rotatie 7 zile)
 - .env obligatoriu (.env.example ca referinta)
 - fpdf2 pt PDF (NU WeasyPrint)
 - Synthesis: subprocess `claude --print --model claude-opus-4-6 --effort max`
+
+## Structura folder principal (ROOT) — REGULA STRICTA
+
+Folderul principal `C:\Proiecte\Sistem_Inteligent_Analize\` trebuie sa ramana curat.
+Fisierele permise in root sunt NUMAI:
+
+| Fisier                          | Motiv                                            |
+| ------------------------------- | ------------------------------------------------ |
+| `CLAUDE.md`                     | Instructiuni Claude — obligatoriu in root        |
+| `ISSUES.md`                     | Feedback loop utilizator                         |
+| `TODO_ROLAND.md`                | Task list activ                                  |
+| `README.md`                     | Documentatie principala proiect                  |
+| `requirements.txt`              | Dependente Python — obligatoriu in root          |
+| `pyproject.toml`                | Configurare Python tools                         |
+| `.env` / `.env.example`         | Config mediu — obligatoriu in root               |
+| `.gitignore` / `.gitattributes` | Config git — obligatoriu in root                 |
+| `RIS.vbs`                       | Launcher unic (dublu-click pornire)              |
+| `RIS_TEST.bat`                  | Runner teste (pytest + vitest)                   |
+| `ris_icon.ico`                  | Iconita aplicatie (folosita de shortcut desktop) |
+| `START_PWA.md`                  | Documentatie pornire + Tailscale + PWA           |
+
+**TOATE celelalte fisiere se plaseaza in subfoldere:**
+
+- Planificari, audit-uri, executoare → `99_Plan_vs_Audit/`
+- Rapoarte de cercetare, deep research → `99_Deep_Research/`
+- Documentatie tehnica, spec-uri, prompturi → `docs/`
+- Scripturi utilitare, tools, iconite → `tools/`
+- Teste backend/frontend → `tests/`
+- Outputuri Claude, audituri automate → `.claude-outputs/`
+
+**La creare fisier nou: intreaba-te "in ce subfolder apartine?" inainte de a-l pune in root.**
+**Nu crea fisiere .bat, .vbs, .ps1 noi in root fara confirmare explicita.**
 
 ## Decizii tehnice confirmate
 
@@ -223,21 +255,44 @@ La finalul fiecarei sesiuni de lucru, actualizeaza:
 
 - `CLAUDE.md` — status faze, key files, decizii
 - `TODO_ROLAND.md` — status items, ce ramane de facut
-- `FUNCTII_SISTEM.md` — inventar complet functionalitati
-- `AUDIT_REPORT.md` — doar daca s-au facut modificari majore
+- `docs/FUNCTII_SISTEM.md` — inventar complet functionalitati
+- `99_Plan_vs_Audit/AUDIT_REPORT.md` — doar daca s-au facut modificari majore
 - Memory files — project_ris_status.md, reference_api_keys.md
+
+## Regula Commit Obligatoriu
+
+**Dupa ORICE modificare in fisierele proiectului → commit + push imediat.**
+
+```bash
+git add fisier1 fisier2 ...   # DOAR fisierele modificate in sesiunea curenta
+git commit -m "tip: descriere"
+git push origin main
+```
+
+Nu lasa modificari uncommitted la finalul sesiunii.
 
 ## Comenzi
 
 ```bash
-# Start complet (dublu-click)
-START_RIS.vbs
+# Start (dublu-click, zero ferestre, serviciu Windows)
+RIS.vbs
 
-# Stop complet (dublu-click)
-STOP_RIS.vbs
+# Serviciu Windows — gestionare manuala
+sc start RIS-Backend
+sc stop RIS-Backend
+sc query RIS-Backend
+tools\RIS-Backend.exe restart   # WinSW restart
 
-# Manual
-cd C:\Proiecte\Sistem_Inteligent_Analize
+# Frontend build (necesar dupa modificari UI, pentru Tailscale/PWA)
+cd frontend && npm run build    # dist/ servit de backend pe 8001
+
+# Rebuild iconita
+python tools\create_icon.py
+
+# Teste
+RIS_TEST.bat                    # pytest + vitest
+
+# Dev mode (doar development, nu productie)
 python -m backend.main          # Backend pe 8001
-cd frontend && npm run dev      # Frontend pe 5173
+cd frontend && npm run dev      # Frontend pe 5173 (dev cu HMR)
 ```
