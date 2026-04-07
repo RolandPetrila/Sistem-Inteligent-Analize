@@ -6,7 +6,7 @@ Limiteaza endpoint-urile POST grele (job creation, batch).
 import time
 from collections import defaultdict
 
-from fastapi import Request, HTTPException
+from fastapi import HTTPException, Request
 
 
 class RateLimiter:
@@ -33,6 +33,8 @@ class RateLimiter:
 _job_limiter = RateLimiter(requests_per_minute=5)
 _batch_limiter = RateLimiter(requests_per_minute=2)
 _download_limiter = RateLimiter(requests_per_minute=20)
+_read_limiter = RateLimiter(requests_per_minute=60)
+_analysis_limiter = RateLimiter(requests_per_minute=30)
 
 
 def _get_client_ip(request: Request) -> str:
@@ -62,3 +64,17 @@ async def rate_limit_downloads(request: Request):
     ip = _get_client_ip(request)
     if not _download_limiter.check(ip):
         raise HTTPException(status_code=429, detail="Prea multe descarcari. Asteapta 1 minut.")
+
+
+async def rate_limit_read(request: Request):
+    """Dependency: max 60 read requests per minute per IP (companies list, search)."""
+    ip = _get_client_ip(request)
+    if not _read_limiter.check(ip):
+        raise HTTPException(status_code=429, detail="Prea multe cereri. Asteapta 1 minut.")
+
+
+async def rate_limit_analysis(request: Request):
+    """Dependency: max 30 analysis requests per minute per IP."""
+    ip = _get_client_ip(request)
+    if not _analysis_limiter.check(ip):
+        raise HTTPException(status_code=429, detail="Prea multe cereri analiza. Asteapta 1 minut.")

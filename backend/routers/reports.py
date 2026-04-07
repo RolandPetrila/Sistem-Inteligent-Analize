@@ -75,7 +75,7 @@ async def download_report(report_id: str, format: str):
     if format not in ("pdf", "docx", "excel", "html", "pptx"):
         raise HTTPException(status_code=400, detail="Invalid format")
 
-    row = await db.fetch_one("SELECT * FROM reports WHERE id = ?", (report_id,))
+    row = await db.fetch_one("SELECT id, job_id, company_id, report_type, report_level, title, summary, risk_score, created_at, pdf_path, docx_path, excel_path, html_path, pptx_path FROM reports WHERE id = ?", (report_id,))
     if not row:
         raise HTTPException(status_code=404, detail="Report not found")
 
@@ -130,7 +130,8 @@ async def get_report_data(
 async def get_report_delta(report_id: str):
     """Returneaza delta (modificari) fata de analiza anterioara."""
     row = await db.fetch_one(
-        "SELECT * FROM report_deltas WHERE report_id = ?", (report_id,)
+        "SELECT id, report_id_new, report_id_old, delta_summary, created_at, report_id, previous_report_id, company_id, previous_score, current_score, changes_json FROM report_deltas WHERE report_id = ?",
+        (report_id,),
     )
     if not row:
         return {
@@ -222,7 +223,7 @@ class SendEmailRequest(BaseModel):
 @router.post("/{report_id}/send-email")
 async def send_report_email(report_id: str, data: SendEmailRequest):
     """Send the report PDF as an email attachment."""
-    row = await db.fetch_one("SELECT * FROM reports WHERE id = ?", (report_id,))
+    row = await db.fetch_one("SELECT id, pdf_path FROM reports WHERE id = ?", (report_id,))
     if not row:
         raise HTTPException(status_code=404, detail="Report not found")
 

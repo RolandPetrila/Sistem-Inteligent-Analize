@@ -692,16 +692,18 @@ Reguli:
 
         try:
             logger.debug("[synthesis] Trying Gemini Flash API...")
-            url = (
-                f"https://generativelanguage.googleapis.com/v1beta/models/"
-                f"gemini-2.5-flash:generateContent?key={settings.google_ai_api_key}"
-            )
+            url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
             payload = {
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {"temperature": 0.3, "maxOutputTokens": 4096},
             }
             client = get_client()
-            response = await client.post(url, json=payload, timeout=60)
+            response = await client.post(
+                url,
+                json=payload,
+                headers={"x-goog-api-key": settings.google_ai_api_key},
+                timeout=60,
+            )
             response.raise_for_status()
             data = response.json()
 

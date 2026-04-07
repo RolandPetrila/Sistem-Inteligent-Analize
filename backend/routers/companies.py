@@ -1,12 +1,16 @@
 
 import json
+import os
+import uuid
 
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse, StreamingResponse
 from loguru import logger
 
+from backend.config import settings
 from backend.database import db
 from backend.errors import ErrorCode, RISError
+from backend.rate_limiter import rate_limit_read
 
 router = APIRouter()
 
@@ -153,7 +157,7 @@ VALID_SORT_COLS = {
 VALID_RISK_SCORES = {"Verde", "Galben", "Rosu"}
 
 
-@router.get("")
+@router.get("", dependencies=[Depends(rate_limit_read)])
 async def list_companies(
     search: str | None = None,
     county: str | None = None,
@@ -635,7 +639,7 @@ async def download_company_timeline_pdf(
     outputs_root = os.path.abspath(settings.outputs_dir)
     os.makedirs(outputs_root, exist_ok=True)
 
-    tmp_path = os.path.join(outputs_root, f"timeline_{cui}_{os.getpid()}.pdf")
+    tmp_path = os.path.join(outputs_root, f"timeline_{uuid.uuid4().hex}.pdf")
     try:
         generate_timeline_pdf(timeline_data, tmp_path)
         return FileResponse(
@@ -643,8 +647,8 @@ async def download_company_timeline_pdf(
             media_type="application/pdf",
             filename=f"evolutie_{cui}.pdf",
         )
-    except Exception as e:
-        logger.error(f"[timeline_pdf] eroare generare pentru CUI {cui}: {e}")
+    except Exception:
+        logger.exception(f"[timeline_pdf] eroare generare pentru CUI {cui}")
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
-        raise HTTPException(status_code=500, detail=f"Eroare generare PDF evolutie: {str(e)}")
+        raise HTTPException(status_code=500, detail="Eroare internă generare PDF evolutie")

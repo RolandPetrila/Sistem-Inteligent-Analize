@@ -520,7 +520,7 @@ async def websocket_job_progress(websocket: WebSocket, job_id: str):
     await ws_manager.connect(job_id, websocket)
     try:
         # Send current state on connect
-        job = await db.fetch_one("SELECT * FROM jobs WHERE id = ?", (job_id,))
+        job = await db.fetch_one("SELECT id, status, progress_percent, current_step FROM jobs WHERE id = ?", (job_id,))
         if job:
             await websocket.send_text(json.dumps({
                 "type": "progress",

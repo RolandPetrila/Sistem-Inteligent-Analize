@@ -14,14 +14,14 @@ from fastapi.responses import FileResponse
 from loguru import logger
 from pydantic import BaseModel
 
-from backend.config import settings
-from backend.agents.tools.anaf_client import get_anaf_data
 from backend.agents.tools.anaf_bilant_client import get_bilant
+from backend.agents.tools.anaf_client import get_anaf_data
+from backend.agents.tools.caen_context import CAEN_BENCHMARK, get_caen_description
 from backend.agents.tools.cui_validator import validate_cui
-from backend.agents.tools.caen_context import get_caen_description, CAEN_BENCHMARK
 from backend.agents.verification.scoring import calculate_risk_score
-from backend.services import cache_service
+from backend.config import settings
 from backend.database import db
+from backend.services import cache_service
 
 router = APIRouter()
 
@@ -263,7 +263,7 @@ async def compare_report_pdf(data: CompareReportRequest):
     output_dir = os.path.join("outputs", "compare")
     os.makedirs(output_dir, exist_ok=True)
     import uuid
-    filename = f"comparativ_{data.cui_1}_{data.cui_2}_{uuid.uuid4().hex[:8]}.pdf"
+    filename = f"comparativ_{uuid.uuid4().hex[:16]}.pdf"
     output_path = os.path.join(output_dir, filename)
 
     generate_compare_pdf(companies[0], companies[1], output_path)
@@ -278,7 +278,7 @@ async def compare_report_pdf(data: CompareReportRequest):
 # --- Compare Templates (F3-8) ---
 @router.get("/templates")
 async def list_compare_templates():
-    rows = await db.fetch_all("SELECT * FROM compare_templates ORDER BY created_at DESC")
+    rows = await db.fetch_all("SELECT id, name, cuis, created_at FROM compare_templates ORDER BY created_at DESC")
     return {
         "templates": [
             {
@@ -297,7 +297,7 @@ async def save_compare_template(body: dict):
     name = str(body.get("name", "")).strip()[:50]
     cuis = body.get("cuis", [])
     if not name or not cuis:
-        from backend.errors import RISError, ErrorCode
+        from backend.errors import ErrorCode, RISError
         raise RISError(ErrorCode.VALIDATION_ERROR, "Nume si CUI-uri obligatorii")
     template_id = uuid.uuid4().hex
     await db.execute(
@@ -319,7 +319,7 @@ async def sector_dashboard(caen_code: str):
     """Agregat sector din DB: scoruri, distributie, top firme."""
     import re as _re
     if not _re.match(r"^\d{4}$", caen_code):
-        from backend.errors import RISError, ErrorCode
+        from backend.errors import ErrorCode, RISError
         raise RISError(ErrorCode.VALIDATION_ERROR, "Cod CAEN invalid (4 cifre)")
 
     stats = await db.fetch_one(

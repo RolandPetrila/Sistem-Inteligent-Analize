@@ -1,6 +1,8 @@
 """Notification center — in-app notifications for jobs, alerts, system events."""
 import uuid
+
 from fastapi import APIRouter
+
 from backend.database import db
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
@@ -8,7 +10,7 @@ router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
 @router.get("")
 async def list_notifications(unread_only: bool = False, limit: int = 20):
-    query = "SELECT * FROM notifications"
+    query = "SELECT id, type, title, message, link, severity, read_at, created_at FROM notifications"
     if unread_only:
         query += " WHERE read_at IS NULL"
     query += " ORDER BY created_at DESC LIMIT ?"

@@ -227,7 +227,7 @@ async def create_batch(
 @router.get("/{batch_id}")
 async def get_batch_status(batch_id: str):
     """Status batch analysis — citeste din DB (persistent)."""
-    row = await db.fetch_one("SELECT * FROM jobs WHERE id = ?", (batch_id,))
+    row = await db.fetch_one("SELECT id, type, status, input_data, report_level, created_at, started_at, completed_at, error_message, progress_percent, current_step FROM jobs WHERE id = ?", (batch_id,))
     if not row:
         raise HTTPException(status_code=404, detail="Batch not found")
 
@@ -248,7 +248,7 @@ async def get_batch_status(batch_id: str):
 @router.post("/{batch_id}/resume")
 async def resume_batch(batch_id: str):
     """9E: Resume a failed/paused batch — re-runs only failed CUIs."""
-    row = await db.fetch_one("SELECT * FROM jobs WHERE id = ?", (batch_id,))
+    row = await db.fetch_one("SELECT id, type, status, input_data, report_level, created_at, started_at, completed_at, error_message, progress_percent, current_step FROM jobs WHERE id = ?", (batch_id,))
     if not row:
         raise HTTPException(status_code=404, detail="Batch not found")
 

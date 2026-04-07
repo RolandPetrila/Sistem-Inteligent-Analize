@@ -62,7 +62,7 @@ async def create_monitoring_alert(data: MonitoringCreate):
 @router.put("/{alert_id}/toggle")
 async def toggle_monitoring(alert_id: str):
     """Activeaza/dezactiveaza o alerta."""
-    row = await db.fetch_one("SELECT * FROM monitoring_alerts WHERE id = ?", (alert_id,))
+    row = await db.fetch_one("SELECT id, company_id, alert_type, is_active, check_frequency, last_checked_at, telegram_notify, suppressed_until, suppress_reason FROM monitoring_alerts WHERE id = ?", (alert_id,))
     if not row:
         raise RISError(ErrorCode.JOB_NOT_FOUND, "Alerta nu exista")
 
@@ -142,7 +142,7 @@ async def get_alert_audit_log(alert_id: str):
         try:
             rows = await db.fetch_all(
                 """
-                SELECT * FROM monitoring_audit
+                SELECT id, alert_id, company_cui, company_name, change_type, old_value, new_value, severity, triggered_at FROM monitoring_audit
                 ORDER BY triggered_at DESC
                 LIMIT 100
                 """,

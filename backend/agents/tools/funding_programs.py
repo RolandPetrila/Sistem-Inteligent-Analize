@@ -10,20 +10,19 @@ from pathlib import Path
 from loguru import logger
 
 _DATA_FILE = Path(__file__).parent.parent.parent.parent / "data" / "funding_programs.json"
-_programs_cache: list[dict] | None = None
+
+# Pre-load la import time (o singura data, inainte de event loop async — evita sync I/O blocant)
+try:
+    with open(_DATA_FILE, encoding="utf-8") as _f:
+        _programs_cache: list[dict] = json.load(_f)
+    logger.debug(f"[funding] Loaded {len(_programs_cache)} programs from {_DATA_FILE}")
+except Exception as _e:
+    logger.warning(f"[funding] Cannot load {_DATA_FILE}: {_e}")
+    _programs_cache = []
 
 
 def _load_programs() -> list[dict]:
-    """Incarca programele din JSON local (cu cache in-memory)."""
-    global _programs_cache
-    if _programs_cache is None:
-        try:
-            with open(_DATA_FILE, encoding="utf-8") as f:
-                _programs_cache = json.load(f)
-            logger.debug(f"[funding] Loaded {len(_programs_cache)} programs from {_DATA_FILE}")
-        except Exception as e:
-            logger.warning(f"[funding] Cannot load {_DATA_FILE}: {e}")
-            _programs_cache = []
+    """Returneaza programele pre-incarcate la startup (fara I/O blocant in runtime)."""
     return _programs_cache
 
 

@@ -87,7 +87,7 @@ async def list_jobs(
     total = total_row["c"] if total_row else 0
 
     rows = await db.fetch_all(
-        f"SELECT * FROM jobs {where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+        f"SELECT id, type, status, input_data, report_level, created_at, started_at, completed_at, error_message, progress_percent, current_step FROM jobs {where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
         tuple(params + [limit, offset]),
     )
 
@@ -114,7 +114,7 @@ async def list_jobs(
 
 @router.get("/{job_id}", response_model=JobResponse)
 async def get_job(job_id: str):
-    row = await db.fetch_one("SELECT * FROM jobs WHERE id = ?", (job_id,))
+    row = await db.fetch_one("SELECT id, type, status, input_data, report_level, created_at, started_at, completed_at, error_message, progress_percent, current_step FROM jobs WHERE id = ?", (job_id,))
     if not row:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -137,7 +137,7 @@ async def get_job(job_id: str):
 
 @router.post("/{job_id}/start")
 async def start_job(job_id: str):
-    row = await db.fetch_one("SELECT * FROM jobs WHERE id = ?", (job_id,))
+    row = await db.fetch_one("SELECT id, type, status, input_data, report_level, created_at, started_at, completed_at, error_message, progress_percent, current_step FROM jobs WHERE id = ?", (job_id,))
     if not row:
         raise HTTPException(status_code=404, detail="Job not found")
     if row["status"] not in (JobStatus.PENDING.value, JobStatus.PAUSED.value):
@@ -153,7 +153,7 @@ async def start_job(job_id: str):
 @router.get("/{job_id}/diagnostics")
 async def get_job_diagnostics(job_id: str):
     """CA6: Returneaza diagnosticul completitudine si surse pentru un job."""
-    row = await db.fetch_one("SELECT * FROM jobs WHERE id = ?", (job_id,))
+    row = await db.fetch_one("SELECT id, type, status, input_data, report_level, created_at, started_at, completed_at, error_message, progress_percent, current_step FROM jobs WHERE id = ?", (job_id,))
     if not row:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -203,7 +203,7 @@ async def get_job_diagnostics(job_id: str):
 @router.post("/{job_id}/retry-source/{source}")
 async def retry_single_source(job_id: str, source: str):
     """CA7: Re-ruleaza o singura sursa esuata fara re-analiza completa."""
-    row = await db.fetch_one("SELECT * FROM jobs WHERE id = ?", (job_id,))
+    row = await db.fetch_one("SELECT id, type, status, input_data, report_level, created_at, started_at, completed_at, error_message, progress_percent, current_step FROM jobs WHERE id = ?", (job_id,))
     if not row:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -269,7 +269,7 @@ async def retry_single_source(job_id: str, source: str):
 
 @router.post("/{job_id}/cancel")
 async def cancel_job(job_id: str):
-    row = await db.fetch_one("SELECT * FROM jobs WHERE id = ?", (job_id,))
+    row = await db.fetch_one("SELECT id, type, status, input_data, report_level, created_at, started_at, completed_at, error_message, progress_percent, current_step FROM jobs WHERE id = ?", (job_id,))
     if not row:
         raise HTTPException(status_code=404, detail="Job not found")
 
