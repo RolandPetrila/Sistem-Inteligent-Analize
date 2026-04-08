@@ -70,29 +70,38 @@ const JUDETE_RO = [
 
 const PAGE_SIZE = 20;
 
-// F6-1: Badge colorat pentru scor risc
+// A2: Badge colorat cu scor numeric pentru risc
 const riskBadge = (score: number | null | undefined) => {
   if (score == null)
     return (
-      <span className="px-2 py-0.5 text-xs rounded bg-gray-700 text-gray-400">
+      <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full border bg-gray-700/40 text-gray-400 border-gray-600/30">
         N/A
       </span>
     );
   if (score >= 70)
     return (
-      <span className="px-2 py-0.5 text-xs rounded bg-green-900 text-green-300">
-        Verde
+      <span
+        className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full border bg-green-500/20 text-green-400 border-green-500/30"
+        aria-label={`Risc scăzut: ${score}/100`}
+      >
+        {score}/100
       </span>
     );
   if (score >= 40)
     return (
-      <span className="px-2 py-0.5 text-xs rounded bg-yellow-900 text-yellow-300">
-        Galben
+      <span
+        className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full border bg-yellow-500/20 text-yellow-400 border-yellow-500/30"
+        aria-label={`Risc mediu: ${score}/100`}
+      >
+        {score}/100
       </span>
     );
   return (
-    <span className="px-2 py-0.5 text-xs rounded bg-red-900 text-red-300">
-      Rosu
+    <span
+      className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full border bg-red-500/20 text-red-400 border-red-500/30"
+      aria-label={`Risc ridicat: ${score}/100`}
+    >
+      {score}/100
     </span>
   );
 };

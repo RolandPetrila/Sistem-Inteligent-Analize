@@ -1,0 +1,29 @@
+<service>
+  <id>RIS-Backend</id>
+  <name>RIS Backend - Roland Intelligence System</name>
+  <description>Backend FastAPI pentru Roland Intelligence System. Serveste API REST si frontend PWA pe portul 8001.</description>
+
+  <executable>C:\Users\ALIENWARE\AppData\Local\Programs\Python\Python313\python.exe</executable>
+  <arguments>-m backend.main</arguments>
+  <workingdirectory>C:\Proiecte\Sistem_Inteligent_Analize</workingdirectory>
+
+  <env name="RIS_ENV" value="production"/>
+  <env name="PYTHONUNBUFFERED" value="1"/>
+
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>false</delayedAutoStart>
+
+  <logmode>rotate</logmode>
+  <log mode="roll-by-size">
+    <sizeThreshold>5120</sizeThreshold>
+    <keepFiles>7</keepFiles>
+  </log>
+  <logpath>C:\Proiecte\Sistem_Inteligent_Analize\logs</logpath>
+  <outfile>C:\Proiecte\Sistem_Inteligent_Analize\logs\ris_service_stdout.log</outfile>
+  <errfile>C:\Proiecte\Sistem_Inteligent_Analize\logs\ris_service_stderr.log</errfile>
+
+  <onfailure action="restart" delay="3 sec"/>
+  <onfailure action="restart" delay="10 sec"/>
+  <onfailure action="none"/>
+  <resetfailure>1 hour</resetfailure>
+</service>

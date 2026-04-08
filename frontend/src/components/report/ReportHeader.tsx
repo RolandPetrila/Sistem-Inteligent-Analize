@@ -4,6 +4,7 @@ import {
   Download,
   RefreshCw,
   Mail,
+  Share2,
   Database,
   Calendar,
   Layers,
@@ -47,6 +48,7 @@ interface ReportHeaderProps {
   reanalyzing: boolean;
   onReanalyze: () => void;
   onEmailOpen: () => void;
+  onShare?: () => void;
 }
 
 export function ReportHeader({
@@ -57,6 +59,7 @@ export function ReportHeader({
   reanalyzing,
   onReanalyze,
   onEmailOpen,
+  onShare,
 }: ReportHeaderProps) {
   return (
     <>
@@ -114,6 +117,16 @@ export function ReportHeader({
             <Mail className="w-3.5 h-3.5" />
             Trimite email
           </button>
+          {onShare && (
+            <button
+              onClick={onShare}
+              className="btn-secondary flex items-center gap-1.5 text-sm"
+              aria-label="Genereaza link partajabil"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              Partajeaza
+            </button>
+          )}
         </div>
       </div>
 

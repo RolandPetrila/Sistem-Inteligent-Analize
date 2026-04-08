@@ -1,4 +1,5 @@
 # PLAN IMPLEMENTARE R7 — Roland Intelligence System
+
 **Data creare:** 2026-04-09
 **Versiune:** 7.0
 **Baza:** Analiza Gemini CLI (2026-04-08) + audit documente Gemini_Documentatie/ + 99_Plan_vs_Audit/ + 99_Deep_Research/
@@ -11,27 +12,27 @@
 Înainte de a citi planul, itemele de mai jos au fost marcate ca neimplementate în documentele anterioare dar
 **SUNT DE FAPT DEJA IMPLEMENTATE** și nu apar în R7:
 
-| Item | Faza implementat |
-|---|---|
-| ANAF Bilant API, Scoring 0-100 multi-dimensional, Cross-validare, CUI MOD11 | Faza 4.5 |
-| SEAP, Openapi.ro, Excel 4 sheet-uri, Comparator, Detectare Anomalii | Faza 5 |
-| Lazy imports, CORS Tailscale, httpx singleton, health deep, stats cache | Faza 6A |
-| Due Diligence, Actionariat, 1-Pager PDF, CAEN Context, Benchmark, Early Warnings, Batch CSV | Faza 6B |
-| Error Boundaries, CSP headers, Toast, CUI validator JS, Prompt optimization | Faza 6C |
-| Matricea Relatii, INS TEMPO live, Scheduler, AI Smart Routing, React 19 | Faza 6D |
-| Rate limiting, API Key auth (X-RIS-Key), api.ts complet, CSP hardened | Faza 7C |
-| 28 pytest + 11 vitest, React.lazy 10 pagini, retry logic ANAF | Faza 7D |
-| Predictive models (Altman Z, Piotroski F, Beneish M, Zmijewski X) | Faza R6 (2026-04-08) |
-| Cross-section coherence, anti-halucinare, token budget, prompt injection hardening | Faza 10B/10F |
-| Watermark CONFIDENTIAL, TOC PDF/DOCX | Faza 9D |
-| WS auth token, scoring constants extracted, 15 router tests | Faza R10/R17 |
-| NetworkX BFS depth-4, Toxic PageRank, shell company detection | network_client.py R6 |
-| Agentic Reflexion, CA percentile scoring, scheduler log cleanup | Gemini Sprint 2026-04-08 |
-| .gitignore pentru .claude-outputs/ și Gemini_Documentatie/ | Existent în .gitignore |
-| Monitorul Oficial via Tavily (osint_client.py) | agent_official.py |
-| React Router v7 (7.4.0) | frontend/package.json |
-| CSV Export StreamingResponse cu generator | routers/companies.py |
-| F8-3 rollup-plugin-visualizer + npm run analyze | Faza R6 (vite.config.ts) |
+| Item                                                                                        | Faza implementat         |
+| ------------------------------------------------------------------------------------------- | ------------------------ |
+| ANAF Bilant API, Scoring 0-100 multi-dimensional, Cross-validare, CUI MOD11                 | Faza 4.5                 |
+| SEAP, Openapi.ro, Excel 4 sheet-uri, Comparator, Detectare Anomalii                         | Faza 5                   |
+| Lazy imports, CORS Tailscale, httpx singleton, health deep, stats cache                     | Faza 6A                  |
+| Due Diligence, Actionariat, 1-Pager PDF, CAEN Context, Benchmark, Early Warnings, Batch CSV | Faza 6B                  |
+| Error Boundaries, CSP headers, Toast, CUI validator JS, Prompt optimization                 | Faza 6C                  |
+| Matricea Relatii, INS TEMPO live, Scheduler, AI Smart Routing, React 19                     | Faza 6D                  |
+| Rate limiting, API Key auth (X-RIS-Key), api.ts complet, CSP hardened                       | Faza 7C                  |
+| 28 pytest + 11 vitest, React.lazy 10 pagini, retry logic ANAF                               | Faza 7D                  |
+| Predictive models (Altman Z, Piotroski F, Beneish M, Zmijewski X)                           | Faza R6 (2026-04-08)     |
+| Cross-section coherence, anti-halucinare, token budget, prompt injection hardening          | Faza 10B/10F             |
+| Watermark CONFIDENTIAL, TOC PDF/DOCX                                                        | Faza 9D                  |
+| WS auth token, scoring constants extracted, 15 router tests                                 | Faza R10/R17             |
+| NetworkX BFS depth-4, Toxic PageRank, shell company detection                               | network_client.py R6     |
+| Agentic Reflexion, CA percentile scoring, scheduler log cleanup                             | Gemini Sprint 2026-04-08 |
+| .gitignore pentru .claude-outputs/ și Gemini_Documentatie/                                  | Existent în .gitignore   |
+| Monitorul Oficial via Tavily (osint_client.py)                                              | agent_official.py        |
+| React Router v7 (7.4.0)                                                                     | frontend/package.json    |
+| CSV Export StreamingResponse cu generator                                                   | routers/companies.py     |
+| F8-3 rollup-plugin-visualizer + npm run analyze                                             | Faza R6 (vite.config.ts) |
 
 ---
 
@@ -48,11 +49,13 @@ GRUP E — Surse Noi de Date   (efort total: ~10-15h)
 ---
 
 ## GRUP A — QUICK WINS
+
 > Efort mic, impact vizibil imediat. Implementare în ordinea listată.
 
 ---
 
 ### A1 — Număr Raport Unic
+
 **Prioritate:** P1 | **Efort:** 30-45 min | **Risc:** SCĂZUT
 
 **Descriere:**
@@ -62,6 +65,7 @@ Apare pe cover page PDF, header HTML, footer DOCX.
 **Implementare:**
 
 1. Migrare SQL — adaugă coloana în tabelul `reports`:
+
 ```sql
 -- Se adaugă în database.py la connect (idempotent):
 ALTER TABLE reports ADD COLUMN report_number TEXT DEFAULT NULL;
@@ -75,6 +79,7 @@ CREATE TABLE IF NOT EXISTS report_sequences (
 ```
 
 2. Funcție DB (`database.py`):
+
 ```python
 async def get_next_report_number(self) -> str:
     """Genereaza numarul urmator in format RIS-YYYY-XXXX."""
@@ -93,6 +98,7 @@ async def get_next_report_number(self) -> str:
 ```
 
 3. Integrare în `reports/generator.py`:
+
 ```python
 # În generate_report(), înainte de salvare:
 from backend.database import db
@@ -102,6 +108,7 @@ report_number = await db.get_next_report_number()
 ```
 
 4. Afișare în fiecare generator:
+
 - **PDF**: Cover page — rând sub titlu: `f"Raport #{report_number}"`
 - **HTML**: Metadata header
 - **DOCX**: Proprietate document + footer
@@ -113,6 +120,7 @@ report_number = await db.get_next_report_number()
 ---
 
 ### A2 — Risk Badge Vizibil pe Card Companie
+
 **Prioritate:** P1 | **Efort:** 20-30 min | **Risc:** SCĂZUT
 
 **Descriere:**
@@ -122,24 +130,28 @@ Adaugă badge colorat cu scorul numeric și culoarea (Verde/Galben/Roșu) pe fie
 **Fișier:** `frontend/src/pages/Companies.tsx`
 
 **Implementare:**
+
 ```tsx
 // Componentă helper adăugată în fișier:
 function RiskBadge({ score, color }: { score?: number; color?: string }) {
   if (score === undefined || score === null) return null;
-  const bg = color === "Verde"
-    ? "bg-green-500/20 text-green-400 border-green-500/30"
-    : color === "Galben"
-    ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"
-    : "bg-red-500/20 text-red-400 border-red-500/30";
+  const bg =
+    color === "Verde"
+      ? "bg-green-500/20 text-green-400 border-green-500/30"
+      : color === "Galben"
+        ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"
+        : "bg-red-500/20 text-red-400 border-red-500/30";
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${bg}`}>
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${bg}`}
+    >
       {score}/100
     </span>
   );
 }
 
 // În render card:
-<RiskBadge score={company.risk_score} color={company.risk_color} />
+<RiskBadge score={company.risk_score} color={company.risk_color} />;
 ```
 
 **Verificare:** Badge apare pe toate cardurile care au `risk_score` !== null.
@@ -147,6 +159,7 @@ function RiskBadge({ score, color }: { score?: number; color?: string }) {
 ---
 
 ### A3 — Actualizare FUNCTII_SISTEM.md
+
 **Prioritate:** P1 | **Efort:** 20 min | **Risc:** ZERO
 
 **Descriere:**
@@ -156,6 +169,7 @@ Trebuie actualizat la starea curentă: 365 teste, 42+ endpoints, versiunea R7, t
 **Fișier:** `docs/FUNCTII_SISTEM.md`
 
 **Ce se actualizează:**
+
 - Data: 2026-04-09
 - Versiune: R7.0
 - Teste: 365 pytest + 38 vitest = 403 total
@@ -168,6 +182,7 @@ Trebuie actualizat la starea curentă: 365 teste, 42+ endpoints, versiunea R7, t
 ---
 
 ### A4 — Brave Search API Key (Acțiune User)
+
 **Prioritate:** P1 | **Efort:** 5 min | **Risc:** ZERO
 
 **Descriere:**
@@ -175,6 +190,7 @@ Codul pentru Brave Search este deja implementat în backend. Lipsește doar API 
 Brave oferă 1 lună gratuită + 2000 req/lună permanent gratuit (Basic tier).
 
 **Pași:**
+
 1. Accesează: `https://api.search.brave.com/` → Sign Up
 2. Dashboard → API Keys → Create New Key
 3. Adaugă în `.env`: `BRAVE_SEARCH_API_KEY=BSA...`
@@ -185,6 +201,7 @@ Brave oferă 1 lună gratuită + 2000 req/lună permanent gratuit (Basic tier).
 ---
 
 ### A5 — AEGRM Client (Garanții Reale Mobiliare)
+
 **Prioritate:** P1 | **Efort:** 2-3h | **Risc:** SCĂZUT
 
 **Descriere:**
@@ -195,6 +212,7 @@ Date extrem de relevante în due diligence — un gaj nemenționat poate bloca t
 **Fișier nou:** `backend/agents/tools/aegrm_client.py`
 
 **Implementare:**
+
 ```python
 """
 AEGRM Client — Arhiva Electronica de Garantii Reale Mobiliare.
@@ -255,6 +273,7 @@ async def check_aegrm_guarantees(cui: str) -> dict:
 ```
 
 **Integrare în Agent 1:**
+
 - Adaugă call în `agent_official.py` în secțiunea Due Diligence, paralel cu BPI
 - Adaugă câmp `aegrm_guarantees` în `verified_data`
 - Scoring: dacă `count > 0` → penalizare -5 în dimensiunea Juridic + flag în due diligence checklist
@@ -264,11 +283,13 @@ async def check_aegrm_guarantees(cui: str) -> dict:
 ---
 
 ## GRUP B — FEATURES UX
+
 > Impact vizibil mare pentru utilizator. Implementare în ordinea preferată.
 
 ---
 
 ### B1 — NLQ Ask RIS Chatbot
+
 **Prioritate:** P1 | **Efort:** 4-6h | **Risc:** MEDIU
 
 **Descriere:**
@@ -276,6 +297,7 @@ Chat panel flotant în Dashboard care înțelege întrebări naturale despre dat
 Arhitectură rule-based (fără ML, fără vector DB) — mapare intenție → SQL → răspuns formatat.
 
 **Intenții suportate (v1):**
+
 1. `top_risc` — "care firme au risc ridicat?" → `SELECT ... WHERE risk_score < 40 ORDER BY risk_score LIMIT 5`
 2. `statistici` — "câte analize am făcut?" → `SELECT COUNT(*) FROM jobs WHERE status='COMPLETED'`
 3. `firma_info` — "spune-mi despre [firma]" → `SELECT ... FROM companies WHERE name LIKE ?`
@@ -283,6 +305,7 @@ Arhitectură rule-based (fără ML, fără vector DB) — mapare intenție → S
 5. `ultimele` — "ce am analizat ultima oară?" → `SELECT ... FROM jobs ORDER BY created_at DESC LIMIT 5`
 
 **Backend — fișier nou:** `backend/routers/ask.py`
+
 ```python
 """
 NLQ Ask RIS — Natural Language Query endpoint.
@@ -397,12 +420,14 @@ async def ask_ris(req: AskRequest, _=Depends(require_api_key)):
 ```
 
 **Înregistrare router în `main.py`:**
+
 ```python
 from backend.routers.ask import router as ask_router
 app.include_router(ask_router)
 ```
 
 **Frontend — Chat Panel flotant:**
+
 - Buton flotant `?` în colțul dreapta-jos al Dashboard-ului
 - `useState` pentru `isOpen`, `messages[]`, `loading`
 - `POST /api/ask` cu question → afișare răspuns în bule
@@ -413,6 +438,7 @@ app.include_router(ask_router)
 ---
 
 ### B2 — Knowledge Graph Visualizer
+
 **Prioritate:** P1 | **Efort:** 4-5h | **Risc:** MEDIU
 
 **Descriere:**
@@ -420,11 +446,13 @@ Pagina nouă `/network/:cui` care vizualizează interactiv rețeaua de firme din
 Datele sunt deja disponibile în backend — lipsește doar UI.
 
 **Dependință frontend:**
+
 ```bash
 npm install @xyflow/react  # React Flow v12 — 47KB gzip, MIT license, gratuit
 ```
 
 **Backend:** Endpoint existent sau nou:
+
 ```python
 # Dacă nu există deja:
 # GET /api/companies/{cui}/network → returnează date din network_client.get_company_network()
@@ -433,6 +461,7 @@ npm install @xyflow/react  # React Flow v12 — 47KB gzip, MIT license, gratuit
 **Fișier nou:** `frontend/src/pages/NetworkGraph.tsx`
 
 **Structura grafului:**
+
 - Nod central: firma analizată (albastru)
 - Noduri secundare: firme conectate (verde = active, roșu = inactive, gri = necunoscut)
 - Edges: etichetă cu numele persoanei comune
@@ -444,11 +473,13 @@ npm install @xyflow/react  # React Flow v12 — 47KB gzip, MIT license, gratuit
 **Navigare:** Click pe nod firmă → link către `/company/:cui` (dacă firma e analizată în DB)
 
 **Adăugare în `App.tsx`:**
+
 ```tsx
 <Route path="/network/:cui" element={<Suspense fallback={...}><NetworkGraph /></Suspense>} />
 ```
 
 **Adăugare în sidebar `Layout.tsx`:**
+
 ```tsx
 { icon: <Network size={20} />, label: "Rețea Firme", href: "/companies" }
 // sau link dinamic din CompanyDetail.tsx: "Vezi rețea" → /network/{cui}
@@ -457,6 +488,7 @@ npm install @xyflow/react  # React Flow v12 — 47KB gzip, MIT license, gratuit
 ---
 
 ### B3 — Dark/Light Theme Toggle
+
 **Prioritate:** P2 | **Efort:** 1-2h | **Risc:** SCĂZUT
 
 **Descriere:**
@@ -466,6 +498,7 @@ Persistență în `localStorage`. CSS variables deja definite → modificare min
 **Implementare:**
 
 1. `frontend/src/lib/theme.ts` — utilitar:
+
 ```typescript
 export type Theme = "dark" | "light";
 
@@ -485,6 +518,7 @@ export function initTheme() {
 ```
 
 2. `frontend/src/index.css` — adaugă variabile light theme:
+
 ```css
 .light {
   --bg-primary: #f8fafc;
@@ -497,6 +531,7 @@ export function initTheme() {
 ```
 
 3. Toggle button în `Layout.tsx`:
+
 ```tsx
 import { Sun, Moon } from "lucide-react";
 // În header:
@@ -510,6 +545,7 @@ import { Sun, Moon } from "lucide-react";
 ---
 
 ### B4 — GlobalSearch Accesibil pe Mobile
+
 **Prioritate:** P2 | **Efort:** 1h | **Risc:** SCĂZUT
 
 **Descriere:**
@@ -519,6 +555,7 @@ Adaugă buton lupă vizibil în mobile header → deschide același modal.
 **Fișier:** `frontend/src/components/Layout.tsx`
 
 **Implementare:**
+
 ```tsx
 // În header-ul mobile (vizibil doar la sm: breakpoint):
 <button
@@ -535,6 +572,7 @@ Adaugă buton lupă vizibil în mobile header → deschide același modal.
 ---
 
 ### B5 — Link Partajabil Raport HTML
+
 **Prioritate:** P2 | **Efort:** 2-3h | **Risc:** SCĂZUT
 
 **Descriere:**
@@ -543,6 +581,7 @@ Generează un token unic per raport → URL public accesibil fără autentificar
 **Backend:**
 
 1. Migrare SQL (idempotent în `database.py`):
+
 ```sql
 ALTER TABLE reports ADD COLUMN share_token TEXT DEFAULT NULL;
 ALTER TABLE reports ADD COLUMN share_expires_at TEXT DEFAULT NULL;
@@ -550,6 +589,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_share_token ON reports(share_token
 ```
 
 2. Endpoint generate token — `routers/reports.py`:
+
 ```python
 @router.post("/{report_id}/share")
 async def generate_share_link(report_id: str, ttl_days: int = 30, _=Depends(require_api_key)):
@@ -566,6 +606,7 @@ async def generate_share_link(report_id: str, ttl_days: int = 30, _=Depends(requ
 ```
 
 3. Endpoint public (fără auth):
+
 ```python
 @router.get("/public/{token}", include_in_schema=False)
 async def get_public_report(token: str):
@@ -586,6 +627,7 @@ async def get_public_report(token: str):
 ```
 
 **Frontend:**
+
 - Buton "Partajează" în `ReportView.tsx` toolbar
 - Click → `POST /api/reports/{id}/share` → afișează URL cu buton copy-to-clipboard
 - Toast confirmare "Link copiat!"
@@ -593,11 +635,13 @@ async def get_public_report(token: str):
 ---
 
 ## GRUP C — CALITATE COD
+
 > Îmbunătățiri tehnice care reduc datoria tehnica fără a schimba funcționalitatea.
 
 ---
 
 ### C1 — Split Frontend Files > 500 LOC
+
 **Prioritate:** P2 | **Efort:** 3-4h | **Risc:** MEDIU
 
 **Descriere:**
@@ -606,14 +650,15 @@ Strategia: extrage componente reutilizabile în `components/`.
 
 **Fișiere afectate:**
 
-| Fișier | LOC actuale | Target |
-|---|---|---|
-| `ReportView.tsx` | ~619 | < 300 (extrage ReportToolbar, ReportMetadata) |
-| `CompanyDetail.tsx` | ~551 | < 300 (extrage CompanyHeader, ScoreHistory) |
-| `Dashboard.tsx` | ~521 | < 300 (extrage StatCards, QuickActions) |
-| `NewAnalysis.tsx` | ~500 | < 280 (extrage WizardStep, CUIInput) |
+| Fișier              | LOC actuale | Target                                        |
+| ------------------- | ----------- | --------------------------------------------- |
+| `ReportView.tsx`    | ~619        | < 300 (extrage ReportToolbar, ReportMetadata) |
+| `CompanyDetail.tsx` | ~551        | < 300 (extrage CompanyHeader, ScoreHistory)   |
+| `Dashboard.tsx`     | ~521        | < 300 (extrage StatCards, QuickActions)       |
+| `NewAnalysis.tsx`   | ~500        | < 280 (extrage WizardStep, CUIInput)          |
 
 **Procedura pentru fiecare:**
+
 1. Identifică blocuri vizuale coerente (≥50 LOC, props clare)
 2. Extrage în `frontend/src/components/[PageName]/ComponentName.tsx`
 3. `npm run build` — verifică 0 erori TypeScript
@@ -624,6 +669,7 @@ Strategia: extrage componente reutilizabile în `components/`.
 ---
 
 ### C2 — TanStack Query pentru Data Fetching
+
 **Prioritate:** P2 | **Efort:** 3-4h | **Risc:** MEDIU
 
 **Descriere:**
@@ -631,15 +677,17 @@ Strategia: extrage componente reutilizabile în `components/`.
 Beneficii: cache automat, revalidare, loading states, deduplication requests.
 
 **Instalare:**
+
 ```bash
 npm install @tanstack/react-query @tanstack/react-query-devtools
 ```
 
 **Setup `main.tsx`:**
+
 ```tsx
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { staleTime: 30_000, retry: 2 } }
+  defaultOptions: { queries: { staleTime: 30_000, retry: 2 } },
 });
 // Wrap <App /> cu <QueryClientProvider client={queryClient}>
 ```
@@ -647,6 +695,7 @@ const queryClient = new QueryClient({
 **Migrare prioritizată (în ordine):**
 
 1. `Dashboard.tsx` — stats și recent jobs:
+
 ```tsx
 const { data: stats } = useQuery({
   queryKey: ["stats"],
@@ -656,6 +705,7 @@ const { data: stats } = useQuery({
 ```
 
 2. `Companies.tsx` — lista companii:
+
 ```tsx
 const { data: companies, isLoading } = useQuery({
   queryKey: ["companies", search, sortBy, filters],
@@ -664,6 +714,7 @@ const { data: companies, isLoading } = useQuery({
 ```
 
 3. `ReportsList.tsx` — lista rapoarte:
+
 ```tsx
 const { data } = useQuery({
   queryKey: ["reports", page],
@@ -676,6 +727,7 @@ const { data } = useQuery({
 ---
 
 ### C3 — Accessibility ARIA
+
 **Prioritate:** P3 | **Efort:** 1-2h | **Risc:** SCĂZUT
 
 **Descriere:**
@@ -709,6 +761,7 @@ Adaugă atribute ARIA pentru screen readers și utilizatori cu daltonism.
 ---
 
 ### C4 — Type Hints Funcții Publice Backend
+
 **Prioritate:** P3 | **Efort:** 1-2h | **Risc:** SCĂZUT
 
 **Descriere:**
@@ -734,11 +787,13 @@ async def send_telegram(self, message: str, severity: str = "INFO") -> bool: ...
 ---
 
 ## GRUP D — STRATEGIC
+
 > Sesiuni dedicate, cu branch separat și testare manuală completă.
 
 ---
 
 ### D1 — data.gov.ro ONRC Dataset Local
+
 **Prioritate:** P1 | **Efort:** 2-3 zile | **Risc:** MEDIU
 
 **Descriere:**
@@ -746,11 +801,13 @@ Dataset oficial ONRC disponibil gratuit pe data.gov.ro (CC BY 4.0).
 Înlocuiește limita de 100 req/lună de la openapi.ro cu date locale pentru câmpurile de bază.
 
 **Dimensiuni dataset:**
+
 - Firme active: ~660 MB CSV
 - Firme radiate: ~392 MB CSV
 - Persoane juridice: ~89 MB CSV
 
 **Arhitectură propusă:**
+
 1. Script `tools/import_onrc.py` — download + parse CSV + import SQLite
 2. Tabel nou `onrc_companies` (CUI, denumire, CAEN, județ, data_înregistrare, status)
 3. Index pe `cui` (lookup O(log n))
@@ -764,12 +821,14 @@ Dacă dimensiunea SQLite devine problemă (~500MB), se poate folosi FTS5 pentru 
 ---
 
 ### D2 — Vite 6 → 7 Upgrade
+
 **Prioritate:** P2 | **Efort:** 2-4h | **Risc:** MEDIU
 
 **Descriere:**
 Vite 7 aduce îmbunătățiri de performanță la build și HMR. Upgrade recomandat pe branch separat.
 
 **Pași:**
+
 ```bash
 git checkout -b upgrade/vite7
 cd frontend
@@ -786,6 +845,7 @@ git merge main   # dacă OK
 ---
 
 ### D3 — Tailwind v3 → v4
+
 **Prioritate:** P3 | **Efort:** 4-8h | **Risc:** MARE
 
 **PREREQUISITE:** D2 (Vite 7) trebuie să fie COMPLET și pe main.
@@ -794,12 +854,14 @@ git merge main   # dacă OK
 Tailwind v4 aduce engine Rust (Oxide) — build de 5-10x mai rapid. Breaking changes semnificative.
 
 **Breaking changes de cunoscut:**
+
 - `tailwind.config.js` **dispare** — configurare prin `@theme` în CSS
 - `@apply` sintaxa schimbată
 - Unele clase sunt redenumite (ex: `shadow` → `shadow-sm`)
 - `JIT` devine default și unic mod
 
 **Pași:**
+
 ```bash
 git checkout -b upgrade/tailwind4
 cd frontend
@@ -815,6 +877,7 @@ npm test
 ---
 
 ### D4 — XGBoost Predicție Faliment
+
 **Prioritate:** P3 | **Efort:** 5-10 zile | **Risc:** SCĂZUT (funcționalitate izolată)
 
 **Descriere:**
@@ -822,10 +885,12 @@ Model Gradient Boosting antrenat pe date ANAF acumulate în sistem.
 Output: `AI_Bankruptcy_Probability_Score` (0-100%) adăugat în scoring.
 
 **Prerequisites:**
+
 - Minim 200 firme analizate în DB cu date ANAF Bilant complete
 - Cel puțin 2 ani de date per firmă
 
 **Arhitectură:**
+
 ```python
 # backend/agents/tools/ml_predictor.py
 # Features: CA trend, profit_margin, equity_ratio, angajati_trend,
@@ -843,11 +908,12 @@ Output: `AI_Bankruptcy_Probability_Score` (0-100%) adăugat în scoring.
 
 ---
 
-### E1 — AEGRM Client *(mutat la A5 — Quick Win)*
+### E1 — AEGRM Client _(mutat la A5 — Quick Win)_
 
 ---
 
 ### E2 — Cohere Embed + Semantic Search Firme Similare
+
 **Prioritate:** P2 | **Efort:** 4-6h | **Risc:** SCĂZUT
 
 **Descriere:**
@@ -855,6 +921,7 @@ Utilizează Cohere Embed (gratuit, 1000 req/lună Trial) pentru embeddings vecto
 Endpoint `GET /api/companies/{cui}/similar?semantic=true` → returnează firme similare semantic.
 
 **Arhitectură:**
+
 ```python
 # backend/services/semantic_service.py
 # 1. La fiecare analiză completă: generează embedding din rezumatul firmei
@@ -867,17 +934,20 @@ Endpoint `GET /api/companies/{cui}/similar?semantic=true` → returnează firme 
 ```
 
 **Instalare:**
+
 ```bash
 pip install cohere>=5.0  # adaugă în requirements.txt
 ```
 
 **Cheie API:**
+
 - Signup gratuit: `https://dashboard.cohere.com/`
 - Adaugă în `.env`: `COHERE_API_KEY=co-...`
 
 ---
 
 ### E3 — Mistral OCR (Upload Documente Scanate)
+
 **Prioritate:** P3 | **Efort:** 3-4h | **Risc:** SCĂZUT
 
 **Descriere:**
@@ -885,6 +955,7 @@ Endpoint `POST /api/documents/ocr` — upload PDF scanat → text structurat JSO
 Model: `pixtral-12b` (Mistral multimodal). Util pentru bilanțuri scanate, contracte, acte ONRC.
 
 **Backend — fișier nou:** `backend/routers/documents.py`
+
 ```python
 @router.post("/ocr")
 async def ocr_document(file: UploadFile, _=Depends(require_api_key)):
@@ -896,6 +967,7 @@ async def ocr_document(file: UploadFile, _=Depends(require_api_key)):
 ```
 
 **Instalare:**
+
 ```bash
 pip install pypdfium2  # conversie PDF → imagini (pur Python, fără dependințe native)
 ```
@@ -931,14 +1003,14 @@ pip install pypdfium2  # conversie PDF → imagini (pur Python, fără dependin�
 
 ## ESTIMĂRI EFORT
 
-| Grup | Items | Efort estimat | Complexitate |
-|---|---|---|---|
-| A — Quick Wins | 5 | 6-8h | SCĂZUTĂ |
-| B — Features UX | 5 | 12-18h | MEDIE |
-| C — Calitate Cod | 4 | 8-12h | MEDIE |
-| D — Strategic | 4 | 3-15 zile | MARE |
-| E — Surse Noi | 3 | 10-15h | MEDIE |
-| **TOTAL (excl. D)** | **17** | **~36-53h** | — |
+| Grup                | Items  | Efort estimat | Complexitate |
+| ------------------- | ------ | ------------- | ------------ |
+| A — Quick Wins      | 5      | 6-8h          | SCĂZUTĂ      |
+| B — Features UX     | 5      | 12-18h        | MEDIE        |
+| C — Calitate Cod    | 4      | 8-12h         | MEDIE        |
+| D — Strategic       | 4      | 3-15 zile     | MARE         |
+| E — Surse Noi       | 3      | 10-15h        | MEDIE        |
+| **TOTAL (excl. D)** | **17** | **~36-53h**   | —            |
 
 ---
 
@@ -977,12 +1049,12 @@ git commit -m "feat(grup-id): descriere scurta — item AX/BX/CX"
 
 ## ITEMS CARE NECESITĂ ACȚIUNE USER (NU COD)
 
-| Item | Acțiune | Timp | URL |
-|---|---|---|---|
-| A4 — Brave Search | Signup + API key | 5 min | api.search.brave.com |
-| E2 — Cohere Embed | Signup + API key | 5 min | dashboard.cohere.com |
-| DeepSeek R1 | ATENȚIE: servere China — NU pentru date reale client | — | — |
+| Item              | Acțiune                                              | Timp  | URL                  |
+| ----------------- | ---------------------------------------------------- | ----- | -------------------- |
+| A4 — Brave Search | Signup + API key                                     | 5 min | api.search.brave.com |
+| E2 — Cohere Embed | Signup + API key                                     | 5 min | dashboard.cohere.com |
+| DeepSeek R1       | ATENȚIE: servere China — NU pentru date reale client | —     | —                    |
 
 ---
 
-*Plan generat: 2026-04-09 | Baza: commit c401077 | 365 pytest PASSED*
+_Plan generat: 2026-04-09 | Baza: commit c401077 | 365 pytest PASSED_
