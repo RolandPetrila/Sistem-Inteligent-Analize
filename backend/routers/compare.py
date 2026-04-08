@@ -351,7 +351,8 @@ async def sector_dashboard(caen_code: str):
     try:
         from backend.agents.tools.caen_context import get_caen_info
         caen_info = get_caen_info(caen_code)
-    except Exception:
+    except Exception as e:
+        logger.debug(f"[compare] caen_info lookup failed for {caen_code}: {e}")
         caen_info = {}
 
     return {

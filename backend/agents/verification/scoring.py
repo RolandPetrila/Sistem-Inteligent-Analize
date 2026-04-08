@@ -680,8 +680,8 @@ def calculate_risk_score(verified: dict, dynamic_thresholds: dict | None = None)
                     "text": f"Rating Google Maps slab: {maps_data.get('rating')}/5",
                     "impact": maps_bonus,
                 })
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"[scoring] maps bonus calculation error: {e}")
 
     dimensions["reputational"] = {"score": max(0, min(100, rep_score)), "weight": 10, "reasons": rep_reasons}
 

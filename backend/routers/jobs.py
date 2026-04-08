@@ -316,7 +316,7 @@ async def regenerate_section(
 
     try:
         full_data = json.loads(report["full_data"]) if report["full_data"] else {}
-    except Exception:
+    except (json.JSONDecodeError, TypeError, ValueError):
         raise HTTPException(status_code=500, detail="Date raport invalide")
 
     # Extrage sectiunea curenta

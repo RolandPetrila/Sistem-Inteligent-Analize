@@ -483,7 +483,7 @@ async def get_predictive_scores(cui: str):
 
     try:
         verified_data = json.loads(report["full_data"])
-    except Exception:
+    except (json.JSONDecodeError, TypeError, ValueError):
         raise HTTPException(status_code=500, detail="Date raport invalide")
 
     scores = calculate_all_predictive_scores(verified_data)

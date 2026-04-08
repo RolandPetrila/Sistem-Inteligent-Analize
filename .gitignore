@@ -57,6 +57,22 @@ info.md
 frontend/*.txt
 CheckPoint/
 
+# Claude/Gemini outputs — generate local, nu se comit
+.claude-outputs/
+Gemini_Documentatie/
+session_context.md
+
+# Test reports HTML generate local
+tests/*.html
+tests/raport*.html
+
+# Securitate — fisiere cu chei API (NICIODATA in git)
+99_Plan_vs_Audit/API_KEYS.md
+API_KEYS.md
+**/API_KEYS.md
+*_keys.md
+*_KEYS.md
+
 # Test reports folder (local testing, not tracked)
 Testari_Analize_Sistem/
 

@@ -123,8 +123,8 @@ class VerificationAgent(BaseAgent):
                     county_for_dyn = county_for_dyn.get("judet", None)
                 elif isinstance(county_for_dyn, str):
                     county_for_dyn = None  # adresa e string, nu extragem judetul
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"[verification] dynamic thresholds extraction error: {e}")
 
         dynamic_thresholds = await self._get_dynamic_thresholds(caen_for_dyn, county_for_dyn)
 
