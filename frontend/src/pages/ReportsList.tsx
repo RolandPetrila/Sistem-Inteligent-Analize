@@ -1,47 +1,36 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { FileText, Eye, ChevronLeft, ChevronRight } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { useToast } from "@/components/Toast";
 import { logAction } from "@/lib/logger";
-import type { Report } from "@/lib/types";
 import { ANALYSIS_TYPE_LABELS } from "@/lib/constants";
 import clsx from "clsx";
 
 const PAGE_SIZE = 20;
 
 export default function ReportsList() {
-  const { toast } = useToast();
-  const [reports, setReports] = useState<Report[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
 
-  const loadReports = (pageNum = 0) => {
-    setLoading(true);
-    api
-      .listReports({ limit: PAGE_SIZE, offset: pageNum * PAGE_SIZE })
-      .then((res) => {
-        setReports(res.reports);
-        setTotal(res.total);
-        logAction("ReportsList", "loaded", { total: res.total, page: pageNum });
-      })
-      .catch(() => toast("Eroare la incarcarea rapoartelor", "error"))
-      .finally(() => setLoading(false));
-  };
+  const { data, isLoading } = useQuery({
+    queryKey: ["reports", page],
+    queryFn: () =>
+      api
+        .listReports({ limit: PAGE_SIZE, offset: page * PAGE_SIZE })
+        .then((res) => {
+          logAction("ReportsList", "loaded", {
+            total: res.total,
+            page,
+          });
+          return res;
+        }),
+  });
 
-  useEffect(() => {
-    loadReports();
-  }, []);
-
+  const reports = data?.reports ?? [];
+  const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  const goToPage = (p: number) => {
-    setPage(p);
-    loadReports(p);
-  };
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="animate-pulse space-y-4">
         <div className="h-8 bg-dark-card rounded w-48" />
@@ -95,8 +84,9 @@ export default function ReportsList() {
                           className={clsx(
                             "ml-2 font-medium",
                             report.risk_score === "Verde" && "text-risk-verde",
-                            report.risk_score === "Galben" && "text-risk-galben",
-                            report.risk_score === "Rosu" && "text-risk-rosu"
+                            report.risk_score === "Galben" &&
+                              "text-risk-galben",
+                            report.risk_score === "Rosu" && "text-risk-rosu",
                           )}
                         >
                           Risc: {report.risk_score}
@@ -134,7 +124,7 @@ export default function ReportsList() {
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-2 pt-4">
               <button
-                onClick={() => goToPage(page - 1)}
+                onClick={() => setPage((p) => p - 1)}
                 disabled={page === 0}
                 className="p-2 rounded-lg bg-dark-surface border border-dark-border
                            disabled:opacity-30 hover:bg-dark-hover transition-colors"
@@ -155,7 +145,7 @@ export default function ReportsList() {
                 return (
                   <button
                     key={p}
-                    onClick={() => goToPage(p)}
+                    onClick={() => setPage(p)}
                     className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${
                       p === page
                         ? "bg-accent-primary text-white"
@@ -167,7 +157,7 @@ export default function ReportsList() {
                 );
               })}
               <button
-                onClick={() => goToPage(page + 1)}
+                onClick={() => setPage((p) => p + 1)}
                 disabled={page >= totalPages - 1}
                 className="p-2 rounded-lg bg-dark-surface border border-dark-border
                            disabled:opacity-30 hover:bg-dark-hover transition-colors"

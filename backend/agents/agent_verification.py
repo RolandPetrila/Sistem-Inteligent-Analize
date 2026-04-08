@@ -463,6 +463,14 @@ class VerificationAgent(BaseAgent):
                 f"Status: {bpi.get('status', 'N/A')}" if bpi.get("found") else "Nicio procedura gasita",
             )
 
+        # A5: AEGRM Garantii Reale Mobiliare
+        aegrm = official.get("aegrm_guarantees", {})
+        if isinstance(aegrm, dict) and aegrm.get("has_data"):
+            risk["aegrm_guarantees"] = self._make_field(
+                aegrm, "AEGRM (aegrm.justportal.ro)",
+                f"{aegrm.get('count', 0)} garantii reale mobiliare inregistrate" if aegrm.get("has_guarantees") else "Nicio garantie reala mobiliara",
+            )
+
         # F1-1: Portal Just SOAP — dosare reale (prioritate peste Tavily estimation)
         dosare_just = official.get("dosare_just", {})
         if isinstance(dosare_just, dict) and dosare_just.get("found"):

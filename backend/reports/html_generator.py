@@ -673,7 +673,7 @@ body{{font-family:'Segoe UI',system-ui,sans-serif;background:#1a1a2e;color:#e2e8
     <div class="header">
         <h1>{title}</h1>
         <div class="company">{company}</div>
-        <div class="meta">Nivel {level} | Generat: {generated} | {len(sources)} surse</div>
+        <div class="meta">Nivel {level} | Generat: {generated} | {len(sources)} surse{f" | Nr: {meta.get('report_number')}" if meta.get('report_number') else ""}</div>
         <div class="risk-badge">{risk_display}</div>
         {f'<p style="margin-top:8px;color:#94a3b8;font-size:0.85em">{risk_rec}</p>' if risk_rec else ''}
     </div>

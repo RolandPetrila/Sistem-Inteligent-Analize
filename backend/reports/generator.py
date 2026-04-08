@@ -5,8 +5,8 @@ Lazy imports: fpdf2/openpyxl/pptx/docx se importeaza DOAR cand genereaza efectiv
 """
 
 import zipfile
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, date, UTC
 
 from loguru import logger
 
@@ -45,6 +45,10 @@ async def generate_all_reports(
     risk_score = verified_data.get("risk_score", {})
     sources_used = verified_data.get("sources_used", [])
 
+    # A1: Număr raport unic RIS-YYYY-XXXX
+    from backend.database import db as _db
+    report_number = await _db.get_next_report_number()
+
     meta = {
         "title": f"Raport {analysis_type.replace('_', ' ').title()}",
         "company_name": company_name or "N/A",
@@ -56,6 +60,7 @@ async def generate_all_reports(
         "risk_recommendation": risk_score.get("recommendation", ""),
         "sources_count": len(sources_used),
         "sources": sources_used,
+        "report_number": report_number,
     }
 
     paths = {}
@@ -71,7 +76,8 @@ async def generate_all_reports(
             return None
 
     # PDF (lazy import fpdf2)
-    from backend.reports.pdf_generator import generate_pdf, _sanitize as pdf_sanitize_fn
+    from backend.reports.pdf_generator import _sanitize as pdf_sanitize_fn
+    from backend.reports.pdf_generator import generate_pdf
     pdf_path = output_dir / "raport.pdf"
 
     def _pdf_sanitize(obj):
@@ -145,4 +151,6 @@ async def generate_all_reports(
         except Exception as e:
             logger.error(f"ZIP pack failed: {e}")
 
+    # A1: Include report_number in returned dict for persistence
+    paths["report_number"] = report_number
     return paths

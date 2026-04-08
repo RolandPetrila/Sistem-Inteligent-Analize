@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RIS — Inventar Complet Functionalitati v5.0</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#0f0f23;color:#e2e8f0;line-height:1.7}
+.container{max-width:1100px;margin:0 auto;padding:40px 24px 80px}
+
+.hero{text-align:center;padding:60px 0 50px;border-bottom:2px solid #6366f1}
+.hero h1{font-size:2.4em;color:#fff;margin-bottom:4px;letter-spacing:-0.5px}
+.hero .accent{color:#6366f1}
+.hero .subtitle{color:#94a3b8;font-size:1em;margin-top:8px}
+.hero .version{display:inline-block;margin-top:16px;padding:4px 16px;border-radius:20px;background:#6366f115;color:#a5b4fc;font-size:0.8em;border:1px solid #6366f130}
+
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:40px 0}
+.stat-card{background:#1a1a2e;border-radius:12px;padding:20px;text-align:center;border:1px solid #ffffff10}
+.stat-card .number{font-size:2em;font-weight:800;color:#6366f1}
+.stat-card .label{font-size:0.75em;color:#94a3b8;margin-top:4px;text-transform:uppercase;letter-spacing:1px}
+
+section{margin-top:50px}
+h2{font-size:1.4em;color:#fff;margin-bottom:20px;padding-bottom:8px;border-bottom:1px solid #ffffff10}
+h2 .badge{font-size:0.5em;padding:2px 10px;border-radius:10px;background:#22c55e20;color:#22c55e;vertical-align:middle;margin-left:8px}
+h3{font-size:1.1em;color:#a5b4fc;margin:20px 0 10px}
+
+table{width:100%;border-collapse:collapse;margin:10px 0 20px}
+th{background:#1a1a2e;color:#a5b4fc;padding:10px 14px;text-align:left;font-size:0.8em;text-transform:uppercase;letter-spacing:0.5px}
+td{padding:8px 14px;border-bottom:1px solid #ffffff08;font-size:0.9em;color:#cbd5e1}
+tr:hover td{background:#ffffff05}
+.method{font-weight:700;font-size:0.75em;padding:2px 8px;border-radius:4px;font-family:monospace}
+.get{background:#3b82f620;color:#60a5fa}
+.post{background:#22c55e20;color:#4ade80}
+.put{background:#f59e0b20;color:#fbbf24}
+.delete{background:#ef444420;color:#f87171}
+.ws{background:#8b5cf620;color:#a78bfa}
+.endpoint{font-family:monospace;font-size:0.85em;color:#e2e8f0}
+
+.tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:0.75em;margin:1px 2px}
+.tag-ok{background:#22c55e15;color:#4ade80;border:1px solid #22c55e30}
+.tag-new{background:#6366f115;color:#a5b4fc;border:1px solid #6366f130}
+.tag-8{background:#f59e0b15;color:#fbbf24;border:1px solid #f59e0b30}
+.tag-info{background:#94a3b815;color:#94a3b8;border:1px solid #94a3b830}
+
+.feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin:16px 0}
+.feature-card{background:#1a1a2e;border-radius:10px;padding:16px;border:1px solid #ffffff08}
+.feature-card h4{color:#e2e8f0;font-size:0.95em;margin-bottom:6px}
+.feature-card p{color:#94a3b8;font-size:0.82em;line-height:1.5}
+.feature-card .phase{font-size:0.7em;color:#6366f1;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px}
+.feature-card.phase8 .phase{color:#fbbf24}
+.feature-card.phase8{border-color:#f59e0b15}
+.feature-card.phase9 .phase{color:#22c55e}
+.feature-card.phase9{border-color:#22c55e40;background:#22c55e08}
+
+.footer{text-align:center;margin-top:60px;padding-top:30px;border-top:1px solid #ffffff10;color:#64748b;font-size:0.8em}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="hero">
+  <h1>Roland <span class="accent">Intelligence</span> System</h1>
+  <div class="subtitle">Inventar Complet Functionalitati</div>
+  <div class="version">v5.0 — Faze 1-9E Complete — 2026-03-22</div>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card"><div class="number">37</div><div class="label">REST Endpoints</div></div>
+  <div class="stat-card"><div class="number">1</div><div class="label">WebSocket</div></div>
+  <div class="stat-card"><div class="number">11</div><div class="label">Pagini Frontend</div></div>
+  <div class="stat-card"><div class="number">7</div><div class="label">Formate Raport</div></div>
+  <div class="stat-card"><div class="number">5</div><div class="label">Agenti AI</div></div>
+  <div class="stat-card"><div class="number">13</div><div class="label">Surse Date</div></div>
+</div>
+
+<!-- ENDPOINTS -->
+<section>
+<h2>Backend API <span class="badge">37 endpoints</span></h2>
+
+<h3>Jobs</h3>
+<table>
+<tr><th>Metoda</th><th>Endpoint</th><th>Descriere</th></tr>
+<tr><td><span class="method post">POST</span></td><td class="endpoint">/api/jobs</td><td>Creeaza job nou (rate limited: 5/min)</td></tr>
+<tr><td><span class="method get">GET</span></td><td class="endpoint">/api/jobs</td><td>Lista joburi (filtru status, paginare)</td></tr>
+<tr><td><span class="method get">GET</span></td><td class="endpoint">/api/jobs/{id}</td><td>Detalii job</td></tr>
+<tr><td><span class="method post">POST</span></td><td class="endpoint">/api/jobs/{id}/start</td><td>Porneste executia</td></tr>
+<tr><td><span class="method post">POST</span></td><td class="endpoint">/api/jobs/{id}/cancel</td><td>Anuleaza job</td></tr>
+<tr><td><span class="method get">GET</span></td><td class="endpoint">/api/jobs/{id}/diagnostics</td><td>Diagnostic completitudine + surse <span class="tag tag-new">7E</span></td></tr>
+<tr><td><span class="method get">GET</span></td><td class="endpoint">/api/jobs/diagnostics/latest</td><td>Diagnostic ultimul job completat <span class="tag tag-new">7E</span></td></tr>
+<tr><td><span class="method post">POST</span></td><td class="endpoint">/api/jobs/{id}/retry-source/{source}</td><td>Re-ruleaza sursa esuata <span class="tag tag-new">7E</span></td></tr>
+<tr><td><span class="method ws">WS</span></td><td class="endpoint">/ws/jobs/{id}</td><td>WebSocket progress real-time</td></tr>
+</table>
+
+<h3>Reports</h3>
+<table>
+<tr><th>Metoda</th><th>Endpoint</th><th>Descriere</th></tr>
+<tr><td><span class="method get">GET</span></td><td class="endpoint">/api/reports</td><td>Lista rapoarte (filtru tip, firma, paginare)</td></tr>
+<tr><td><span class="method get">GET</span></td><td class="endpoint">/api/reports/{id}</td><td>Detalii raport + full_data JSON</td></tr>
+<tr><td><span class="method get">GET</span></td><td class="endpoint">/api/reports/{id}/download/{format}</td><td>Download PDF/DOCX/Excel/HTML/PPTX</td></tr>
+<tr><td><span class="method get">GET</span></td><td class="endpoint">/api/reports/{id}/download/one_pager</td><td>Download raport executiv 1-pager PDF</td></tr>
+</table>
+
+<h3>Companies</h3>
+<table>
+<tr><th>Metoda</th><th>Endpoint</th><th>Descriere</th></tr>
+<tr><td><span class="method get">GET</span></td><td class="endpoint">/api/companies</td><td>Lista companii (search, filtru judet/CAEN)</td></tr>
+<tr><td><span class="method get">GET</span></td><td class="endpoint">/api/companies/{id}</td><td>Detalii companie + rapoarte</td></tr>
+<tr><td><span class="method get">GET</span></td><td class="endpoint">/api/companies/export/csv</td><td>Export CSV CRM-ready</td></tr>
+</table>
+
+<h3>Analysis</h3>
+<table>
+<tr><th>Metoda</th><th>Endpoint</th><th>Descriere</th></tr>
+<tr><td><span class="method get">GET</span></td><td class="endpoint">/api/analysis/types</td><td>Lista tipuri analiza (9 tipuri)</td></tr>
+<tr><td><span class="method get">GET</span></td><td class="endpoint">/api/analysis/types/{type}</td><td>Detalii tip analiza</td></tr>
+<tr><td><span class="method post">POST</span></td><td class="endpoint">/api/analysis/parse-query</td><td>NLP: parseaza cerere in limba naturala</td></tr>
+</table>
+
+<h3>Compare</h3>
+<table>
+<tr><th>Metoda</th><th>Endpoint</th><th>Descriere</th></tr>
+<tr><td><span class="method post">POST</span></td><td class="endpoint">/api/compare</td><td>Compara 2-5 firme side-by-side <span class="tag tag-8">8D: cache + persist</span></td></tr>
+<tr><td><span class="method post">POST</span></td><td class="endpoint">/api/compare/sector</td><td>Raport sector CAEN (agregate)</td></tr>
+</table>
+
+<h3>Monitoring</h3>
+<table>
+<tr><th>Metoda</th><th>Endpoint</th><th>Descriere</th></tr>
+<tr><td><span class="method get">GET</span></td><td class="endpoint">/api/monitoring</td><td>Lista alerte monitorizare</td></tr>
+<tr><td><span class="method post">POST</span></td><td class="endpoint">/api/monitoring</td><td>Creeaza alerta noua</td></tr>
+<tr><td><span class="method put">PUT</span></td><td class="endpoint">/api/monitoring/{id}/toggle</td><td>Activeaza/dezactiveaza alerta</td></tr>
+<tr><td><span class="method delete">DELETE</span></td><td class="endpoint">/api/monitoring/{id}</td><td>Sterge alerta</td></tr>
+<tr><td><span class="method post">POST</span></td><td class="endpoint">/api/monitoring/check-now</td><td>Verificare manuala <span class="tag tag-8">8E: smart severity</span></td></tr>
+</table>
+
+<h3>Batch</h3>
+<table>
+<tr><th>Metoda</th><th>Endpoint</th><th>Descriere</th></tr>
+<tr><td><span class="method post">POST</span></td><td class="endpoint">/api/batch</td><td>Upload CSV + start batch analysis</td></tr>
+<tr><td><span class="method get">GET</span></td><td class="endpoint">/api/batch/{id}</td><td>Status batch (progress, completed, failed)</td></tr>
+<tr><td><span class="method get">GET</span></td><td class="endpoint">/api/batch/{id}/download</td><td>Download ZIP <span class="tag tag-8">8D: rich summary + retry</span></td></tr>
+<tr><td><span class="method post">POST</span></td><td class="endpoint">/api/batch/{id}/resume</td><td>Reia batch suspendat/esuat <span class="tag tag-new">9E</span></td></tr>
+</table>
+
+<h3>System</h3>
+<table>
+<tr><th>Metoda</th><th>Endpoint</th><th>Descriere</th></tr>
+<tr><td><span class="method get">GET</span></td><td class="endpoint">/api/health</td><td>Health check simplu</td></tr>
+<tr><td><span class="method get">GET</span></td><td class="endpoint">/api/health/deep</td><td>Health deep (DB, ANAF, Tavily, disk, AI)</td></tr>
+<tr><td><span class="method get">GET</span></td><td class="endpoint">/api/stats</td><td>Statistici globale (cached 30s)</td></tr>
+<tr><td><span class="method get">GET</span></td><td class="endpoint">/api/stats/trend</td><td>Analize per luna (6 luni)</td></tr>
+<tr><td><span class="method get">GET</span></td><td class="endpoint">/api/cache/stats</td><td>Statistici cache: entries, expired, size_mb <span class="tag tag-8">8A</span></td></tr>
+<tr><td><span class="method get">GET</span></td><td class="endpoint">/api/settings</td><td>Configurare curenta</td></tr>
+<tr><td><span class="method put">PUT</span></td><td class="endpoint">/api/settings</td><td>Salveaza setari</td></tr>
+<tr><td><span class="method post">POST</span></td><td class="endpoint">/api/settings/test-telegram</td><td>Test notificare Telegram</td></tr>
+</table>
+</section>
+
+<!-- AGENTI AI -->
+<section>
+<h2>Agenti AI <span class="badge">5 agenti</span></h2>
+<table>
+<tr><th>Agent</th><th>Rol</th><th>Surse / Capabilitati</th></tr>
+<tr><td>Agent 1 (Official)</td><td>Date oficiale</td><td>ANAF, ANAF Bilant, BNR, openapi.ro, Tavily, SEAP, INS TEMPO, AI Pre-processing</td></tr>
+<tr><td>Agent 2 (Web)</td><td>Web intelligence</td><td>Tavily search (stiri, recenzii) <span class="tag tag-8">8D: error boundary</span></td></tr>
+<tr><td>Agent 3 (Market)</td><td>Analiza piata</td><td>Tavily search (competitori, sector) <span class="tag tag-8">8D: error boundary</span></td></tr>
+<tr><td>Agent 4 (Verification)</td><td>Verificare + Scoring</td><td>Cross-validare, Scoring 0-100 <span class="tag tag-8">8B: trend + volatility + solvency + age-adjusted</span></td></tr>
+<tr><td>Agent 5 (Synthesis)</td><td>Generare text</td><td>Claude / Groq / Mistral / Gemini / Cerebras <span class="tag tag-8">8C: dynamic WC + context injection + provider routing</span></td></tr>
+</table>
+</section>
+
+<!-- FAZA 7 FEATURES -->
+<section>
+<h2>Functionalitati Faza 7 <span class="badge">Data Quality + Securitate + Testare</span></h2>
+
+<h3>7A — Data Quality</h3>
+<div class="feature-grid">
+<div class="feature-card"><div class="phase">DQ1</div><h4>SEAP Routing Fix</h4><p>FULL_COMPANY_PROFILE include Agent 3/Market la nivel 2.</p></div>
+<div class="feature-card"><div class="phase">DQ2</div><h4>ONRC Structurat</h4><p>CAEN, asociati, administratori, capital integrat in Verification.</p></div>
+<div class="feature-card"><div class="phase">DQ3</div><h4>Completeness Check</h4><p>17 verificari (profil, financiar, CAEN, SEAP, litigii).</p></div>
+<div class="feature-card"><div class="phase">DQ4</div><h4>Anti-halucinare</h4><p>Campuri lipsa transmise explicit in prompt AI.</p></div>
+<div class="feature-card"><div class="phase">DQ5</div><h4>Diagnostic HTML</h4><p>Sectiune "Diagnostic Completitudine" vizibila in raport HTML.</p></div>
+<div class="feature-card"><div class="phase">DQ6</div><h4>Job Logging</h4><p>Sistem logging complet per job: logs/job_{id}.log</p></div>
+</div>
+
+<h3>7B — Quick Wins Securitate</h3>
+<div class="feature-grid">
+<div class="feature-card"><div class="phase">SEC1</div><h4>PATH TRAVERSAL Fix</h4><p>resolve() + startswith pe 3 endpoint-uri download.</p></div>
+<div class="feature-card"><div class="phase">SEC2</div><h4>SQLite Optimize</h4><p>PRAGMA synchronous=NORMAL + mmap_size=256MB.</p></div>
+<div class="feature-card"><div class="phase">SEC3</div><h4>Backup Sigur</h4><p>sqlite3.backup() in loc de shutil.copy2.</p></div>
+<div class="feature-card"><div class="phase">SEC4</div><h4>Toast Catches</h4><p>5 catch-uri goale din frontend fixate cu toast notifications.</p></div>
+<div class="feature-card"><div class="phase">SEC5</div><h4>Route 404</h4><p>Catch-all cu pagina "Pagina nu a fost gasita".</p></div>
+</div>
+
+<h3>7C — Securitate & Stabilitate</h3>
+<div class="feature-grid">
+<div class="feature-card"><div class="phase">STAB1</div><h4>Batch Persistent DB</h4><p>Progress supravietuieste restart server.</p></div>
+<div class="feature-card"><div class="phase">STAB2</div><h4>Rate Limiting</h4><p>5 req/min jobs, 2 req/min batch, per IP.</p></div>
+<div class="feature-card"><div class="phase">STAB3</div><h4>API Key Auth</h4><p>X-RIS-Key header, activat cand RIS_API_KEY setat.</p></div>
+<div class="feature-card"><div class="phase">STAB4</div><h4>CSP Hardened</h4><p>Eliminat unsafe-eval + CDN din script-src.</p></div>
+<div class="feature-card"><div class="phase">STAB5</div><h4>Few-shot Prompts</h4><p>Exemple in 4 prompturi AI (executive, financial, risk, recommendations).</p></div>
+</div>
+
+<h3>7D — Testare & Refactorizare</h3>
+<div class="feature-grid">
+<div class="feature-card"><div class="phase">TEST1</div><h4>28 pytest Tests</h4><p>CUI validator, scoring, completeness, rate limiter.</p></div>
+<div class="feature-card"><div class="phase">TEST2</div><h4>11 vitest Tests</h4><p>CUI validator frontend complet testat.</p></div>
+<div class="feature-card"><div class="phase">TEST3</div><h4>Split Verification</h4><p>agent_verification.py → scoring.py + completeness.py</p></div>
+<div class="feature-card"><div class="phase">TEST4</div><h4>React.lazy()</h4><p>Toate 10 paginile cu lazy loading + Suspense.</p></div>
+</div>
+
+<h3>7E — Calitate Analiza</h3>
+<div class="feature-grid">
+<div class="feature-card"><div class="phase">CAL1</div><h4>CAEN Fallback Bilant</h4><p>Daca openapi.ro + ANAF n-au CAEN, extrage din Bilant.</p></div>
+<div class="feature-card"><div class="phase">CAL2</div><h4>Retry All Sources</h4><p>Backoff pe ANAF, openapi.ro, BNR, SEAP.</p></div>
+<div class="feature-card"><div class="phase">CAL3</div><h4>Completeness Gate</h4><p>&lt;50%: WARNING inject in prompt sinteza.</p></div>
+<div class="feature-card"><div class="phase">CAL4</div><h4>Anti-halucinare SWOT</h4><p>Prompturi competition, opportunities, SWOT cu date legate.</p></div>
+<div class="feature-card"><div class="phase">CAL5</div><h4>Diagnostics API</h4><p>3 endpoint-uri: per job, latest, retry-source.</p></div>
+</div>
+</section>
+
+<!-- FAZA 8 FEATURES -->
+<section>
+<h2>Functionalitati Faza 8 <span class="badge">Extindere Module</span></h2>
+
+<h3>8A — Infrastructure & Performance</h3>
+<div class="feature-grid">
+<div class="feature-card phase8"><div class="phase">8A-1</div><h4>GZip Middleware</h4><p>Compresia raspunsurilor HTTP > 1000 bytes automat.</p></div>
+<div class="feature-card phase8"><div class="phase">8A-2</div><h4>Coduri Eroare Structurate</h4><p>ErrorCode enum 25+ coduri + RISError exception + HTTP mapping.</p></div>
+<div class="feature-card phase8"><div class="phase">8A-3</div><h4>Cache-Control Headers</h4><p>Per endpoint: stats=30s, types=immutable, companies=5min.</p></div>
+<div class="feature-card phase8"><div class="phase">8A-4</div><h4>Cache Stats API</h4><p>GET /api/cache/stats: entries, expired, size_mb, per sursa.</p></div>
+<div class="feature-card phase8"><div class="phase">8A-5</div><h4>Cache Cleanup Periodic</h4><p>Scheduler curata cache expirat la fiecare 12h.</p></div>
+<div class="feature-card phase8"><div class="phase">8A-6</div><h4>DB Migration 002</h4><p>monitoring_audit + score_history + compare_history.</p></div>
+</div>
+
+<h3>8B — Scoring & Intelligence</h3>
+<div class="feature-grid">
+<div class="feature-card phase8"><div class="phase">8B-1</div><h4>Trend Scoring</h4><p>CA growth: >50%=+15, >20%=+10, 0-20%=+5, negativ=penalizare.</p></div>
+<div class="feature-card phase8"><div class="phase">8B-2</div><h4>Volatility Index</h4><p>CV pe CA multi-an: >0.5=-10pts, >0.3=-5pts.</p></div>
+<div class="feature-card phase8"><div class="phase">8B-3</div><h4>Solvency Ratio</h4><p>Capital/CA: negativ=-15pts, sub 5%=-10pts.</p></div>
+<div class="feature-card phase8"><div class="phase">8B-4</div><h4>Age-Adjusted</h4><p>Startup &lt;2 ani: toleranta +5. Firma >10 ani cu pierderi: -10.</p></div>
+<div class="feature-card phase8"><div class="phase">8B-5</div><h4>Angajati Trend</h4><p>Reducere >50% = HIGH risk factor (-15pts).</p></div>
+<div class="feature-card phase8"><div class="phase">8B-6</div><h4>Market Enhanced</h4><p>Bonus SEAP contracte + bonus benchmark CAEN.</p></div>
+</div>
+
+<h3>8C — Synthesis & Reports</h3>
+<div class="feature-grid">
+<div class="feature-card phase8"><div class="phase">8C-1</div><h4>Dynamic Word Count</h4><p>Target cuvinte ajustat la complexitatea datelor disponibile.</p></div>
+<div class="feature-card phase8"><div class="phase">8C-2</div><h4>Context Injection</h4><p>Summary structurat per tip sectiune injectat in prompt AI.</p></div>
+<div class="feature-card phase8"><div class="phase">8C-3</div><h4>Provider Routing</h4><p>SECTION_PROVIDER_PREFERENCE: fast vs quality per sectiune.</p></div>
+<div class="feature-card phase8"><div class="phase">8C-4</div><h4>ZIP Auto-Pack</h4><p>Toate formatele generate → raport_{CUI}_{date}.zip automat.</p></div>
+</div>
+
+<h3>8D — Orchestrator & Comparator</h3>
+<div class="feature-grid">
+<div class="feature-card phase8"><div class="phase">8D-1</div><h4>Error Boundaries</h4><p>Agent 2+3 erori catchuite, pipeline continua cu date partiale.</p></div>
+<div class="feature-card phase8"><div class="phase">8D-2</div><h4>Timing Metrics</h4><p>_agent_metrics per nod: secunde executie per agent.</p></div>
+<div class="feature-card phase8"><div class="phase">8D-3</div><h4>Compare Cache</h4><p>ANAF+Bilant prin cache_service, reduce API calls.</p></div>
+<div class="feature-card phase8"><div class="phase">8D-4</div><h4>Compare Persist</h4><p>Rezultate salvate in compare_history (persistence).</p></div>
+<div class="feature-card phase8"><div class="phase">8D-5</div><h4>Batch Retry</h4><p>Max 2 retries cu backoff exponential (3s * attempt).</p></div>
+<div class="feature-card phase8"><div class="phase">8D-6</div><h4>Rich Summary CSV</h4><p>CUI, Denumire, CAEN, CA, Profit, Angajati, Scor, Culoare.</p></div>
+</div>
+
+<h3>8E — Monitoring & UX</h3>
+<div class="feature-grid">
+<div class="feature-card phase8"><div class="phase">8E-1</div><h4>Smart Severity</h4><p>RED (inactiv/radiat), YELLOW (TVA/split), GREEN (reactivare).</p></div>
+<div class="feature-card phase8"><div class="phase">8E-2</div><h4>Audit Log</h4><p>monitoring_audit: alert_id, change_type, old/new, severity.</p></div>
+<div class="feature-card phase8"><div class="phase">8E-3</div><h4>Expanded Delta</h4><p>Detectie: stare, inactiv, TVA, split TVA cu severity per change.</p></div>
+<div class="feature-card phase8"><div class="phase">8E-4</div><h4>Score History</h4><p>score_history: tracking scor + dimensiuni per firma in timp.</p></div>
+<div class="feature-card phase8"><div class="phase">8E-5</div><h4>Telegram Severity</h4><p>Mesaje cu iconite severitate: RED/YELLOW/GREEN.</p></div>
+</div>
+</section>
+
+<!-- FAZA 9 FEATURES -->
+<section>
+<h2>Functionalitati Faza 9 <span class="badge">Performance + Intelligence + UX</span></h2>
+
+<h3>9A — Performance & Robustness</h3>
+<div class="feature-grid">
+<div class="feature-card phase9"><div class="phase">9A-1</div><h4>Parallel Source Fetching</h4><p>asyncio.gather pe toate sursele — executie paralela, nu secventiala.</p></div>
+<div class="feature-card phase9"><div class="phase">9A-2</div><h4>Error Boundaries 5/5</h4><p>Toti 5 agentii au error boundary — pipeline nu se opreste la eroare agent.</p></div>
+<div class="feature-card phase9"><div class="phase">9A-3</div><h4>Request Size 10MB</h4><p>Limita maxima request body 10MB pentru protectie server.</p></div>
+<div class="feature-card phase9"><div class="phase">9A-4</div><h4>Cache Hit/Miss Tracking</h4><p>Tracking hit/miss per sursa pentru monitorizare eficienta cache.</p></div>
+<div class="feature-card phase9"><div class="phase">9A-5</div><h4>Data Freshness Tracking</h4><p>Tracking varsta datelor din cache — avertizare la date vechi.</p></div>
+</div>
+
+<h3>9B — Scoring & Intelligence</h3>
+<div class="feature-grid">
+<div class="feature-card phase9"><div class="phase">9B-1</div><h4>Cash Flow Proxy</h4><p>Estimare cash flow din date bilant: capital propriu + profit net.</p></div>
+<div class="feature-card phase9"><div class="phase">9B-2</div><h4>Anomaly Feedback Loop</h4><p>Agent 4 trimite anomalii detectate catre Agent 5 pentru context sinteza.</p></div>
+<div class="feature-card phase9"><div class="phase">9B-3</div><h4>Confidence Scoring</h4><p>Scor de incredere per dimensiune bazat pe nr surse si concordanta.</p></div>
+<div class="feature-card phase9"><div class="phase">9B-4</div><h4>Provider Capacity Awareness</h4><p>Auto-truncare context cand depaseste limita provider AI.</p></div>
+</div>
+
+<h3>9C — Frontend UX Polish</h3>
+<div class="feature-grid">
+<div class="feature-card phase9"><div class="phase">9C-1</div><h4>Pagination Companies+Reports</h4><p>PAGE_SIZE 20, navigare pagini pe liste lungi.</p></div>
+<div class="feature-card phase9"><div class="phase">9C-2</div><h4>API Key Masking</h4><p>Eye toggle — cheia API ascunsa/vizibila in Settings.</p></div>
+<div class="feature-card phase9"><div class="phase">9C-3</div><h4>Mobile Sidebar Drawer</h4><p>Sidebar responsive: drawer pe mobile, fixa pe desktop.</p></div>
+<div class="feature-card phase9"><div class="phase">9C-4</div><h4>ApiError + 429 Handler</h4><p>Clasa ApiError dedicata + handling rate limit 429 cu retry info.</p></div>
+<div class="feature-card phase9"><div class="phase">9C-5</div><h4>Error Codes in Toast</h4><p>Coduri eroare structurate afisate in toast notifications.</p></div>
+</div>
+
+<h3>9D — Reports & Export</h3>
+<div class="feature-grid">
+<div class="feature-card phase9"><div class="phase">9D-1</div><h4>Watermark CONFIDENTIAL</h4><p>PDF: text diagonal semi-transparent. HTML: CSS overlay pe fiecare pagina.</p></div>
+<div class="feature-card phase9"><div class="phase">9D-2</div><h4>TOC PDF</h4><p>Pagina Cuprins cu numere de pagina la inceputul raportului PDF.</p></div>
+<div class="feature-card phase9"><div class="phase">9D-3</div><h4>TOC DOCX</h4><p>Table of Contents Word field — actualizabil in Microsoft Word.</p></div>
+</div>
+
+<h3>9E — Monitoring & Batch</h3>
+<div class="feature-grid">
+<div class="feature-card phase9"><div class="phase">9E-1</div><h4>Alert Dedup 24h</h4><p>Alerte identice suprimate 24h — fara spam Telegram la verificari repetate.</p></div>
+<div class="feature-card phase9"><div class="phase">9E-2</div><h4>Batch Resume</h4><p>POST /api/batch/{id}/resume — reia batch suspendat sau cu joburi esuate.</p></div>
+</div>
+</section>
+
+<!-- FAZA 6 FEATURES -->
+<section>
+<h2>Functionalitati Faza 6 <span class="badge">28 features</span></h2>
+
+<h3>6A — Performance</h3>
+<div class="feature-grid">
+<div class="feature-card"><div class="phase">QW1</div><h4>Lazy Imports</h4><p>fpdf2, openpyxl, pptx se importa doar la generare raport.</p></div>
+<div class="feature-card"><div class="phase">QW2</div><h4>CORS Tailscale</h4><p>Acces de pe Android via IP range 100.*</p></div>
+<div class="feature-card"><div class="phase">QW3</div><h4>httpx Singleton</h4><p>1 client HTTP cu connection pool.</p></div>
+<div class="feature-card"><div class="phase">QW4</div><h4>Cache Cleanup</h4><p>Stergere cache expirat automat la startup.</p></div>
+<div class="feature-card"><div class="phase">QW5</div><h4>Health Deep</h4><p>/api/health/deep — DB, ANAF, Tavily, disk, AI.</p></div>
+<div class="feature-card"><div class="phase">QW6</div><h4>Stats Cache 30s</h4><p>Dashboard nu interogheaza DB la fiecare refresh.</p></div>
+</div>
+
+<h3>6B — Documentare Extinsa</h3>
+<div class="feature-grid">
+<div class="feature-card"><div class="phase">DF1</div><h4>Due Diligence Checklist</h4><p>10 verificari DA/NU: TVA, insolventa, angajati, profit, capitaluri.</p></div>
+<div class="feature-card"><div class="phase">DF2</div><h4>Profil Actionariat</h4><p>Asociati + administratori din openapi.ro.</p></div>
+<div class="feature-card"><div class="phase">DF3</div><h4>Raport Executiv 1-Pager</h4><p>PDF 1 pagina: scor, dimensiuni, checklist, riscuri, benchmark.</p></div>
+<div class="feature-card"><div class="phase">DF4</div><h4>Context CAEN</h4><p>122 coduri + 96 sectiuni + INS TEMPO live.</p></div>
+<div class="feature-card"><div class="phase">DF5</div><h4>Early Warning Signals</h4><p>Scadere CA >30%, pierdere 2 ani, reducere angajati >50%.</p></div>
+<div class="feature-card"><div class="phase">DF6</div><h4>Benchmark CAEN</h4><p>CA firma vs media sector: ratio, pozitie.</p></div>
+<div class="feature-card"><div class="phase">DF7</div><h4>Export CRM CSV</h4><p>Buton in Companies — format CRM-ready.</p></div>
+<div class="feature-card"><div class="phase">DF8</div><h4>Batch Analysis CSV</h4><p>Upload CSV 10-50 CUI, analiza serie, ZIP rapoarte.</p></div>
+</div>
+
+<h3>6C — UX Polish</h3>
+<div class="feature-grid">
+<div class="feature-card"><div class="phase">UX1</div><h4>Toast Notifications</h4><p>Notificari vizuale verde/rosu.</p></div>
+<div class="feature-card"><div class="phase">UX2</div><h4>Error Boundaries</h4><p>Pagina crapa → mesaj util + buton reload.</p></div>
+<div class="feature-card"><div class="phase">UX3</div><h4>Dashboard Trend</h4><p>Bare SVG — analize per luna 6 luni.</p></div>
+<div class="feature-card"><div class="phase">UX4</div><h4>CUI Validator JS</h4><p>MOD 11 instant in browser.</p></div>
+<div class="feature-card"><div class="phase">UX5</div><h4>Prompt Optimization</h4><p>Per provider: narativ/structurat/european/analitic.</p></div>
+<div class="feature-card"><div class="phase">UX6</div><h4>CSP Headers</h4><p>Chart.js CDN + WebSocket permise.</p></div>
+</div>
+
+<h3>6D — Advanced</h3>
+<div class="feature-grid">
+<div class="feature-card"><div class="phase">ADV1</div><h4>Scheduler Monitoring</h4><p>Verificare firme la 6h, alerte Telegram automat.</p></div>
+<div class="feature-card"><div class="phase">ADV2</div><h4>INS TEMPO Live</h4><p>Nr firme + CA medie din API INS oficial.</p></div>
+<div class="feature-card"><div class="phase">ADV3</div><h4>Auto-backup DB</h4><p>Zilnic, rotatie 7 zile.</p></div>
+<div class="feature-card"><div class="phase">ADV4</div><h4>Sector Report</h4><p>POST /api/compare/sector — agregate per CAEN.</p></div>
+<div class="feature-card"><div class="phase">ADV5</div><h4>Matricea Relatii</h4><p>One-person, virtual office, flags.</p></div>
+<div class="feature-card"><div class="phase">ADV6</div><h4>AI Smart Routing</h4><p>Scurt → Groq, lung → Claude.</p></div>
+<div class="feature-card"><div class="phase">ADV7</div><h4>AI Pre-processing</h4><p>5 categorii + sentiment pe Tavily.</p></div>
+<div class="feature-card"><div class="phase">ADV8</div><h4>React 19</h4><p>Auto-memoizare, -38% JS payload.</p></div>
+</div>
+</section>
+
+<!-- FRONTEND -->
+<section>
+<h2>Frontend <span class="badge">11 pagini</span></h2>
+<table>
+<tr><th>Pagina</th><th>Ruta</th><th>Descriere</th></tr>
+<tr><td>Dashboard</td><td class="endpoint">/</td><td>Stats, trend chart, integrari, actiuni rapide</td></tr>
+<tr><td>Analiza Noua</td><td class="endpoint">/new-analysis</td><td>Wizard 4 pasi + chatbot NLP + CUI validator instant</td></tr>
+<tr><td>Progress Analiza</td><td class="endpoint">/analysis/:id</td><td>WebSocket real-time, logs, link raport</td></tr>
+<tr><td>Rapoarte</td><td class="endpoint">/reports</td><td>Lista rapoarte, download (7 formate incl. 1-pager + ZIP)</td></tr>
+<tr><td>Vizualizare Raport</td><td class="endpoint">/report/:id</td><td>Full data, sectiuni, surse, download</td></tr>
+<tr><td>Companii</td><td class="endpoint">/companies</td><td>Lista + search + Export CSV CRM</td></tr>
+<tr><td>Comparator</td><td class="endpoint">/compare</td><td>Comparatie 2-5 firme side-by-side</td></tr>
+<tr><td>Monitorizare</td><td class="endpoint">/monitoring</td><td>Alerte, toggle, check-now, Telegram</td></tr>
+<tr><td>Batch Analysis</td><td class="endpoint">/batch</td><td>Upload CSV, progress, download ZIP</td></tr>
+<tr><td>Configurare</td><td class="endpoint">/settings</td><td>API keys, Telegram, Gmail, synthesis mode</td></tr>
+</table>
+</section>
+
+<!-- FORMATE RAPORT -->
+<section>
+<h2>Formate Raport <span class="badge">7 formate</span></h2>
+<table>
+<tr><th>Format</th><th>Generator</th><th>Detalii</th></tr>
+<tr><td>PDF</td><td>fpdf2</td><td>Multi-pagina, titlu, sectiuni, surse, disclaimer</td></tr>
+<tr><td>DOCX</td><td>python-docx</td><td>Headere, paragrafe, stiluri profesionale</td></tr>
+<tr><td>HTML</td><td>Custom</td><td>Single-file, dark theme, Chart.js grafice</td></tr>
+<tr><td>Excel</td><td>openpyxl</td><td>4 sheet-uri cu grafice native</td></tr>
+<tr><td>PPTX</td><td>python-pptx</td><td>7 slide-uri prezentare</td></tr>
+<tr><td>1-Pager PDF</td><td>fpdf2</td><td>O pagina: scor, dimensiuni, checklist, riscuri, benchmark</td></tr>
+<tr><td>ZIP Auto-Pack</td><td>zipfile</td><td>Toate formatele → raport_{CUI}_{date}.zip <span class="tag tag-8">8C</span></td></tr>
+</table>
+</section>
+
+<!-- SURSE DATE -->
+<section>
+<h2>Surse Date <span class="badge">13 surse</span></h2>
+<table>
+<tr><th>Sursa</th><th>Nivel</th><th>Status</th></tr>
+<tr><td>ANAF TVA/Stare v9</td><td>1 (Oficial)</td><td><span class="tag tag-ok">Activ</span></td></tr>
+<tr><td>ANAF Bilant</td><td>1 (Oficial)</td><td><span class="tag tag-ok">Activ</span></td></tr>
+<tr><td>BNR Cursuri</td><td>1 (Oficial)</td><td><span class="tag tag-ok">Activ</span></td></tr>
+<tr><td>openapi.ro (ONRC)</td><td>1 (Oficial)</td><td><span class="tag tag-ok">Activ</span> 100 req/luna</td></tr>
+<tr><td>SEAP e-licitatie.ro</td><td>1 (Oficial)</td><td><span class="tag tag-ok">Activ</span></td></tr>
+<tr><td>INS TEMPO</td><td>1 (Oficial)</td><td><span class="tag tag-ok">Activ</span></td></tr>
+<tr><td>Tavily Search</td><td>3 (Estimat)</td><td><span class="tag tag-ok">Activ</span> 1000 req/luna</td></tr>
+<tr><td>Groq AI (Llama 4 Scout)</td><td>—</td><td><span class="tag tag-ok">Activ</span> gratuit</td></tr>
+<tr><td>Mistral AI (Small 3)</td><td>—</td><td><span class="tag tag-ok">Activ</span> 1B tokeni/luna</td></tr>
+<tr><td>Gemini AI (2.5 Flash)</td><td>—</td><td><span class="tag tag-ok">Activ</span> gratuit</td></tr>
+<tr><td>Cerebras (Qwen 3 235B)</td><td>—</td><td><span class="tag tag-ok">Activ</span> 1M tokeni/zi</td></tr>
+<tr><td>Claude CLI (Opus)</td><td>—</td><td><span class="tag tag-ok">Activ</span> local</td></tr>
+<tr><td>Telegram Bot</td><td>—</td><td><span class="tag tag-ok">Activ</span></td></tr>
+</table>
+</section>
+
+<!-- DB TABLES -->
+<section>
+<h2>Tabele Database <span class="badge">SQLite WAL</span></h2>
+<table>
+<tr><th>Tabel</th><th>Migratie</th><th>Scop</th></tr>
+<tr><td>jobs</td><td>001</td><td>Joburi analiza + status + progress</td></tr>
+<tr><td>reports</td><td>001</td><td>Rapoarte generate + full_data JSON + paths</td></tr>
+<tr><td>report_sources</td><td>001</td><td>Surse per raport (status, data_found, response_time)</td></tr>
+<tr><td>companies</td><td>001</td><td>Firme analizate (CUI, judet, CAEN)</td></tr>
+<tr><td>data_cache</td><td>001</td><td>Cache date per sursa cu TTL</td></tr>
+<tr><td>settings</td><td>001</td><td>Configurare sistem (key-value)</td></tr>
+<tr><td>monitoring_alerts</td><td>001</td><td>Alerte monitorizare firme</td></tr>
+<tr><td>monitoring_audit</td><td>002</td><td>Audit log schimbari detectate <span class="tag tag-8">8E</span></td></tr>
+<tr><td>score_history</td><td>002</td><td>Istoric scor per firma in timp <span class="tag tag-8">8E</span></td></tr>
+<tr><td>compare_history</td><td>002</td><td>Persistenta rezultate comparatii <span class="tag tag-8">8D</span></td></tr>
+</table>
+</section>
+
+<div class="footer">
+  Roland Intelligence System v5.0 — Generat automat 2026-03-22 — Faze 1-9E Complete
+</div>
+
+</div>
+</body>
+</html>

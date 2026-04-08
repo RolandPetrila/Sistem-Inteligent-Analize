@@ -87,13 +87,14 @@ class OfficialAgent(BaseAgent):
 
         # --- 9A: Parallel source fetching (Phase 1 — ANAF + openapi.ro + BNR simultan) ---
         if cui_clean:
-            # Fetch ANAF, openapi.ro, ANAF Bilant, BNR, BPI in parallel cu timeout individual
-            anaf_source, openapi_source, bilant_source, bnr_source, bpi_source = await asyncio.gather(
+            # Fetch ANAF, openapi.ro, ANAF Bilant, BNR, BPI, AEGRM in parallel cu timeout individual
+            anaf_source, openapi_source, bilant_source, bnr_source, bpi_source, aegrm_source = await asyncio.gather(
                 self._fetch_with_timeout(self.fetch_with_retry(lambda: self._fetch_anaf(cui_clean), source_name="ANAF", source_url="https://webservicesp.anaf.ro"), "ANAF", 15),
                 self._fetch_with_timeout(self.fetch_with_retry(lambda: self._fetch_openapi_ro(cui_clean), source_name="openapi.ro", source_url="https://openapi.ro"), "openapi.ro", 10),
                 self._fetch_with_timeout(self.fetch_with_retry(lambda: self._fetch_anaf_bilant(cui_clean), source_name="ANAF Bilant", source_url="https://webservicesp.anaf.ro/bilant"), "ANAF Bilant", 15),
                 self._fetch_with_timeout(self.fetch_with_retry(lambda: self._fetch_bnr(), source_name="BNR", source_url="https://www.bnr.ro/nbrfxrates.xml"), "BNR", 5),
                 self._fetch_with_timeout(self.fetch_with_retry(lambda c=cui_clean: self._fetch_bpi(c), source_name="BPI (buletinul.ro)", source_url="https://www.buletinul.ro"), "BPI (buletinul.ro)", 10),
+                self._fetch_with_timeout(self._fetch_aegrm(cui_clean), "AEGRM", 15),
             )
 
             # Process ANAF result
@@ -150,6 +151,16 @@ class OfficialAgent(BaseAgent):
             else:
                 log_source_result(job_id, "BPI", False, bpi_source.get("response_time_ms", 0),
                     error="BPI check failed")
+
+            # A5: Process AEGRM Garantii Reale Mobiliare result
+            if aegrm_source.get("has_data"):
+                official_data["aegrm_guarantees"] = aegrm_source
+                count = aegrm_source.get("count", 0)
+                logger.info(f"[official] AEGRM: {count} garantii pentru CUI {cui_clean}")
+                log_source_result(job_id, "AEGRM", True, 0, [f"garantii={count}"])
+            else:
+                logger.debug("[official] AEGRM: fara date sau eroare")
+                log_source_result(job_id, "AEGRM", False, 0, error=aegrm_source.get("error", "no data"))
 
             # F1-2: Store administrators in DB for network queries
             if openapi_source["data_found"]:
@@ -624,6 +635,16 @@ class OfficialAgent(BaseAgent):
             key=cache_key,
             source="bpi",
             fetch_coro=lambda: check_insolvency(cui),
+            ttl_hours=24,
+        )
+
+    async def _fetch_aegrm(self, cui: str) -> dict:
+        """A5: Fetch AEGRM garantii reale mobiliare (cache 24h)."""
+        cache_key = cache_service.make_cache_key("aegrm", cui)
+        return await cache_service.get_or_fetch(
+            key=cache_key,
+            source="aegrm",
+            fetch_coro=lambda: check_aegrm_guarantees(cui),
             ttl_hours=24,
         )
 

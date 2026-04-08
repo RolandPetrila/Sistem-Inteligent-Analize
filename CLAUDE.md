@@ -53,13 +53,14 @@ Sistem local de Business Intelligence care ruleaza pe Windows 10. Extrage automa
 - **Faza R6 (2026-04-07):** COMPLETATA PARTIAL — ~45/65 items implementate din RECOMANDARI_IMBUNATATIRI_R6.md.
 - **Hotfix (2026-04-08):** INVALID_CONCURRENT_GRAPH_UPDATE pe `_agent_metrics` — fix in `state.py:68` (`Annotated[dict | None, _merge_dicts]`), ReportView null-safety `sources ?? []`. Commits: dc0d408, 69ae807. **ATENTIE: repornire serviciu obligatorie dupa deploy.** F0-3 (job_service split), F1-2/F1-3/F1-4/F1-5 (retea firme + SQL migration 008), F2-1..F2-4 (Altman/Piotroski/Beneish/Zmijewski + wrapper), F3-3/F3-4/F3-6/F3-8 (trust scoring/anomalii/coherence/quota), F4-1/F4-2/F4-3/F4-4 (monitoring escalation/sync/audit-log/suppress), F5-1 (funding programs JSON+module), F6-1/F6-3/F6-5/F6-8 (risk badge/completeness warning/localStorage draft/dedup dashboard), F7-1/F7-2 (N+1 fix/CSV streaming), F8-5 (29 teste modele predictive). Provideri noi: GitHub Models, Fireworks AI, SambaNova. 213 pytest PASSED.
 - **Gemini Analysis Sprint (2026-04-08):** 3 imbunatatiri din analiza Gemini CLI — commit 7a2e70d. (A) Agentic Reflexion: `_reflexion_check()` in SynthesisAgent detecteaza contradictii tone vs scor in sectiuni critice si corecteaza via Groq. (B) Dynamic CA percentile scoring dual-path: PRIMAR = CA real din `companies.latest_ca` (stocat dupa fiecare analiza), FALLBACK = score_history proxy. Coloana `latest_ca` adaugata idempotent in database.py. (C) Scheduler log cleanup: `_run_log_cleanup_safe()` sterge log-urile rotite mai vechi de 7 zile. 365 pytest PASSED.
+- **Sprint R7 (2026-04-09):** COMPLETAT — 18 items din RECOMANDARI_IMBUNATATIRI_R7.md (A1-A5, B1-B5, C1-C4, E3): raport unic RIS-YYYY-XXXX, risk badge numeric, AEGRM garanții, NLQ chatbot, Knowledge Graph (@xyflow), share link HTML, mobile search, dark/light theme, TanStack Query, split componente (ReportView 910→644, CompanyDetail 1009→826), ARIA + type hints, Mistral OCR. 365 pytest PASSED, 0 erori TypeScript.
 - **Feedback Loop:** ACTIV — RIS_TEST.bat, logs/ris_summary.log, ris_runtime.log, ris_frontend.log (5 componente), ISSUES.md, session startup protocol, G1-G8 complete
-- **Git:** https://github.com/RolandPetrila/Sistem-Inteligent-Analize.git | 182 teste (171 pytest + 11 vitest)
-- **12 pagini frontend** (adaugat CompanyDetail /company/:id)
+- **Git:** https://github.com/RolandPetrila/Sistem-Inteligent-Analize.git | 365 pytest + vitest
+- **13 pagini frontend** (adaugat NetworkGraph /network/:cui)
 - **Planificari detaliate:** ROLAND_PLANIFICARI_MODULE.md (R4 + R5 + R6 + R7 = 88 items total)
 - **Deep Research:** 99_Deep_Research/ (2 rapoarte complete cu roadmap)
 - **Spec complet:** SPEC_INTELLIGENCE_SYSTEM_V2.md
-- **42 REST endpoints + 1 WebSocket + 12 pagini frontend + 8 formate raport + diagnostic + audit + request tracing + notifications + favorites + timeline**
+- **48+ REST endpoints + 1 WebSocket + 13 pagini frontend + 8 formate raport + diagnostic + audit + request tracing + notifications + favorites + timeline + OCR**
 
 ## Feedback Loop (Session Protocol)
 

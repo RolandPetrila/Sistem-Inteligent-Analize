@@ -15,6 +15,7 @@ const CompareCompanies = lazy(() => import("./pages/CompareCompanies"));
 const Monitoring = lazy(() => import("./pages/Monitoring"));
 const BatchAnalysis = lazy(() => import("./pages/BatchAnalysis"));
 const CompanyDetail = lazy(() => import("./pages/CompanyDetail"));
+const NetworkGraph = lazy(() => import("./pages/NetworkGraph"));
 
 function PageLoader() {
   return (
@@ -59,6 +60,7 @@ export default function App() {
           <Route path="/report/:id" element={<ReportView />} />
           <Route path="/companies" element={<Companies />} />
           <Route path="/company/:id" element={<CompanyDetail />} />
+          <Route path="/network/:cui" element={<NetworkGraph />} />
           <Route path="/compare" element={<CompareCompanies />} />
           <Route path="/monitoring" element={<Monitoring />} />
           <Route path="/batch" element={<BatchAnalysis />} />

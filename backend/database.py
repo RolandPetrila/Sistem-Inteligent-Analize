@@ -80,6 +80,21 @@ class Database:
             return None
         return dict(row)
 
+    async def get_next_report_number(self) -> str:
+        """A1: Genereaza numarul urmator in format RIS-YYYY-XXXX."""
+        from datetime import UTC, datetime
+        year = datetime.now(UTC).year
+        await self.execute(
+            "INSERT INTO report_sequences (year, last_seq) VALUES (?, 1) "
+            "ON CONFLICT(year) DO UPDATE SET last_seq = last_seq + 1",
+            (year,),
+        )
+        row = await self.fetch_one(
+            "SELECT last_seq FROM report_sequences WHERE year = ?", (year,)
+        )
+        seq = row["last_seq"] if row else 1
+        return f"RIS-{year}-{seq:04d}"
+
     async def fetch_all(self, sql: str, params: tuple = ()) -> list[dict]:
         cursor = await self.db.execute(sql, params)
         rows = await cursor.fetchall()
@@ -140,6 +155,41 @@ class Database:
                 logger.info(f"Migration: added {col_name} to companies")
             except Exception as e:
                 logger.debug(f"Migration column check companies.{col_name} (expected if exists): {e}")
+        # A1: Număr Raport Unic (RIS-YYYY-XXXX)
+        try:
+            await self.db.execute("ALTER TABLE reports ADD COLUMN report_number TEXT DEFAULT NULL")
+            await self.db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_number ON reports(report_number)")
+            await self.db.commit()
+            logger.info("Migration: added report_number to reports")
+        except Exception as e:
+            logger.debug(f"Migration column check reports.report_number (expected if exists): {e}")
+        try:
+            await self.db.execute(
+                "CREATE TABLE IF NOT EXISTS report_sequences ("
+                "year INTEGER PRIMARY KEY, last_seq INTEGER DEFAULT 0)"
+            )
+            await self.db.commit()
+            logger.info("Migration: created report_sequences table")
+        except Exception as e:
+            logger.debug(f"Migration report_sequences (expected if exists): {e}")
+        # B5: Share link pentru rapoarte HTML
+        for col_sql, col_name in [
+            ("ALTER TABLE reports ADD COLUMN share_token TEXT DEFAULT NULL", "share_token"),
+            ("ALTER TABLE reports ADD COLUMN share_expires_at TEXT DEFAULT NULL", "share_expires_at"),
+        ]:
+            try:
+                await self.db.execute(col_sql)
+                await self.db.commit()
+                logger.info(f"Migration: added {col_name} to reports")
+            except Exception as e:
+                logger.debug(f"Migration column check reports.{col_name} (expected if exists): {e}")
+        try:
+            await self.db.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_share_token ON reports(share_token)"
+            )
+            await self.db.commit()
+        except Exception as e:
+            logger.debug(f"Migration index reports.share_token (expected if exists): {e}")
         logger.info(f"Migrations complete ({len(migration_files)} files)")
 
 

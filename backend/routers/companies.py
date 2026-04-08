@@ -17,7 +17,7 @@ router = APIRouter()
 
 
 @router.get("/favorites")
-async def list_favorites():
+async def list_favorites() -> dict:
     """Return only companies marked as favorite."""
     try:
         rows = await db.fetch_all(
@@ -30,7 +30,7 @@ async def list_favorites():
 
 
 @router.get("/stats/risk-movers")
-async def risk_movers():
+async def risk_movers() -> dict:
     """Companies with the biggest score drops in the last 30 days."""
     try:
         rows = await db.fetch_all(
@@ -242,7 +242,7 @@ async def export_companies_csv():
 
 # --- Tags (F3-3) ---
 @router.get("/{company_id}/tags")
-async def get_company_tags(company_id: str):
+async def get_company_tags(company_id: str) -> dict:
     tags = await db.fetch_all(
         "SELECT tag, created_at FROM company_tags WHERE company_id = ? ORDER BY created_at DESC",
         (company_id,),
@@ -251,7 +251,7 @@ async def get_company_tags(company_id: str):
 
 
 @router.post("/{company_id}/tags")
-async def add_company_tag(company_id: str, body: dict):
+async def add_company_tag(company_id: str, body: dict) -> dict:
     tag = str(body.get("tag", "")).strip()[:30]
     if not tag:
         raise RISError(ErrorCode.VALIDATION_ERROR, "Tag gol")
@@ -263,7 +263,7 @@ async def add_company_tag(company_id: str, body: dict):
 
 
 @router.delete("/{company_id}/tags/{tag}")
-async def remove_company_tag(company_id: str, tag: str):
+async def remove_company_tag(company_id: str, tag: str) -> dict:
     await db.execute(
         "DELETE FROM company_tags WHERE company_id = ? AND tag = ?",
         (company_id, tag),
@@ -273,7 +273,7 @@ async def remove_company_tag(company_id: str, tag: str):
 
 # --- Note (F3-3) ---
 @router.get("/{company_id}/note")
-async def get_company_note(company_id: str):
+async def get_company_note(company_id: str) -> dict:
     row = await db.fetch_one(
         "SELECT note, updated_at FROM company_notes WHERE company_id = ?",
         (company_id,),
@@ -285,7 +285,7 @@ async def get_company_note(company_id: str):
 
 
 @router.put("/{company_id}/note")
-async def upsert_company_note(company_id: str, body: dict):
+async def upsert_company_note(company_id: str, body: dict) -> dict:
     note = str(body.get("note", ""))[:2000]
     existing = await db.fetch_one(
         "SELECT id FROM company_notes WHERE company_id = ?", (company_id,)
@@ -304,7 +304,7 @@ async def upsert_company_note(company_id: str, body: dict):
 
 
 @router.get("/{company_id}")
-async def get_company(company_id: str):
+async def get_company(company_id: str) -> dict:
     row = await db.fetch_one("SELECT id, cui, name, caen_code, county, is_active, is_favorite, last_analyzed_at, risk_score, tag, note FROM companies WHERE id = ?", (company_id,))
     if not row:
         raise HTTPException(status_code=404, detail="Company not found")
@@ -332,7 +332,7 @@ async def get_company(company_id: str):
 
 
 @router.put("/{company_id}/favorite")
-async def toggle_favorite(company_id: str):
+async def toggle_favorite(company_id: str) -> dict:
     """Toggle is_favorite on a company. Creates column if missing."""
     row = await db.fetch_one("SELECT id FROM companies WHERE id = ?", (company_id,))
     if not row:
@@ -357,7 +357,7 @@ async def toggle_favorite(company_id: str):
 
 
 @router.post("/{company_id}/auto-reanalyze")
-async def toggle_auto_reanalyze(company_id: str):
+async def toggle_auto_reanalyze(company_id: str) -> dict:
     """F6-6: Toggle auto_reanalyze flag pe companie.
     Scheduler-ul va re-analiza automat la intervalul configurat (default 30 zile)."""
     row = await db.fetch_one("SELECT id FROM companies WHERE id = ?", (company_id,))
@@ -386,7 +386,7 @@ async def toggle_auto_reanalyze(company_id: str):
 
 
 @router.get("/{company_id}/timeline")
-async def company_timeline(company_id: str):
+async def company_timeline(company_id: str) -> dict:
     """Chronological list of events: reports, score changes, monitoring alerts."""
     row = await db.fetch_one("SELECT id FROM companies WHERE id = ?", (company_id,))
     if not row:
@@ -824,3 +824,30 @@ async def chat_with_company(company_id: str, req: ChatRequest):
         "report_title": report["title"] or company_name,
         "company_name": company_name,
     }
+
+
+@router.get("/{company_id}/network")
+async def get_company_network_graph(company_id: str):
+    """B2: Retea de firme conectate prin asociati/administratori comuni (BFS depth-4)."""
+    company = await db.fetch_one("SELECT cui, name FROM companies WHERE id = ?", (company_id,))
+    if not company:
+        raise HTTPException(status_code=404, detail="Companie negasita")
+
+    cui = company.get("cui", "")
+    if not cui:
+        return {"nodes": [], "edges": [], "company_name": company.get("name", "N/A"), "cui": ""}
+
+    try:
+        from backend.agents.tools.network_client import get_company_network
+        data = await get_company_network(cui, max_depth=3)
+        return {
+            "cui": cui,
+            "company_name": company.get("name", "N/A"),
+            "nodes": data.get("nodes", []),
+            "edges": data.get("edges", []),
+            "stats": data.get("stats", {}),
+        }
+    except Exception as e:
+        logger.warning(f"[network] Eroare retea CUI {cui}: {e}")
+        return {"nodes": [], "edges": [], "company_name": company.get("name", "N/A"), "cui": cui, "error": str(e)}
+

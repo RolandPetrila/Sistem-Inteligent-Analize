@@ -334,7 +334,7 @@ export default function Layout() {
               clsx("sidebar-link", isActive && "active")
             }
           >
-            <item.icon className="w-5 h-5" />
+            <item.icon className="w-5 h-5" aria-hidden="true" />
             <span className="text-sm">{item.label}</span>
           </NavLink>
         ))}
@@ -406,6 +406,19 @@ export default function Layout() {
             <Activity className="w-4 h-4 text-accent-primary" />
             <span className="text-sm font-semibold text-white">RIS</span>
           </div>
+          {/* B4: Search button pe mobile — deschide GlobalSearch (Ctrl+K) */}
+          <button
+            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-dark-hover transition-colors"
+            onClick={() =>
+              window.dispatchEvent(
+                new KeyboardEvent("keydown", { key: "k", ctrlKey: true }),
+              )
+            }
+            aria-label="Cauta (Ctrl+K)"
+            title="Cauta"
+          >
+            <Search className="w-5 h-5" />
+          </button>
           <NotificationBell />
         </div>
         {/* Desktop Top Bar */}

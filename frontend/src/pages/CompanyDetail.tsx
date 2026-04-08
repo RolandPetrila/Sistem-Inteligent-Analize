@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -14,12 +14,9 @@ import {
   ArrowUpDown,
   Users,
   Star,
-  AlertTriangle,
   Loader2,
   Download,
   RefreshCw,
-  MessageCircle,
-  Send,
 } from "lucide-react";
 import clsx from "clsx";
 import { api } from "@/lib/api";
@@ -27,6 +24,8 @@ import { useToast } from "@/components/Toast";
 import { logAction } from "@/lib/logger";
 import { ANALYSIS_TYPE_LABELS } from "@/lib/constants";
 import type { TimelineEvent, ScoringDimension } from "@/lib/types";
+import { CompanyChat } from "@/components/company/CompanyChat";
+import { CompanyTimeline } from "@/components/company/CompanyTimeline";
 
 interface CompanyReport {
   id: string;
@@ -119,17 +118,6 @@ export default function CompanyDetail() {
   const [tags, setTags] = useState<string[]>([]);
   const [note, setNote] = useState("");
   const [newTag, setNewTag] = useState("");
-
-  // RAG Chat
-  interface ChatMessage {
-    role: "user" | "assistant";
-    text: string;
-    provider?: string;
-  }
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [chatInput, setChatInput] = useState("");
-  const [chatLoading, setChatLoading] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -230,35 +218,6 @@ export default function CompanyDetail() {
       toast("Nota salvata", "success");
     } catch {
       toast("Eroare la salvarea notei", "error");
-    }
-  };
-
-  const handleChat = async () => {
-    const q = chatInput.trim();
-    if (!q || !id || chatLoading) return;
-    setChatInput("");
-    setChatMessages((prev) => [...prev, { role: "user", text: q }]);
-    setChatLoading(true);
-    try {
-      const res = await api.chatCompany(id, q);
-      setChatMessages((prev) => [
-        ...prev,
-        { role: "assistant", text: res.answer, provider: res.provider },
-      ]);
-      setTimeout(
-        () => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }),
-        50,
-      );
-    } catch {
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          text: "Eroare la generarea raspunsului. Incearca din nou.",
-        },
-      ]);
-    } finally {
-      setChatLoading(false);
     }
   };
 
@@ -853,157 +812,11 @@ export default function CompanyDetail() {
         </div>
       </div>
 
-      {/* N4: Timeline */}
-      <div className="card">
-        <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">
-          Timeline
-        </h3>
+      {/* N4: Timeline (extracted component) */}
+      <CompanyTimeline timeline={timeline} loading={timelineLoading} />
 
-        {timelineLoading ? (
-          <div className="flex items-center justify-center py-6">
-            <Loader2 className="w-5 h-5 text-accent-primary animate-spin" />
-          </div>
-        ) : timeline.length === 0 ? (
-          <p className="text-gray-600 text-sm py-4 text-center">
-            Nicio activitate inregistrata
-          </p>
-        ) : (
-          <div className="relative">
-            {/* Vertical line */}
-            <div className="absolute left-4 top-0 bottom-0 w-px bg-dark-border" />
-
-            <div className="space-y-4">
-              {timeline.map((event, i) => {
-                const TimelineIcon =
-                  event.type === "report"
-                    ? FileText
-                    : event.type === "score_change"
-                      ? event.detail?.includes("-") ||
-                        event.detail?.includes("scadere")
-                        ? TrendingDown
-                        : TrendingUp
-                      : AlertTriangle;
-                const iconColor =
-                  event.type === "report"
-                    ? "text-blue-400 bg-blue-500/10"
-                    : event.type === "score_change"
-                      ? event.detail?.includes("-") ||
-                        event.detail?.includes("scadere")
-                        ? "text-red-400 bg-red-500/10"
-                        : "text-green-400 bg-green-500/10"
-                      : "text-yellow-400 bg-yellow-500/10";
-
-                return (
-                  <div key={i} className="flex items-start gap-4 pl-1">
-                    <div
-                      className={clsx(
-                        "w-7 h-7 rounded-full flex items-center justify-center shrink-0 z-10",
-                        iconColor,
-                      )}
-                    >
-                      <TimelineIcon className="w-3.5 h-3.5" />
-                    </div>
-                    <div className="flex-1 min-w-0 pb-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm text-gray-300 font-medium">
-                          {event.title}
-                        </p>
-                        <span className="text-[10px] text-gray-600 shrink-0">
-                          {new Date(event.date).toLocaleDateString("ro-RO", {
-                            day: "2-digit",
-                            month: "2-digit",
-                            year: "numeric",
-                          })}
-                        </span>
-                      </div>
-                      {event.detail && (
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {event.detail}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* RAG Chat with Company */}
-      <div className="card">
-        <div className="flex items-center gap-2 mb-4">
-          <MessageCircle className="w-4 h-4 text-accent-primary" />
-          <h3 className="text-sm font-semibold text-gray-400 uppercase">
-            Chat cu Compania
-          </h3>
-          <span className="text-xs text-gray-600 ml-auto">
-            Intreaba despre datele din ultimul raport
-          </span>
-        </div>
-
-        {/* Mesaje */}
-        <div className="space-y-3 max-h-80 overflow-y-auto mb-3 pr-1">
-          {chatMessages.length === 0 && (
-            <p className="text-xs text-gray-600 italic text-center py-6">
-              Pune o intrebare despre aceasta companie.
-              <br />
-              Ex: &ldquo;Care este riscul principal daca dau un credit de 50k
-              EUR?&rdquo;
-            </p>
-          )}
-          {chatMessages.map((msg, i) => (
-            <div
-              key={i}
-              className={clsx(
-                "rounded-lg px-3 py-2 text-sm max-w-[90%]",
-                msg.role === "user"
-                  ? "bg-accent-primary/20 text-white ml-auto text-right"
-                  : "bg-dark-surface text-gray-300",
-              )}
-            >
-              <p className="whitespace-pre-wrap">{msg.text}</p>
-              {msg.provider && msg.role === "assistant" && (
-                <p className="text-[10px] text-gray-600 mt-1">
-                  via {msg.provider}
-                </p>
-              )}
-            </div>
-          ))}
-          {chatLoading && (
-            <div className="flex items-center gap-2 text-gray-500 text-xs">
-              <Loader2 className="w-3 h-3 animate-spin" />
-              Generez raspuns...
-            </div>
-          )}
-          <div ref={chatEndRef} />
-        </div>
-
-        {/* Input */}
-        <div className="flex gap-2">
-          <input
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value.slice(0, 500))}
-            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleChat()}
-            placeholder="Intreaba ceva despre aceasta firma..."
-            maxLength={500}
-            disabled={chatLoading}
-            className="flex-1 bg-dark-surface border border-dark-border rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-primary disabled:opacity-50"
-          />
-          <button
-            onClick={handleChat}
-            disabled={chatLoading || !chatInput.trim()}
-            className="btn-primary px-3 py-2 disabled:opacity-50"
-            aria-label="Trimite intrebare"
-          >
-            <Send className="w-4 h-4" />
-          </button>
-        </div>
-        <p className="text-[10px] text-gray-700 mt-1">
-          {chatInput.length}/500 — Enter pentru trimitere | Necesita un raport
-          generat anterior
-        </p>
-      </div>
+      {/* RAG Chat with Company (extracted component) */}
+      <CompanyChat companyId={id!} />
     </div>
   );
 }

@@ -638,4 +638,67 @@ export const api = {
       estimated_time_minutes: number;
     }>;
   },
+
+  // B1: NLQ Ask RIS Chatbot
+  askRIS: (question: string) =>
+    request<{
+      answer: string;
+      intent: string;
+      data?: Record<string, unknown>[];
+    }>("/ask", {
+      method: "POST",
+      body: JSON.stringify({ question }),
+    }),
+
+  // B5: Share link raport HTML
+  shareReport: (reportId: string, ttlDays = 30) =>
+    request<{ share_url: string; expires_at: string }>(
+      `/reports/${reportId}/share`,
+      {
+        method: "POST",
+        body: JSON.stringify({ ttl_days: ttlDays }),
+      },
+    ),
+
+  // E3: Mistral OCR
+  ocrDocument: async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`${BASE}/documents/ocr`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res
+        .json()
+        .catch(() => ({ detail: `HTTP ${res.status}` }));
+      throw new ApiError(err.detail || `HTTP ${res.status}`, "", res.status);
+    }
+    return res.json() as Promise<{
+      filename: string;
+      type: string;
+      pages: number;
+      text: string;
+      char_count: number;
+      model: string;
+    }>;
+  },
+
+  // B2: Knowledge Graph Visualizer
+  getCompanyNetwork: (companyId: string) =>
+    request<{
+      cui: string;
+      company_name: string;
+      nodes: {
+        id: string;
+        label: string;
+        type: string;
+        status?: string;
+        cui?: string;
+        depth?: number;
+        toxic?: boolean;
+      }[];
+      edges: { source: string; target: string; label?: string }[];
+      stats?: Record<string, unknown>;
+    }>(`/companies/${companyId}/network`),
 };

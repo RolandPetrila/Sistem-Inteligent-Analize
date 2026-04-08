@@ -243,8 +243,8 @@ async def _save_job_results(
     await db.execute(
         "INSERT INTO reports (id, job_id, company_id, report_type, report_level, "
         "title, summary, full_data, risk_score, created_at, "
-        "pdf_path, docx_path, html_path, excel_path, pptx_path) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?)",
+        "pdf_path, docx_path, html_path, excel_path, pptx_path, report_number) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?)",
         (
             report_id, job_id, company_id, analysis_type, report_level,
             title, summary,
@@ -255,6 +255,7 @@ async def _save_job_results(
             report_paths.get("html"),
             report_paths.get("excel"),
             report_paths.get("pptx"),
+            report_paths.get("report_number"),
         ),
     )
 

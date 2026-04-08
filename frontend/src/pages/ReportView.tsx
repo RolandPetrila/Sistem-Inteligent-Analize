@@ -1,23 +1,19 @@
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import {
-  ChevronDown,
-  ChevronRight,
-  ExternalLink,
-  Mail,
-  X,
-  Loader2,
-} from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import clsx from "clsx";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { logAction, logValidation, validateReportData } from "@/lib/logger";
 import { ANALYSIS_TYPE_LABELS } from "@/lib/constants";
-import type { ReportDelta, AnalysisType } from "@/lib/types";
+import type { AnalysisType } from "@/lib/types";
 import { ReportHeader } from "@/components/report/ReportHeader";
 import { ReportTabs } from "@/components/report/ReportTabs";
 import { PredictiveScoresTab } from "@/components/report/PredictiveScoresTab";
 import { RadarChartSVG } from "@/components/report/RadarChartSVG";
+import { DeltaView } from "@/components/report/DeltaView";
+import { SimpleBarChart } from "@/components/report/SimpleBarChart";
+import { EmailModal } from "@/components/report/EmailModal";
 
 interface ReportFull {
   id: string;
@@ -50,150 +46,6 @@ interface ReportFull {
   }[];
 }
 
-const DeltaView = ({ reportId }: { reportId: string }) => {
-  const [delta, setDelta] = useState<ReportDelta | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api
-      .getReportDelta(reportId)
-      .then(setDelta)
-      .catch(() => setDelta(null))
-      .finally(() => setLoading(false));
-  }, [reportId]);
-
-  if (loading)
-    return (
-      <div className="card animate-pulse">
-        <div className="h-4 bg-gray-700 rounded w-1/3 mb-3" />
-        <div className="h-6 bg-gray-700 rounded w-1/2" />
-      </div>
-    );
-
-  if (!delta?.has_delta)
-    return (
-      <div className="card text-center py-8">
-        <p className="text-gray-500">
-          Prima analiza — fara date anterioare pentru comparatie
-        </p>
-      </div>
-    );
-
-  return (
-    <div className="card space-y-4">
-      <div className="flex items-center gap-4">
-        <h3 className="text-lg font-semibold">Evolutie Scor</h3>
-        <div className="flex items-center gap-2 text-2xl font-bold">
-          <span className="text-gray-400">{delta.previous_score}</span>
-          <span className="text-gray-500">→</span>
-          <span>{delta.current_score}</span>
-          {delta.score_delta !== undefined && (
-            <span
-              className={`text-lg ml-2 ${delta.score_delta > 0 ? "text-green-400" : delta.score_delta < 0 ? "text-red-400" : "text-gray-400"}`}
-            >
-              ({delta.score_delta > 0 ? "+" : ""}
-              {delta.score_delta})
-            </span>
-          )}
-        </div>
-      </div>
-
-      {delta.changes && delta.changes.length > 0 && (
-        <div className="space-y-2">
-          <h4 className="text-sm font-medium text-gray-400 uppercase tracking-wide">
-            Modificari detectate
-          </h4>
-          {delta.changes.map((change, i) => (
-            <div
-              key={i}
-              className="flex justify-between items-center py-2 border-b border-gray-800"
-            >
-              <span className="text-gray-300">{change.field}</span>
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-red-400 line-through">
-                  {String(change.old ?? "—")}
-                </span>
-                <span className="text-gray-500">→</span>
-                <span className="text-green-400 font-medium">
-                  {String(change.new ?? "—")}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-function SimpleBarChart({
-  data,
-  years,
-  label,
-  color,
-  unit,
-}: {
-  data: (number | null)[];
-  years: string[];
-  label: string;
-  color: string;
-  unit?: string;
-}) {
-  if (!data || data.every((v) => v === null)) return null;
-  const valid = data.filter((v): v is number => v !== null);
-  const max = Math.max(...valid);
-  if (max === 0) return null;
-  const W = 280;
-  const H = 80;
-  const BAR_W = Math.max(10, Math.floor(W / data.length) - 4);
-  return (
-    <div className="space-y-1">
-      <p className="text-xs text-gray-400">
-        {label}
-        {unit ? ` (${unit})` : ""}
-      </p>
-      <svg width={W} height={H} className="overflow-visible">
-        {data.map((v, i) => {
-          if (v === null) return null;
-          const barH = Math.max(2, (v / max) * (H - 16));
-          const x = i * (BAR_W + 4);
-          return (
-            <g key={i}>
-              <rect
-                x={x}
-                y={H - barH - 16}
-                width={BAR_W}
-                height={barH}
-                fill={color}
-                rx={2}
-                opacity={0.8}
-              />
-              <text
-                x={x + BAR_W / 2}
-                y={H - 4}
-                fontSize={8}
-                fill="#9ca3af"
-                textAnchor="middle"
-              >
-                {years[i]}
-              </text>
-              <text
-                x={x + BAR_W / 2}
-                y={H - barH - 18}
-                fontSize={7}
-                fill="#9ca3af"
-                textAnchor="middle"
-              >
-                {v >= 1000 ? `${(v / 1000).toFixed(0)}K` : String(v)}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-    </div>
-  );
-}
-
 export default function ReportView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -204,12 +56,10 @@ export default function ReportView() {
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [reanalyzing, setReanalyzing] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
-  const [emailTo, setEmailTo] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
-  const [emailMessage, setEmailMessage] = useState("");
-  const [emailSending, setEmailSending] = useState(false);
   const [predictiveScores, setPredictiveScores] = useState<any>(null);
   const [predictiveLoading, setPredictiveLoading] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -392,7 +242,34 @@ export default function ReportView() {
         reanalyzing={reanalyzing}
         onReanalyze={handleReanalyze}
         onEmailOpen={() => setEmailModalOpen(true)}
+        onShare={async () => {
+          try {
+            const res = await api.shareReport(report.id);
+            const fullUrl = `${window.location.origin}${res.share_url}`;
+            setShareUrl(fullUrl);
+            await navigator.clipboard.writeText(fullUrl).catch(() => {});
+            toast("Link copiat in clipboard! Valabil 30 zile.", "success");
+          } catch {
+            toast("Eroare la generarea link-ului de partajare.", "error");
+          }
+        }}
       />
+      {shareUrl && (
+        <div className="p-3 rounded-lg border border-accent-primary/30 bg-accent-primary/5 flex items-center gap-3">
+          <span className="text-xs text-gray-400 flex-1 truncate">
+            {shareUrl}
+          </span>
+          <button
+            onClick={async () => {
+              await navigator.clipboard.writeText(shareUrl).catch(() => {});
+              toast("Link copiat!", "success");
+            }}
+            className="text-xs text-accent-secondary hover:text-white transition-colors shrink-0"
+          >
+            Copiaza
+          </button>
+        </div>
+      )}
 
       {/* F6-3: Completeness warning banner */}
       {report &&
@@ -755,128 +632,13 @@ export default function ReportView() {
         )}
       </div>
 
-      {/* N5: Email Send Modal */}
-      {emailModalOpen && (
-        <>
-          <div
-            className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm"
-            onClick={() => setEmailModalOpen(false)}
-          />
-          <div className="fixed inset-0 z-[61] flex items-center justify-center p-4">
-            <div className="bg-dark-card border border-dark-border rounded-xl shadow-2xl w-full max-w-md">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-dark-border">
-                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                  <Mail className="w-4 h-4 text-accent-secondary" />
-                  Trimite raport pe email
-                </h3>
-                <button
-                  onClick={() => setEmailModalOpen(false)}
-                  className="text-gray-500 hover:text-gray-300 p-1"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  if (!emailTo.trim()) {
-                    toast("Introdu adresa de email", "warning");
-                    return;
-                  }
-                  setEmailSending(true);
-                  try {
-                    await api.sendReportEmail(report.id, {
-                      to: emailTo.trim(),
-                      subject: emailSubject,
-                      message: emailMessage,
-                    });
-                    toast("Email trimis cu succes!", "success");
-                    logAction("ReportView", "sendEmail", {
-                      reportId: report.id,
-                      to: emailTo,
-                    });
-                    setEmailModalOpen(false);
-                    setEmailTo("");
-                    setEmailMessage("");
-                  } catch {
-                    toast(
-                      "Eroare la trimiterea emailului. Verifica configurarea Gmail.",
-                      "error",
-                    );
-                  } finally {
-                    setEmailSending(false);
-                  }
-                }}
-                className="p-5 space-y-4"
-              >
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1.5">
-                    Destinatar
-                  </label>
-                  <input
-                    type="email"
-                    value={emailTo}
-                    onChange={(e) => setEmailTo(e.target.value)}
-                    placeholder="email@exemplu.com"
-                    className="input-field w-full"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1.5">
-                    Subiect
-                  </label>
-                  <input
-                    type="text"
-                    value={emailSubject}
-                    onChange={(e) => setEmailSubject(e.target.value)}
-                    className="input-field w-full"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1.5">
-                    Mesaj (optional)
-                  </label>
-                  <textarea
-                    value={emailMessage}
-                    onChange={(e) => setEmailMessage(e.target.value)}
-                    placeholder="Mesaj aditional..."
-                    rows={3}
-                    className="input-field w-full resize-none"
-                  />
-                </div>
-                <div className="flex items-center gap-3 pt-2">
-                  <button
-                    type="submit"
-                    disabled={emailSending}
-                    className="btn-primary flex-1 flex items-center justify-center gap-2"
-                  >
-                    {emailSending ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Se trimite...
-                      </>
-                    ) : (
-                      <>
-                        <Mail className="w-4 h-4" />
-                        Trimite
-                      </>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEmailModalOpen(false)}
-                    className="btn-secondary"
-                  >
-                    Anuleaza
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </>
-      )}
+      {/* N5: Email Send Modal (extracted component) */}
+      <EmailModal
+        open={emailModalOpen}
+        onClose={() => setEmailModalOpen(false)}
+        reportId={report.id}
+        initialSubject={emailSubject}
+      />
     </div>
   );
 }

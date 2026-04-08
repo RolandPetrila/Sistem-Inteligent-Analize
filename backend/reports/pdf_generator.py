@@ -6,8 +6,10 @@ F21: Markdown table rendering via fpdf2 native cells.
 
 import re
 import unicodedata
+
 from fpdf import FPDF
 from loguru import logger
+
 from backend.config import settings
 
 DISCLAIMER = (
@@ -226,6 +228,10 @@ def generate_pdf(report_sections: dict, meta: dict, output_path: str, verified_d
     pdf.set_text_color(120, 120, 120)
     pdf.cell(0, 8, f"Nivel raport: {meta.get('report_level', 'N/A')}", align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.cell(0, 8, f"Generat: {meta.get('generated_at', '')}", align="C", new_x="LMARGIN", new_y="NEXT")
+    if meta.get("report_number"):
+        pdf.set_font("Helvetica", "", 10)
+        pdf.set_text_color(160, 160, 160)
+        pdf.cell(0, 7, f"Nr. raport: {meta['report_number']}", align="C", new_x="LMARGIN", new_y="NEXT")
 
     risk = meta.get("risk_score", "N/A")
     numeric = meta.get("numeric_score")

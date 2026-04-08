@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, field_validator
 
+from backend.security import require_api_key
 from backend.config import settings
 from backend.database import db
 from backend.errors import ErrorCode, RISError
@@ -40,7 +41,7 @@ async def list_reports(
 
 
 @router.get("/{report_id}")
-async def get_report(report_id: str):
+async def get_report(report_id: str) -> dict:
     result = await get_report_by_id(report_id)
     if not result:
         raise HTTPException(status_code=404, detail="Report not found")
@@ -127,7 +128,7 @@ async def get_report_data(
 
 
 @router.get("/{report_id}/delta")
-async def get_report_delta(report_id: str):
+async def get_report_delta(report_id: str) -> dict:
     """Returneaza delta (modificari) fata de analiza anterioara."""
     row = await db.fetch_one(
         "SELECT id, report_id_new, report_id_old, delta_summary, created_at, report_id, previous_report_id, company_id, previous_score, current_score, changes_json FROM report_deltas WHERE report_id = ?",
@@ -155,7 +156,7 @@ async def get_report_delta(report_id: str):
 
 
 @router.get("/{report_id}/export/ics")
-async def export_seap_calendar(report_id: str):
+async def export_seap_calendar(report_id: str) -> dict:
     """F3-5: Exporta licitatii SEAP din raport ca fisier .ics (iCalendar)."""
     import uuid as _uuid
 
@@ -221,7 +222,7 @@ class SendEmailRequest(BaseModel):
 
 
 @router.post("/{report_id}/send-email")
-async def send_report_email(report_id: str, data: SendEmailRequest):
+async def send_report_email(report_id: str, data: SendEmailRequest) -> dict:
     """Send the report PDF as an email attachment."""
     row = await db.fetch_one("SELECT id, pdf_path FROM reports WHERE id = ?", (report_id,))
     if not row:
@@ -253,3 +254,69 @@ async def send_report_email(report_id: str, data: SendEmailRequest):
         raise HTTPException(status_code=500, detail="Email sending failed. Check Gmail configuration in Settings.")
 
     return {"ok": True, "sent_to": data.to}
+
+
+# B5: Share link pentru raport HTML
+
+class ShareRequest(BaseModel):
+    ttl_days: int = 30
+
+
+@router.post("/{report_id}/share")
+async def generate_share_link(report_id: str, data: ShareRequest = ShareRequest(), _=Depends(require_api_key)) -> dict:
+    """B5: Genereaza un link partajabil pentru raportul HTML (token unic, TTL configurabil)."""
+    import secrets
+    from datetime import UTC, datetime, timedelta
+
+    row = await db.fetch_one("SELECT id, html_path FROM reports WHERE id = ?", (report_id,))
+    if not row:
+        raise HTTPException(status_code=404, detail="Raport negasit")
+    if not row.get("html_path"):
+        raise HTTPException(status_code=404, detail="Raportul HTML nu a fost generat")
+
+    token = secrets.token_urlsafe(32)
+    expires = (datetime.now(UTC) + timedelta(days=max(1, min(90, data.ttl_days)))).isoformat()
+    await db.execute(
+        "UPDATE reports SET share_token=?, share_expires_at=? WHERE id=?",
+        (token, expires, report_id),
+    )
+    return {"share_url": f"/api/reports/public/{token}", "expires_at": expires}
+
+
+@router.get("/public/{token}", include_in_schema=False)
+async def get_public_report(token: str):
+    """B5: Serveste raportul HTML via token public (fara autentificare, cu TTL)."""
+    from datetime import UTC, datetime
+
+    from fastapi.responses import HTMLResponse
+
+    if not token or len(token) > 100:
+        raise HTTPException(status_code=404, detail="Link invalid")
+
+    row = await db.fetch_one(
+        "SELECT html_path, share_expires_at FROM reports WHERE share_token=?",
+        (token,),
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Link expirat sau invalid")
+
+    expires = row.get("share_expires_at", "")
+    if expires:
+        try:
+            exp_dt = datetime.fromisoformat(expires)
+            if datetime.now(UTC) > exp_dt:
+                raise HTTPException(status_code=404, detail="Link expirat")
+        except ValueError:
+            pass
+
+    html_path = Path(row["html_path"]).resolve()
+    outputs_root = Path(settings.outputs_dir).resolve()
+    try:
+        html_path.relative_to(outputs_root)
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Acces refuzat")
+
+    if not html_path.exists():
+        raise HTTPException(status_code=404, detail="Raport HTML indisponibil pe disk")
+
+    return HTMLResponse(html_path.read_text(encoding="utf-8", errors="replace"))

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import AskRIS from "@/components/AskRIS";
 import {
   FileText,
   Building2,
@@ -489,6 +490,8 @@ export default function Dashboard() {
           </Link>
         </div>
       </div>
+      {/* B1: Ask RIS chatbot flotant */}
+      <AskRIS />
     </div>
   );
 }

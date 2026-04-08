@@ -527,6 +527,14 @@ def calculate_risk_score(verified: dict, dynamic_thresholds: dict | None = None)
         else:
             jur_reasons.append({"text": "Date juridice indisponibile", "impact": 0})
 
+    # A5: AEGRM garantii reale mobiliare — penalizare daca exista
+    aegrm = risk_data.get("aegrm_guarantees", {})
+    if isinstance(aegrm, dict) and aegrm.get("value", {}).get("has_guarantees"):
+        count = aegrm.get("value", {}).get("count", 0)
+        jur_score -= 5
+        jur_reasons.append({"text": f"Garantii reale mobiliare inregistrate ({count})", "impact": -5})
+        risk_factors.append((f"Garantii reale mobiliare ({count})", "LOW"))
+
     dimensions["juridic"] = {"score": max(0, min(100, jur_score)), "weight": 20, "reasons": jur_reasons}
 
     # --- FISCAL (15%) ---

@@ -21,7 +21,7 @@ from backend import http_client
 from backend.config import settings
 from backend.database import db
 from backend.errors import ERROR_HTTP_STATUS, RISError
-from backend.routers import analysis, batch, companies, compare, jobs, monitoring, notifications, reports
+from backend.routers import analysis, ask, batch, companies, compare, documents, jobs, monitoring, notifications, reports
 from backend.routers import settings as settings_router
 from backend.ws import ws_manager
 
@@ -288,6 +288,8 @@ app.include_router(compare.router, prefix="/api/compare", tags=["Compare"])
 app.include_router(monitoring.router, prefix="/api/monitoring", tags=["Monitoring"])
 app.include_router(batch.router, prefix="/api/batch", tags=["Batch"])
 app.include_router(notifications.router)
+app.include_router(ask.router)  # B1: NLQ Ask RIS Chatbot
+app.include_router(documents.router, prefix="/api/documents", tags=["Documents"])  # E3: Mistral OCR
 
 
 # --- Frontend Log Endpoint ---
