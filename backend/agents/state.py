@@ -41,6 +41,9 @@ class AnalysisState(TypedDict, total=False):
     web_data: dict | None
     market_data: dict | None
 
+    # OSINT date istorice (Monitorul Oficial)
+    historical_flags: list | None
+
     # Post-verificare
     verified_data: dict | None
 

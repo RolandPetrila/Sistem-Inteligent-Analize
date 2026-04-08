@@ -7,6 +7,11 @@ SECTION_PROMPTS = {
     "executive_summary": {
         "title": "Rezumat Executiv",
         "prompt": (
+            "Inainte de a scrie rezumatul, deschide un bloc <analiza_secreta> in care:\n"
+            "- Identifica cele mai importante 3 anomalii sau semnale din datele disponibile\n"
+            "- Conecteaza matricea de solvabilitate cu trendul angajatilor (daca exista)\n"
+            "- Verifica coerenta intre scorul de risc si datele financiare brute\n"
+            "Inchide </analiza_secreta>, apoi scrie rezumatul cerut.\n\n"
             "Scrie un rezumat executiv de {word_count} cuvinte.\n"
             "Include: cine e firma, ce face, starea financiara pe scurt, riscuri cheie, "
             "oportunitate principala. Tonul: decisiv, concis, actionabil.\n"
@@ -65,6 +70,11 @@ SECTION_PROMPTS = {
     "risk_assessment": {
         "title": "Evaluare Risc",
         "prompt": (
+            "Inainte de a scrie evaluarea, deschide un bloc <analiza_secreta> in care:\n"
+            "- Evalueaza critic anomaliile detectate in date (camp 'anomalies')\n"
+            "- Conecteaza scorul Solvency Stress Matrix cu trendul angajatilor\n"
+            "- Identifica daca exista pattern de risc ascuns (ex: CA creste dar angajatii scad)\n"
+            "Inchide </analiza_secreta>, apoi scrie evaluarea ceruta.\n\n"
             "Evalueaza riscurile pe categorii: financiar, juridic, operational, reputational.\n"
             "Scor final: VERDE (risc scazut) / GALBEN (risc mediu) / ROSU (risc ridicat).\n"
             "Fiecare risc: descriere + sursa + severitate + recomandare.\n"
@@ -133,6 +143,11 @@ SECTION_PROMPTS = {
     "recommendations": {
         "title": "Recomandari",
         "prompt": (
+            "Inainte de a scrie recomandarile, deschide un bloc <analiza_secreta> in care:\n"
+            "- Prioritizeaza riscurile dupa urgenta si impact combinat\n"
+            "- Identifica daca exista oportunitati neexploatate in datele disponibile\n"
+            "- Verifica daca early_warnings existente sunt adresate de recomandarile planificate\n"
+            "Inchide </analiza_secreta>, apoi scrie recomandarile cerute.\n\n"
             "3-5 recomandari strategice CONCRETE si ACTIONABILE.\n"
             "Fiecare: ce sa faca, de ce, cum, cu ce resurse estimate.\n"
             "Ordinea: urgenta (risc imediat) > oportunitate rapida > strategie termen lung.\n"

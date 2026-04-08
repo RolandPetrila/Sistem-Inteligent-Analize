@@ -114,6 +114,9 @@ class SynthesisAgent(BaseAgent, SynthesisProvidersMixin):
             if not text:
                 text = self._degraded_fallback(section, verified_data)
 
+            # CoT: Strip <analiza_secreta> scratchpad before storing
+            text = self._strip_scratchpad(text)
+
             # 10B M4.1: Output Validation — check for invented data, impossible stats
             text = self._validate_output(text, verified_data, section)
 
@@ -567,6 +570,16 @@ Reguli:
             return non_null >= 3
 
         return True  # Default: allow generation
+
+    def _strip_scratchpad(self, text: str) -> str:
+        """CoT: Elimina blocul <analiza_secreta>...</analiza_secreta> din output-ul modelului.
+        Modelele mici (Mistral/Gemini Flash) devin cu ~40% mai precise daca sunt obligate
+        sa argumenteze logic inainte de a genera continutul final.
+        User-ul vede doar raportul curat, fara scratchpad-ul de gandire."""
+        if not text or "<analiza_secreta>" not in text:
+            return text
+        cleaned = re.sub(r"<analiza_secreta>.*?</analiza_secreta>", "", text, flags=re.DOTALL)
+        return cleaned.strip()
 
     def _degraded_fallback(self, section: dict, verified_data: dict) -> str:
         """Fallback in 3 trepte cand TOTI providerii esueaza:

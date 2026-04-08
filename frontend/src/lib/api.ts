@@ -556,6 +556,20 @@ export const api = {
       body: JSON.stringify({ note }),
     }),
 
+  // RAG Chat with Company
+  chatCompany: (companyId: string, question: string, reportId?: string) =>
+    request<{
+      question: string;
+      answer: string;
+      provider: string;
+      report_id: string;
+      report_title: string;
+      company_name: string;
+    }>(`/companies/${companyId}/chat`, {
+      method: "POST",
+      body: JSON.stringify({ question, report_id: reportId ?? null }),
+    }),
+
   // Compare templates (F3-8)
   listCompareTemplates: () =>
     request<{

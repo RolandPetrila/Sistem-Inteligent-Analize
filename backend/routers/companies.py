@@ -6,6 +6,7 @@ import uuid
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from loguru import logger
+from pydantic import BaseModel  # noqa: F401 — used by ChatRequest
 
 from backend.config import settings
 from backend.database import db
@@ -652,3 +653,174 @@ async def download_company_timeline_pdf(
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
         raise HTTPException(status_code=500, detail="Eroare internă generare PDF evolutie")
+
+
+# ─── RAG Chat with Company ────────────────────────────────────────────────────
+
+class ChatRequest(BaseModel):
+    question: str
+    report_id: str | None = None
+
+
+@router.post("/{company_id}/chat")
+async def chat_with_company(company_id: str, req: ChatRequest):
+    """
+    RAG Chat — raspunde la intrebari despre o companie folosind datele din ultimul raport.
+    Flux: incarca full_data din reports → injecteaza in prompt → genereaza via Groq/Gemini.
+    """
+    question = (req.question or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="Intrebarea nu poate fi goala")
+    if len(question) > 500:
+        raise HTTPException(status_code=400, detail="Intrebarea depaseste 500 caractere")
+
+    company = await db.fetch_one(
+        "SELECT id, cui, name, caen_code FROM companies WHERE id = ?",
+        (company_id,),
+    )
+    if not company:
+        raise HTTPException(status_code=404, detail="Compania nu a fost gasita")
+
+    if req.report_id:
+        report = await db.fetch_one(
+            "SELECT id, full_data, title, created_at FROM reports WHERE id = ? AND company_id = ?",
+            (req.report_id, company_id),
+        )
+    else:
+        report = await db.fetch_one(
+            """
+            SELECT id, full_data, title, created_at
+            FROM reports
+            WHERE company_id = ?
+              AND full_data IS NOT NULL
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (company_id,),
+        )
+
+    if not report or not report["full_data"]:
+        raise HTTPException(
+            status_code=404,
+            detail="Nu exista raport generat pentru aceasta companie. Ruleaza mai intai o analiza.",
+        )
+
+    try:
+        full_data = json.loads(report["full_data"])
+    except (json.JSONDecodeError, TypeError):
+        raise HTTPException(status_code=500, detail="Date raport corupte")
+
+    company_name = company["name"]
+    context_parts = []
+
+    # Sectiunile narative din raport
+    for section_key, section_data in (full_data.get("report_sections") or {}).items():
+        if isinstance(section_data, dict) and section_data.get("content"):
+            title = section_data.get("title", section_key)
+            content = section_data["content"][:800]
+            context_parts.append(f"## {title}\n{content}")
+
+    # Date cheie verificate
+    verified = full_data.get("verified_data") or {}
+    risk_score = verified.get("risk_score", {})
+    if risk_score:
+        context_parts.append(
+            f"## Scor Risc\n"
+            f"Scor: {risk_score.get('score', 'N/A')}/100 | "
+            f"Culoare: {risk_score.get('color', 'N/A')} | "
+            f"Factori: {', '.join(str(f[0]) for f in (risk_score.get('risk_factors') or [])[:3])}"
+        )
+
+    early_warnings = verified.get("early_warnings") or []
+    if early_warnings:
+        warnings_text = "; ".join(
+            w.get("signal", "") for w in early_warnings[:3] if isinstance(w, dict)
+        )
+        if warnings_text:
+            context_parts.append(f"## Early Warnings\n{warnings_text}")
+
+    financial = verified.get("financial") or {}
+    ca = financial.get("cifra_afaceri", {})
+    ca_val = ca.get("value") if isinstance(ca, dict) else None
+    if ca_val:
+        context_parts.append(f"## Date Financiare Cheie\nCA: {ca_val:,.0f} RON")
+
+    context_text = "\n\n".join(context_parts) or (
+        f"Compania {company_name} (CUI: {company['cui']}) — date insuficiente in cache."
+    )
+    if len(context_text) > 12000:
+        context_text = context_text[:12000] + "\n\n[... context trunchiat ...]"
+
+    prompt = (
+        f"Esti un analist de business intelligence care a analizat compania {company_name}.\n"
+        f"Ai acces la urmatoarele date extrase din raportul generat:\n\n"
+        f"{context_text}\n\n"
+        f"---\n"
+        f"Intrebarea utilizatorului: {question}\n\n"
+        f"Raspunde in romana, concis si bazat EXCLUSIV pe datele de mai sus. "
+        f"Daca datele nu sunt suficiente pentru a raspunde, spune explicit ce informatii lipsesc. "
+        f"Nu inventa cifre sau fapte care nu sunt in context."
+    )
+
+    answer = None
+    provider_used = "unknown"
+
+    if settings.groq_api_key:
+        try:
+            from backend.http_client import get_client
+            client = get_client()
+            resp = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {settings.groq_api_key}"},
+                json={
+                    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 600,
+                    "temperature": 0.3,
+                },
+                timeout=20.0,
+            )
+            resp.raise_for_status()
+            answer = resp.json()["choices"][0]["message"]["content"].strip()
+            provider_used = "groq"
+        except Exception as e:
+            logger.warning(f"[chat] Groq failed: {e}")
+
+    if not answer and settings.gemini_api_key:
+        try:
+            from backend.http_client import get_client
+            client = get_client()
+            resp = await client.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+                f"?key={settings.gemini_api_key}",
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {"maxOutputTokens": 600, "temperature": 0.3},
+                },
+                timeout=20.0,
+            )
+            resp.raise_for_status()
+            candidates = resp.json().get("candidates", [])
+            if candidates:
+                answer = candidates[0]["content"]["parts"][0]["text"].strip()
+                provider_used = "gemini"
+        except Exception as e:
+            logger.warning(f"[chat] Gemini failed: {e}")
+
+    if not answer:
+        answer = (
+            "Serviciul de chat este temporar indisponibil. "
+            "Toti providerii AI au esuat. Incearca din nou in cateva momente."
+        )
+        provider_used = "fallback"
+
+    logger.info(f"[chat] {company_name[:30]} | provider={provider_used} | q={question[:50]}")
+
+    return {
+        "question": question,
+        "answer": answer,
+        "provider": provider_used,
+        "report_id": report["id"],
+        "report_title": report["title"] or company_name,
+        "company_name": company_name,
+    }

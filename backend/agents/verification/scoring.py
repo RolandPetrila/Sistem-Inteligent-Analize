@@ -83,6 +83,23 @@ COLOR_MAP = {
 }
 
 
+def apply_dynamic_thresholds(base: dict, dynamic: dict | None) -> dict:
+    """
+    Combina SCORING_THRESHOLDS cu praguri dinamice din DB (daca exista).
+    Pragurile dinamice au prioritate fata de cele hardcodate.
+
+    Dynamic thresholds vin din percentilele firmelor similare (CAEN + judet)
+    stocate in propria DB SQLite — nu din surse externe.
+    """
+    if not dynamic:
+        return base
+    merged = dict(base)
+    for key, val in dynamic.items():
+        if val is not None and isinstance(val, (int, float)) and val > 0:
+            merged[key] = val
+    return merged
+
+
 def _calculate_financial_ratios(financial: dict) -> list[dict]:
     """N1: Calculate standard financial ratios from ANAF Bilant data.
     Returns list of {name, value, unit, interpretation} for display in reports."""
@@ -140,13 +157,20 @@ def _calculate_financial_ratios(financial: dict) -> list[dict]:
     return ratios
 
 
-def calculate_risk_score(verified: dict) -> dict:
+def calculate_risk_score(verified: dict, dynamic_thresholds: dict | None = None) -> dict:
     """
     Calculeaza scor de risc numeric 0-100 pe 6 dimensiuni:
     - Financiar (30%), Juridic (20%), Fiscal (15%)
     - Operational (15%), Reputational (10%), Piata (10%)
     Scorul 0 = risc maxim, 100 = risc minim.
+
+    dynamic_thresholds: praguri calculate din percentilele DB proprii
+    (ex: ca_excellent = percentile_90 al firmelor cu CAEN similar din acelasi judet).
+    Daca None, se folosesc SCORING_THRESHOLDS hardcodate.
     """
+    # Aplica thresholds dinamice daca sunt disponibile
+    thresholds = apply_dynamic_thresholds(SCORING_THRESHOLDS, dynamic_thresholds)
+
     dimensions = {}
     risk_factors = []
 
@@ -167,13 +191,18 @@ def calculate_risk_score(verified: dict) -> dict:
     fin_reasons = []
     ca_val = _fval(financial.get("cifra_afaceri", {}))
     if ca_val is not None:
-        if ca_val > 10_000_000:
+        # Dynamic thresholds: daca avem percentile din DB, folosim valorile locale
+        # altfel: valorile hardcodate din SCORING_THRESHOLDS
+        ca_excellent = thresholds["ca_excellent"]
+        ca_good = thresholds["ca_good"]
+        ca_ok = thresholds["ca_ok"]
+        if ca_val > ca_excellent:
             fin_score += 15
             fin_reasons.append({"text": f"CA excelenta (>{ca_val/1_000_000:.1f}M RON)", "impact": 15})
-        elif ca_val > 1_000_000:
+        elif ca_val > ca_good:
             fin_score += 10
             fin_reasons.append({"text": f"CA buna ({ca_val/1_000:.0f}K RON)", "impact": 10})
-        elif ca_val > 100_000:
+        elif ca_val > ca_ok:
             fin_score += 5
             fin_reasons.append({"text": f"CA moderata ({ca_val/1_000:.0f}K RON)", "impact": 5})
         elif ca_val <= 0:

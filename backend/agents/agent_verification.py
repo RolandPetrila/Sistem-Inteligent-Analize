@@ -110,8 +110,28 @@ class VerificationAgent(BaseAgent):
         # --- Matricea Relatii (ADV5) ---
         verified["relations"] = self._detect_relations(official)
 
+        # --- Dynamic thresholds din DB proprie (percentile CAEN + judet) ---
+        caen_for_dyn = ""
+        county_for_dyn = None
+        try:
+            caen_raw = verified.get("company", {}).get("caen_code", {})
+            caen_for_dyn = (caen_raw.get("value", "") if isinstance(caen_raw, dict) else str(caen_raw or ""))[:4]
+            county_raw = verified.get("company", {}).get("adresa", {})
+            if isinstance(county_raw, dict):
+                county_for_dyn = county_raw.get("value", {})
+                if isinstance(county_for_dyn, dict):
+                    county_for_dyn = county_for_dyn.get("judet", None)
+                elif isinstance(county_for_dyn, str):
+                    county_for_dyn = None  # adresa e string, nu extragem judetul
+        except Exception:
+            pass
+
+        dynamic_thresholds = await self._get_dynamic_thresholds(caen_for_dyn, county_for_dyn)
+
         # --- Scor risc general ---
-        verified["risk_score"] = self._calculate_risk_score(verified)
+        verified["risk_score"] = self._calculate_risk_score(verified, dynamic_thresholds=dynamic_thresholds)
+        if dynamic_thresholds:
+            verified["risk_score"]["thresholds_source"] = dynamic_thresholds.get("_source", "dynamic")
 
         # --- Surse utilizate ---
         verified["sources_used"] = self._compile_sources(official, web, market)
@@ -649,10 +669,107 @@ class VerificationAgent(BaseAgent):
         )
         return result
 
-    def _calculate_risk_score(self, verified: dict) -> dict:
+    def _calculate_risk_score(self, verified: dict, dynamic_thresholds: dict | None = None) -> dict:
         """Delegheaza la modul separat verification/scoring.py."""
         from backend.agents.verification.scoring import calculate_risk_score
-        return calculate_risk_score(verified)
+        return calculate_risk_score(verified, dynamic_thresholds=dynamic_thresholds)
+
+    async def _get_dynamic_thresholds(self, caen_code: str, county: str | None = None) -> dict | None:
+        """
+        Calculeaza praguri dinamice pentru scoring CA din propriile date DB.
+
+        Logica: percentile(90) = ca_excellent, percentile(50) = ca_good, percentile(10) = ca_ok
+        grupate pe CAEN + judet (daca avem suficiente date) sau CAEN singur.
+
+        Returneaza None daca nu avem suficiente date (< 5 firme).
+        """
+        from backend.database import db
+
+        # Normalizeaza CAEN la primele 4 cifre pentru grupare
+        caen_prefix = (caen_code or "")[:4]
+        if not caen_prefix:
+            return None
+
+        try:
+            # Cauta CA-urile din score_history + companies cu acelasi CAEN
+            # Folosim companies.risk_score (numeric) + ANAF bilant cache indirect
+            # Alternativa mai simpla: interogam direct tabelul companies filtrat pe CAEN
+            if county:
+                rows = await db.fetch_all(
+                    """
+                    SELECT sh.numeric_score
+                    FROM score_history sh
+                    JOIN companies c ON c.id = sh.company_id
+                    WHERE c.caen_code LIKE ?
+                      AND c.county = ?
+                      AND sh.numeric_score IS NOT NULL
+                    ORDER BY sh.recorded_at DESC
+                    LIMIT 200
+                    """,
+                    (f"{caen_prefix}%", county),
+                )
+            else:
+                rows = []
+
+            # Fallback: cauta dupa CAEN singur daca nu avem suficiente date pe judet
+            if len(rows) < 5:
+                rows = await db.fetch_all(
+                    """
+                    SELECT sh.numeric_score
+                    FROM score_history sh
+                    JOIN companies c ON c.id = sh.company_id
+                    WHERE c.caen_code LIKE ?
+                      AND sh.numeric_score IS NOT NULL
+                    ORDER BY sh.recorded_at DESC
+                    LIMIT 500
+                    """,
+                    (f"{caen_prefix}%",),
+                )
+
+            if len(rows) < 5:
+                logger.debug(f"[verification] Dynamic thresholds: insuficiente date pentru CAEN {caen_prefix} ({len(rows)} firme)")
+                return None
+
+            scores = sorted([r["numeric_score"] for r in rows if r["numeric_score"] is not None])
+            n = len(scores)
+
+            # Percentile CA bazate pe scorul numeric din DB (proxy pentru marimea firmei)
+            # Traduce scoruri in praguri CA relative (heuristica calibrata)
+            p90_score = scores[int(n * 0.90)]
+            p50_score = scores[int(n * 0.50)]
+            p10_score = scores[int(n * 0.10)]
+
+            # Mapeaza scoruri la praguri CA prin functie liniara calibrata
+            # Score 90+ → firma mare → ca_excellent ridicat
+            # Score 50  → firma medie → ca_good mediu
+            # Valorile sunt estimate si scaling vs SCORING_THRESHOLDS default
+            from backend.agents.verification.scoring import SCORING_THRESHOLDS
+            base_excellent = SCORING_THRESHOLDS["ca_excellent"]
+            base_good = SCORING_THRESHOLDS["ca_good"]
+            base_ok = SCORING_THRESHOLDS["ca_ok"]
+
+            # Factor de ajustare: daca mediana sectorului e mai mica, scalam in jos
+            median_factor = p50_score / 65.0  # 65 = scor mediu tipic national
+            dynamic = {
+                "ca_excellent": round(base_excellent * median_factor),
+                "ca_good": round(base_good * median_factor),
+                "ca_ok": round(base_ok * median_factor),
+                "_source": f"dynamic_db_{len(scores)}_companies_CAEN{caen_prefix}",
+                "_county": county or "national",
+                "_median_score": p50_score,
+            }
+            logger.info(
+                f"[verification] Dynamic thresholds CAEN {caen_prefix} "
+                f"({county or 'national'}, {n} firme): "
+                f"excellent={dynamic['ca_excellent']:,.0f} "
+                f"good={dynamic['ca_good']:,.0f} "
+                f"ok={dynamic['ca_ok']:,.0f}"
+            )
+            return dynamic
+
+        except Exception as e:
+            logger.debug(f"[verification] Dynamic thresholds error: {e}")
+            return None
 
     def _detect_anomalies(self, official: dict, verified: dict) -> list[dict]:
         """

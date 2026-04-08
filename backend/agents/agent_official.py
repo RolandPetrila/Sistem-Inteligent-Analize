@@ -495,11 +495,37 @@ class OfficialAgent(BaseAgent):
             f"Lipsa: {len(missing_fields)} campuri"
         )
 
+        # OSINT: Monitorul Oficial — date istorice (cesiuni, schimbari asociati, etc.)
+        historical_flags: list = []
+        if (company_name or cui_clean) and tavily_quota_ok:
+            try:
+                from backend.agents.tools.osint_client import search_monitorul_oficial
+                osint_result = await asyncio.wait_for(
+                    search_monitorul_oficial(company_name or "", cui_clean or None),
+                    timeout=15.0,
+                )
+                official_data["osint_historical"] = osint_result
+                historical_flags = osint_result.get("historical_flags", [])
+                if historical_flags:
+                    logger.info(
+                        f"[official] OSINT: {len(historical_flags)} semnale istorice detectate"
+                    )
+                    sources.append({
+                        "source_name": "Monitorul Oficial (OSINT)",
+                        "source_url": "https://www.monitoruloficial.ro",
+                        "status": "OK",
+                        "data_found": True,
+                        "response_time_ms": 0,
+                    })
+            except Exception as _oe:
+                logger.debug(f"[official] OSINT Monitorul Oficial error: {_oe}")
+
         log_agent_end(job_id, "official",
             f"{ok_count}/{total_count} surse OK | completeness={official_data['diagnostics']['completeness_score']}%")
 
         return {
             "official_data": official_data,
+            "historical_flags": historical_flags,
             "sources": sources,
             "current_step": f"Agent 1 finalizat: {ok_count}/{total_count} surse ({official_data['diagnostics']['completeness_score']}% complet)",
             "progress": 0.20,
