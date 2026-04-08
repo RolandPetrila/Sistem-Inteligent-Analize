@@ -662,7 +662,7 @@ class ChatRequest(BaseModel):
     report_id: str | None = None
 
 
-@router.post("/{company_id}/chat")
+@router.post("/{company_id}/chat", dependencies=[Depends(rate_limit_read)])
 async def chat_with_company(company_id: str, req: ChatRequest):
     """
     RAG Chat — raspunde la intrebari despre o companie folosind datele din ultimul raport.

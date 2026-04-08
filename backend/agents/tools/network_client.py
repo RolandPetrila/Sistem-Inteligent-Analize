@@ -247,6 +247,7 @@ async def get_company_network(cui: str, max_depth: int = 4) -> dict:
     deep_companies: dict[str, int] = {}
     toxic_persons: set[str] = set()
     nx_stats: dict = {"available": _NX_AVAILABLE, "depth_used": 1}
+    person_to_cuis: dict | None = None  # initializare explicita pentru check ulterior
 
     if _NX_AVAILABLE:
         try:
@@ -319,9 +320,9 @@ async def get_company_network(cui: str, max_depth: int = 4) -> dict:
 
     # Shell company detection: persoane cu 5+ firme active = posibil conflict interes
     person_names_set = set(person_names)
-    if _NX_AVAILABLE and "person_to_cuis" in dir():
+    if person_to_cuis is not None:
         for person in person_names_set:
-            cuis_info = person_to_cuis.get(person, [])  # type: ignore[name-defined]
+            cuis_info = person_to_cuis.get(person, [])
             active_count = sum(1 for _, _, is_active in cuis_info if is_active != 0)
             if active_count >= 5:
                 risk_flags.append({
