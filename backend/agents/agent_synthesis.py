@@ -120,6 +120,9 @@ class SynthesisAgent(BaseAgent, SynthesisProvidersMixin):
             # 10B M4.1: Output Validation — check for invented data, impossible stats
             text = self._validate_output(text, verified_data, section)
 
+            # Reflexion: verifica consistenta text vs scoring numeric (sectiuni critice)
+            text = await self._reflexion_check(text, verified_data, section)
+
             # ER1: Verify numbers in generated text against verified_data
             is_ok, discrepancies = self._verify_numbers_in_text(text, verified_data, key)
             if not is_ok and len(discrepancies) > 2:
@@ -186,6 +189,78 @@ Reguli:
             logger.warning(f"[synthesis] Key takeaways generation failed: {e}")
 
         return ""
+
+    async def _reflexion_check(self, text: str, verified_data: dict, section: dict) -> str:
+        """
+        Agentic Reflexion: verifica daca textul generat contrazice scoring-ul numeric.
+        Aplicat DOAR sectiunilor critice. Corectie via Groq (rapid, fara overhead mare).
+
+        Logica:
+        1. Keyword detection rapid (fara LLM) — detecteaza contradictii tone vs scor
+        2. Daca contradictie: apeleaza Groq pentru rescrierea paragrafului consistent
+        3. Fallback: returneaza textul original daca Groq esueaza
+        """
+        REFLEXION_SECTIONS = {"financial_analysis", "risk_assessment", "executive_summary"}
+        if section.get("key") not in REFLEXION_SECTIONS or not text:
+            return text
+
+        risk_score = verified_data.get("risk_score", {})
+        numeric_score = risk_score.get("numeric_score") or risk_score.get("score")
+        if not isinstance(numeric_score, (int, float)):
+            return text
+
+        risk_color = "Verde" if numeric_score >= 70 else "Galben" if numeric_score >= 40 else "Rosu"
+        text_lower = text.lower()
+
+        # Detectie contradictie: pozitiv in text + scor Rosu, sau negativ in text + scor Verde
+        positive_kw = ["stabil", "solid", "excelent", "performant", "sanatoas", "prosper", "fara riscuri"]
+        negative_kw = ["risc ridicat", "pierdere semnificativa", "faliment", "insolventa",
+                       "in pericol", "situatie critica", "abandon"]
+
+        has_positive = sum(1 for k in positive_kw if k in text_lower)
+        has_negative = sum(1 for k in negative_kw if k in text_lower)
+
+        contradiction = (
+            (risk_color == "Rosu" and has_positive >= 2 and has_negative == 0) or
+            (risk_color == "Verde" and has_negative >= 2 and has_positive == 0)
+        )
+
+        if not contradiction:
+            return text
+
+        logger.info(
+            f"[synthesis] Reflexion triggered: section='{section['key']}' "
+            f"score={numeric_score} ({risk_color}) | "
+            f"positive_kw={has_positive} negative_kw={has_negative}"
+        )
+
+        risk_factors = risk_score.get("risk_factors", [])[:5]
+        factors_text = "\n".join(
+            f"- {r[0]} ({r[1]})" if isinstance(r, (list, tuple)) and len(r) >= 2 else f"- {r}"
+            for r in risk_factors
+        )
+
+        reflexion_prompt = (
+            f"Textul sectiunii '{section['title']}' contrazice scoring-ul numeric calculat automat.\n\n"
+            f"SCORING OBIECTIV: {numeric_score}/100 → {risk_color}\n"
+            f"FACTORI DETERMINANTI:\n{factors_text or 'N/A'}\n\n"
+            f"TEXT ORIGINAL (cu contradictie detectata):\n{text[:1500]}\n\n"
+            f"INSTRUCTIUNE: Rescrie textul pastrând TOATE cifrele, faptele si informatiile originale, "
+            f"dar asigurand consistenta tonului cu scorul de {numeric_score}/100 ({risk_color}).\n"
+            f"- Scor Rosu (<40): nu descrie firma ca stabila/solida fara sa mentionezi riscurile\n"
+            f"- Scor Verde (>=70): nu adauga avertismente dramatice nejustificate de date\n"
+            f"Scrie DIRECT textul rescris, fara meta-comentarii. Limba: Romana."
+        )
+
+        try:
+            corrected = await self._generate_with_groq(reflexion_prompt)
+            if corrected and len(corrected.split()) >= max(30, len(text.split()) // 3):
+                logger.info(f"[synthesis] Reflexion correction applied for '{section['key']}'")
+                return corrected.strip()
+        except Exception as e:
+            logger.warning(f"[synthesis] Reflexion correction failed: {e}")
+
+        return text
 
     def _estimate_prompt_tokens(self, data: dict, word_target: int) -> int:
         """Pre-check: estimate token count before building the full prompt.

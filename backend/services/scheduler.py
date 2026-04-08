@@ -16,6 +16,7 @@ MONITORING_INTERVAL = 6 * 3600  # 6 ore (verifica de 4 ori pe zi)
 BACKUP_INTERVAL = 24 * 3600     # 24 ore (o data pe zi)
 CACHE_CLEANUP_INTERVAL = 12 * 3600  # 12 ore
 AUTO_REANALYZE_INTERVAL = 6 * 3600  # 6 ore (verifica ce firme trebuie re-analizate)
+LOG_CLEANUP_INTERVAL = 24 * 3600    # 24 ore (curata log-uri rotite > 7 zile)
 
 _running = True
 
@@ -67,7 +68,7 @@ async def start_scheduler() -> asyncio.Task:
     global _running, _task
     _running = True
     _task = asyncio.create_task(_scheduler_loop())
-    logger.info("[scheduler] Started — monitoring every 6h, backup every 24h, cache cleanup every 12h, auto-reanalyze every 6h")
+    logger.info("[scheduler] Started — monitoring 6h, backup 24h, cache cleanup 12h, auto-reanalyze 6h, log cleanup 24h")
     return _task
 
 
@@ -90,6 +91,7 @@ async def _scheduler_loop():
     last_backup = await _get_checkpoint("backup")
     last_cache_cleanup = await _get_checkpoint("cache_cleanup")
     last_auto_reanalyze = await _get_checkpoint("auto_reanalyze")
+    last_log_cleanup = await _get_checkpoint("log_cleanup")
 
     # Asteapta 30s dupa startup (sa fie totul initializat)
     await asyncio.sleep(30)
@@ -120,6 +122,12 @@ async def _scheduler_loop():
             await _auto_reanalyze_job()
             last_auto_reanalyze = now
             await _save_checkpoint("auto_reanalyze")
+
+        # Log cleanup: curata fisierele de log rotite mai vechi de 7 zile
+        if now - last_log_cleanup >= LOG_CLEANUP_INTERVAL:
+            await _run_log_cleanup_safe()
+            last_log_cleanup = now
+            await _save_checkpoint("log_cleanup")
 
         # Sleep 60s intre verificari
         await asyncio.sleep(60)
@@ -232,6 +240,39 @@ async def _auto_reanalyze_job():
 
     except Exception as e:
         logger.error(f"[scheduler] auto-reanalyze job error: {e}")
+
+
+async def _run_log_cleanup_safe():
+    """Curata fisierele de log rotite (loguru rotation) mai vechi de 7 zile din logs/."""
+    try:
+        import time
+        from pathlib import Path
+
+        logs_dir = Path("logs")
+        if not logs_dir.exists():
+            return
+
+        cutoff = time.time() - 7 * 24 * 3600
+        removed = 0
+
+        # Loguru creeaza fisiere rotite cu suffix numeric sau data: *.log.1, *.log.2, ris_runtime.log.2026...
+        for pattern in ["*.log.*", "*.log.[0-9]*"]:
+            for log_file in logs_dir.glob(pattern):
+                try:
+                    if log_file.stat().st_mtime < cutoff:
+                        log_file.unlink()
+                        removed += 1
+                        logger.debug(f"[scheduler] Log cleanup: removed {log_file.name}")
+                except OSError as file_err:
+                    logger.debug(f"[scheduler] Log cleanup skip {log_file.name}: {file_err}")
+
+        if removed > 0:
+            logger.info(f"[scheduler] Log cleanup: {removed} rotated log file(s) removed (>7 days)")
+        else:
+            logger.debug("[scheduler] Log cleanup: no old rotated logs found")
+
+    except Exception as e:
+        logger.error(f"[scheduler] Log cleanup error: {e}")
 
 
 async def _run_backup_safe():

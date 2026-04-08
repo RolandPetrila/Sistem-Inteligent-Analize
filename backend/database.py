@@ -32,6 +32,16 @@ class Database:
         await self._db.execute(
             "CREATE INDEX IF NOT EXISTS idx_reports_job_id ON reports(job_id)"
         )
+        # Dynamic percentile scoring: stocheaza CA real per firma pentru percentile CAEN
+        try:
+            await self._db.execute(
+                "ALTER TABLE companies ADD COLUMN latest_ca INTEGER DEFAULT NULL"
+            )
+            await self._db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_companies_caen_ca ON companies(caen_code, latest_ca)"
+            )
+        except Exception:
+            pass  # Column/index already exists
         await self._db.commit()
         logger.info(f"Database connected: {self.db_path}")
 

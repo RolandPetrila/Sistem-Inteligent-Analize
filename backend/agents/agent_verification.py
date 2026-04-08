@@ -154,6 +154,22 @@ class VerificationAgent(BaseAgent):
                 f"[verification] DATE LIPSA: {', '.join(g['field'] for g in verified['completeness']['gaps'])}"
             )
 
+        # Dynamic percentile scoring: stocheaza CA real in companies pentru percentile viitoare
+        try:
+            from backend.database import db
+            ca_raw = verified.get("financial", {}).get("cifra_afaceri", {})
+            ca_val_num = ca_raw.get("value") if isinstance(ca_raw, dict) else None
+            cui_for_ca = verified.get("company", {}).get("cui", {})
+            cui_str_ca = cui_for_ca.get("value", "") if isinstance(cui_for_ca, dict) else str(cui_for_ca or "")
+            if ca_val_num and isinstance(ca_val_num, (int, float)) and ca_val_num > 0 and cui_str_ca:
+                await db.execute(
+                    "UPDATE companies SET latest_ca = ? WHERE cui = ?",
+                    (int(ca_val_num), cui_str_ca),
+                )
+                logger.debug(f"[verification] latest_ca stored: {int(ca_val_num):,} RON for {cui_str_ca}")
+        except Exception as _ca_err:
+            logger.debug(f"[verification] latest_ca store error: {_ca_err}")
+
         # F1-6: Retea firme — query DB pentru asociati comuni
         cui_verified = verified.get("company", {}).get("cui", {})
         cui_val = cui_verified.get("value", "") if isinstance(cui_verified, dict) else str(cui_verified or "")
@@ -678,8 +694,9 @@ class VerificationAgent(BaseAgent):
         """
         Calculeaza praguri dinamice pentru scoring CA din propriile date DB.
 
-        Logica: percentile(90) = ca_excellent, percentile(50) = ca_good, percentile(10) = ca_ok
-        grupate pe CAEN + judet (daca avem suficiente date) sau CAEN singur.
+        Strategie duala (precizie crescanda pe masura ce DB se umple):
+        1. PRIMAR: Percentile CA real din companies.latest_ca (valori ANAF Bilant stocate)
+        2. FALLBACK: Proxy prin score_history.numeric_score (calibrare heuristica)
 
         Returneaza None daca nu avem suficiente date (< 5 firme).
         """
@@ -691,9 +708,47 @@ class VerificationAgent(BaseAgent):
             return None
 
         try:
-            # Cauta CA-urile din score_history + companies cu acelasi CAEN
-            # Folosim companies.risk_score (numeric) + ANAF bilant cache indirect
-            # Alternativa mai simpla: interogam direct tabelul companies filtrat pe CAEN
+            from backend.agents.verification.scoring import SCORING_THRESHOLDS
+            base_excellent = SCORING_THRESHOLDS["ca_excellent"]
+            base_good = SCORING_THRESHOLDS["ca_good"]
+            base_ok = SCORING_THRESHOLDS["ca_ok"]
+
+            # --- CALEA 1: Percentile CA real (PRIMAR — date ANAF Bilant stocate) ---
+            ca_rows = await db.fetch_all(
+                """
+                SELECT latest_ca
+                FROM companies
+                WHERE caen_code LIKE ?
+                  AND latest_ca IS NOT NULL
+                  AND latest_ca > 0
+                ORDER BY latest_ca
+                LIMIT 500
+                """,
+                (f"{caen_prefix}%",),
+            )
+
+            if len(ca_rows) >= 5:
+                ca_values = sorted([r["latest_ca"] for r in ca_rows if r["latest_ca"]])
+                n = len(ca_values)
+                p90 = ca_values[min(int(n * 0.90), n - 1)]
+                p50 = ca_values[min(int(n * 0.50), n - 1)]
+                p10 = ca_values[min(int(n * 0.10), n - 1)]
+                dynamic = {
+                    "ca_excellent": max(p90, base_excellent // 10),  # nu scade sub 10% din national
+                    "ca_good": max(p50, base_good // 10),
+                    "ca_ok": max(p10, base_ok // 10),
+                    "_source": f"ca_real_{n}_companies_CAEN{caen_prefix}",
+                    "_county": county or "national",
+                    "_p50_ca": p50,
+                    "_method": "ca_percentile",
+                }
+                logger.info(
+                    f"[verification] Dynamic thresholds CA-real CAEN {caen_prefix} "
+                    f"({n} firme): p10={p10:,.0f} p50={p50:,.0f} p90={p90:,.0f} RON"
+                )
+                return dynamic
+
+            # --- CALEA 2: Proxy score_history (FALLBACK — pana DB acumuleaza CA) ---
             if county:
                 rows = await db.fetch_all(
                     """
@@ -711,7 +766,6 @@ class VerificationAgent(BaseAgent):
             else:
                 rows = []
 
-            # Fallback: cauta dupa CAEN singur daca nu avem suficiente date pe judet
             if len(rows) < 5:
                 rows = await db.fetch_all(
                     """
@@ -732,21 +786,8 @@ class VerificationAgent(BaseAgent):
 
             scores = sorted([r["numeric_score"] for r in rows if r["numeric_score"] is not None])
             n = len(scores)
-
-            # Percentile CA bazate pe scorul numeric din DB (proxy pentru marimea firmei)
-            # Traduce scoruri in praguri CA relative (heuristica calibrata)
             p90_score = scores[int(n * 0.90)]
             p50_score = scores[int(n * 0.50)]
-            p10_score = scores[int(n * 0.10)]
-
-            # Mapeaza scoruri la praguri CA prin functie liniara calibrata
-            # Score 90+ → firma mare → ca_excellent ridicat
-            # Score 50  → firma medie → ca_good mediu
-            # Valorile sunt estimate si scaling vs SCORING_THRESHOLDS default
-            from backend.agents.verification.scoring import SCORING_THRESHOLDS
-            base_excellent = SCORING_THRESHOLDS["ca_excellent"]
-            base_good = SCORING_THRESHOLDS["ca_good"]
-            base_ok = SCORING_THRESHOLDS["ca_ok"]
 
             # Factor de ajustare: daca mediana sectorului e mai mica, scalam in jos
             median_factor = p50_score / 65.0  # 65 = scor mediu tipic national
@@ -754,9 +795,10 @@ class VerificationAgent(BaseAgent):
                 "ca_excellent": round(base_excellent * median_factor),
                 "ca_good": round(base_good * median_factor),
                 "ca_ok": round(base_ok * median_factor),
-                "_source": f"dynamic_db_{len(scores)}_companies_CAEN{caen_prefix}",
+                "_source": f"score_proxy_{len(scores)}_companies_CAEN{caen_prefix}",
                 "_county": county or "national",
                 "_median_score": p50_score,
+                "_method": "score_proxy",
             }
             logger.info(
                 f"[verification] Dynamic thresholds CAEN {caen_prefix} "
