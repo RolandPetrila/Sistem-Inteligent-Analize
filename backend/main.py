@@ -510,14 +510,20 @@ async def get_stats_trend():
 
 @app.websocket("/ws/jobs/{job_id}")
 async def websocket_job_progress(websocket: WebSocket, job_id: str):
-    # SEC-01: Validate API key on WebSocket upgrade if configured
+    # SEC-01: First-message auth — token nu apare in query params (URL/logs)
+    await websocket.accept()
     if settings.ris_api_key:
-        token = websocket.query_params.get("token", "")
-        if token != settings.ris_api_key:
+        try:
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+            msg = json.loads(raw)
+            if msg.get("type") != "auth" or msg.get("token") != settings.ris_api_key:
+                await websocket.close(code=4001, reason="Unauthorized")
+                return
+        except (TimeoutError, json.JSONDecodeError, Exception):
             await websocket.close(code=4001, reason="Unauthorized")
             return
 
-    await ws_manager.connect(job_id, websocket)
+    await ws_manager.connect(job_id, websocket, already_accepted=True)
     try:
         # Send current state on connect
         job = await db.fetch_one("SELECT id, status, progress_percent, current_step FROM jobs WHERE id = ?", (job_id,))

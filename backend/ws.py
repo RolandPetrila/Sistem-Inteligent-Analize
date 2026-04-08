@@ -12,8 +12,9 @@ class ConnectionManager:
     def __init__(self):
         self.active: dict[str, list[WebSocket]] = {}
 
-    async def connect(self, job_id: str, ws: WebSocket):
-        await ws.accept()
+    async def connect(self, job_id: str, ws: WebSocket, already_accepted: bool = False):
+        if not already_accepted:
+            await ws.accept()
         if job_id not in self.active:
             self.active[job_id] = []
         self.active[job_id].append(ws)

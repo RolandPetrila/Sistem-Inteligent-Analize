@@ -8,7 +8,7 @@ const PING_INTERVAL = 30000;
 export function useWebSocket(
   jobId: string,
   onMessage: (msg: WSMessage) => void,
-  enabled: boolean = true
+  enabled: boolean = true,
 ) {
   const wsRef = useRef<WebSocket | null>(null);
   const retryCountRef = useRef(0);
@@ -30,6 +30,9 @@ export function useWebSocket(
     ws.onopen = () => {
       retryCountRef.current = 0;
       logWs(jobId, "connected");
+      // SEC: Send auth token as first message (evita token in query params/URL logs)
+      const token = localStorage.getItem("ris_ws_token") || "";
+      ws.send(JSON.stringify({ type: "auth", token }));
       // Start ping
       pingIntervalRef.current = window.setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
@@ -57,7 +60,11 @@ export function useWebSocket(
       if (enabled && retryCountRef.current < RECONNECT_DELAYS.length) {
         const delay = RECONNECT_DELAYS[retryCountRef.current];
         retryCountRef.current++;
-        logWs(jobId, "disconnected", `retry ${retryCountRef.current} in ${delay}ms`);
+        logWs(
+          jobId,
+          "disconnected",
+          `retry ${retryCountRef.current} in ${delay}ms`,
+        );
         reconnectTimeoutRef.current = window.setTimeout(connect, delay);
       } else {
         logWs(jobId, "closed");

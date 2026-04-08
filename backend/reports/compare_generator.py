@@ -3,6 +3,7 @@ E9: Compare PDF Generator — Raport comparativ 2 firme side-by-side.
 """
 
 from fpdf import FPDF
+
 from backend.reports.pdf_generator import _sanitize
 
 
@@ -14,7 +15,7 @@ class ComparePdf(FPDF):
     def header(self):
         self.set_font("Helvetica", "B", 9)
         self.set_text_color(100, 100, 100)
-        self.cell(0, 6, "Roland Intelligence System — Raport Comparativ", align="L")
+        self.cell(0, 6, _sanitize("Roland Intelligence System - Raport Comparativ"), align="L")
         self.ln(3)
         self.set_draw_color(99, 102, 241)
         self.set_line_width(0.5)

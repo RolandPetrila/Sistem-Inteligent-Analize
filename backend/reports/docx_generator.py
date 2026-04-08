@@ -4,11 +4,10 @@ Genereaza document Word editabil din report_sections.
 """
 
 from docx import Document
-from docx.shared import Inches, Pt, Cm, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.style import WD_STYLE_TYPE
-from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.shared import Pt, RGBColor
 
 DISCLAIMER = (
     "Acest raport a fost generat automat folosind exclusiv date disponibile public "
@@ -75,13 +74,20 @@ def generate_docx(report_sections: dict, meta: dict, output_path: str, verified_
 
     risk = meta.get("risk_score", "N/A")
     if risk != "N/A":
+        # risk_score poate fi dict {"score": 72, "label": "Verde"} sau string
+        if isinstance(risk, dict):
+            risk_label = risk.get("label", "N/A")
+            risk_display = f"{risk.get('score', '')} ({risk_label})" if risk.get("score") else risk_label
+        else:
+            risk_label = str(risk)
+            risk_display = risk_label
         risk_para = doc.add_paragraph()
         risk_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        risk_run = risk_para.add_run(f"Scor Risc: {risk}")
+        risk_run = risk_para.add_run(f"Scor Risc: {risk_display}")
         risk_run.font.size = Pt(16)
         risk_run.bold = True
         color_map = {"Verde": RGBColor(34, 197, 94), "Galben": RGBColor(200, 150, 0), "Rosu": RGBColor(220, 50, 50)}
-        risk_run.font.color.rgb = color_map.get(risk, RGBColor(100, 100, 100))
+        risk_run.font.color.rgb = color_map.get(risk_label, RGBColor(100, 100, 100))
 
     doc.add_page_break()
 
@@ -200,10 +206,13 @@ def generate_docx(report_sections: dict, meta: dict, output_path: str, verified_
         doc.add_page_break()
         doc.add_heading("Surse Utilizate", level=1)
         for src in sources:
-            level = src.get("level", "?")
-            name = src.get("name", "N/A")
-            status = src.get("status", "N/A")
-            doc.add_paragraph(f"[Nivel {level}] {name} — {status}", style="List Bullet")
+            if isinstance(src, dict):
+                level = src.get("level", "?")
+                name = src.get("name", "N/A")
+                status = src.get("status", "N/A")
+                doc.add_paragraph(f"[Nivel {level}] {name} - {status}", style="List Bullet")
+            else:
+                doc.add_paragraph(str(src), style="List Bullet")
 
     # Disclaimer
     doc.add_page_break()
