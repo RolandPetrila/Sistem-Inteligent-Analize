@@ -118,10 +118,8 @@ async def run_official(state: AnalysisState) -> dict:
             "errors": [{"agent": "official", "error": str(e)}],
         }
     elapsed = time.time() - t0
-    # Store timing in state for diagnostics
-    metrics = state.get("_agent_metrics", {})
-    metrics["official"] = round(elapsed, 1)
-    result["_agent_metrics"] = metrics
+    # Store timing — return only THIS agent's metric (reducer merges all)
+    result["_agent_metrics"] = {"official": round(elapsed, 1)}
     logger.info(f"[orchestrator] Agent 1 (Official) completed in {elapsed:.1f}s")
     await _ws_broadcast(state, {"type": "agent_complete", "agent": "official", "duration_ms": int(elapsed * 1000)})
     await _save_checkpoint(state.get("job_id", ""), "official", result)  # 10F M5.4
@@ -148,9 +146,7 @@ async def run_verification(state: AnalysisState) -> dict:
     completeness = vd.get("completeness", {})
     risk = vd.get("risk_score", {})
     elapsed = time.time() - t0
-    metrics = state.get("_agent_metrics", {})
-    metrics["verification"] = round(elapsed, 1)
-    result["_agent_metrics"] = metrics
+    result["_agent_metrics"] = {"verification": round(elapsed, 1)}
     log_agent_end(job_id, "verification",
         f"risk={risk.get('score', '?')}/100 | completeness={completeness.get('score', '?')}% | "
         f"gaps={completeness.get('gaps_count', '?')} | {elapsed:.1f}s")
@@ -201,9 +197,7 @@ async def run_synthesis(state: AnalysisState) -> dict:
         }
     sections = result.get("report_sections", {})
     elapsed = time.time() - t0
-    metrics = state.get("_agent_metrics", {})
-    metrics["synthesis"] = round(elapsed, 1)
-    result["_agent_metrics"] = metrics
+    result["_agent_metrics"] = {"synthesis": round(elapsed, 1)}
     log_agent_end(job_id, "synthesis", f"{len(sections)} sections | {elapsed:.1f}s")
     await _ws_broadcast(state, {"type": "agent_complete", "agent": "synthesis", "duration_ms": int(elapsed * 1000)})
     await _save_checkpoint(job_id, "synthesis", result)  # 10F M5.4
@@ -238,15 +232,13 @@ async def run_report_generator(state: AnalysisState) -> dict:
     )
 
     elapsed = time.time() - t0
-    metrics = state.get("_agent_metrics", {})
-    metrics["report_generator"] = round(elapsed, 1)
 
     logger.info(f"[report] Generated {len(paths)} formats in {elapsed:.1f}s: {list(paths.keys())}")
     log_agent_end(job_id, "report_generator", f"{len(paths)} formats | {elapsed:.1f}s")
 
     report_result = {
         "report_paths": paths,
-        "_agent_metrics": metrics,
+        "_agent_metrics": {"report_generator": round(elapsed, 1)},
         "current_step": f"Rapoarte generate: {', '.join(paths.keys()).upper()}",
         "progress": 1.0,
     }
@@ -314,11 +306,9 @@ async def run_web(state: AnalysisState) -> dict:
         for cat in web_data:
             log_source_result(job_id, f"Tavily ({cat})", True, 0, [f"{len(web_data[cat].get('results', []))} results"])
         log_agent_end(job_id, "web", f"{len(web_data)} categories | {elapsed:.1f}s")
-        metrics = state.get("_agent_metrics", {})
-        metrics["web"] = round(elapsed, 1)
         web_result = {
             "web_data": web_data,
-            "_agent_metrics": metrics,
+            "_agent_metrics": {"web": round(elapsed, 1)},
             "current_step": f"Agent 2: {len(web_data)} categorii web gasite",
             "progress": 0.40,
         }
@@ -364,11 +354,9 @@ async def run_market(state: AnalysisState) -> dict:
         log_source_result(job_id, "SEAP (achizitii directe)", direct > 0, 0,
             [f"{direct} achizitii"])
         log_agent_end(job_id, "market", f"{total} contracte SEAP | {elapsed:.1f}s")
-        metrics = state.get("_agent_metrics", {})
-        metrics["market"] = round(elapsed, 1)
         market_result = {
             "market_data": {"seap": seap_data},
-            "_agent_metrics": metrics,
+            "_agent_metrics": {"market": round(elapsed, 1)},
             "current_step": f"Agent 3: {total} contracte SEAP gasite",
             "progress": 0.40,
         }
