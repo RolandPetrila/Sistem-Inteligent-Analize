@@ -54,13 +54,14 @@ Sistem local de Business Intelligence care ruleaza pe Windows 10. Extrage automa
 - **Hotfix (2026-04-08):** INVALID_CONCURRENT_GRAPH_UPDATE pe `_agent_metrics` — fix in `state.py:68` (`Annotated[dict | None, _merge_dicts]`), ReportView null-safety `sources ?? []`. Commits: dc0d408, 69ae807. **ATENTIE: repornire serviciu obligatorie dupa deploy.** F0-3 (job_service split), F1-2/F1-3/F1-4/F1-5 (retea firme + SQL migration 008), F2-1..F2-4 (Altman/Piotroski/Beneish/Zmijewski + wrapper), F3-3/F3-4/F3-6/F3-8 (trust scoring/anomalii/coherence/quota), F4-1/F4-2/F4-3/F4-4 (monitoring escalation/sync/audit-log/suppress), F5-1 (funding programs JSON+module), F6-1/F6-3/F6-5/F6-8 (risk badge/completeness warning/localStorage draft/dedup dashboard), F7-1/F7-2 (N+1 fix/CSV streaming), F8-5 (29 teste modele predictive). Provideri noi: GitHub Models, Fireworks AI, SambaNova. 213 pytest PASSED.
 - **Gemini Analysis Sprint (2026-04-08):** 3 imbunatatiri din analiza Gemini CLI — commit 7a2e70d. (A) Agentic Reflexion: `_reflexion_check()` in SynthesisAgent detecteaza contradictii tone vs scor in sectiuni critice si corecteaza via Groq. (B) Dynamic CA percentile scoring dual-path: PRIMAR = CA real din `companies.latest_ca` (stocat dupa fiecare analiza), FALLBACK = score_history proxy. Coloana `latest_ca` adaugata idempotent in database.py. (C) Scheduler log cleanup: `_run_log_cleanup_safe()` sterge log-urile rotite mai vechi de 7 zile. 365 pytest PASSED.
 - **Sprint R7 (2026-04-09):** COMPLETAT — 18 items din RECOMANDARI_IMBUNATATIRI_R7.md (A1-A5, B1-B5, C1-C4, E3): raport unic RIS-YYYY-XXXX, risk badge numeric, AEGRM garanții, NLQ chatbot, Knowledge Graph (@xyflow), share link HTML, mobile search, dark/light theme, TanStack Query, split componente (ReportView 910→644, CompanyDetail 1009→826), ARIA + type hints, Mistral OCR. 365 pytest PASSED, 0 erori TypeScript.
-- **Feedback Loop:** ACTIV — RIS_TEST.bat, logs/ris_summary.log, ris_runtime.log, ris_frontend.log (5 componente), ISSUES.md, session startup protocol, G1-G8 complete
+- **Sprint R8 (2026-04-09):** COMPLETAT — 9 items din RECOMANDARI_IMBUNATATIRI_R8.md (G1-G8 + D1): Process Pool asyncio.to_thread + asyncio.gather (6 formate concurent), TanStack Query Dashboard+Companies+RiskMovers+TrendChart (3/3 pagini migrate), WCAG 2.2 (sidebar focus-visible, contrast text-gray-400, aria-modal GlobalSearch), i18n English (i18n.py + PDF/HTML lang param), ONRC local dataset (migration 009 + import script + agent lookup), Monitorul Oficial crawler (Tavily+scrape, scoring penalty juridic), Prometheus /metrics endpoint, PostgreSQL feasibility (documentat), XGBoost faliment (research doar). 365 pytest PASSED, 0 erori TypeScript.
+- **Feedback Loop:** ACTIV — RIS_TEST.bat, logs/ris_summary.log, ris_runtime.log, ris_frontend.log (5 componente), ISSUES.md, session startup protocol
 - **Git:** https://github.com/RolandPetrila/Sistem-Inteligent-Analize.git | 365 pytest + vitest
 - **13 pagini frontend** (adaugat NetworkGraph /network/:cui)
-- **Planificari detaliate:** ROLAND_PLANIFICARI_MODULE.md (R4 + R5 + R6 + R7 = 88 items total)
+- **Planificari detaliate:** ROLAND_PLANIFICARI_MODULE.md (R4 + R5 + R6 + R7 + R8 = 97 items total)
 - **Deep Research:** 99_Deep_Research/ (2 rapoarte complete cu roadmap)
 - **Spec complet:** SPEC_INTELLIGENCE_SYSTEM_V2.md
-- **48+ REST endpoints + 1 WebSocket + 13 pagini frontend + 8 formate raport + diagnostic + audit + request tracing + notifications + favorites + timeline + OCR**
+- **49+ REST endpoints + 1 WebSocket + 13 pagini frontend + 8 formate raport + diagnostic + audit + request tracing + notifications + favorites + timeline + OCR + /metrics**
 
 ## Feedback Loop (Session Protocol)
 
@@ -117,6 +118,10 @@ Fisiere feedback loop:
 - `backend/agents/tools/openapi_client.py` — openapi.ro REST client (ONRC + asociati + administratori + CAEN)
 - `backend/agents/tools/seap_client.py` — SEAP e-licitatie.ro (licitatii + achizitii directe)
 - `backend/agents/tools/caen_context.py` — Context CAEN: 122 coduri + 96 sectiuni + benchmark + INS TEMPO live
+- `backend/agents/tools/monitorul_oficial_client.py` — G2: Monitorul Oficial Partea IV (cesiuni, dizolvari, radieri) + scoring penalty
+- `backend/reports/i18n.py` — G5: i18n traduceri ro/en pentru rapoarte PDF/HTML
+- `backend/migrations/009_onrc_local.sql` — D1: tabel ONRC local dataset din data.gov.ro
+- `tools/import_onrc.py` — D1: script import CSV ONRC in SQLite (~660MB active + ~392MB radiate)
 - `backend/services/job_service.py` — Job execution + WS progress
 - `backend/services/cache_service.py` — Cache cu TTL per sursa
 - `backend/services/notification.py` — Telegram + Email notifications
@@ -251,6 +256,11 @@ Fisierele permise in root sunt NUMAI:
 24. Batch parallel processing (2 CUI simultan cu semaphore)
 25. Prompt injection hardening (sanitize backticks, control chars)
 26. Solvency Stress Matrix 3x3 (profit margin x equity ratio)
+27. PostgreSQL: NU acum — SQLite WAL suficient pentru <10K firme, 1 user. La >50K firme/5+ useri: adauga DATABASE_URL in .env + asyncpg. Pattern: repository abstraction layer
+28. XGBoost faliment: Research future — necesita 1000+ firme cu istoric 3+ ani (insolvent+sanatoase). Revizuieste cand score_history are 500+ entries
+29. asyncio.to_thread pentru generare rapoarte (PDF/DOCX/Excel/PPTX) — elibereaza event loop, toate formatele ruleaza concurent
+30. i18n rapoarte: ro (default) + en, extensibil cu noi limbi in backend/reports/i18n.py
+31. Monitorul Oficial Partea IV ca sursa OSINT — cesiuni, dizolvari, radieri cu penalty scoring juridic
 
 ## Documentatie — Fisiere de tinut sincronizate
 

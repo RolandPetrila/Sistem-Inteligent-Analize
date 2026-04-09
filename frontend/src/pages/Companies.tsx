@@ -1,4 +1,5 @@
 import { useEffect, useState, useOptimistic, useTransition } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Building2,
   Download,
@@ -108,11 +109,9 @@ const riskBadge = (score: number | null | undefined) => {
 
 export default function Companies() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
@@ -125,48 +124,47 @@ export default function Companies() {
   // 10C M12.4: Debounced search — auto-search after 300ms typing pause
   const debouncedSearch = useDebounce(search, 300);
 
-  const loadCompanies = (
-    searchTerm?: string,
-    pageNum = 0,
-    sortParam = sort,
-    county = filterCounty,
-    caen = filterCaen,
-    riskScore = filterRiskScore,
-  ) => {
-    setLoading(true);
-    const fetchFn = showFavoritesOnly
-      ? api.listFavorites()
-      : api.listCompanies({
-          search: searchTerm,
-          limit: PAGE_SIZE,
-          offset: pageNum * PAGE_SIZE,
-          sort: sortParam,
-          county: county || undefined,
-          caen: caen || undefined,
-          risk_score: riskScore || undefined,
-        });
-    fetchFn
-      .then((res) => {
-        setCompanies(res.companies ?? []);
-        setTotal(res.total ?? 0);
-        logAction("Companies", "loaded", { total: res.total, sort: sortParam });
-      })
-      .catch(() => toast("Eroare la incarcarea companiilor", "error"))
-      .finally(() => setLoading(false));
-  };
-
-  // M4: Consolidated — initial load + toate trigger-ele de reload intr-un singur effect
-  // (inlocuieste 5 useEffect separate: mount, search, sort, filters, favorites toggle)
-  useEffect(() => {
-    setPage(0);
-    loadCompanies(
+  // G3: TanStack Query pentru lista companii (inlocuieste useEffect + loadCompanies)
+  const { data: companiesData, isLoading: loading } = useQuery({
+    queryKey: [
+      "companies",
       debouncedSearch,
-      0,
       sort,
+      page,
       filterCounty,
       filterCaen,
       filterRiskScore,
-    );
+      showFavoritesOnly,
+    ],
+    queryFn: () =>
+      showFavoritesOnly
+        ? api.listFavorites()
+        : api.listCompanies({
+            search: debouncedSearch || undefined,
+            limit: PAGE_SIZE,
+            offset: page * PAGE_SIZE,
+            sort,
+            county: filterCounty || undefined,
+            caen: filterCaen || undefined,
+            risk_score: filterRiskScore || undefined,
+          }),
+    staleTime: 60_000,
+    placeholderData: (prev) => prev,
+  });
+
+  const companies: Company[] = companiesData?.companies ?? [];
+  const total: number = companiesData?.total ?? 0;
+
+  // Log on data change
+  useEffect(() => {
+    if (companiesData) {
+      logAction("Companies", "loaded", { total: companiesData.total, sort });
+    }
+  }, [companiesData]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset page to 0 when filters change
+  useEffect(() => {
+    setPage(0);
   }, [
     debouncedSearch,
     sort,
@@ -174,12 +172,11 @@ export default function Companies() {
     filterCaen,
     filterRiskScore,
     showFavoritesOnly,
-  ]); // eslint-disable-line react-hooks/exhaustive-deps
+  ]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(0);
-    loadCompanies(search, 0);
   };
 
   const updateFilter = (key: string, value: string) => {
@@ -217,6 +214,8 @@ export default function Companies() {
           companyId,
           isFavorite: res.is_favorite,
         });
+        // G3: Invalidate companies query for fresh data
+        queryClient.invalidateQueries({ queryKey: ["companies"] });
       } catch {
         // Rollback via setFavorites — optimistic state reverts on next render
         setFavorites((prev) => ({ ...prev, [companyId]: currentVal }));
@@ -243,7 +242,7 @@ export default function Companies() {
 
   const goToPage = (p: number) => {
     setPage(p);
-    loadCompanies(search, p, sort);
+    // G3: TanStack Query auto-refetches when page changes in queryKey
   };
 
   return (
@@ -375,7 +374,7 @@ export default function Companies() {
             onClick={() => {
               setSearch("");
               setPage(0);
-              loadCompanies("", 0);
+              // G3: TanStack re-fetches automatically when search state changes
             }}
             className="btn-secondary text-sm"
           >

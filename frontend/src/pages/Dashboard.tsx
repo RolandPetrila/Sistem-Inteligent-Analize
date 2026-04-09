@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import AskRIS from "@/components/AskRIS";
 import {
@@ -20,7 +21,7 @@ import {
 import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { logAction } from "@/lib/logger";
-import type { Stats, Job, RiskMover } from "@/lib/types";
+import type { Job, RiskMover } from "@/lib/types";
 import { JOB_STATUS_LABELS, ANALYSIS_TYPE_LABELS } from "@/lib/constants";
 import clsx from "clsx";
 
@@ -58,49 +59,61 @@ const SkeletonDashboard = () => (
 );
 
 export default function Dashboard() {
-  const { toast } = useToast();
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [recentJobs, setRecentJobs] = useState<Job[]>([]);
-  const [integrations, setIntegrations] = useState<IntegrationStatus | null>(
-    null,
-  );
-  const [healthData, setHealthData] = useState<Record<string, unknown> | null>(
-    null,
-  );
-  const [loading, setLoading] = useState(true);
+  const { toast: _toast } = useToast();
 
+  const { data: stats, isLoading } = useQuery({
+    queryKey: ["dashboard-stats"],
+    queryFn: () => api.getStats(),
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+  });
+
+  const { data: jobsData } = useQuery({
+    queryKey: ["recent-jobs"],
+    queryFn: () => api.listJobs({ limit: 5 }),
+    staleTime: 10_000,
+    refetchInterval: 30_000,
+  });
+
+  const { data: integrations } = useQuery<IntegrationStatus | null>({
+    queryKey: ["settings"],
+    queryFn: async () => {
+      try {
+        return (await api.getSettings()) as IntegrationStatus;
+      } catch {
+        return null;
+      }
+    },
+    staleTime: 60_000,
+  });
+
+  const { data: healthData } = useQuery({
+    queryKey: ["health-deep"],
+    queryFn: async () => {
+      try {
+        return await api.healthDeep();
+      } catch {
+        return null;
+      }
+    },
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+
+  const recentJobs: Job[] = jobsData?.jobs ?? [];
+
+  // G3: log only when stats first loads (not on every render)
   useEffect(() => {
-    Promise.all([
-      api.getStats(),
-      api.listJobs({ limit: 5 }),
-      api.getSettings().catch(() => null),
-      api.healthDeep().catch(() => null),
-    ])
-      .then(([s, j, settings, health]) => {
-        setStats(s);
-        setRecentJobs(j.jobs);
-        if (settings) setIntegrations(settings);
-        if (health) setHealthData(health);
-        logAction("Dashboard", "loaded", {
-          companies: s?.total_companies,
-          reports: s?.total_reports,
-          jobs: s?.total_jobs,
-        });
-      })
-      .catch(() => toast("Eroare la incarcarea dashboard-ului", "error"))
-      .finally(() => setLoading(false));
+    if (stats) {
+      logAction("Dashboard", "loaded", {
+        companies: stats.total_companies,
+        reports: stats.total_reports,
+        jobs: stats.total_jobs,
+      });
+    }
+  }, [stats]);
 
-    // 10C M1.1: Refresh health status every 60s
-    const healthInterval = setInterval(() => {
-      api
-        .healthDeep()
-        .then(setHealthData)
-        .catch(() => {});
-    }, 60_000);
-    return () => clearInterval(healthInterval);
-  }, []);
-
-  if (loading) return <SkeletonDashboard />;
+  if (isLoading) return <SkeletonDashboard />;
 
   // Trend indicator: compare jobs_this_month with a previous reference
   // The API doesn't expose last month's count directly, so we show a visual placeholder
@@ -498,17 +511,17 @@ export default function Dashboard() {
 
 function RiskMoversWidget() {
   const navigate = useNavigate();
-  const [movers, setMovers] = useState<RiskMover[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    api
-      .getRiskMovers()
-      .then((data) => setMovers((data.movers || []).slice(0, 5)))
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
-  }, []);
+  const {
+    data,
+    isLoading: loading,
+    isError: error,
+  } = useQuery({
+    queryKey: ["risk-movers"],
+    queryFn: () => api.getRiskMovers(),
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+  });
+  const movers: RiskMover[] = (data?.movers ?? []).slice(0, 5);
 
   return (
     <div className="card">
@@ -576,16 +589,18 @@ function RiskMoversWidget() {
 }
 
 function TrendChart() {
-  const [trend, setTrend] = useState<{ month: string; count: number }[]>([]);
-
-  useEffect(() => {
-    api
-      .getStatsTrend()
-      .then((data) => setTrend(data.trend || []))
-      .catch(() => {
-        /* trend chart optional — fail silently */
-      });
-  }, []);
+  const { data: trendData } = useQuery({
+    queryKey: ["stats-trend"],
+    queryFn: async () => {
+      try {
+        return await api.getStatsTrend();
+      } catch {
+        return null;
+      }
+    },
+    staleTime: 300_000,
+  });
+  const trend: { month: string; count: number }[] = trendData?.trend ?? [];
 
   if (trend.length === 0) return null;
 

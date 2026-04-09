@@ -535,6 +535,19 @@ def calculate_risk_score(verified: dict, dynamic_thresholds: dict | None = None)
         jur_reasons.append({"text": f"Garantii reale mobiliare inregistrate ({count})", "impact": -5})
         risk_factors.append((f"Garantii reale mobiliare ({count})", "LOW"))
 
+    # G2: Monitorul Oficial penalty (cesiuni, dizolvari, radieri)
+    mo_events = risk_data.get("monitorul_oficial")
+    if mo_events and isinstance(mo_events, dict):
+        mo_val = mo_events.get("value", [])
+        if isinstance(mo_val, list) and mo_val:
+            from backend.agents.tools.monitorul_oficial_client import score_penalty as _mo_penalty
+            mo_result = _mo_penalty(mo_val)
+            if mo_result["penalty"] > 0:
+                jur_score -= mo_result["penalty"]
+                for flag in mo_result["flags"]:
+                    jur_reasons.append({"text": flag, "impact": -mo_result["penalty"]})
+                    risk_factors.append((flag, "HIGH" if mo_result["penalty"] >= 15 else "MEDIUM"))
+
     dimensions["juridic"] = {"score": max(0, min(100, jur_score)), "weight": 20, "reasons": jur_reasons}
 
     # --- FISCAL (15%) ---

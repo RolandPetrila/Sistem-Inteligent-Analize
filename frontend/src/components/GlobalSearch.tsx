@@ -1,6 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Building2, FileText, Zap, X, Command, Clock } from "lucide-react";
+import {
+  Search,
+  Building2,
+  FileText,
+  Zap,
+  X,
+  Command,
+  Clock,
+} from "lucide-react";
 import clsx from "clsx";
 import { api } from "@/lib/api";
 import type { Company, Report } from "@/lib/types";
@@ -19,11 +27,36 @@ interface QuickAction {
 }
 
 const QUICK_ACTIONS: QuickAction[] = [
-  { id: "new-analysis", label: "Analiza noua", description: "Incepe o analiza noua", path: "/new-analysis" },
-  { id: "compare", label: "Compara firme", description: "Compara 2 firme", path: "/compare" },
-  { id: "batch", label: "Batch analiza", description: "Analiza multipla CSV", path: "/batch" },
-  { id: "settings", label: "Setari", description: "Configurare sistem", path: "/settings" },
-  { id: "monitoring", label: "Monitorizare", description: "Alerte firme", path: "/monitoring" },
+  {
+    id: "new-analysis",
+    label: "Analiza noua",
+    description: "Incepe o analiza noua",
+    path: "/new-analysis",
+  },
+  {
+    id: "compare",
+    label: "Compara firme",
+    description: "Compara 2 firme",
+    path: "/compare",
+  },
+  {
+    id: "batch",
+    label: "Batch analiza",
+    description: "Analiza multipla CSV",
+    path: "/batch",
+  },
+  {
+    id: "settings",
+    label: "Setari",
+    description: "Configurare sistem",
+    path: "/settings",
+  },
+  {
+    id: "monitoring",
+    label: "Monitorizare",
+    description: "Alerte firme",
+    path: "/monitoring",
+  },
 ];
 
 // F2-7: Cheie pentru istoricul cautarilor recente
@@ -42,10 +75,16 @@ export default function GlobalSearch() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResults>({ companies: [], reports: [], actions: QUICK_ACTIONS.slice(0, 4) });
+  const [results, setResults] = useState<SearchResults>({
+    companies: [],
+    reports: [],
+    actions: QUICK_ACTIONS.slice(0, 4),
+  });
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState(0);
-  const [recentSearches, setRecentSearches] = useState<string[]>(() => loadRecentSearches());
+  const [recentSearches, setRecentSearches] = useState<string[]>(() =>
+    loadRecentSearches(),
+  );
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -53,9 +92,16 @@ export default function GlobalSearch() {
   const saveRecent = useCallback((q: string) => {
     const trimmed = q.trim();
     if (!trimmed || trimmed.length < 2) return;
-    setRecentSearches(prev => {
-      const updated = [trimmed, ...prev.filter(r => r !== trimmed)].slice(0, 5);
-      try { localStorage.setItem(RECENT_KEY, JSON.stringify(updated)); } catch { /* ignoram */ }
+    setRecentSearches((prev) => {
+      const updated = [trimmed, ...prev.filter((r) => r !== trimmed)].slice(
+        0,
+        5,
+      );
+      try {
+        localStorage.setItem(RECENT_KEY, JSON.stringify(updated));
+      } catch {
+        /* ignoram */
+      }
       return updated;
     });
   }, []);
@@ -80,75 +126,85 @@ export default function GlobalSearch() {
     if (open) {
       setTimeout(() => inputRef.current?.focus(), 50);
       setQuery("");
-      setResults({ companies: [], reports: [], actions: QUICK_ACTIONS.slice(0, 4) });
+      setResults({
+        companies: [],
+        reports: [],
+        actions: QUICK_ACTIONS.slice(0, 4),
+      });
       setSelected(0);
     }
   }, [open]);
 
   // Search all sources with debounce
-  const searchAll = useCallback(
-    (q: string) => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+  const searchAll = useCallback((q: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
 
-      if (!q || q.trim().length < 2) {
-        setResults({ companies: [], reports: [], actions: QUICK_ACTIONS.slice(0, 4) });
-        setLoading(false);
-        return;
+    if (!q || q.trim().length < 2) {
+      setResults({
+        companies: [],
+        reports: [],
+        actions: QUICK_ACTIONS.slice(0, 4),
+      });
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    debounceRef.current = setTimeout(async () => {
+      const query = q.trim();
+
+      // Detect CUI: numeric string 6-10 digits
+      const isCui = /^\d{6,10}$/.test(query);
+
+      // Filter quick actions matching query
+      const matchingActions = QUICK_ACTIONS.filter(
+        (a) =>
+          a.label.toLowerCase().includes(query.toLowerCase()) ||
+          a.description.toLowerCase().includes(query.toLowerCase()),
+      );
+
+      // Add "Analizeaza CUI X" action for numeric queries
+      if (isCui) {
+        matchingActions.unshift({
+          id: `analyze-${query}`,
+          label: `Analizeaza CUI ${query}`,
+          description: "Porneste analiza directa",
+          path: `/new-analysis?cui=${query}`,
+        });
       }
 
-      setLoading(true);
-      debounceRef.current = setTimeout(async () => {
-        const query = q.trim();
+      try {
+        const [companiesResult, reportsResult] = await Promise.all([
+          api.listCompanies({ search: query, limit: 5 }),
+          api
+            .listReports({ limit: 20 })
+            .catch(() => ({ reports: [], total: 0 })),
+        ]);
 
-        // Detect CUI: numeric string 6-10 digits
-        const isCui = /^\d{6,10}$/.test(query);
-
-        // Filter quick actions matching query
-        const matchingActions = QUICK_ACTIONS.filter(
-          (a) =>
-            a.label.toLowerCase().includes(query.toLowerCase()) ||
-            a.description.toLowerCase().includes(query.toLowerCase())
-        );
-
-        // Add "Analizeaza CUI X" action for numeric queries
-        if (isCui) {
-          matchingActions.unshift({
-            id: `analyze-${query}`,
-            label: `Analizeaza CUI ${query}`,
-            description: "Porneste analiza directa",
-            path: `/new-analysis?cui=${query}`,
-          });
-        }
-
-        try {
-          const [companiesResult, reportsResult] = await Promise.all([
-            api.listCompanies({ search: query, limit: 5 }),
-            api.listReports({ limit: 20 }).catch(() => ({ reports: [], total: 0 })),
-          ]);
-
-          // Filter reports locally by title/type match (backend doesn't support search param)
-          const allReports = reportsResult.reports || [];
-          const filteredReports = allReports.filter(
+        // Filter reports locally by title/type match (backend doesn't support search param)
+        const allReports = reportsResult.reports || [];
+        const filteredReports = allReports
+          .filter(
             (r) =>
-              (r.title && r.title.toLowerCase().includes(query.toLowerCase())) ||
-              r.report_type.toLowerCase().includes(query.toLowerCase())
-          ).slice(0, 5);
+              (r.title &&
+                r.title.toLowerCase().includes(query.toLowerCase())) ||
+              r.report_type.toLowerCase().includes(query.toLowerCase()),
+          )
+          .slice(0, 5);
 
-          setResults({
-            companies: companiesResult?.companies || [],
-            reports: filteredReports,
-            actions: matchingActions,
-          });
-          setSelected(0);
-        } catch {
-          setResults({ companies: [], reports: [], actions: matchingActions });
-        } finally {
-          setLoading(false);
-        }
-      }, 300);
-    },
-    []
-  );
+        setResults({
+          companies: companiesResult?.companies || [],
+          reports: filteredReports,
+          actions: matchingActions,
+        });
+        setSelected(0);
+      } catch {
+        setResults({ companies: [], reports: [], actions: matchingActions });
+      } finally {
+        setLoading(false);
+      }
+    }, 300);
+  }, []);
 
   const handleInputChange = (value: string) => {
     setQuery(value);
@@ -213,8 +269,13 @@ export default function GlobalSearch() {
         onClick={() => setOpen(false)}
       />
 
-      {/* Command Palette */}
-      <div className="fixed inset-x-0 top-[15%] z-[61] mx-auto w-full max-w-lg px-4">
+      {/* Command Palette — G4: role=dialog + aria-modal pentru focus trap WCAG */}
+      <div
+        className="fixed inset-x-0 top-[15%] z-[61] mx-auto w-full max-w-lg px-4"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Cautare globala"
+      >
         <div className="bg-dark-card border border-dark-border rounded-xl shadow-2xl overflow-hidden">
           {/* Search Input */}
           <div className="flex items-center gap-3 px-4 py-3 border-b border-dark-border">
@@ -230,7 +291,14 @@ export default function GlobalSearch() {
             />
             {query && (
               <button
-                onClick={() => { setQuery(""); setResults({ companies: [], reports: [], actions: QUICK_ACTIONS.slice(0, 4) }); }}
+                onClick={() => {
+                  setQuery("");
+                  setResults({
+                    companies: [],
+                    reports: [],
+                    actions: QUICK_ACTIONS.slice(0, 4),
+                  });
+                }}
                 className="text-gray-600 hover:text-gray-400 transition-colors"
                 aria-label="Sterge cautarea"
               >
@@ -253,7 +321,9 @@ export default function GlobalSearch() {
             {!loading && query.length >= 2 && !hasResults && (
               <div className="py-8 text-center">
                 <p className="text-sm text-gray-500">Niciun rezultat gasit</p>
-                <p className="text-xs text-gray-600 mt-1">Incearca alt termen de cautare</p>
+                <p className="text-xs text-gray-600 mt-1">
+                  Incearca alt termen de cautare
+                </p>
               </div>
             )}
 
@@ -277,15 +347,19 @@ export default function GlobalSearch() {
                             "w-full flex items-center gap-3 px-4 py-2 text-left transition-colors",
                             isSelected
                               ? "bg-accent-primary/10 text-white"
-                              : "text-gray-300 hover:bg-dark-hover"
+                              : "text-gray-300 hover:bg-dark-hover",
                           )}
                         >
                           <div className="w-7 h-7 rounded-lg bg-dark-surface flex items-center justify-center shrink-0">
                             <Zap className="w-3.5 h-3.5 text-yellow-400" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{action.label}</p>
-                            <p className="text-[10px] text-gray-500">{action.description}</p>
+                            <p className="text-sm font-medium truncate">
+                              {action.label}
+                            </p>
+                            <p className="text-[10px] text-gray-500">
+                              {action.description}
+                            </p>
                           </div>
                         </button>
                       );
@@ -311,14 +385,16 @@ export default function GlobalSearch() {
                             "w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors",
                             isSelected
                               ? "bg-accent-primary/10 text-white"
-                              : "text-gray-300 hover:bg-dark-hover"
+                              : "text-gray-300 hover:bg-dark-hover",
                           )}
                         >
                           <div className="w-8 h-8 rounded-lg bg-dark-surface flex items-center justify-center shrink-0">
                             <Building2 className="w-4 h-4 text-accent-secondary" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{company.name}</p>
+                            <p className="text-sm font-medium truncate">
+                              {company.name}
+                            </p>
                             <div className="flex items-center gap-2 mt-0.5">
                               {company.cui && (
                                 <span className="text-[10px] text-gray-500 font-mono">
@@ -364,7 +440,7 @@ export default function GlobalSearch() {
                             "w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors",
                             isSelected
                               ? "bg-accent-primary/10 text-white"
-                              : "text-gray-300 hover:bg-dark-hover"
+                              : "text-gray-300 hover:bg-dark-hover",
                           )}
                         >
                           <div className="w-8 h-8 rounded-lg bg-dark-surface flex items-center justify-center shrink-0">
@@ -376,16 +452,21 @@ export default function GlobalSearch() {
                             </p>
                             <p className="text-[10px] text-gray-500">
                               Nivel {report.report_level} |{" "}
-                              {new Date(report.created_at).toLocaleDateString("ro-RO")}
+                              {new Date(report.created_at).toLocaleDateString(
+                                "ro-RO",
+                              )}
                             </p>
                           </div>
                           {report.risk_score && (
                             <span
                               className={clsx(
                                 "text-[10px] px-1.5 py-0.5 rounded border shrink-0",
-                                report.risk_score === "Verde" && "text-green-400 border-green-500/30 bg-green-500/10",
-                                report.risk_score === "Galben" && "text-yellow-400 border-yellow-500/30 bg-yellow-500/10",
-                                report.risk_score === "Rosu" && "text-red-400 border-red-500/30 bg-red-500/10"
+                                report.risk_score === "Verde" &&
+                                  "text-green-400 border-green-500/30 bg-green-500/10",
+                                report.risk_score === "Galben" &&
+                                  "text-yellow-400 border-yellow-500/30 bg-yellow-500/10",
+                                report.risk_score === "Rosu" &&
+                                  "text-red-400 border-red-500/30 bg-red-500/10",
                               )}
                             >
                               {report.risk_score}
@@ -426,7 +507,11 @@ export default function GlobalSearch() {
                       <button
                         onClick={() => {
                           setRecentSearches([]);
-                          try { localStorage.removeItem(RECENT_KEY); } catch { /* ignoram */ }
+                          try {
+                            localStorage.removeItem(RECENT_KEY);
+                          } catch {
+                            /* ignoram */
+                          }
                         }}
                         className="text-[10px] text-gray-600 hover:text-gray-400 transition-colors"
                       >
@@ -452,17 +537,25 @@ export default function GlobalSearch() {
           <div className="px-4 py-2 border-t border-dark-border flex items-center justify-between text-[10px] text-gray-600">
             <div className="flex items-center gap-3">
               <span className="flex items-center gap-1">
-                <kbd className="bg-dark-surface px-1 py-0.5 rounded border border-dark-border/50">&#8593;</kbd>
-                <kbd className="bg-dark-surface px-1 py-0.5 rounded border border-dark-border/50">&#8595;</kbd>
+                <kbd className="bg-dark-surface px-1 py-0.5 rounded border border-dark-border/50">
+                  &#8593;
+                </kbd>
+                <kbd className="bg-dark-surface px-1 py-0.5 rounded border border-dark-border/50">
+                  &#8595;
+                </kbd>
                 navigheaza
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="bg-dark-surface px-1 py-0.5 rounded border border-dark-border/50">Enter</kbd>
+                <kbd className="bg-dark-surface px-1 py-0.5 rounded border border-dark-border/50">
+                  Enter
+                </kbd>
                 selecteaza
               </span>
             </div>
             <span className="flex items-center gap-1">
-              <kbd className="bg-dark-surface px-1 py-0.5 rounded border border-dark-border/50">Esc</kbd>
+              <kbd className="bg-dark-surface px-1 py-0.5 rounded border border-dark-border/50">
+                Esc
+              </kbd>
               inchide
             </span>
           </div>

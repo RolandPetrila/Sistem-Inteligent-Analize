@@ -1,4 +1,5 @@
 # RECOMANDARI IMBUNATATIRI R8
+
 **Data:** 9 Aprilie 2026 | **Sprint precedent:** R7 (18/18 COMPLETAT)
 **Baza:** Verificare R7 + Analiza Gemini 2026-04-09 + Analiza Gemini 2026-04-08
 
@@ -6,23 +7,23 @@
 
 ## VERIFICARE R7 — STATUS FINAL: 18/18 COMPLETAT ✓
 
-| Item | Descriere | Status | Fisier |
-|------|-----------|--------|--------|
-| A1 | Raport unic RIS-YYYY-XXXX (report_sequences) | ✓ | database.py:168, reports.py |
-| A2 | Risk badge numeric {score}/100 cu culori | ✓ | Companies.tsx:84-104 |
-| A3 | docs/FUNCTII_SISTEM.md actualizat | ✓ | docs/FUNCTII_SISTEM.md |
-| A4 | Brave Search key | ✓ | (user action, skip) |
-| A5 | AEGRM client garanții reale mobiliare | ✓ | backend/agents/tools/aegrm_client.py |
-| B1 | NLQ Ask RIS chatbot (POST /api/ask) | ✓ | routers/ask.py, components/AskRIS.tsx |
-| B2 | Knowledge Graph Visualizer (/network/:cui) | ✓ | pages/NetworkGraph.tsx |
-| B3 | Dark/Light theme toggle | ✓ | Layout.tsx:ThemeToggle |
-| B4 | Mobile search button (Ctrl+K dispatch) | ✓ | Layout.tsx:409-421 |
-| B5 | Share link HTML cu TTL (share_token) | ✓ | database.py:177-192, reports.py:280,297 |
-| C1 | Split componente: DeltaView, SimpleBarChart, EmailModal, CompanyChat, CompanyTimeline | ✓ | components/report/, components/company/ |
-| C2 | TanStack Query (@tanstack/react-query v5) | ✓ PARTIAL | main.tsx:27, ReportsList.tsx |
-| C3 | ARIA aria-hidden pe iconite decorative | ✓ | Layout.tsx:337 |
-| C4 | Return type hints pe 16 functii router | ✓ | companies.py, reports.py |
-| E3 | Mistral OCR (POST /api/documents/ocr) | ✓ | routers/documents.py |
+| Item | Descriere                                                                             | Status    | Fisier                                  |
+| ---- | ------------------------------------------------------------------------------------- | --------- | --------------------------------------- |
+| A1   | Raport unic RIS-YYYY-XXXX (report_sequences)                                          | ✓         | database.py:168, reports.py             |
+| A2   | Risk badge numeric {score}/100 cu culori                                              | ✓         | Companies.tsx:84-104                    |
+| A3   | docs/FUNCTII_SISTEM.md actualizat                                                     | ✓         | docs/FUNCTII_SISTEM.md                  |
+| A4   | Brave Search key                                                                      | ✓         | (user action, skip)                     |
+| A5   | AEGRM client garanții reale mobiliare                                                 | ✓         | backend/agents/tools/aegrm_client.py    |
+| B1   | NLQ Ask RIS chatbot (POST /api/ask)                                                   | ✓         | routers/ask.py, components/AskRIS.tsx   |
+| B2   | Knowledge Graph Visualizer (/network/:cui)                                            | ✓         | pages/NetworkGraph.tsx                  |
+| B3   | Dark/Light theme toggle                                                               | ✓         | Layout.tsx:ThemeToggle                  |
+| B4   | Mobile search button (Ctrl+K dispatch)                                                | ✓         | Layout.tsx:409-421                      |
+| B5   | Share link HTML cu TTL (share_token)                                                  | ✓         | database.py:177-192, reports.py:280,297 |
+| C1   | Split componente: DeltaView, SimpleBarChart, EmailModal, CompanyChat, CompanyTimeline | ✓         | components/report/, components/company/ |
+| C2   | TanStack Query (@tanstack/react-query v5)                                             | ✓ PARTIAL | main.tsx:27, ReportsList.tsx            |
+| C3   | ARIA aria-hidden pe iconite decorative                                                | ✓         | Layout.tsx:337                          |
+| C4   | Return type hints pe 16 functii router                                                | ✓         | companies.py, reports.py                |
+| E3   | Mistral OCR (POST /api/documents/ocr)                                                 | ✓         | routers/documents.py                    |
 
 **Nota C2:** TanStack Query montat global in main.tsx, migrat ReportsList.tsx.
 Dashboard.tsx + Companies.tsx raman cu pattern `useEffect + useState` — migratia completa e in R8.
@@ -31,17 +32,17 @@ Dashboard.tsx + Companies.tsx raman cu pattern `useEffect + useState` — migrat
 
 ## TABEL PRIORITĂȚI R8
 
-| ID | Grup | Titlu | P | Impact | Efort |
-|----|------|-------|---|--------|-------|
-| G1 | Gemini-Perf | Process Pool PDF/DOCX (event loop blocker) | P1 | Ridicat | Mediu |
-| G2 | Gemini-Biz | Crawler Monitorul Oficial (cesiuni suspecte) | P1 | Maxim | Mare |
-| G3 | Extindere-C2 | TanStack Query: Dashboard + Companies | P1 | Mediu | Mic |
-| G4 | Gemini-UX | WCAG 2.2 audit React/Tailwind + contrast fix | P2 | Mediu | Scazut |
-| G5 | Gemini-i18n | Suport English la rapoarte PDF/HTML | P2 | Ridicat | Mediu |
-| D1 | Strategic | data.gov.ro ONRC dataset local | P2 | Ridicat | Mare |
-| G6 | Gemini-DB | PostgreSQL fezabilitate studiu | P3 | Mediu | Ridicat |
-| G7 | Gemini-Ops | Prometheus/Grafana monitorizare | P3 | Scazut | Mediu |
-| G8 | Gemini-AI | Predictie faliment XGBoost local | P3 | Strategic | Mare |
+| ID  | Grup         | Titlu                                        | P   | Impact    | Efort   | Status  |
+| --- | ------------ | -------------------------------------------- | --- | --------- | ------- | ------- |
+| G1  | Gemini-Perf  | Process Pool PDF/DOCX (event loop blocker)   | P1  | Ridicat   | Mediu   | ✅ DONE |
+| G2  | Gemini-Biz   | Crawler Monitorul Oficial (cesiuni suspecte) | P1  | Maxim     | Mare    | ✅ DONE |
+| G3  | Extindere-C2 | TanStack Query: Dashboard + Companies        | P1  | Mediu     | Mic     | ✅ DONE |
+| G4  | Gemini-UX    | WCAG 2.2 audit React/Tailwind + contrast fix | P2  | Mediu     | Scazut  | ✅ DONE |
+| G5  | Gemini-i18n  | Suport English la rapoarte PDF/HTML          | P2  | Ridicat   | Mediu   | ✅ DONE |
+| D1  | Strategic    | data.gov.ro ONRC dataset local               | P2  | Ridicat   | Mare    | ✅ DONE |
+| G6  | Gemini-DB    | PostgreSQL fezabilitate studiu               | P3  | Mediu     | Ridicat | ✅ DOC  |
+| G7  | Gemini-Ops   | Prometheus/Grafana monitorizare              | P3  | Scazut    | Mediu   | ✅ DONE |
+| G8  | Gemini-AI    | Predictie faliment XGBoost local             | P3  | Strategic | Mare    | ✅ DOC  |
 
 ---
 
@@ -61,6 +62,7 @@ Dashboard.tsx + Companies.tsx raman cu pattern `useEffect + useState` — migrat
 Generarea PDF (fpdf2), DOCX (python-docx), PPTX (python-pptx) si Excel (openpyxl) sunt operatii CPU-bound care ruleaza in event loop-ul FastAPI. La generari simultane (batch, compare) pot bloca toate request-urile async.
 
 **Masurare:**
+
 - PDF cu 50 pagini + grafice: ~3-8s CPU-bound
 - La 3 generari simultane: latenta totala poate atinge 20-25s
 - Impacteaza si request-urile de citire (GET /api/reports) in acelasi timp
@@ -108,6 +110,7 @@ def _generate_pdf_sync(report_data: dict, output_path: str) -> str:
 Monitorul Oficial Partea a IV-a contine publicatii despre cesiuni de parti sociale, dizolvari, radieri, numiri administratori. Aceste evenimente apar CU 1-6 luni inainte de probleme financiare declarate oficial (bilant).
 
 **Valoare intelligence:**
+
 - Detectezi cand cineva "se retrage" din firma inainte de bilant negativ
 - Identifici cesiuni suspecte (pret mult sub valoare contabila)
 - Alerte precoce reale (nu estimate)
@@ -141,6 +144,7 @@ state["monitorul_oficial"] = mo_publications
 ```
 
 3. Scoring penalty in `agent_verification.py`:
+
 - Cesiune parti sociale in ultimele 6 luni: -10 puncte juridic
 - Dizolvare in curs: -20 puncte + flag early warning
 
@@ -176,7 +180,7 @@ const { data: recentJobs } = useQuery({
   queryKey: ["recent-jobs"],
   queryFn: () => api.listJobs({ limit: 5 }),
   staleTime: 10_000,
-  refetchInterval: 30_000,  // auto-refresh la 30s
+  refetchInterval: 30_000, // auto-refresh la 30s
 });
 ```
 
@@ -192,6 +196,7 @@ const { data: companiesData, isLoading } = useQuery({
 ```
 
 **Beneficii:**
+
 - Deduplication requesturi (Dashboard polling vs Companies lista)
 - Cache cross-page: daca navighez companies → dashboard → companies, nu refetch
 - Loading states uniforme
@@ -232,7 +237,7 @@ function useFocusTrap(active: boolean) {
   useEffect(() => {
     if (!active || !ref.current) return;
     const focusable = ref.current.querySelectorAll(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
     );
     const first = focusable[0] as HTMLElement;
     const last = focusable[focusable.length - 1] as HTMLElement;
@@ -303,6 +308,7 @@ Continutul generat de AI ramane in romana (e generat din datele ANAF).
 
 **Descriere:**
 Dataset oficial ONRC pe data.gov.ro (CC BY 4.0), actualizat lunar:
+
 - Firme active: ~660 MB CSV
 - Firme radiate: ~392 MB CSV
 
@@ -369,14 +375,14 @@ La >50K firme sau >5 utilizatori simultanei, PostgreSQL devine relevant.
 
 **De evaluat:**
 
-| Criteriu | SQLite (actual) | PostgreSQL |
-|----------|----------------|------------|
-| Setup | Zero (file-based) | Docker sau local install |
-| Backup | sqlite3.backup() | pg_dump |
-| Concurenta | WAL (1 writer) | MVCC (n writers) |
-| Full-text | FTS5 built-in | pg_trgm + GIN index |
-| JSON | JSON1 extension | jsonb nativ |
-| Migrare cod | - | aiosqlite → asyncpg (mediu) |
+| Criteriu    | SQLite (actual)   | PostgreSQL                  |
+| ----------- | ----------------- | --------------------------- |
+| Setup       | Zero (file-based) | Docker sau local install    |
+| Backup      | sqlite3.backup()  | pg_dump                     |
+| Concurenta  | WAL (1 writer)    | MVCC (n writers)            |
+| Full-text   | FTS5 built-in     | pg_trgm + GIN index         |
+| JSON        | JSON1 extension   | jsonb nativ                 |
+| Migrare cod | -                 | aiosqlite → asyncpg (mediu) |
 
 **Recomandare Gemini:** Pastreaza SQLite pentru versiunea locala. Adauga PostgreSQL ca optiune in `.env` (DATABASE_URL) pentru deployuri cloud viitoare. Pattern: repository abstraction layer.
 
@@ -423,6 +429,7 @@ Sistemul calculeaza deja scoruri Altman Z, Piotroski, Beneish, Zmijewski.
 Un model XGBoost antrenat pe date istorice reale (firme care au intrat in insolventa vs firme sanatoase) ar putea da probabilitati mai precise.
 
 **Blocante:**
+
 - Dataset de antrenament necesar: minim 1000 firme cu istoric 3+ ani (insolvent + sanatoase)
 - ANAF Bilant ofera date, dar colectarea ia timp
 - GDPR: datele despre firme sunt publice, OK
@@ -435,18 +442,22 @@ Documenteaza ca directie strategica. Revizuieste cand ai 500+ firme analizate in
 ## ORDINE RECOMANDATA DE IMPLEMENTARE
 
 ### Sprint R8A (prioritate imediata, 1-2 sesiuni):
+
 1. **G3** — TanStack Query Dashboard + Companies (2-3h, risc scazut) ← cel mai rapid win
 2. **G1** — Process Pool PDF/DOCX (3-4h, risc mediu) ← elibereaza event loop
 
 ### Sprint R8B (calitate si UX, 1-2 sesiuni):
+
 3. **G4** — WCAG 2.2 audit + contrast fix (2-3h)
 4. **G5** — i18n English reports (3-4h)
 
 ### Sprint R8C (strategic, sesiune dedicata):
+
 5. **D1** — data.gov.ro ONRC local (2-3 zile)
 6. **G2** — Crawler Monitorul Oficial (2-3 zile)
 
 ### Sprint R8D (research/future):
+
 7. **G6** — PostgreSQL feasibility (documentare, fara cod)
 8. **G7** — Prometheus metrics endpoint (2-3h, optional)
 9. **G8** — XGBoost faliment (research, termen lung)
@@ -456,6 +467,7 @@ Documenteaza ca directie strategica. Revizuieste cand ai 500+ firme analizate in
 ## INFORMATII DE CONTEXT GEMINI
 
 ### Gemini 2026-04-09 (RAPORT_MASTER.md) — Concluzii cheie:
+
 - **Scor general sistem:** Excelent — arhitectura matura pentru BI local
 - **Securitate:** Conformitate ridicata (CSP strict, 10MB anti-DDoS, mascare date sensibile)
 - **Compliance:** GDPR compliant, risc IP AI minimal prin abstract provider routing
@@ -463,6 +475,7 @@ Documenteaza ca directie strategica. Revizuieste cand ai 500+ firme analizate in
 - **VIES EU VAT:** Integrare potentiala pentru verificare TVA cross-border UE (P3 research)
 
 ### Gemini 2026-04-08 (MASTER_REPORT.md) — Bug hotfix implementat:
+
 - ✓ Fix LangGraph `_agent_metrics` (Annotated merge) — implementat in commit dc0d408
 - ✓ Knowledge Graph Visualizer — implementat in R7 (NetworkGraph.tsx)
 - ✓ BPI fallback Tavily — implementat in fazele anterioare
@@ -471,12 +484,12 @@ Documenteaza ca directie strategica. Revizuieste cand ai 500+ firme analizate in
 
 ## METRICI TINTA R8
 
-| Metric | Actual (post-R7) | Tinta R8 |
-|--------|-----------------|---------|
-| pytest | 365 PASSED | 375+ PASSED |
-| TypeScript errors | 0 | 0 |
-| Event loop blocker | PDF/DOCX sync | Async (Process Pool) |
+| Metric                  | Actual (post-R7)         | Tinta R8                      |
+| ----------------------- | ------------------------ | ----------------------------- |
+| pytest                  | 365 PASSED               | 375+ PASSED                   |
+| TypeScript errors       | 0                        | 0                             |
+| Event loop blocker      | PDF/DOCX sync            | Async (Process Pool)          |
 | TanStack Query coverage | 1/3 pagini (ReportsList) | 3/3 (+ Dashboard + Companies) |
-| WCAG contrast | Neverificat | AA compliant (4.5:1) |
-| i18n | RO only | RO + EN |
-| ONRC requests/luna | 100 limit (openapi.ro) | Nelimitat (local dataset) |
+| WCAG contrast           | Neverificat              | AA compliant (4.5:1)          |
+| i18n                    | RO only                  | RO + EN                       |
+| ONRC requests/luna      | 100 limit (openapi.ro)   | Nelimitat (local dataset)     |

@@ -234,7 +234,7 @@ function NotificationBell() {
                         <p className="text-sm text-gray-200 font-medium truncate">
                           {notif.title}
                         </p>
-                        <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                        <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">
                           {notif.message}
                         </p>
                       </div>

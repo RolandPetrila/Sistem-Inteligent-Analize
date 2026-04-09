@@ -482,8 +482,9 @@ def _build_company_network_html(verified_data: dict) -> str:
     </section>'''
 
 
-def generate_html(report_sections: dict, meta: dict, verified_data: dict, output_path: str):
-    """Genereaza HTML single-file din report_sections + verified_data."""
+def generate_html(report_sections: dict, meta: dict, verified_data: dict, output_path: str, lang: str = "ro"):
+    """Genereaza HTML single-file din report_sections + verified_data. G5: i18n lang."""
+    from backend.reports.i18n import t as _t
     company = _escape(meta.get("company_name", "N/A"))
     title = _escape(meta.get("title", "Raport"))
     generated = _escape(meta.get("generated_at", ""))
@@ -495,7 +496,7 @@ def generate_html(report_sections: dict, meta: dict, verified_data: dict, output
 
     risk_color = {"Verde": "#22c55e", "Galben": "#eab308", "Rosu": "#ef4444"}.get(risk, "#888")
 
-    risk_display = f"Risc: {risk}"
+    risk_display = f"{_t('risk_score', lang)}: {risk}"
     if numeric is not None:
         risk_display += f" ({numeric}/100)"
 

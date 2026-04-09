@@ -21,7 +21,18 @@ from backend import http_client
 from backend.config import settings
 from backend.database import db
 from backend.errors import ERROR_HTTP_STATUS, RISError
-from backend.routers import analysis, ask, batch, companies, compare, documents, jobs, monitoring, notifications, reports
+from backend.routers import (
+    analysis,
+    ask,
+    batch,
+    companies,
+    compare,
+    documents,
+    jobs,
+    monitoring,
+    notifications,
+    reports,
+)
 from backend.routers import settings as settings_router
 from backend.ws import ws_manager
 
@@ -356,7 +367,46 @@ async def get_frontend_log(lines: int = 200):
 @app.get("/api/health")
 async def health_check():
     """Health check simplu — raspuns rapid."""
-    return {"status": "ok", "service": "RIS", "version": "3.1.0"}
+    return {"status": "ok", "service": "RIS", "version": "3.2.0"}
+
+
+# G7: Prometheus metrics endpoint
+@app.get("/metrics", include_in_schema=False)
+async def prometheus_metrics():
+    """Prometheus-compatible metrics endpoint. Util pentru Grafana Cloud / local monitoring."""
+    try:
+        from prometheus_client import (
+            CONTENT_TYPE_LATEST,
+            CollectorRegistry,
+            Counter,
+            Gauge,
+            generate_latest,
+        )
+        from starlette.responses import Response
+
+        registry = CollectorRegistry()
+        # Expose basic app metrics
+        info = Gauge("ris_info", "RIS application info", ["version"], registry=registry)
+        info.labels(version="3.2.0").set(1)
+
+        # DB stats
+        try:
+            stats_row = await db.fetch_one("SELECT COUNT(*) as c FROM jobs")
+            jobs_total = Gauge("ris_jobs_total", "Total jobs in DB", registry=registry)
+            jobs_total.set(stats_row["c"] if stats_row else 0)
+        except Exception:
+            pass
+
+        try:
+            companies_row = await db.fetch_one("SELECT COUNT(*) as c FROM companies")
+            companies_total = Gauge("ris_companies_total", "Total companies", registry=registry)
+            companies_total.set(companies_row["c"] if companies_row else 0)
+        except Exception:
+            pass
+
+        return Response(generate_latest(registry), media_type=CONTENT_TYPE_LATEST)
+    except ImportError:
+        return {"error": "prometheus-client not installed"}
 
 
 @app.get("/api/cache/stats")

@@ -168,10 +168,11 @@ def _render_markdown_text(pdf, text: str, line_height: float = 6.0):
 
 
 class RISPdf(FPDF):
-    def __init__(self, meta: dict, watermark: str = "CONFIDENTIAL"):
+    def __init__(self, meta: dict, watermark: str = "CONFIDENTIAL", lang: str = "ro"):
         super().__init__()
         self.meta = meta
         self.watermark = watermark
+        self.lang = lang
         self.section_pages: list[tuple[str, int]] = []  # (title, page_no) for TOC
         self.set_auto_page_break(auto=True, margin=25)
 
@@ -194,20 +195,21 @@ class RISPdf(FPDF):
             self.set_font(*prev_font)
 
     def footer(self):
+        from backend.reports.i18n import t as _t
         self.set_y(-20)
         self.set_font("Helvetica", "I", 7)
         self.set_text_color(150, 150, 150)
-        watermark_label = self.watermark if self.watermark else "CONFIDENTIAL"
-        self.cell(0, 5, f"{watermark_label} | Pagina {self.page_no()}/{{nb}}", align="C")
+        watermark_label = self.watermark if self.watermark else _t("confidential", self.lang)
+        page_label = _t("page", self.lang)
+        self.cell(0, 5, f"{watermark_label} | {page_label} {self.page_no()}/{{nb}}", align="C")
 
 
-def generate_pdf(report_sections: dict, meta: dict, output_path: str, verified_data: dict = None):
-    """Genereaza PDF din report_sections. 9D: watermark + TOC. B15: due_diligence + early_warnings."""
-    # meta and report_sections should already be sanitized by caller
+def generate_pdf(report_sections: dict, meta: dict, output_path: str, verified_data: dict = None, lang: str = "ro"):
+    """Genereaza PDF din report_sections. 9D: watermark + TOC. B15: due_diligence + early_warnings. G5: i18n lang."""
     verified_data = verified_data or {}
     # F3-12: Watermark personalizabil din settings (.env PDF_WATERMARK / PDF_WATERMARK_ENABLED)
     watermark_text = settings.pdf_watermark if settings.pdf_watermark_enabled else ""
-    pdf = RISPdf(meta, watermark=watermark_text)
+    pdf = RISPdf(meta, watermark=watermark_text, lang=lang)
     pdf.alias_nb_pages()
     pdf.add_page()
 
@@ -226,12 +228,13 @@ def generate_pdf(report_sections: dict, meta: dict, output_path: str, verified_d
     pdf.ln(10)
     pdf.set_font("Helvetica", "", 11)
     pdf.set_text_color(120, 120, 120)
-    pdf.cell(0, 8, f"Nivel raport: {meta.get('report_level', 'N/A')}", align="C", new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 8, f"Generat: {meta.get('generated_at', '')}", align="C", new_x="LMARGIN", new_y="NEXT")
+    from backend.reports.i18n import t as _t
+    pdf.cell(0, 8, f"{_t('report_level', lang)}: {meta.get('report_level', 'N/A')}", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, f"{_t('generated_at', lang)}: {meta.get('generated_at', '')}", align="C", new_x="LMARGIN", new_y="NEXT")
     if meta.get("report_number"):
         pdf.set_font("Helvetica", "", 10)
         pdf.set_text_color(160, 160, 160)
-        pdf.cell(0, 7, f"Nr. raport: {meta['report_number']}", align="C", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 7, f"{_t('report_number', lang)}: {meta['report_number']}", align="C", new_x="LMARGIN", new_y="NEXT")
 
     risk = meta.get("risk_score", "N/A")
     numeric = meta.get("numeric_score")
@@ -241,7 +244,7 @@ def generate_pdf(report_sections: dict, meta: dict, output_path: str, verified_d
         color_map = {"Verde": (34, 197, 94), "Galben": (234, 179, 8), "Rosu": (239, 68, 68)}
         r, g, b = color_map.get(risk, (150, 150, 150))
         pdf.set_text_color(r, g, b)
-        score_text = f"Scor Risc: {risk}"
+        score_text = f"{_t('risk_score', lang)}: {risk}"
         if numeric is not None:
             score_text += f" ({numeric}/100)"
         pdf.cell(0, 10, score_text, align="C", new_x="LMARGIN", new_y="NEXT")

@@ -85,6 +85,29 @@ class OfficialAgent(BaseAgent):
                     "progress": 0.20,
                 }
 
+        # --- D1: ONRC Local lookup (instant, inaintea openapi.ro) ---
+        if cui_clean:
+            try:
+                from backend.database import db as _db
+                onrc_local = await _db.fetch_one(
+                    "SELECT * FROM onrc_companies WHERE cui=?", (int(cui_clean),)
+                )
+                if onrc_local:
+                    onrc_dict = dict(onrc_local)
+                    official_data["onrc_local"] = onrc_dict
+                    if not company_name:
+                        company_name = onrc_dict.get("denumire", "")
+                    logger.info(f"[official] ONRC local hit: CUI {cui_clean} = {onrc_dict.get('denumire', '')}")
+                    sources.append({
+                        "source_name": "ONRC (local)",
+                        "source_url": "data.gov.ro",
+                        "status": "OK",
+                        "data_found": True,
+                        "response_time_ms": 0,
+                    })
+            except Exception as _e:
+                logger.debug(f"[official] ONRC local lookup skipped: {_e}")
+
         # --- 9A: Parallel source fetching (Phase 1 — ANAF + openapi.ro + BNR simultan) ---
         if cui_clean:
             # Fetch ANAF, openapi.ro, ANAF Bilant, BNR, BPI, AEGRM in parallel cu timeout individual
@@ -236,6 +259,30 @@ class OfficialAgent(BaseAgent):
                         logger.info(f"[official] Google Maps: {maps_result.get('name')} rating={maps_result.get('rating')}")
                 except Exception as _e:
                     logger.debug(f"[official] maps error: {_e}")
+
+            # G2: Monitorul Oficial Partea IV (cesiuni, dizolvari, radieri)
+            if company_name:
+                try:
+                    from backend.agents.tools.monitorul_oficial_client import search_company_publications
+                    mo_events = await self._fetch_with_timeout(
+                        search_company_publications(cui_clean, company_name, max_results=5),
+                        "Monitorul Oficial",
+                        15,
+                    )
+                    if mo_events and isinstance(mo_events, list) and len(mo_events) > 0:
+                        official_data["monitorul_oficial"] = mo_events
+                        sources.append({
+                            "source_name": "Monitorul Oficial",
+                            "source_url": "https://www.monitoruloficial.ro",
+                            "status": "OK",
+                            "data_found": True,
+                            "response_time_ms": 0,
+                        })
+                        log_source_result(job_id, "Monitorul Oficial", True, 0,
+                            [f"events={len(mo_events)}"])
+                        logger.info(f"[official] MO: {len(mo_events)} events for {company_name}")
+                except Exception as _e:
+                    logger.debug(f"[official] MO error: {_e}")
 
             # EP2+EP3: Extract ANAF inactivi + risc fiscal (already in ANAF v9 response)
             if anaf_source["data_found"]:
