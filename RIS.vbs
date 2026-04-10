@@ -27,33 +27,42 @@ If oFSO.FolderExists(sFrontendDir) Then
     oShell.Run sBuildCmd, 0, True
 End If
 
-' ── 2. RESTART SERVICIU (stop + start) ────────────────────────────────
-On Error Resume Next
-Set oSvc = GetObject("winmgmts:{impersonationLevel=impersonate}!\\.\root\cimv2")
-Set colItems = oSvc.ExecQuery("SELECT State FROM Win32_Service WHERE Name='RIS-Backend'")
+' ── 2. RESTART SERVICIU via WinSW (nu sc — necesita admin) ─────────────
+' Foloseste tools\RIS-Backend.exe restart care NU necesita elevare admin
+' pentru ca e semnat si instalat ca serviciu Windows via WinSW.
+Dim sWinSW
+sWinSW = sProjectDir & "\tools\RIS-Backend.exe"
 
-sState = "NotFound"
-For Each objItem In colItems
-    sState = objItem.State
-Next
-On Error GoTo 0
+If oFSO.FileExists(sWinSW) Then
+    ' Restart via WinSW — stop + start + wait
+    oShell.Run """" & sWinSW & """ restart", 0, True
+    WScript.Sleep 2000
 
-If sState = "Running" Then
-    ' Serviciul ruleaza — restart (stop + start)
-    oShell.Run "sc stop RIS-Backend", 0, True
-    WScript.Sleep 3000
-    oShell.Run "sc start RIS-Backend", 0, False
-    WScript.Sleep 3000
-ElseIf sState = "Stopped" Then
-    ' Serviciul oprit — doar start
-    oShell.Run "sc start RIS-Backend", 0, False
-    WScript.Sleep 3000
-ElseIf sState = "NotFound" Then
-    ' Serviciul nu e instalat — incearca pornire directa
-    Dim sDirectCmd
-    sDirectCmd = "cmd /c cd /d """ & sProjectDir & """ && python -m backend.main"
-    oShell.Run sDirectCmd, 0, False
+    ' CRITICAL: Omoara procesele orfane pythonw.exe care pot tine portul 8001
+    ' (pot ramane din sesiuni anterioare daca serviciul a picat brutal)
+    oShell.Run "cmd /c for /f ""tokens=5"" %a in ('netstat -ano ^| findstr "":8001"" ^| findstr ""LISTENING""') do taskkill /PID %a /F 2>nul", 0, True
+    WScript.Sleep 1500
+
+    ' Restart din nou daca a fost omorat cineva
+    oShell.Run """" & sWinSW & """ start", 0, True
     WScript.Sleep 4000
+Else
+    ' WinSW nu exista — fallback la sc (necesita admin)
+    On Error Resume Next
+    Set oSvc = GetObject("winmgmts:{impersonationLevel=impersonate}!\\.\root\cimv2")
+    Set colItems = oSvc.ExecQuery("SELECT State FROM Win32_Service WHERE Name='RIS-Backend'")
+    sState = "NotFound"
+    For Each objItem In colItems
+        sState = objItem.State
+    Next
+    On Error GoTo 0
+
+    If sState = "Running" Then
+        oShell.Run "sc stop RIS-Backend", 0, True
+        WScript.Sleep 3000
+    End If
+    oShell.Run "sc start RIS-Backend", 0, False
+    WScript.Sleep 3000
 End If
 
 ' ── 3. DETECTEAZA IP TAILSCALE ────────────────────────────────────────

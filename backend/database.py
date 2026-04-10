@@ -101,11 +101,38 @@ class Database:
         return [dict(row) for row in rows]
 
     async def run_migrations(self):
+        import sqlite3 as _sqlite3
         migration_files = sorted(MIGRATIONS_DIR.glob("*.sql"))
         for mf in migration_files:
             logger.info(f"Running migration: {mf.name}")
             sql = mf.read_text(encoding="utf-8")
-            await self.db.executescript(sql)
+            # Folosim sqlite3.complete_statement() pentru split corect pe statements
+            # (gestioneaza corect strings, comments, triggers multi-line).
+            statements = []
+            buf = ""
+            for line in sql.splitlines():
+                if line.strip().startswith("--"):
+                    continue
+                buf += line + "\n"
+                if _sqlite3.complete_statement(buf):
+                    stmt = buf.strip()
+                    if stmt:
+                        statements.append(stmt)
+                    buf = ""
+            if buf.strip():
+                statements.append(buf.strip())
+
+            for stmt in statements:
+                try:
+                    await self.db.execute(stmt)
+                    await self.db.commit()
+                except Exception as e:
+                    msg = str(e).lower()
+                    if "duplicate column" in msg or "already exists" in msg:
+                        logger.debug(f"Migration {mf.name} idempotent skip: {e}")
+                    else:
+                        logger.error(f"Migration {mf.name} stmt failed: {e}\nSQL: {stmt[:200]}")
+                        raise
         # 10A M10.2: Add schema_version column to cache (safe — ignores if exists)
         try:
             await self.db.execute("ALTER TABLE data_cache ADD COLUMN schema_version INTEGER DEFAULT 1")
