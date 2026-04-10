@@ -641,12 +641,16 @@ async def download_company_timeline_pdf(
     os.makedirs(outputs_root, exist_ok=True)
 
     tmp_path = os.path.join(outputs_root, f"timeline_{uuid.uuid4().hex}.pdf")
+    # Security: sanitize CUI before putting in HTTP header (filename)
+    # Only digits, max 10 chars — prevents header injection + filename manipulation
+    safe_cui = "".join(c for c in (cui or "") if c.isdigit())[:10]
+    safe_filename = f"evolutie_{safe_cui}.pdf" if safe_cui else f"evolutie_{uuid.uuid4().hex[:8]}.pdf"
     try:
         generate_timeline_pdf(timeline_data, tmp_path)
         return FileResponse(
             tmp_path,
             media_type="application/pdf",
-            filename=f"evolutie_{cui}.pdf",
+            filename=safe_filename,
         )
     except Exception:
         logger.exception(f"[timeline_pdf] eroare generare pentru CUI {cui}")
@@ -849,5 +853,5 @@ async def get_company_network_graph(company_id: str):
         }
     except Exception as e:
         logger.warning(f"[network] Eroare retea CUI {cui}: {e}")
-        return {"nodes": [], "edges": [], "company_name": company.get("name", "N/A"), "cui": cui, "error": str(e)}
+        return {"nodes": [], "edges": [], "company_name": company.get("name", "N/A"), "cui": cui, "error": "Eroare la construirea retelei de companii"}
 

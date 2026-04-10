@@ -1,10 +1,11 @@
 import re
 
 from fastapi import APIRouter
+from loguru import logger
 from pydantic import BaseModel
 
-from backend.models import AnalysisType, ANALYSIS_TYPES_META, AnalysisTypeResponse
-from backend.errors import RISError, ErrorCode
+from backend.errors import ErrorCode, RISError
+from backend.models import ANALYSIS_TYPES_META, AnalysisType, AnalysisTypeResponse
 
 router = APIRouter()
 
@@ -119,8 +120,9 @@ async def parse_natural_query(data: ParseQueryRequest):
 async def quick_score_batch(body: dict):
     """F3-2: Scoring rapid pentru max 20 CUI-uri — doar ANAF TVA + Bilant, fara AI synthesis."""
     import asyncio
-    from backend.agents.tools.anaf_client import ANAFClient
+
     from backend.agents.tools.anaf_bilant_client import ANAFBilantClient
+    from backend.agents.tools.anaf_client import ANAFClient
     from backend.agents.tools.cui_validator import validate_cui
 
     cuis = body.get("cuis", [])[:20]
@@ -163,7 +165,8 @@ async def quick_score_batch(body: dict):
                 "risk": "Verde" if score >= 70 else "Galben" if score >= 40 else "Rosu"
             }
         except Exception as e:
-            return {"cui": cui, "error": str(e)[:80]}
+            logger.warning(f"[quick_score] CUI {cui} eroare: {e}")
+            return {"cui": cui, "error": "Eroare la scoring rapid — sursa indisponibila"}
 
     results = await asyncio.gather(*[score_one(c) for c in cuis])
     return {"results": list(results), "note": "Scoring rapid — doar ANAF, fara AI synthesis"}

@@ -90,7 +90,10 @@ class OfficialAgent(BaseAgent):
             try:
                 from backend.database import db as _db
                 onrc_local = await _db.fetch_one(
-                    "SELECT * FROM onrc_companies WHERE cui=?", (int(cui_clean),)
+                    "SELECT cui, denumire, caen, judet, localitate, "
+                    "data_inregistrare, status, forma_juridica, cod_postal, updated_at "
+                    "FROM onrc_companies WHERE cui=?",
+                    (int(cui_clean),),
                 )
                 if onrc_local:
                     onrc_dict = dict(onrc_local)

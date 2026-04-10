@@ -130,7 +130,14 @@ class TestStartScheduler:
 
         fake_task = MagicMock(spec=asyncio.Task)
 
-        with patch("asyncio.create_task", return_value=fake_task):
+        # Close the coroutine passed to create_task to avoid
+        # "coroutine '_scheduler_loop' was never awaited" RuntimeWarning
+        def fake_create_task(coro, *args, **kwargs):
+            if hasattr(coro, "close"):
+                coro.close()
+            return fake_task
+
+        with patch("asyncio.create_task", side_effect=fake_create_task):
             from backend.services.scheduler import start_scheduler
             result = await start_scheduler()
             assert result is fake_task

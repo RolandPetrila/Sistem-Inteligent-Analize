@@ -120,7 +120,13 @@ async def _prepare_job_state(job_id: str, ws_manager=None) -> tuple[dict, "Analy
     Raises: ValueError daca job nu exista.
     Side effects: seteaza status RUNNING in DB, trimite WS progress 5%.
     """
-    job = await db.fetch_one("SELECT * FROM jobs WHERE id = ?", (job_id,))
+    job = await db.fetch_one(
+        "SELECT id, type, status, input_data, report_level, created_at, "
+        "started_at, completed_at, error_message, progress_percent, "
+        "current_step, checkpoint_data "
+        "FROM jobs WHERE id = ?",
+        (job_id,),
+    )
     if not job:
         raise ValueError(f"Job {job_id} not found")
 

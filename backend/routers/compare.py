@@ -59,8 +59,9 @@ async def compare_companies(data: CompareRequest):
                 if anaf:
                     await cache_service.set(cache_key_anaf, anaf, "anaf")
             except Exception as e:
+                logger.warning(f"[compare] ANAF eroare CUI {cui}: {e}")
                 anaf = {}
-                company["error_anaf"] = str(e)
+                company["error_anaf"] = "Sursa ANAF indisponibila"
             # C17 fix: Only sleep on cache miss (rate limit), not on hit
             await asyncio.sleep(settings.compare_rate_delay_s)  # rate limit: doar la fetch real, nu la cache hit
 

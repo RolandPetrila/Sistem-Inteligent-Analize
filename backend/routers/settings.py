@@ -213,7 +213,7 @@ TESTABLE_SERVICES = ["groq", "gemini", "tavily", "telegram"]
 @router.post("/test/{service}")
 async def test_service(service: str):
     """Test conectivitate individual per serviciu (groq, gemini, tavily, telegram)."""
-    from backend.errors import RISError, ErrorCode
+    from backend.errors import ErrorCode, RISError
 
     if service not in TESTABLE_SERVICES:
         raise RISError(ErrorCode.VALIDATION_ERROR, f"Serviciu necunoscut: {service}. Valide: {', '.join(TESTABLE_SERVICES)}")
@@ -260,4 +260,5 @@ async def test_service(service: str):
             return {"ok": ok, "message": "Telegram OK" if ok else "Telegram: eroare la trimitere"}
 
     except Exception as e:
-        return {"ok": False, "message": str(e)[:150]}
+        logger.warning(f"[settings] Test conexiune {service} esuat: {e}")
+        return {"ok": False, "message": "Eroare la testarea conexiunii — verifica logs"}

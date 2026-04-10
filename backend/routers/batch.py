@@ -380,13 +380,13 @@ async def _analyze_one_cui(
 
         # 8D: Retry logic — max 2 retries with backoff
         max_retries = 2
-        last_error = ""
+        internal_error = ""  # Full error for logs
         for attempt in range(1 + max_retries):
             try:
                 await run_analysis_job(sub_job_id, ws_manager=None)
                 return {"cui": cui, "job_id": sub_job_id, "status": "OK"}
             except Exception as e:
-                last_error = str(e)[:200]
+                internal_error = str(e)[:200]
                 if attempt < max_retries:
                     logger.warning(f"[batch] CUI {cui} attempt {attempt+1} failed: {e}, retrying...")
                     await asyncio.sleep(3 * (attempt + 1))
@@ -396,8 +396,9 @@ async def _analyze_one_cui(
                         (sub_job_id,),
                     )
 
-        logger.warning(f"[batch] CUI {cui} failed after {max_retries+1} attempts: {last_error}")
-        return {"cui": cui, "job_id": sub_job_id, "status": "FAILED", "error": last_error}
+        logger.warning(f"[batch] CUI {cui} failed after {max_retries+1} attempts: {internal_error}")
+        # Security: client gets generic message, details in logs
+        return {"cui": cui, "job_id": sub_job_id, "status": "FAILED", "error": "Analiza esuata dupa retry — verifica logs"}
 
 
 async def _run_batch(
@@ -413,10 +414,11 @@ async def _run_batch(
     try:
         await _run_batch_inner(batch_id, cuis, analysis_type, report_level, ws_manager, refresh=refresh)
     except Exception as e:
-        logger.error(f"[batch] {batch_id[:8]}: Top-level error: {e}")
+        logger.error(f"[batch] {batch_id[:8]}: Top-level error: {e}", exc_info=True)
+        # Security: generic message in DB (visible via API), real error in logs
         await db.execute(
             "UPDATE jobs SET status = 'ERROR', error_message = ?, completed_at = ? WHERE id = ?",
-            (f"Eroare neasteptata: {str(e)[:200]}", datetime.now(UTC).isoformat(), batch_id),
+            ("Eroare neasteptata in batch — verifica logs", datetime.now(UTC).isoformat(), batch_id),
         )
 
 

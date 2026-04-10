@@ -8,13 +8,33 @@ from pathlib import Path
 from backend.config import settings
 from backend.database import db
 
+# Audit 2026-04-10: Explicit columns pentru a preveni data leak accidental
+# la adaugare coloane in schema si pentru performance (no wildcard)
+_REPORT_COLUMNS_FULL = (
+    "id, job_id, company_id, report_type, report_level, title, summary, "
+    "full_data, risk_score, created_at, pdf_path, docx_path, excel_path, "
+    "html_path, pptx_path, report_number, share_token, share_expires_at"
+)
+_REPORT_COLUMNS_LIST = (
+    "id, job_id, company_id, report_type, report_level, title, summary, "
+    "risk_score, created_at, pdf_path, docx_path, excel_path, "
+    "html_path, pptx_path, report_number"
+)
+_SOURCE_COLUMNS = (
+    "id, report_id, source_name, source_url, accessed_at, "
+    "status, data_found, response_time_ms"
+)
+
 
 async def get_report_by_id(report_id: str) -> dict | None:
     """
     Returneaza un raport complet dupa ID, inclusiv surse si formate disponibile.
     Returns None daca raportul nu exista.
     """
-    row = await db.fetch_one("SELECT * FROM reports WHERE id = ?", (report_id,))
+    row = await db.fetch_one(
+        f"SELECT {_REPORT_COLUMNS_FULL} FROM reports WHERE id = ?",
+        (report_id,),
+    )
     if not row:
         return None
 
@@ -31,7 +51,7 @@ async def get_report_by_id(report_id: str) -> dict | None:
             formats.append(fmt)
 
     sources = await db.fetch_all(
-        "SELECT * FROM report_sources WHERE report_id = ? ORDER BY accessed_at",
+        f"SELECT {_SOURCE_COLUMNS} FROM report_sources WHERE report_id = ? ORDER BY accessed_at",
         (report_id,),
     )
 
@@ -79,7 +99,7 @@ async def list_reports(
     total = total_row["c"] if total_row else 0
 
     rows = await db.fetch_all(
-        f"SELECT * FROM reports {where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+        f"SELECT {_REPORT_COLUMNS_LIST} FROM reports {where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
         tuple(params + [limit, offset]),
     )
 
