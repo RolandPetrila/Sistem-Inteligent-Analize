@@ -1,14 +1,44 @@
+import os
 import secrets as _secrets
+import stat
 from pathlib import Path
 
 from loguru import logger
 from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
+_SECRET_KEY_FILE = Path("data") / ".secret_key"
+_DEFAULT_PLACEHOLDER = "change-me-to-random-string"
 
-def _default_secret_key() -> str:
-    """D19: Generate random secret key if not set in .env."""
-    return _secrets.token_urlsafe(32)
+
+def _load_or_create_secret_key() -> tuple[str, bool]:
+    """Load persisted secret key from data/.secret_key or create one.
+
+    Returns (key, was_created). Persisting the key ensures JWT/cookie
+    sessions survive across process restarts when APP_SECRET_KEY is not
+    explicitly set in .env.
+    """
+    try:
+        if _SECRET_KEY_FILE.exists():
+            key = _SECRET_KEY_FILE.read_text(encoding="utf-8").strip()
+            if key and key != _DEFAULT_PLACEHOLDER and len(key) >= 32:
+                return key, False
+    except OSError as e:
+        logger.warning(f"[config] Could not read {_SECRET_KEY_FILE}: {e}")
+
+    # Create a fresh key and persist it
+    key = _secrets.token_urlsafe(32)
+    try:
+        _SECRET_KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _SECRET_KEY_FILE.write_text(key, encoding="utf-8")
+        # Best-effort restrict permissions (noop on Windows but safe)
+        try:
+            os.chmod(_SECRET_KEY_FILE, stat.S_IRUSR | stat.S_IWUSR)
+        except OSError:
+            pass
+    except OSError as e:
+        logger.warning(f"[config] Could not persist secret key to {_SECRET_KEY_FILE}: {e}")
+    return key, True
 
 
 class Settings(BaseSettings):
@@ -94,13 +124,22 @@ class Settings(BaseSettings):
     }
 
     def model_post_init(self, __context) -> None:
-        # D19: Auto-generate secret key if not set or still default
-        if not self.app_secret_key or self.app_secret_key == "change-me-to-random-string":
-            self.app_secret_key = _default_secret_key()
-            logger.warning(
-                "APP_SECRET_KEY nu e setat in .env — s-a generat automat. "
-                "Setati APP_SECRET_KEY in .env pentru persistenta intre restart-uri."
-            )
+        # D19 + Gemini-P0: Persist auto-generated secret key so sessions survive restarts.
+        if not self.app_secret_key or self.app_secret_key == _DEFAULT_PLACEHOLDER:
+            # Production hard-fail: refuse to run with missing/default key
+            if os.environ.get("RIS_ENV", "").lower() == "production":
+                raise RuntimeError(
+                    "SECURITATE: APP_SECRET_KEY lipseste sau e valoarea default in .env. "
+                    "Seteaza APP_SECRET_KEY cu o valoare random (min 32 chars) inainte de "
+                    "pornire in RIS_ENV=production."
+                )
+            key, created = _load_or_create_secret_key()
+            self.app_secret_key = key
+            if created:
+                logger.warning(
+                    f"APP_SECRET_KEY nu e setat in .env — s-a generat si persistat in "
+                    f"{_SECRET_KEY_FILE}. Pentru productie, seteaza APP_SECRET_KEY in .env."
+                )
 
     @model_validator(mode="after")
     def validate_critical_keys(self) -> "Settings":

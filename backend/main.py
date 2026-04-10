@@ -1,26 +1,20 @@
 import asyncio
 import json
-import re
-import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-
-# Runtime log — captures startup, shutdown, 500 errors (not per-job)
 from pathlib import Path as _Path
 
 import aiofiles
-from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
-from starlette.middleware.base import BaseHTTPMiddleware
 
 from backend import http_client
 from backend.config import settings
 from backend.database import db
 from backend.errors import ERROR_HTTP_STATUS, RISError
+from backend.middlewares import register_middlewares
 from backend.routers import (
     analysis,
     ask,
@@ -34,8 +28,10 @@ from backend.routers import (
     reports,
 )
 from backend.routers import settings as settings_router
+from backend.static_serving import mount_frontend_dist
 from backend.ws import ws_manager
 
+# --- Runtime log sink — captures startup, shutdown, 500 errors (not per-job) ---
 _LOGS_DIR = _Path("logs")
 _LOGS_DIR.mkdir(exist_ok=True)
 if settings.log_format == "json":
@@ -58,29 +54,21 @@ else:
     )
 
 
-# --- WebSocket connection manager --- (defined in backend.ws, imported above)
-
-
 # --- App lifespan ---
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("RIS starting up...")
-    if settings.app_secret_key == "change-me-to-random-string":
-        logger.warning("SECURITATE: app_secret_key are valoare default! Seteaza APP_SECRET_KEY in .env")
     await db.connect()
     await db.run_migrations()
     await http_client.startup()
 
-    # Cleanup cache expirat
     from backend.services import cache_service
     await cache_service.cleanup_expired()
     logger.info("Cache: expired entries cleaned at startup")
 
     # Recover interrupted jobs
-    interrupted = await db.fetch_all(
-        "SELECT id FROM jobs WHERE status = 'RUNNING'"
-    )
+    interrupted = await db.fetch_all("SELECT id FROM jobs WHERE status = 'RUNNING'")
     for job in interrupted:
         await db.execute(
             "UPDATE jobs SET status = 'PAUSED', "
@@ -113,129 +101,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-def _redact_sensitive(text: str) -> str:
-    """10F M11.3: Mask CUI-like numbers and API keys in logs."""
-    # Mask CUI-like numbers (6-10 digits) — keep first 3, replace rest with ***
-    text = re.sub(r'\b(\d{3})\d{3,7}\b', r'\1***', text)
-    return text
+register_middlewares(app)
 
 
-class RequestIdMiddleware(BaseHTTPMiddleware):
-    """10F M11.4: Request ID tracing — propagate in logs + response headers."""
-    async def dispatch(self, request: Request, call_next):
-        request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
-        request.state.request_id = request_id
-        response = await call_next(request)
-        response.headers["X-Request-ID"] = request_id
-        return response
-
-
-# Security headers middleware
-class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
-    """9A: Reject requests > 10MB to prevent abuse."""
-    MAX_BODY_SIZE = 10 * 1024 * 1024  # 10MB
-
-    async def dispatch(self, request: Request, call_next):
-        content_length = request.headers.get("content-length")
-        if content_length and int(content_length) > self.MAX_BODY_SIZE:
-            from starlette.responses import JSONResponse
-            return JSONResponse(
-                status_code=413,
-                content={"detail": "Request body too large. Maximum 10MB.", "error_code": "REQUEST_TOO_LARGE"},
-            )
-        return await call_next(request)
-
-
-class RequestLoggingMiddleware(BaseHTTPMiddleware):
-    """Logheaza FIECARE request HTTP primit — monitorizare completa frontend + API.
-    10F M11.3: Sensitive data redaction — CUI masked, X-RIS-Key never logged."""
-    async def dispatch(self, request: Request, call_next):
-        import time
-        start = time.time()
-        response: Response = await call_next(request)
-        elapsed_ms = int((time.time() - start) * 1000)
-        # 10F M11.3: Redact CUI-like numbers from path before logging
-        path = _redact_sensitive(request.url.path)
-        method = request.method
-        status = response.status_code
-        request_id = getattr(request.state, 'request_id', '-')
-        # Nu logam health checks (prea frecvente)
-        if request.url.path not in ("/api/health", "/api/health/deep"):
-            logger.info(
-                f"HTTP | {method: <6} {path: <40} | {status} | {elapsed_ms}ms | rid={request_id}"
-            )
-        return response
-
-
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        response: Response = await call_next(request)
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "script-src 'self'; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-            "img-src 'self' data: blob:; "
-            "connect-src 'self' ws: wss:; "
-            "font-src 'self' data: https://fonts.gstatic.com; "
-            "worker-src 'self';"
-        )
-        # API Response Caching Headers (8A)
-        path = request.url.path
-        if path == "/api/stats":
-            response.headers["Cache-Control"] = "public, max-age=30"
-        elif path == "/api/analysis/types":
-            response.headers["Cache-Control"] = "public, max-age=3600, immutable"
-        elif path.startswith("/api/companies"):
-            response.headers["Cache-Control"] = "public, max-age=300"
-        elif path == "/api/health":
-            response.headers["Cache-Control"] = "no-cache"
-        return response
-
-class ApiKeyMiddleware(BaseHTTPMiddleware):
-    """Daca RIS_API_KEY e setat in .env, cere header X-RIS-Key pe /api/ endpoints."""
-    async def dispatch(self, request: Request, call_next):
-        if not settings.ris_api_key:
-            return await call_next(request)
-        path = request.url.path
-        # Exclude health checks, WebSocket, frontend-log
-        if path in ("/api/health", "/api/health/deep", "/api/frontend-log") or path.startswith("/ws/"):
-            return await call_next(request)
-        if path.startswith("/api/"):
-            key = request.headers.get("X-RIS-Key", "")
-            if key != settings.ris_api_key:
-                from starlette.responses import JSONResponse
-                return JSONResponse(
-                    status_code=401,
-                    content={"detail": "API key invalid sau lipsa. Trimite header X-RIS-Key."},
-                )
-        return await call_next(request)
-
-app.add_middleware(RequestIdMiddleware)  # 10F M11.4: Outermost — generates request ID first
-app.add_middleware(RequestLoggingMiddleware)
-app.add_middleware(RequestSizeLimitMiddleware)
-app.add_middleware(ApiKeyMiddleware)
-app.add_middleware(SecurityHeadersMiddleware)
-app.add_middleware(GZipMiddleware, minimum_size=1000)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1|100\.\d+\.\d+\.\d+)(:\d+)?",
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-RIS-Key", "Accept", "Authorization"],
-    max_age=86400,  # 10A M11.7: Cache preflight OPTIONS for 24h — reduces overhead
-)
-
-# --- FIX #3: RISError handler — HTTP status corect per ErrorCode ---
+# --- Exception handlers ---
 
 @app.exception_handler(RISError)
 async def ris_error_handler(request: Request, exc: RISError):
     """Transforma RISError in HTTP response cu status code corect."""
-    request_id = getattr(request.state, 'request_id', 'unknown')
+    request_id = getattr(request.state, "request_id", "unknown")
     status_code = ERROR_HTTP_STATUS.get(exc.code, 500)
     logger.warning(f"RISError [{exc.code.value}] [req={request_id}]: {exc.message}")
     return JSONResponse(
@@ -248,12 +122,10 @@ async def ris_error_handler(request: Request, exc: RISError):
     )
 
 
-# --- 10F M11.2: Error Message Sanitization ---
-
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """10F M11.2: Error Message Sanitization — never expose stack traces."""
-    request_id = getattr(request.state, 'request_id', 'unknown')
+    request_id = getattr(request.state, "request_id", "unknown")
     logger.exception(f"Unhandled error [req={request_id}]: {type(exc).__name__}: {exc}")
     return JSONResponse(
         status_code=500,
@@ -265,19 +137,18 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-# --- 10F M11.1: Request Body Schema Validation ---
-
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """10F M11.1: Structured validation errors without internal details."""
-    request_id = getattr(request.state, 'request_id', 'unknown')
-    errors = []
-    for err in exc.errors():
-        errors.append({
+    request_id = getattr(request.state, "request_id", "unknown")
+    errors = [
+        {
             "field": " -> ".join(str(loc) for loc in err.get("loc", [])),
             "message": err.get("msg", "Invalid"),
             "type": err.get("type", ""),
-        })
+        }
+        for err in exc.errors()
+    ]
     return JSONResponse(
         status_code=422,
         content={
@@ -289,7 +160,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
-# Routers
+# --- Routers ---
 app.include_router(jobs.router, prefix="/api/jobs", tags=["Jobs"])
 app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
 app.include_router(companies.router, prefix="/api/companies", tags=["Companies"])
@@ -325,7 +196,6 @@ async def frontend_log(request: Request):
                 message = entry.get("message", "")
                 details = entry.get("details", "")
 
-                # Session markers get special formatting
                 if level == "SESSION":
                     await f.write(f"\n{'=' * 60}\n")
                     await f.write(f"SESSION | {ts} | {message}\n")
@@ -337,14 +207,13 @@ async def frontend_log(request: Request):
                     if details:
                         line += f" | {details}"
                     await f.write(line + "\n")
-                    # Multi-line details for errors (stack traces)
                     if entry.get("stack"):
                         for sline in str(entry["stack"]).split("\n")[:5]:
                             await f.write(f"{'': <12} | {'': <20} | {sline.strip()}\n")
 
         return {"ok": True}
     except Exception as e:
-        logger.debug(f"[health] Non-critical: {e}")
+        logger.debug(f"[frontend-log] write error: {e}")
         return {"ok": False}
 
 
@@ -364,32 +233,30 @@ async def get_frontend_log(lines: int = 200):
         return {"lines": [], "total": 0}
 
 
+# --- Health / Stats / Metrics ---
+
 @app.get("/api/health")
 async def health_check():
     """Health check simplu — raspuns rapid."""
     return {"status": "ok", "service": "RIS", "version": "3.2.0"}
 
 
-# G7: Prometheus metrics endpoint
 @app.get("/metrics", include_in_schema=False)
 async def prometheus_metrics():
-    """Prometheus-compatible metrics endpoint. Util pentru Grafana Cloud / local monitoring."""
+    """G7: Prometheus-compatible metrics endpoint. Util pentru Grafana Cloud / local monitoring."""
     try:
         from prometheus_client import (
             CONTENT_TYPE_LATEST,
             CollectorRegistry,
-            Counter,
             Gauge,
             generate_latest,
         )
         from starlette.responses import Response
 
         registry = CollectorRegistry()
-        # Expose basic app metrics
         info = Gauge("ris_info", "RIS application info", ["version"], registry=registry)
         info.labels(version="3.2.0").set(1)
 
-        # DB stats
         try:
             stats_row = await db.fetch_one("SELECT COUNT(*) as c FROM jobs")
             jobs_total = Gauge("ris_jobs_total", "Total jobs in DB", registry=registry)
@@ -420,25 +287,24 @@ async def get_cache_stats():
 async def health_check_deep():
     """Health check avansat — verifica DB, APIs, quota, disk."""
     import shutil
-    checks = {"service": "RIS", "version": "3.1.0"}
+    checks: dict = {"service": "RIS", "version": "3.1.0"}
 
-    # DB writable
     try:
         await db.execute("SELECT 1")
         checks["database"] = "OK"
     except Exception as e:
         checks["database"] = f"ERROR: {e}"
 
-    # ANAF reachable
     try:
         from backend.http_client import get_client
         client = get_client()
-        r = await client.get("https://webservicesp.anaf.ro/api/PlatitorTvaRest/v9/tva", timeout=5)
+        r = await client.get(
+            "https://webservicesp.anaf.ro/api/PlatitorTvaRest/v9/tva", timeout=5
+        )
         checks["anaf"] = "OK" if r.status_code in (200, 404) else f"HTTP {r.status_code}"
     except Exception as e:
         checks["anaf"] = f"UNREACHABLE: {e}"
 
-    # Tavily quota
     try:
         from backend.agents.tools.tavily_client import get_quota_status
         quota = await get_quota_status()
@@ -448,7 +314,6 @@ async def health_check_deep():
         logger.debug(f"[tavily_check] Non-critical: {e}")
         checks["tavily_quota"] = "N/A"
 
-    # Disk space
     try:
         disk = shutil.disk_usage(".")
         free_gb = disk.free / (1024**3)
@@ -458,7 +323,6 @@ async def health_check_deep():
         logger.debug(f"[disk] Non-critical: {e}")
         checks["disk_free_gb"] = "N/A"
 
-    # AI providers configured
     checks["ai_providers"] = {
         "claude_cli": settings.synthesis_mode == "claude_code",
         "groq": bool(settings.groq_api_key),
@@ -477,7 +341,6 @@ async def health_check_deep():
         and checks.get("disk_ok", False)
     )
     checks["status"] = "healthy" if all_ok else "degraded"
-
     return checks
 
 
@@ -490,16 +353,18 @@ async def health_status_page():
     except Exception as e:
         logger.warning(f"[health] DB check failed: {e}")
         db_ok = False
+
     recent_jobs = await db.fetch_all(
         "SELECT status, completed_at FROM jobs ORDER BY created_at DESC LIMIT 5"
     )
+
     from backend.services.scheduler import get_scheduler_status
-    scheduler_info: dict = {}
     try:
         scheduler_info = await get_scheduler_status()
     except Exception as e:
         logger.warning(f"[health] Scheduler check failed: {e}")
         scheduler_info = {"status": "unknown"}
+
     return {
         "status": "ok" if db_ok else "degraded",
         "timestamp": datetime.now(UTC).isoformat(),
@@ -511,7 +376,7 @@ async def health_status_page():
         "recent_jobs": [
             {"status": j["status"], "completed": j["completed_at"]}
             for j in recent_jobs
-        ]
+        ],
     }
 
 
@@ -560,6 +425,8 @@ async def get_stats_trend():
     return {"trend": [{"month": r["month"], "count": r["count"]} for r in rows]}
 
 
+# --- WebSocket ---
+
 @app.websocket("/ws/jobs/{job_id}")
 async def websocket_job_progress(websocket: WebSocket, job_id: str):
     # SEC-01: First-message auth — token nu apare in query params (URL/logs)
@@ -577,8 +444,10 @@ async def websocket_job_progress(websocket: WebSocket, job_id: str):
 
     await ws_manager.connect(job_id, websocket, already_accepted=True)
     try:
-        # Send current state on connect
-        job = await db.fetch_one("SELECT id, status, progress_percent, current_step FROM jobs WHERE id = ?", (job_id,))
+        job = await db.fetch_one(
+            "SELECT id, status, progress_percent, current_step FROM jobs WHERE id = ?",
+            (job_id,),
+        )
         if job:
             await websocket.send_text(json.dumps({
                 "type": "progress",
@@ -588,7 +457,6 @@ async def websocket_job_progress(websocket: WebSocket, job_id: str):
                 "status": job["status"],
             }, ensure_ascii=False))
 
-        # Keep alive and listen for client messages
         while True:
             data = await websocket.receive_text()
             msg = json.loads(data)
@@ -601,49 +469,8 @@ async def websocket_job_progress(websocket: WebSocket, job_id: str):
         ws_manager.disconnect(job_id, websocket)
 
 
-# --- Serve frontend static build (Tailscale / production mode) ---
-# Routes defined AFTER all API routes — FastAPI matches in order, so /api/* wins.
-# Pattern: explicit mounts for /assets and known root files + catch-all for SPA routing.
-
-_FRONTEND_DIST = _Path(__file__).parent.parent / "frontend" / "dist"
-
-if _FRONTEND_DIST.exists():
-    from fastapi.responses import FileResponse as _FileResponse
-    from fastapi.staticfiles import StaticFiles
-
-    # /assets/* — JS, CSS bundles (content-hashed, safe to cache)
-    _assets_dir = _FRONTEND_DIST / "assets"
-    if _assets_dir.exists():
-        app.mount("/assets", StaticFiles(directory=str(_assets_dir)), name="assets")
-
-    # /icons/* — PWA icons
-    _icons_dir = _FRONTEND_DIST / "icons"
-    if _icons_dir.exists():
-        app.mount("/icons", StaticFiles(directory=str(_icons_dir)), name="icons")
-
-    # Known root-level static files
-    _ROOT_STATIC = ["manifest.webmanifest", "sw.js", "registerSW.js",
-                    "workbox-b51dd497.js", "favicon.ico", "robots.txt"]
-
-    for _fname in _ROOT_STATIC:
-        _fpath = _FRONTEND_DIST / _fname
-        if _fpath.exists():
-            _captured = str(_fpath)
-            _route = f"/{_fname}"
-
-            @app.get(_route, include_in_schema=False)
-            async def _serve_root_file(_p=_captured):
-                return _FileResponse(_p)
-
-    # SPA catch-all — must be last; serves index.html for all remaining paths
-    @app.get("/", include_in_schema=False)
-    @app.get("/{full_path:path}", include_in_schema=False)
-    async def serve_spa(full_path: str = ""):
-        return _FileResponse(str(_FRONTEND_DIST / "index.html"))
-
-    logger.info(f"Frontend build found — serving from {_FRONTEND_DIST}")
-else:
-    logger.info("No frontend/dist — run 'cd frontend && npm run build' for Tailscale/PWA mode")
+# --- Frontend static serving (must be after all API routes) ---
+mount_frontend_dist(app)
 
 
 if __name__ == "__main__":

@@ -55,6 +55,7 @@ Sistem local de Business Intelligence care ruleaza pe Windows 10. Extrage automa
 - **Gemini Analysis Sprint (2026-04-08):** 3 imbunatatiri din analiza Gemini CLI — commit 7a2e70d. (A) Agentic Reflexion: `_reflexion_check()` in SynthesisAgent detecteaza contradictii tone vs scor in sectiuni critice si corecteaza via Groq. (B) Dynamic CA percentile scoring dual-path: PRIMAR = CA real din `companies.latest_ca` (stocat dupa fiecare analiza), FALLBACK = score_history proxy. Coloana `latest_ca` adaugata idempotent in database.py. (C) Scheduler log cleanup: `_run_log_cleanup_safe()` sterge log-urile rotite mai vechi de 7 zile. 365 pytest PASSED.
 - **Sprint R7 (2026-04-09):** COMPLETAT — 18 items din RECOMANDARI_IMBUNATATIRI_R7.md (A1-A5, B1-B5, C1-C4, E3): raport unic RIS-YYYY-XXXX, risk badge numeric, AEGRM garanții, NLQ chatbot, Knowledge Graph (@xyflow), share link HTML, mobile search, dark/light theme, TanStack Query, split componente (ReportView 910→644, CompanyDetail 1009→826), ARIA + type hints, Mistral OCR. 365 pytest PASSED, 0 erori TypeScript.
 - **Sprint R8 (2026-04-09):** COMPLETAT — 9 items din RECOMANDARI_IMBUNATATIRI_R8.md (G1-G8 + D1): Process Pool asyncio.to_thread + asyncio.gather (6 formate concurent), TanStack Query Dashboard+Companies+RiskMovers+TrendChart (3/3 pagini migrate), WCAG 2.2 (sidebar focus-visible, contrast text-gray-400, aria-modal GlobalSearch), i18n English (i18n.py + PDF/HTML lang param), ONRC local dataset (migration 009 + import script + agent lookup), Monitorul Oficial crawler (Tavily+scrape, scoring penalty juridic), Prometheus /metrics endpoint, PostgreSQL feasibility (documentat), XGBoost faliment (research doar). 365 pytest PASSED, 0 erori TypeScript.
+- **Gemini Audit Sprint (2026-04-11):** COMPLETAT — validare audit Gemini (10 claims verificate: 6 false/deja-facute/overkill respinse, 3 valide implementate) + simplificari cod. (1) Secret key persistence: `config.py` auto-genereaza+persista in `data/.secret_key` (gitignored); hard-fail in `RIS_ENV=production` daca APP_SECRET_KEY lipseste. (2) `main.py` refactor 659→486 LOC: extras `backend/middlewares.py` (5 classes: RequestId, RequestLogging, RequestSizeLimit, ApiKey, SecurityHeaders + `_redact_sensitive` + `register_middlewares`) si `backend/static_serving.py` (mount_frontend_dist). (3) WCAG 2.2 NetworkGraph: `aria-label` pe nodes + edges + `role=application` pe container + `nodesFocusable` + keyboard nav. (4) Simplificari: `_is_private_ip` dedup, benchmark `_position()` helper, key_takeaways provider loop, cleanup variabile nefolosite (`p90_score`, `profit_net`, `risk_content`). Respinse (contrazic context/deja-done): PostgreSQL migration, Dockerfile, PDF Celery (deja G1), GDPR backup T>30 (deja 7 zile), SQLi in migrations (fals — static .sql files), Elasticsearch/Loki (overkill). 365 pytest PASSED, 0 erori TypeScript.
 - **Feedback Loop:** ACTIV — RIS_TEST.bat, logs/ris_summary.log, ris_runtime.log, ris_frontend.log (5 componente), ISSUES.md, session startup protocol
 - **Git:** https://github.com/RolandPetrila/Sistem-Inteligent-Analize.git | 365 pytest + vitest
 - **13 pagini frontend** (adaugat NetworkGraph /network/:cui)
@@ -94,8 +95,10 @@ Fisiere feedback loop:
 
 ## Key Files
 
-- `backend/main.py` — FastAPI entry point + WebSocket + lifespan + SecurityHeaders + CSP + scheduler
-- `backend/config.py` — Settings din .env (pydantic-settings)
+- `backend/main.py` — FastAPI entry point + lifespan + routers + exception handlers + WebSocket (486 LOC dupa refactor Gemini-audit)
+- `backend/middlewares.py` — 5 middleware classes (RequestId, RequestLogging, RequestSizeLimit, ApiKey, SecurityHeaders) + `register_middlewares()`
+- `backend/static_serving.py` — `mount_frontend_dist()` pentru servit `frontend/dist` (Tailscale/PWA mode)
+- `backend/config.py` — Settings din .env (pydantic-settings) + secret key persistence (`data/.secret_key`)
 - `backend/database.py` — SQLite connection + migrations
 - `backend/models.py` — Pydantic models + ANALYSIS_TYPES_META (9 tipuri)
 - `backend/http_client.py` — httpx AsyncClient singleton (connection pool) + pool metrics

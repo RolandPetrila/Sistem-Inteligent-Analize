@@ -69,15 +69,14 @@ async def update_job_progress(
 
 def _is_private_ip(hostname: str) -> bool:
     """Verifica daca un hostname se rezolva la un IP privat/loopback/rezervat."""
-    try:
-        ip = ip_address(hostname)
+    def _is_restricted(ip):
         return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
+    try:
+        return _is_restricted(ip_address(hostname))
     except (AddressValueError, ValueError, TypeError):
         pass
     try:
-        resolved = socket.gethostbyname(hostname)
-        ip = ip_address(resolved)
-        return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
+        return _is_restricted(ip_address(socket.gethostbyname(hostname)))
     except Exception:
         return True  # fail-safe: block if can't resolve
 

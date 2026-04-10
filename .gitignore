@@ -9,6 +9,9 @@ data/*.db
 data/*.db-wal
 data/*.db-shm
 
+# Persisted auto-generated secret key (never commit)
+data/.secret_key
+
 # Generated reports
 outputs/
 

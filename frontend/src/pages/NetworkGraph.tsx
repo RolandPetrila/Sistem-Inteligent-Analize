@@ -57,11 +57,28 @@ function buildFlowNodes(nodes: NetworkNode[]): Node[] {
     const isCenter = n.depth === 0;
     const isCompany = n.type === "company";
     let color = NODE_COLORS.unknown;
-    if (isCenter) color = NODE_COLORS.center;
-    else if (n.toxic) color = NODE_COLORS.inactive;
-    else if (!isCompany) color = NODE_COLORS.person;
-    else if (n.status === "activ") color = NODE_COLORS.active;
-    else if (n.status === "inactiv") color = NODE_COLORS.inactive;
+    let statusLabel = "status necunoscut";
+    if (isCenter) {
+      color = NODE_COLORS.center;
+      statusLabel = "firma analizata central";
+    } else if (n.toxic) {
+      color = NODE_COLORS.inactive;
+      statusLabel = "nod toxic";
+    } else if (!isCompany) {
+      color = NODE_COLORS.person;
+      statusLabel = "persoana";
+    } else if (n.status === "activ") {
+      color = NODE_COLORS.active;
+      statusLabel = "firma activa";
+    } else if (n.status === "inactiv") {
+      color = NODE_COLORS.inactive;
+      statusLabel = "firma inactiva";
+    }
+
+    // WCAG 2.2 — aria-label descriptiv pentru screen readers
+    const ariaLabel = `${isCompany ? "Firma" : "Persoana"} ${n.label}${
+      n.cui ? `, CUI ${n.cui}` : ""
+    }, ${statusLabel}`;
 
     // Simple circle layout
     const angle = (i / Math.max(nodes.length - 1, 1)) * 2 * Math.PI;
@@ -72,6 +89,7 @@ function buildFlowNodes(nodes: NetworkNode[]): Node[] {
         x: isCenter ? 300 : 300 + radius * Math.cos(angle),
         y: isCenter ? 200 : 200 + radius * Math.sin(angle),
       },
+      ariaLabel,
       data: {
         label: (
           <div className="text-center p-1 max-w-[100px]">
@@ -151,14 +169,25 @@ export default function NetworkGraph() {
     [networkData],
   );
 
+  const graphAriaLabel = networkData
+    ? `Graf retea firme pentru ${networkData.company_name || cui}, ${
+        networkData.nodes.length
+      } noduri si ${networkData.edges.length} conexiuni. ` +
+      `Foloseste Tab pentru a naviga intre noduri, Enter pentru a selecta.`
+    : "Graf retea firme, incarcare in curs";
+
   return (
     <div className="space-y-4 h-full">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link to="/companies" className="text-gray-400 hover:text-white">
-          <ArrowLeft className="w-5 h-5" />
+        <Link
+          to="/companies"
+          className="text-gray-400 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-primary rounded"
+          aria-label="Inapoi la lista de companii"
+        >
+          <ArrowLeft className="w-5 h-5" aria-hidden="true" />
         </Link>
-        <Network className="w-5 h-5 text-accent-secondary" />
+        <Network className="w-5 h-5 text-accent-secondary" aria-hidden="true" />
         <div>
           <h1 className="text-xl font-bold text-white">
             Retea Firme — {networkData?.company_name || cui}
@@ -192,13 +221,19 @@ export default function NetworkGraph() {
       ) : (
         <div className="flex gap-4 h-[600px]">
           {/* Graph */}
-          <div className="flex-1 bg-dark-card border border-dark-border rounded-xl overflow-hidden">
+          <div
+            className="flex-1 bg-dark-card border border-dark-border rounded-xl overflow-hidden"
+            role="application"
+            aria-label={graphAriaLabel}
+          >
             <ReactFlow
               nodes={nodes}
               edges={edges}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onNodeClick={onNodeClick}
+              nodesFocusable
+              edgesFocusable
               fitView
               colorMode="dark"
             >

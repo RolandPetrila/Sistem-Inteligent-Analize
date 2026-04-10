@@ -614,18 +614,19 @@ class VerificationAgent(BaseAgent):
             "comparisons": [],
         }
 
+        def _position(r: float) -> str:
+            if r >= 2:
+                return "Semnificativ peste medie"
+            if r >= 1:
+                return "Peste medie"
+            if r >= 0.5:
+                return "Sub medie"
+            return "Semnificativ sub medie"
+
         # Compara CA
         if ca_firma is not None and isinstance(ca_firma, (int, float)) and ca_medie:
             ratio = ca_firma / ca_medie if ca_medie > 0 else 0
-            if ratio >= 2:
-                pozitie = "Semnificativ peste medie"
-            elif ratio >= 1:
-                pozitie = "Peste medie"
-            elif ratio >= 0.5:
-                pozitie = "Sub medie"
-            else:
-                pozitie = "Semnificativ sub medie"
-
+            pozitie = _position(ratio)
             result["comparisons"].append({
                 "metric": "Cifra de afaceri",
                 "firma": ca_firma,
@@ -638,15 +639,7 @@ class VerificationAgent(BaseAgent):
         # Compara angajati
         if ang_firma is not None and isinstance(ang_firma, (int, float)) and ang_medii:
             ratio = ang_firma / ang_medii if ang_medii > 0 else 0
-            if ratio >= 2:
-                pozitie = "Semnificativ peste medie"
-            elif ratio >= 1:
-                pozitie = "Peste medie"
-            elif ratio >= 0.5:
-                pozitie = "Sub medie"
-            else:
-                pozitie = "Semnificativ sub medie"
-
+            pozitie = _position(ratio)
             result["comparisons"].append({
                 "metric": "Numar angajati",
                 "firma": int(ang_firma),
@@ -794,7 +787,6 @@ class VerificationAgent(BaseAgent):
 
             scores = sorted([r["numeric_score"] for r in rows if r["numeric_score"] is not None])
             n = len(scores)
-            p90_score = scores[int(n * 0.90)]
             p50_score = scores[int(n * 0.50)]
 
             # Factor de ajustare: daca mediana sectorului e mai mica, scalam in jos
@@ -836,7 +828,6 @@ class VerificationAgent(BaseAgent):
 
         ca = latest.get("cifra_afaceri_neta")
         angajati = latest.get("numar_mediu_salariati")
-        profit_net = latest.get("profit_net")
         pierdere = latest.get("pierdere_neta")
         capital = latest.get("capital_social") or latest.get("capitaluri_proprii")
 

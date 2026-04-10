@@ -174,20 +174,13 @@ Reguli:
 - Limba: Romana
 - NU adauga alt text in afara de cele 3 bullets"""
 
-        try:
-            result = await self._generate_with_groq(prompt)
-            if result:
-                return result.strip()
-        except Exception as e:
-            logger.warning(f"[synthesis] Key takeaways Groq failed: {e}")
-
-        try:
-            result = await self._generate_with_gemini(prompt)
-            if result:
-                return result.strip()
-        except Exception as e:
-            logger.warning(f"[synthesis] Key takeaways generation failed: {e}")
-
+        for provider_fn in (self._generate_with_groq, self._generate_with_gemini):
+            try:
+                result = await provider_fn(prompt)
+                if result:
+                    return result.strip()
+            except Exception as e:
+                logger.warning(f"[synthesis] Key takeaways {provider_fn.__name__} failed: {e}")
         return ""
 
     async def _reflexion_check(self, text: str, verified_data: dict, section: dict) -> str:
@@ -502,7 +495,6 @@ Reguli:
 
         # Check: executive_summary and risk_assessment should agree on risk color
         exec_content = sections.get("executive_summary", {}).get("content", "")
-        risk_content = sections.get("risk_assessment", {}).get("content", "")
 
         color_map = {
             "Verde": ["verde", "scazut", "favorabil", "low risk"],
