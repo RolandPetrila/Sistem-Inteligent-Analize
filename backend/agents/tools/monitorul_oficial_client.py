@@ -116,7 +116,7 @@ async def search_company_publications(
     # Strategia 2: Scrape direct monitoruloficial.ro (fallback)
     if not events and company_name:
         try:
-            client = await get_client()
+            client = get_client()
             search_name = company_name.split(" ")[0] if company_name else ""
             if len(search_name) >= 3:
                 resp = await client.get(
