@@ -12,6 +12,7 @@ from loguru import logger
 from backend.agents.base import BaseAgent
 from backend.agents.state import AnalysisState, SourceResult
 from backend.agents.tools import anaf_client, bnr_client, tavily_client
+from backend.agents.tools.aegrm_client import check_aegrm_guarantees
 from backend.agents.tools.anaf_bilant_client import get_bilant_multi_year
 from backend.agents.tools.bpi_client import check_insolvency
 from backend.agents.tools.brave_client import is_available as brave_available

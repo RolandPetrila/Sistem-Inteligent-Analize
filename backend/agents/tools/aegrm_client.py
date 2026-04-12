@@ -6,7 +6,7 @@ API public gratuit: aegrm.justportal.ro/aegrm/rest/
 
 from loguru import logger
 
-from backend.http_client import get_http_client
+from backend.http_client import get_client
 
 AEGRM_BASE = "https://aegrm.justportal.ro/aegrm/rest"
 
@@ -22,7 +22,7 @@ async def check_aegrm_guarantees(cui: str) -> dict:
     cui_clean = str(cui).strip().lstrip("RO").lstrip("0")
 
     try:
-        client = await get_http_client()
+        client = get_client()
         resp = await client.get(
             f"{AEGRM_BASE}/debitoriPJ",
             params={"cui": cui_clean},

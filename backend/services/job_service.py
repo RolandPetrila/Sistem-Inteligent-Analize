@@ -214,7 +214,7 @@ async def _save_job_results(
 
     report_id = str(uuid.uuid4())
 
-    official = final_state.get("official_data", {})
+    official = final_state.get("official_data") or {}
     company_name = official.get("company_name", "")
     cui = official.get("cui", "")
     risk_score = verified_data.get("risk_score", {}).get("score")
