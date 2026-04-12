@@ -22,6 +22,7 @@ from backend.agents.tools.cui_validator import validate_cui
 from backend.agents.tools.jina_client import enrich_tavily_results
 from backend.agents.tools.just_client import search_dosare
 from backend.agents.tools.openapi_client import get_company_onrc
+from backend.config import settings
 from backend.services import cache_service
 from backend.services.job_logger import (
     log_agent_end,
