@@ -1,0 +1,88 @@
+1. Ghid Google Maps Places API — Pas cu Pas
+
+  ▎ Atenție: Google Maps Places API necesită activarea billing (card de credit) chiar dacă oferi $200 credit gratuit/lună. Din        
+  perspectiva politicii free-only, aceasta este o sursă condiționată — funcționează gratuit în limitele creditului, dar necesită card.
+  Dacă vrei totuși să îl obții:
+
+  Pasul 1 — Creează/accesează Google Cloud Console:
+  https://console.cloud.google.com/
+
+  Pasul 2 — Creează un proiect nou:
+  - Click Select a project → New Project → Denumire: RIS-Backend
+
+  Pasul 3 — Activează Places API:
+  https://console.cloud.google.com/apis/library/places-backend.googleapis.com
+  → Click Enable
+
+  Pasul 4 — Creează API Key:
+  https://console.cloud.google.com/apis/credentials
+  → Create Credentials → API Key
+  → Restricționează la: Places API + IP-ul serverului tău
+
+  Pasul 5 — Activează billing (obligatoriu):
+  https://console.cloud.google.com/billing
+  → Adaugă card → primești $200 credit/lună (~28.500 requests Places gratis)
+
+  Pasul 6 — Adaugă în .env:
+  GOOGLE_CLOUD_API_KEY=AIza...
+
+
+Select a project
+Search projects and folders
+Recent
+Starred
+All
+Name
+Type
+ID
+Current    
+Automatizari
+Project    automatizari-486409    
+Not current    
+Traduceri
+Project    gen-lang-client-0149624142    
+Not current    
+My First Project
+Project    subtle-backup-427721-h4    
+Not current    
+My Maps Project
+Project    ultra-tube-427721-f9    
+
+1. eu am proiecte active , putem lua de acolo cheile necesare . nu ? 
+
+
+
+1. Google Cloud — Da, poți folosi proiectele existente
+
+  "My Maps Project" (ultra-tube-427721-f9) este cel mai probabil candidat — numele sugerează că Maps APIs au fost activate acolo.     
+
+  Pași cu link direct:
+
+  Step 1 — Deschide proiectul existent și activează Places API:
+  https://console.cloud.google.com/apis/library/places-backend.googleapis.com?project=ultra-tube-427721-f9
+  (înlocuiește cu ID-ul proiectului ales dacă preferi altul)
+
+  Step 2 — Creează API Key:
+  https://console.cloud.google.com/apis/credentials?project=ultra-tube-427721-f9
+  → Create Credentials → API Key → restricționează la Places API
+
+  Step 3 — Verifică dacă billing e deja activ (dacă proiectul e folosit pentru altceva, probabil da):
+  https://console.cloud.google.com/billing/linkedaccount?project=ultra-tube-427721-f9
+
+  Dacă billing e deja activat pe acel proiect → nu mai ai nevoie de card nou, folosești creditul existent.
+
+
+1. vezi poza [Image #1] si spune ce sa aleg din acele optiuni .
+
+
+1. Ce să alegi — IP addresses
+
+  Aplicația RIS face apeluri server-side (Python backend), nu din browser. Deci:
+
+  Alege: IP addresses (nu Websites — aia e pentru aplicații web/browser)
+
+  Apoi vei adăuga:
+  - 127.0.0.1 — localhost (pentru development)
+  - IP-ul Tailscale al PC-ului tău (găsești în aplicația Tailscale → 100.x.x.x)
+
+  Și separat, după ce confirmi IP-ul, vei vedea secțiunea API restrictions → selectează Places API only.
