@@ -5,9 +5,10 @@ Sursa primara: buletinul.ro | Fallback: Tavily search.
 """
 
 import re
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 from loguru import logger
+
 from backend.http_client import get_client
 
 # BPI-01: Procedural markers — keyword must appear near one of these

@@ -1,10 +1,10 @@
 import asyncio
 from abc import ABC, abstractmethod
-from datetime import datetime, date, UTC
+from datetime import UTC, datetime
 
 from loguru import logger
 
-from backend.agents.state import AnalysisState, SourceResult, AgentError
+from backend.agents.state import AgentError, AnalysisState, SourceResult
 
 
 class BaseAgent(ABC):
@@ -32,7 +32,7 @@ class BaseAgent(ABC):
             logger.info(f"[{self.name}] Completed in {elapsed:.1f}s")
             return result
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             elapsed = (datetime.now(UTC) - start).total_seconds()
             logger.error(f"[{self.name}] Timeout after {elapsed:.1f}s")
             return {

@@ -8,8 +8,8 @@ import asyncio
 from datetime import date
 
 from loguru import logger
-from backend.http_client import get_client
 
+from backend.http_client import get_client
 
 ANAF_BILANT_URL = "https://webservicesp.anaf.ro/bilant"
 REQUEST_DELAY = 2  # secunde intre request-uri

@@ -4,14 +4,12 @@ Tavily API wrapper cu quota tracking.
 Avertizare la 80% consum.
 """
 
-from datetime import datetime, date
 
 from loguru import logger
-from backend.http_client import get_client
 
 from backend.config import settings
 from backend.database import db
-
+from backend.http_client import get_client
 
 TAVILY_SEARCH_URL = "https://api.tavily.com/search"
 

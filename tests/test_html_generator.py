@@ -1,6 +1,6 @@
 """F15: Tests for html_generator — _render_content (headers, lists, tables, bold)."""
 
-from backend.reports.html_generator import _render_content, _render_inline, _build_table
+from backend.reports.html_generator import _build_table, _render_content, _render_inline
 
 
 class TestRenderInline:

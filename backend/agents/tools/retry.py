@@ -4,7 +4,8 @@ Exponential backoff with configurable retries.
 """
 
 import asyncio
-from typing import Callable, TypeVar
+from collections.abc import Callable
+from typing import TypeVar
 
 from loguru import logger
 

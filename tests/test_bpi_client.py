@@ -4,10 +4,10 @@ Acopera: false positives (firma name), CUI normalization, keyword boundary,
 Tavily fallback case sensitivity, timeout, empty response, malformed HTML.
 """
 
-import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
-import httpx
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
+import pytest
 
 # --- Helpers: mock httpx response ---
 

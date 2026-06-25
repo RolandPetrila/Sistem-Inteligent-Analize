@@ -3,14 +3,15 @@ Notification service — Telegram Bot API + Gmail SMTP.
 Apelat automat la completarea/esuarea unui job.
 """
 
-import aiosmtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
 from email import encoders
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from pathlib import Path
 
+import aiosmtplib
 from loguru import logger
+
 from backend.config import settings
 
 

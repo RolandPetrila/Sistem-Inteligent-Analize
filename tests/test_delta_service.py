@@ -1,10 +1,9 @@
 """Tests for Delta Service — change detection logic between reports."""
-import pytest
 from backend.services.delta_service import (
     _compute_change,
     _extract_ca,
-    _extract_profit,
     _extract_employees,
+    _extract_profit,
     _extract_risk_score,
     _get_field_value,
 )

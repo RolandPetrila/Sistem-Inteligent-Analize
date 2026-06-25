@@ -7,11 +7,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, field_validator
 
-from backend.security import require_api_key
 from backend.config import settings
 from backend.database import db
 from backend.errors import ErrorCode, RISError
 from backend.rate_limiter import rate_limit_downloads
+from backend.security import require_api_key
 from backend.services.report_service import (
     get_report_by_id,
 )

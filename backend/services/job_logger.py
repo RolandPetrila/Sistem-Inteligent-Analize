@@ -13,9 +13,8 @@ Flux:
 Log-urile pot fi citite cu orice text editor din: logs/job_{id}.log
 """
 
-import sys
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, UTC
 
 from loguru import logger
 
@@ -239,7 +238,7 @@ def finish_job_log(job_id: str, success: bool = True, error: str = "",
         # Try to extract from job log header events
         log_path = _get_log_path(job_id)
         if log_path.exists():
-            with open(log_path, "r", encoding="utf-8") as f:
+            with open(log_path, encoding="utf-8") as f:
                 for line in f:
                     if "CUI:" in line:
                         cui_val = line.split("CUI:")[-1].strip()

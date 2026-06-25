@@ -4,10 +4,10 @@ Refolosit de toate tools/*.py si services/*.py.
 Se initializeaza in lifespan (main.py) si se inchide la shutdown.
 """
 
-import httpx
 import ipaddress
 from urllib.parse import urlparse
 
+import httpx
 
 _BLOCKED_RANGES = [
     ipaddress.ip_network("10.0.0.0/8"),

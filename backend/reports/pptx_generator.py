@@ -4,10 +4,9 @@ Genereaza prezentare PowerPoint profesionala (7 slide-uri) din verified_data.
 """
 
 from pptx import Presentation
-from pptx.util import Inches, Pt, Emu
 from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
-
+from pptx.util import Inches, Pt
 
 ACCENT = RGBColor(99, 102, 241)
 DARK_BG = RGBColor(26, 26, 46)

@@ -4,6 +4,7 @@ Contine: scor risc, top 3 puncte tari, top 3 riscuri, recomandare, due diligence
 """
 
 from fpdf import FPDF
+
 from backend.reports.pdf_generator import _sanitize
 
 DISCLAIMER_SHORT = (

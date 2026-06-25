@@ -69,18 +69,6 @@ CREATE TABLE IF NOT EXISTS report_sources (
 );
 CREATE INDEX IF NOT EXISTS idx_sources_report ON report_sources(report_id);
 
--- Markets
--- NOTE: markets table defined but unused (2026-04-05) — kept for potential future use
-CREATE TABLE IF NOT EXISTS markets (
-    id TEXT PRIMARY KEY,
-    caen_code TEXT,
-    description TEXT,
-    county TEXT,
-    last_analyzed_at DATETIME,
-    competitor_count INTEGER,
-    analysis_count INTEGER DEFAULT 0
-);
-
 -- Monitoring Alerts (Faza 5)
 CREATE TABLE IF NOT EXISTS monitoring_alerts (
     id TEXT PRIMARY KEY,

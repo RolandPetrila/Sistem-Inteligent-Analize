@@ -4,7 +4,6 @@ Detecteaza schimbari in: CA, profit, angajati, scor risc, stare ANAF.
 """
 
 import json
-from datetime import datetime
 
 from loguru import logger
 

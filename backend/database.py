@@ -182,6 +182,21 @@ class Database:
                 logger.info(f"Migration: added {col_name} to companies")
             except Exception as e:
                 logger.debug(f"Migration column check companies.{col_name} (expected if exists): {e}")
+        # FORTIFY F1: companies columns referenced by routers/services but never created
+        # (is_active = real attribute; risk_score/last_risk_score_numeric/tag/note denormalized like latest_ca)
+        for col_sql, col_name in [
+            ("ALTER TABLE companies ADD COLUMN is_active BOOLEAN DEFAULT 1", "is_active"),
+            ("ALTER TABLE companies ADD COLUMN risk_score TEXT DEFAULT NULL", "risk_score"),
+            ("ALTER TABLE companies ADD COLUMN last_risk_score_numeric INTEGER DEFAULT NULL", "last_risk_score_numeric"),
+            ("ALTER TABLE companies ADD COLUMN tag TEXT DEFAULT NULL", "tag"),
+            ("ALTER TABLE companies ADD COLUMN note TEXT DEFAULT NULL", "note"),
+        ]:
+            try:
+                await self.db.execute(col_sql)
+                await self.db.commit()
+                logger.info(f"Migration: added {col_name} to companies")
+            except Exception as e:
+                logger.debug(f"Migration column check companies.{col_name} (expected if exists): {e}")
         # A1: Număr Raport Unic (RIS-YYYY-XXXX)
         try:
             await self.db.execute("ALTER TABLE reports ADD COLUMN report_number TEXT DEFAULT NULL")

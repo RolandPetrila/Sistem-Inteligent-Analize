@@ -1,5 +1,6 @@
 """Tests for risk scoring and completeness check logic."""
 import pytest
+
 from backend.agents.agent_verification import VerificationAgent
 
 

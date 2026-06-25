@@ -8,8 +8,8 @@ from datetime import date
 from xml.etree import ElementTree
 
 from loguru import logger
-from backend.http_client import get_client
 
+from backend.http_client import get_client
 
 BNR_URL = "https://www.bnr.ro/nbrfxrates.xml"
 BNR_NS = {"bnr": "http://www.bnr.ro/xsd"}

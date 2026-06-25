@@ -3,8 +3,8 @@ Circuit Breaker — Provider health tracking.
 R2: Tracks provider failures and skips providers that fail 3+ times in 30 minutes.
 Separated from orchestrator.py to avoid circular imports with agent_synthesis.py.
 """
-from collections import defaultdict
 import time
+from collections import defaultdict
 
 from loguru import logger
 

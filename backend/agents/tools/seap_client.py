@@ -6,9 +6,9 @@ API public, rate limit strict — delay 3s intre request-uri.
 import asyncio
 
 from loguru import logger
-from backend.http_client import get_client
-from backend.agents.tools.retry import with_retry
 
+from backend.agents.tools.retry import with_retry
+from backend.http_client import get_client
 
 SEAP_NOTICES_URL = "https://e-licitatie.ro/api-pub/NoticeCommon/GetCANoticeList/"
 SEAP_DIRECT_URL = "https://e-licitatie.ro/api-pub/DirectAcquisitionCommon/GetDirectAcquisitionList/"

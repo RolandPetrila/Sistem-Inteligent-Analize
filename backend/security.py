@@ -1,5 +1,6 @@
 """Security utilities — API key validation."""
 from fastapi import Header, HTTPException, status
+
 from backend.config import settings
 
 

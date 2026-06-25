@@ -1,6 +1,5 @@
 """Teste pentru backend/utils/serialization.py."""
-import pytest
-from backend.utils.serialization import to_json, from_json
+from backend.utils.serialization import from_json, to_json
 
 
 def test_to_json_simple():

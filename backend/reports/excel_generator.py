@@ -4,10 +4,9 @@ Genereaza raport Excel profesional cu 4 sheet-uri din verified_data + report_sec
 """
 
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.chart import BarChart, LineChart, Reference
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
-
 
 # Palette
 ACCENT = "6366F1"

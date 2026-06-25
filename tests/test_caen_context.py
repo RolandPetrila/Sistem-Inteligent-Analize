@@ -1,5 +1,4 @@
 """Tests for CAEN context — code lookup and sector classification."""
-import pytest
 from backend.agents.tools.caen_context import CAEN_DESCRIPTIONS, CAEN_SECTIONS
 
 

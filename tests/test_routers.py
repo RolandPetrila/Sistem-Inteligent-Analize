@@ -3,8 +3,9 @@ TST-02: Router tests with FastAPI TestClient.
 Tests API endpoints: health, stats, jobs CRUD, companies, reports, settings, monitoring.
 """
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 from fastapi.testclient import TestClient
 
 

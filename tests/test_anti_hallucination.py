@@ -4,6 +4,7 @@ Covers: _has_sufficient_data(), _validate_output(), completeness gate.
 """
 
 import pytest
+
 from backend.agents.agent_synthesis import SynthesisAgent
 
 

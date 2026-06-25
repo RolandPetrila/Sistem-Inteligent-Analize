@@ -8,8 +8,8 @@ import asyncio
 from datetime import date
 
 from loguru import logger
-from backend.http_client import get_client
 
+from backend.http_client import get_client
 
 ANAF_API_URL = "https://webservicesp.anaf.ro/api/PlatitorTvaRest/v9/tva"
 REQUEST_DELAY = 2  # secunde intre request-uri

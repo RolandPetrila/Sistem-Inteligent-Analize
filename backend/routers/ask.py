@@ -10,8 +10,8 @@ from fastapi import APIRouter, Depends
 from loguru import logger
 from pydantic import BaseModel
 
-from backend.security import require_api_key
 from backend.database import db
+from backend.security import require_api_key
 
 router = APIRouter(prefix="/api/ask", tags=["Ask"])
 

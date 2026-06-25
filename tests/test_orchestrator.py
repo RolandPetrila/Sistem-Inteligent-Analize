@@ -6,14 +6,14 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from backend.agents.orchestrator import (
-    deduplicate_job,
-    register_in_flight,
-    complete_in_flight,
     _in_flight,
     _in_flight_results,
+    complete_in_flight,
+    deduplicate_job,
+    register_in_flight,
     run_official,
-    run_verification,
     run_synthesis,
+    run_verification,
 )
 
 

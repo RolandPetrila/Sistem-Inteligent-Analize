@@ -1,5 +1,4 @@
 """Tests for ANAF Bilant client — trend calculation and data parsing logic."""
-import pytest
 from backend.agents.tools.anaf_bilant_client import _calculate_trends
 
 

@@ -1,6 +1,7 @@
 """Tests for structured error codes and RISError exception."""
 import pytest
-from backend.errors import ErrorCode, RISError, ERROR_HTTP_STATUS
+
+from backend.errors import ERROR_HTTP_STATUS, ErrorCode, RISError
 
 
 class TestErrorCode:

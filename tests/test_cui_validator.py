@@ -1,6 +1,5 @@
 """Tests for CUI validator — MOD 11 algorithm."""
-import pytest
-from backend.agents.tools.cui_validator import validate_cui, extract_and_validate_cui
+from backend.agents.tools.cui_validator import extract_and_validate_cui, validate_cui
 
 
 class TestValidateCUI:

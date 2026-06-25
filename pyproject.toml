@@ -7,13 +7,14 @@ requires-python = ">=3.13"
 [tool.ruff]
 line-length = 120
 target-version = "py313"
-select = ["E", "F", "W", "I", "N", "UP", "B"]
-ignore = ["E501", "B008", "N802", "N803", "N806"]
 exclude = [
-    "backend/agents/tools/_experimental/",
     "backend/migrations/",
     "frontend/",
 ]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B"]
+ignore = ["E501", "B008", "N802", "N803", "N806"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -28,7 +29,6 @@ filterwarnings = ["ignore::DeprecationWarning"]
 source = ["backend"]
 omit = [
     "backend/migrations/*",
-    "backend/agents/tools/_experimental/*",
     "tests/*",
 ]
 

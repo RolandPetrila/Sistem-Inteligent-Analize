@@ -1,6 +1,7 @@
 """Teste pentru backend/ws.py — ConnectionManager."""
+from unittest.mock import AsyncMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 from backend.ws import ConnectionManager
 
