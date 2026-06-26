@@ -182,14 +182,17 @@ class Database:
                 logger.info(f"Migration: added {col_name} to companies")
             except Exception as e:
                 logger.debug(f"Migration column check companies.{col_name} (expected if exists): {e}")
-        # FORTIFY F1: companies columns referenced by routers/services but never created
-        # (is_active = real attribute; risk_score/last_risk_score_numeric/tag/note denormalized like latest_ca)
+        # FORTIFY F1+F5: companies columns referenced by routers/services — single source of truth here.
+        # is_active = real attribute (monitoring/network); risk_score + last_risk_score_numeric = denormalized
+        # latest score, populated at job completion (powers Companies list filter + sort); auto_reanalyze +
+        # reanalyze_interval_days consolidated here from the previously-scattered ALTERs in companies.py +
+        # scheduler.py. (tag/note are NOT denormalized — they live in company_tags / company_notes.)
         for col_sql, col_name in [
             ("ALTER TABLE companies ADD COLUMN is_active BOOLEAN DEFAULT 1", "is_active"),
             ("ALTER TABLE companies ADD COLUMN risk_score TEXT DEFAULT NULL", "risk_score"),
             ("ALTER TABLE companies ADD COLUMN last_risk_score_numeric INTEGER DEFAULT NULL", "last_risk_score_numeric"),
-            ("ALTER TABLE companies ADD COLUMN tag TEXT DEFAULT NULL", "tag"),
-            ("ALTER TABLE companies ADD COLUMN note TEXT DEFAULT NULL", "note"),
+            ("ALTER TABLE companies ADD COLUMN auto_reanalyze INTEGER DEFAULT 0", "auto_reanalyze"),
+            ("ALTER TABLE companies ADD COLUMN reanalyze_interval_days INTEGER DEFAULT 30", "reanalyze_interval_days"),
         ]:
             try:
                 await self.db.execute(col_sql)

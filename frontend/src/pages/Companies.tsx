@@ -7,6 +7,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Star,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import clsx from "clsx";
@@ -125,7 +127,12 @@ export default function Companies() {
   const debouncedSearch = useDebounce(search, 300);
 
   // G3: TanStack Query pentru lista companii (inlocuieste useEffect + loadCompanies)
-  const { data: companiesData, isLoading: loading } = useQuery({
+  const {
+    data: companiesData,
+    isLoading: loading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: [
       "companies",
       debouncedSearch,
@@ -388,6 +395,23 @@ export default function Companies() {
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-16 bg-dark-card rounded-xl" />
           ))}
+        </div>
+      ) : isError ? (
+        <div className="card text-center py-16">
+          <AlertCircle className="w-16 h-16 text-red-500/70 mx-auto mb-4" />
+          <p className="text-gray-300 text-lg">
+            Eroare la incarcarea companiilor
+          </p>
+          <p className="text-gray-500 text-sm mt-2">
+            Serverul a raspuns cu o eroare. Verifica conexiunea si incearca din
+            nou.
+          </p>
+          <button
+            onClick={() => refetch()}
+            className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-dark-card text-gray-200 hover:text-white transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" /> Reincearca
+          </button>
         </div>
       ) : companies.length === 0 ? (
         <div className="card text-center py-16">

@@ -52,13 +52,14 @@ async def ask_ris(req: AskRequest, _=Depends(require_api_key)):
 
     if intent == "top_risc":
         rows = await db.fetch_all(
-            "SELECT name, cui, risk_score, risk_color FROM companies "
-            "WHERE risk_score IS NOT NULL ORDER BY risk_score ASC LIMIT 5"
+            "SELECT name, cui, last_risk_score_numeric, risk_score FROM companies "
+            "WHERE last_risk_score_numeric IS NOT NULL "
+            "ORDER BY last_risk_score_numeric ASC LIMIT 5"
         )
         if not rows:
             return AskResponse(answer="Nu exista date de scoring in sistem.", intent=intent)
         lines = [
-            f"• {r['name']} (CUI {r['cui']}): {r['risk_score']}/100 — {r.get('risk_color', 'N/A')}"
+            f"• {r['name']} (CUI {r['cui']}): {r['last_risk_score_numeric']}/100 — {r['risk_score'] or 'N/A'}"
             for r in rows
         ]
         return AskResponse(
@@ -102,7 +103,7 @@ async def ask_ris(req: AskRequest, _=Depends(require_api_key)):
         name_match = re.search(r'(?:despre|info|detalii|spune|arata)\s+(.+?)(?:\?|$)', question, re.IGNORECASE)
         search_term = name_match.group(1).strip() if name_match else question
         rows = await db.fetch_all(
-            "SELECT name, cui, risk_score, risk_color, caen_code FROM companies "
+            "SELECT name, cui, caen_code, last_risk_score_numeric, risk_score FROM companies "
             "WHERE name LIKE ? LIMIT 3",
             (f"%{search_term}%",),
         )
@@ -111,7 +112,7 @@ async def ask_ris(req: AskRequest, _=Depends(require_api_key)):
                 answer=f"Nu am gasit companii cu numele '{search_term}'.", intent=intent
             )
         lines = [
-            f"• {r['name']} — CUI: {r['cui']}, Scor: {r['risk_score']}/100 ({r.get('risk_color', 'N/A')}), CAEN: {r.get('caen_code', 'N/A')}"
+            f"• {r['name']} — CUI: {r['cui']}, Scor: {r['last_risk_score_numeric'] if r['last_risk_score_numeric'] is not None else 'N/A'}/100 ({r['risk_score'] or 'N/A'}), CAEN: {r['caen_code'] or 'N/A'}"
             for r in rows
         ]
         return AskResponse(answer="\n".join(lines), intent=intent, data=[dict(r) for r in rows])

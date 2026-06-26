@@ -175,15 +175,8 @@ async def _auto_reanalyze_job():
 
         from backend.database import db
 
-        # Ensure columns exist (idempotent — poate fi primul run)
-        for alter_sql in [
-            "ALTER TABLE companies ADD COLUMN auto_reanalyze INTEGER DEFAULT 0",
-            "ALTER TABLE companies ADD COLUMN reanalyze_interval_days INTEGER DEFAULT 30",
-        ]:
-            try:
-                await db.execute(alter_sql)
-            except Exception:
-                pass  # Column already exists
+        # Columns auto_reanalyze / reanalyze_interval_days are guaranteed by database.run_migrations()
+        # (consolidated single source of truth — no scattered ALTER here anymore).
 
         # Selecteaza firmele eligibile:
         # - auto_reanalyze = 1

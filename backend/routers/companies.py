@@ -21,7 +21,7 @@ async def list_favorites() -> dict:
     """Return only companies marked as favorite."""
     try:
         rows = await db.fetch_all(
-            "SELECT id, cui, name, caen_code, county, is_active, is_favorite, last_analyzed_at, risk_score, tag, note FROM companies WHERE is_favorite = 1 ORDER BY last_analyzed_at DESC LIMIT 500"
+            "SELECT id, cui, name, caen_code, county, is_active, is_favorite, last_analyzed_at, risk_score FROM companies WHERE is_favorite = 1 ORDER BY last_analyzed_at DESC LIMIT 500"
         )
         return {"companies": [dict(r) for r in rows], "total": len(rows)}
     except Exception as e:
@@ -194,7 +194,7 @@ async def list_companies(
     total = total_row["c"] if total_row else 0
 
     rows = await db.fetch_all(
-        f"SELECT id, cui, name, caen_code, county, is_active, is_favorite, last_analyzed_at, risk_score, tag, note FROM companies {where} ORDER BY {order_by} LIMIT ? OFFSET ?",
+        f"SELECT id, cui, name, caen_code, county, is_active, is_favorite, last_analyzed_at, risk_score FROM companies {where} ORDER BY {order_by} LIMIT ? OFFSET ?",
         tuple(params + [limit, offset]),
     )
 
@@ -305,7 +305,7 @@ async def upsert_company_note(company_id: str, body: dict) -> dict:
 
 @router.get("/{company_id}")
 async def get_company(company_id: str) -> dict:
-    row = await db.fetch_one("SELECT id, cui, name, caen_code, county, is_active, is_favorite, last_analyzed_at, risk_score, tag, note FROM companies WHERE id = ?", (company_id,))
+    row = await db.fetch_one("SELECT id, cui, name, caen_code, county, is_active, is_favorite, last_analyzed_at, risk_score FROM companies WHERE id = ?", (company_id,))
     if not row:
         raise HTTPException(status_code=404, detail="Company not found")
 
@@ -338,20 +338,10 @@ async def toggle_favorite(company_id: str) -> dict:
     if not row:
         raise HTTPException(status_code=404, detail="Company not found")
 
-    try:
-        current = await db.fetch_one(
-            "SELECT is_favorite FROM companies WHERE id = ?", (company_id,)
-        )
-        new_val = 0 if current and current.get("is_favorite") else 1
-    except Exception as e:
-        logger.debug(f"[companies] toggle favorite: {e}")
-        # Column does not exist yet — create it then set to 1
-        try:
-            await db.execute("ALTER TABLE companies ADD COLUMN is_favorite INTEGER DEFAULT 0")
-        except Exception as e2:
-            logger.debug(f"[companies] migration: {e2}")
-        new_val = 1
-
+    current = await db.fetch_one(
+        "SELECT is_favorite FROM companies WHERE id = ?", (company_id,)
+    )
+    new_val = 0 if current and current.get("is_favorite") else 1
     await db.execute("UPDATE companies SET is_favorite = ? WHERE id = ?", (new_val, company_id))
     return {"ok": True, "is_favorite": bool(new_val)}
 
@@ -364,16 +354,7 @@ async def toggle_auto_reanalyze(company_id: str) -> dict:
     if not row:
         raise HTTPException(status_code=404, detail="Company not found")
 
-    # Ensure columns exist (idempotent ALTER TABLE)
-    for alter_sql in [
-        "ALTER TABLE companies ADD COLUMN auto_reanalyze INTEGER DEFAULT 0",
-        "ALTER TABLE companies ADD COLUMN reanalyze_interval_days INTEGER DEFAULT 30",
-    ]:
-        try:
-            await db.execute(alter_sql)
-        except Exception:
-            pass  # Column already exists
-
+    # Columns auto_reanalyze / reanalyze_interval_days guaranteed by database.run_migrations() (F5).
     current = await db.fetch_one(
         "SELECT auto_reanalyze FROM companies WHERE id = ?", (company_id,)
     )

@@ -241,6 +241,20 @@ async def _save_job_results(
                 (company_id, cui or None, company_name or "N/A", None),
             )
 
+        # F5: denormalize latest score onto companies (powers Companies list filter + sort).
+        # risk_score holds the COLOR label ('Verde'/'Galben'/'Rosu'); numeric_score is the 0-100 value.
+        _numeric = verified_data.get("risk_score", {}).get("numeric_score")
+        if risk_score is not None or _numeric is not None:
+            try:
+                _num = int(round(float(_numeric))) if _numeric is not None else None
+            except (TypeError, ValueError):
+                _num = None
+            await db.execute(
+                "UPDATE companies SET risk_score = ?, "
+                "last_risk_score_numeric = COALESCE(?, last_risk_score_numeric) WHERE id = ?",
+                (risk_score, _num, company_id),
+            )
+
     # Salveaza raportul
     title = f"{analysis_type} — {company_name or cui or 'Analiza'}"
     summary = verified_data.get("risk_score", {}).get("recommendation", "")
