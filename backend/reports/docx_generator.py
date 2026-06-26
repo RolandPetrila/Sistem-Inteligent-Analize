@@ -34,6 +34,137 @@ def _setup_styles(doc: Document):
         h.font.bold = True
 
 
+def _fmt_docx_num(v) -> str:
+    if isinstance(v, int | float):
+        return f"{v:,.0f}"
+    return str(v) if v is not None else "-"
+
+
+def _docx_names(items) -> list[str]:
+    res = []
+    for it in items or []:
+        if isinstance(it, dict):
+            res.append(str(it.get("nume") or it.get("name") or it.get("denumire") or it))
+        else:
+            res.append(str(it))
+    return res
+
+
+def _add_rich_fields_docx(doc, verified_data: dict):
+    """Render previously-dropped rich fields into the DOCX: predictive scores,
+    benchmark, actionariat/relations, AEGRM guarantees, historical OSINT, funding."""
+    pred = verified_data.get("predictive_scores", {})
+    if isinstance(pred, dict) and pred.get("summary"):
+        doc.add_page_break()
+        doc.add_heading("Scoruri Predictive Faliment", level=1)
+        altman = pred.get("altman_z", {}) or {}
+        piotroski = pred.get("piotroski_f", {}) or {}
+        beneish = pred.get("beneish_m", {}) or {}
+        zmijewski = pred.get("zmijewski_x", {}) or {}
+        zmi_state = "Distres" if zmijewski.get("distress") else ("OK" if zmijewski.get("available") else "Indisponibil")
+        for ln_ in [
+            f"Altman Z'': {altman.get('z_score', 'N/A')} ({altman.get('zone', 'INDISPONIBIL')})",
+            f"Piotroski F: {piotroski.get('f_score', 'N/A')}/{piotroski.get('max_possible', 9)} ({piotroski.get('grade', 'N/A')})",
+            f"Beneish M: {beneish.get('m_score', 'N/A')} ({beneish.get('risk', 'INDISPONIBIL')})",
+            f"Zmijewski X: {zmijewski.get('x_score', 'N/A')} ({zmi_state})",
+        ]:
+            doc.add_paragraph(ln_, style="List Bullet")
+        cp = doc.add_paragraph()
+        cp.add_run(f"Concluzie: {pred.get('summary', '')} ({pred.get('distress_signals', 0)} semnale)").bold = True
+
+    bench = verified_data.get("benchmark", {})
+    if isinstance(bench, dict) and bench.get("available") and bench.get("comparisons"):
+        doc.add_page_break()
+        doc.add_heading(f"Benchmark Sector CAEN {bench.get('caen_code', '')}", level=1)
+        section_name = bench.get("caen_section_name", "")
+        if section_name:
+            doc.add_paragraph(f"{section_name} — {bench.get('nr_firme_sector') or '?'} firme in sector")
+        try:
+            table = doc.add_table(rows=1, cols=4)
+            table.style = "Table Grid"
+            hdr = table.rows[0].cells
+            hdr[0].text, hdr[1].text, hdr[2].text, hdr[3].text = "Indicator", "Firma", "Media sector", "Pozitie"
+            for c in bench["comparisons"]:
+                row = table.add_row().cells
+                row[0].text = str(c.get("metric", ""))
+                row[1].text = _fmt_docx_num(c.get("firma"))
+                row[2].text = _fmt_docx_num(c.get("media_sector"))
+                row[3].text = str(c.get("pozitie", ""))
+        except Exception:
+            for c in bench["comparisons"]:
+                doc.add_paragraph(str(c.get("text", "")), style="List Bullet")
+
+    act = verified_data.get("actionariat", {})
+    rel = verified_data.get("relations", {})
+    act_ok = isinstance(act, dict) and act.get("available")
+    rel_flags = rel.get("flags", []) if isinstance(rel, dict) else []
+    if act_ok or rel_flags:
+        doc.add_page_break()
+        doc.add_heading("Actionariat si Relatii", level=1)
+        if act_ok:
+            cap = act.get("capital_social")
+            stare = act.get("stare", "")
+            if cap or stare:
+                extra = f" | Stare: {stare}" if stare else ""
+                doc.add_paragraph(f"Capital social: {_fmt_docx_num(cap)}{extra}")
+            for label, items in (("Asociati", act.get("asociati")), ("Administratori", act.get("administratori"))):
+                names = _docx_names(items)
+                if names:
+                    doc.add_heading(label, level=2)
+                    for n in names:
+                        doc.add_paragraph(n, style="List Bullet")
+        for fl in rel_flags:
+            doc.add_paragraph(f"[{fl.get('severity', 'INFO')}] {fl.get('type', '')}: {fl.get('detail', '')}", style="List Bullet")
+
+    risk = verified_data.get("risk", {})
+    aegrm_field = risk.get("aegrm_guarantees", {}) if isinstance(risk, dict) else {}
+    aegrm = aegrm_field.get("value") if isinstance(aegrm_field, dict) else None
+    hist = verified_data.get("historical_flags", [])
+    aegrm_ok = isinstance(aegrm, dict) and aegrm.get("has_data")
+    hist_ok = isinstance(hist, list) and bool(hist)
+    if aegrm_ok or hist_ok:
+        doc.add_page_break()
+        doc.add_heading("Garantii si Istoric (OSINT)", level=1)
+        if aegrm_ok:
+            doc.add_paragraph(f"Garantii reale mobiliare (AEGRM): {aegrm.get('count', 0)}")
+            guarantees = aegrm.get("guarantees") or aegrm.get("results") or []
+            if isinstance(guarantees, list):
+                for g in guarantees[:8]:
+                    txt = (g.get("descriere") or g.get("creditor") or g.get("title") or str(g)) if isinstance(g, dict) else str(g)
+                    doc.add_paragraph(str(txt)[:200], style="List Bullet")
+        if hist_ok:
+            for fl in hist:
+                if isinstance(fl, dict):
+                    label = fl.get("type") or fl.get("title") or "Semnal"
+                    detail = fl.get("detail") or fl.get("description") or ""
+                    date_raw = fl.get("date") or fl.get("data") or ""
+                    doc.add_paragraph(f"{label} {date_raw}: {detail}"[:240], style="List Bullet")
+                else:
+                    doc.add_paragraph(str(fl), style="List Bullet")
+
+    funding = verified_data.get("funding_programs", {})
+    if isinstance(funding, dict) and funding.get("eligible"):
+        doc.add_page_break()
+        doc.add_heading("Programe de Finantare Eligibile", level=1)
+        if funding.get("summary"):
+            doc.add_paragraph(str(funding["summary"]))
+        try:
+            table = doc.add_table(rows=1, cols=3)
+            table.style = "Table Grid"
+            hdr = table.rows[0].cells
+            hdr[0].text, hdr[1].text, hdr[2].text = "Program", "Suma max (EUR)", "Termen"
+            for p in funding["eligible"]:
+                suma = p.get("suma_max_eur", 0)
+                suma_str = f"{suma:,.0f}" if isinstance(suma, int | float) and suma else "-"
+                row = table.add_row().cells
+                row[0].text = str(p.get("nume", ""))
+                row[1].text = suma_str
+                row[2].text = str(p.get("termen", "") or "-")
+        except Exception:
+            for p in funding["eligible"]:
+                doc.add_paragraph(f"{p.get('nume', '')} — {p.get('suma_max_eur', 0)} EUR", style="List Bullet")
+
+
 def generate_docx(report_sections: dict, meta: dict, output_path: str, verified_data: dict = None):
     """Genereaza DOCX din report_sections. B15: due_diligence + early_warnings."""
     verified_data = verified_data or {}
@@ -92,7 +223,7 @@ def generate_docx(report_sections: dict, meta: dict, output_path: str, verified_
     doc.add_page_break()
 
     # 9D: Table of Contents
-    toc_heading = doc.add_heading("Cuprins", level=1)
+    doc.add_heading("Cuprins", level=1)
     # Insert Word TOC field (auto-updates on open in Word)
     toc_para = doc.add_paragraph()
     run = toc_para.add_run()
@@ -199,6 +330,9 @@ def generate_docx(report_sections: dict, meta: dict, output_path: str, verified_
                     dp.runs[0].font.color.rgb = RGBColor(100, 100, 100)
             elif isinstance(ew, str):
                 doc.add_paragraph(ew, style="List Bullet")
+
+    # Rich fields previously dropped: predictive, benchmark, actionariat, AEGRM, historical, funding
+    _add_rich_fields_docx(doc, verified_data)
 
     # Sources
     sources = meta.get("sources", [])

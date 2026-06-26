@@ -482,6 +482,184 @@ def _build_company_network_html(verified_data: dict) -> str:
     </section>'''
 
 
+def _fmt_num(v) -> str:
+    """Format a numeric value with thousands separators; passthrough otherwise."""
+    if isinstance(v, int | float):
+        return f"{v:,.0f}"
+    return str(v) if v is not None else "—"
+
+
+def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
+    """Surface rich verification fields previously dropped from reports:
+    predictive_scores, benchmark, actionariat + relations, aegrm_guarantees,
+    historical_flags, funding_programs. Returns (sections_html, nav_links_html)."""
+    out: list[str] = []
+    nav = ""
+
+    # ---- Scoruri predictive faliment ----
+    pred = verified_data.get("predictive_scores", {})
+    if isinstance(pred, dict) and pred.get("summary"):
+        def _badge(label, value, tone):
+            colors = {"ok": "#22c55e", "warn": "#eab308", "bad": "#ef4444", "na": "#64748b"}
+            c = colors.get(tone, "#64748b")
+            return (f'<div style="background:#16213e;border-radius:8px;padding:12px 16px;border-left:3px solid {c}">'
+                    f'<div style="font-size:0.72em;color:#64748b;text-transform:uppercase;letter-spacing:1px">{_escape(label)}</div>'
+                    f'<div style="font-size:1.02em;color:{c};font-weight:700;margin-top:3px">{_escape(value)}</div></div>')
+        altman = pred.get("altman_z", {}) or {}
+        piotroski = pred.get("piotroski_f", {}) or {}
+        beneish = pred.get("beneish_m", {}) or {}
+        zmijewski = pred.get("zmijewski_x", {}) or {}
+        cards = []
+        z_zone = altman.get("zone", "INDISPONIBIL")
+        z_val = f"{altman.get('z_score')} ({z_zone})" if altman.get("z_score") is not None else "Indisponibil"
+        cards.append(_badge("Altman Z''", z_val, {"SAFE": "ok", "GREY": "warn", "DISTRESS": "bad"}.get(z_zone, "na")))
+        f_grade = piotroski.get("grade", "INSUFICIENT")
+        f_val = f"{piotroski.get('f_score')}/{piotroski.get('max_possible', 9)} ({f_grade})" if piotroski.get("f_score") is not None else "Insuficient"
+        cards.append(_badge("Piotroski F", f_val, {"STRONG": "ok", "AVERAGE": "warn", "WEAK": "bad"}.get(f_grade, "na")))
+        m_risk = beneish.get("risk", "INDISPONIBIL")
+        m_val = f"{beneish.get('m_score')} ({m_risk})" if beneish.get("m_score") is not None else "Indisponibil"
+        cards.append(_badge("Beneish M", m_val, {"OK": "ok", "INVESTIGAT": "warn", "MANIPULATOR_PROBABIL": "bad"}.get(m_risk, "na")))
+        z_av = zmijewski.get("available")
+        x_val = f"{zmijewski.get('x_score')} ({'Distres' if zmijewski.get('distress') else 'OK'})" if z_av else "Indisponibil"
+        cards.append(_badge("Zmijewski X", x_val, "bad" if zmijewski.get("distress") else ("ok" if z_av else "na")))
+        signals = pred.get("distress_signals", 0)
+        sig_color = "#ef4444" if signals >= 3 else "#eab308" if signals >= 1 else "#22c55e"
+        out.append(f'''
+    <section id="predictive" class="report-section">
+        <h2>Scoruri Predictive Faliment</h2>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:8px">{"".join(cards)}</div>
+        <p style="margin-top:14px;color:{sig_color};font-weight:600">{_escape(str(pred.get("summary", "")))} ({signals} semnale de distres)</p>
+        <p style="color:#64748b;font-size:0.78em;margin-top:6px;font-style:italic">Modele statistice orientative — praguri calibrate international, interpretare cu prudenta pentru piata RO.</p>
+    </section>''')
+        nav += '<a href="#predictive" class="nav-link">Scoruri Predictive</a>\n'
+
+    # ---- Benchmark sector CAEN ----
+    bench = verified_data.get("benchmark", {})
+    if isinstance(bench, dict) and bench.get("available") and bench.get("comparisons"):
+        rows = ""
+        for c in bench["comparisons"]:
+            rows += (f'<tr><td style="padding:8px 12px;color:#e2e8f0">{_escape(str(c.get("metric", "")))}</td>'
+                     f'<td style="padding:8px 12px;text-align:right;color:#a5b4fc">{_escape(_fmt_num(c.get("firma")))}</td>'
+                     f'<td style="padding:8px 12px;text-align:right;color:#94a3b8">{_escape(_fmt_num(c.get("media_sector")))}</td>'
+                     f'<td style="padding:8px 12px;text-align:center;color:#cbd5e1">{_escape(str(c.get("pozitie", "")))}</td></tr>')
+        section_name = bench.get("caen_section_name", "") or ""
+        meta_line = f'<p style="color:#94a3b8;font-size:0.9em">{_escape(section_name)} — {bench.get("nr_firme_sector") or "?"} firme in sector</p>' if section_name else ""
+        out.append(f'''
+    <section id="benchmark" class="report-section">
+        <h2>Benchmark Sector CAEN {_escape(str(bench.get("caen_code", "")))}</h2>
+        {meta_line}
+        <table class="ris-table" style="margin-top:12px"><thead><tr><th>Indicator</th><th style="text-align:right">Firma</th><th style="text-align:right">Media sector</th><th style="text-align:center">Pozitie</th></tr></thead><tbody>{rows}</tbody></table>
+    </section>''')
+        nav += '<a href="#benchmark" class="nav-link">Benchmark</a>\n'
+
+    # ---- Actionariat + relatii ----
+    act = verified_data.get("actionariat", {})
+    rel = verified_data.get("relations", {})
+    act_ok = isinstance(act, dict) and act.get("available")
+    rel_flags = rel.get("flags", []) if isinstance(rel, dict) else []
+    if act_ok or rel_flags:
+        body = ""
+
+        def _names(items):
+            res = []
+            for it in items or []:
+                if isinstance(it, dict):
+                    res.append(str(it.get("nume") or it.get("name") or it.get("denumire") or it))
+                else:
+                    res.append(str(it))
+            return res
+        if act_ok:
+            cap = act.get("capital_social")
+            stare = act.get("stare", "")
+            if cap or stare:
+                body += f'<p style="color:#cbd5e1">Capital social: <strong>{_escape(_fmt_num(cap))}</strong>{f" | Stare: {_escape(str(stare))}" if stare else ""}</p>'
+            for label, items in (("Asociati", act.get("asociati")), ("Administratori", act.get("administratori"))):
+                names = _names(items)
+                if names:
+                    body += f'<h3 style="color:#818cf8;margin:14px 0 6px;font-size:1em">{label}</h3><ul class="list-disc ml-6">'
+                    body += "".join(f'<li style="color:#cbd5e1">{_escape(n)}</li>' for n in names)
+                    body += "</ul>"
+        for fl in rel_flags:
+            sev = str(fl.get("severity", "INFO")).upper()
+            c = {"RED": "#ef4444", "YELLOW": "#eab308"}.get(sev, "#6366f1")
+            body += (f'<div style="padding:8px 12px;margin-top:8px;background:#16213e;border-radius:6px;border-left:3px solid {c}">'
+                     f'<span style="color:{c};font-weight:600">{_escape(str(fl.get("type", "")))}</span> '
+                     f'<span style="color:#cbd5e1">— {_escape(str(fl.get("detail", "")))}</span></div>')
+        if body:
+            out.append(f'''
+    <section id="actionariat" class="report-section">
+        <h2>Actionariat &amp; Relatii</h2>
+        {body}
+    </section>''')
+            nav += '<a href="#actionariat" class="nav-link">Actionariat</a>\n'
+
+    # ---- AEGRM garantii + semnale istorice OSINT ----
+    risk = verified_data.get("risk", {})
+    aegrm_field = risk.get("aegrm_guarantees", {}) if isinstance(risk, dict) else {}
+    aegrm = aegrm_field.get("value") if isinstance(aegrm_field, dict) else None
+    hist = verified_data.get("historical_flags", [])
+    aegrm_ok = isinstance(aegrm, dict) and aegrm.get("has_data")
+    if aegrm_ok or hist:
+        body = ""
+        if aegrm_ok:
+            cnt = aegrm.get("count", 0)
+            gc = "#eab308" if aegrm.get("has_guarantees") else "#22c55e"
+            body += f'<p style="color:{gc};font-weight:600">Garantii reale mobiliare (AEGRM): {cnt}</p>'
+            guarantees = aegrm.get("guarantees") or aegrm.get("results") or []
+            if isinstance(guarantees, list) and guarantees:
+                body += '<ul class="list-disc ml-6">'
+                for g in guarantees[:8]:
+                    txt = (g.get("descriere") or g.get("creditor") or g.get("title") or str(g)) if isinstance(g, dict) else str(g)
+                    body += f'<li style="color:#cbd5e1">{_escape(str(txt)[:200])}</li>'
+                body += "</ul>"
+        if hist and isinstance(hist, list):
+            body += '<h3 style="color:#818cf8;margin:14px 0 6px;font-size:1em">Semnale istorice (Monitorul Oficial)</h3>'
+            for fl in hist:
+                if isinstance(fl, dict):
+                    sev = str(fl.get("severity", "INFO")).upper()
+                    c = {"RED": "#ef4444", "YELLOW": "#eab308", "HIGH": "#ef4444", "MEDIUM": "#eab308"}.get(sev, "#6366f1")
+                    label = _escape(str(fl.get("type") or fl.get("title") or fl.get("category") or "Semnal"))
+                    detail = _escape(str(fl.get("detail") or fl.get("description") or fl.get("text") or "")[:240])
+                    date_raw = fl.get("date") or fl.get("data") or ""
+                    date_html = f'<span style="color:#64748b;font-size:0.8em">{_escape(str(date_raw))}</span> ' if date_raw else ""
+                    body += (f'<div style="padding:8px 12px;margin-bottom:6px;background:#16213e;border-radius:6px;border-left:3px solid {c}">'
+                             f'<span style="color:{c};font-weight:600">{label}</span> {date_html}'
+                             f'<span style="color:#cbd5e1">— {detail}</span></div>')
+                else:
+                    body += f'<div style="color:#cbd5e1">{_escape(str(fl))}</div>'
+        if body:
+            out.append(f'''
+    <section id="garantii" class="report-section">
+        <h2>Garantii &amp; Istoric (OSINT)</h2>
+        {body}
+    </section>''')
+            nav += '<a href="#garantii" class="nav-link">Garantii &amp; Istoric</a>\n'
+
+    # ---- Programe de finantare ----
+    funding = verified_data.get("funding_programs", {})
+    if isinstance(funding, dict) and funding.get("eligible"):
+        rows = ""
+        for p in funding["eligible"]:
+            suma = p.get("suma_max_eur", 0)
+            suma_str = f"{suma:,.0f} EUR" if isinstance(suma, int | float) and suma else "—"
+            link = str(p.get("link", "") or "")
+            nume = _escape(str(p.get("nume", "")))
+            nume_html = f'<a href="{_escape(link)}" style="color:#a5b4fc" target="_blank" rel="noopener">{nume}</a>' if link.startswith(("http://", "https://")) else nume
+            rows += (f'<tr><td style="padding:8px 12px;color:#e2e8f0">{nume_html}</td>'
+                     f'<td style="padding:8px 12px;text-align:right;color:#22c55e;font-weight:600">{suma_str}</td>'
+                     f'<td style="padding:8px 12px;color:#94a3b8;font-size:0.85em">{_escape(str(p.get("termen", "") or "—"))}</td></tr>')
+        out.append(f'''
+    <section id="funding" class="report-section">
+        <h2>Programe de Finantare Eligibile</h2>
+        <p style="color:#cbd5e1">{_escape(str(funding.get("summary", "")))}</p>
+        <table class="ris-table" style="margin-top:12px"><thead><tr><th>Program</th><th style="text-align:right">Suma max</th><th>Termen</th></tr></thead><tbody>{rows}</tbody></table>
+        <p style="color:#64748b;font-size:0.78em;margin-top:6px;font-style:italic">Eligibilitate orientativa pe profil (CAEN/angajati/vechime) — verificati conditiile complete la sursa.</p>
+    </section>''')
+        nav += '<a href="#funding" class="nav-link">Finantare</a>\n'
+
+    return "\n".join(out), nav
+
+
 def generate_html(report_sections: dict, meta: dict, verified_data: dict, output_path: str, lang: str = "ro"):
     """Genereaza HTML single-file din report_sections + verified_data. G5: i18n lang."""
     from backend.reports.i18n import t as _t
@@ -604,6 +782,10 @@ def generate_html(report_sections: dict, meta: dict, verified_data: dict, output
     if company_network_html:
         nav_items += '<a href="#network" class="nav-link">Retea Firme</a>\n'
 
+    # Rich fields previously dropped (predictive/benchmark/actionariat/aegrm/historical/funding)
+    rich_fields_html, rich_fields_nav = _build_rich_fields_html(verified_data)
+    nav_items += rich_fields_nav
+
     # Diagnostics section (per-source from agent_official)
     diag = verified_data.get("diagnostics") if "diagnostics" in verified_data else None
     if not diag:
@@ -686,6 +868,7 @@ body{{font-family:'Segoe UI',system-ui,sans-serif;background:#1a1a2e;color:#e2e8
     {sections_html}
     {early_warnings_html}
     {company_network_html}
+    {rich_fields_html}
     {completeness_html}
     <div class="sources">
         <h2>Surse Utilizate</h2>

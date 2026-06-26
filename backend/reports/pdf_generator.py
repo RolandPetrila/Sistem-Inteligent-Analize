@@ -204,6 +204,155 @@ class RISPdf(FPDF):
         self.cell(0, 5, f"{watermark_label} | {page_label} {self.page_no()}/{{nb}}", align="C")
 
 
+def _fmt_pdf_num(v) -> str:
+    if isinstance(v, int | float):
+        return f"{v:,.0f}"
+    return str(v) if v is not None else "-"
+
+
+def _pdf_names(items) -> list[str]:
+    res = []
+    for it in items or []:
+        if isinstance(it, dict):
+            res.append(str(it.get("nume") or it.get("name") or it.get("denumire") or it))
+        else:
+            res.append(str(it))
+    return res
+
+
+def _add_rich_fields_pdf(pdf, verified_data: dict):
+    """Render previously-dropped rich fields into the PDF: predictive scores,
+    benchmark, actionariat/relations, AEGRM guarantees, historical OSINT, funding."""
+    pred = verified_data.get("predictive_scores", {})
+    bench = verified_data.get("benchmark", {})
+    has_pred = isinstance(pred, dict) and pred.get("summary")
+    has_bench = isinstance(bench, dict) and bench.get("available") and bench.get("comparisons")
+
+    # ---- Page 1: Predictive + Benchmark ----
+    if has_pred or has_bench:
+        pdf.add_page()
+        pdf.start_section("Analiza Predictiva si Benchmark", level=0)
+        pdf.set_font("Helvetica", "B", 16)
+        pdf.set_text_color(99, 102, 241)
+        pdf.cell(0, 12, _sanitize("Analiza Predictiva si Benchmark"), new_x="LMARGIN", new_y="NEXT")
+        pdf.set_draw_color(99, 102, 241)
+        pdf.line(10, pdf.get_y(), 80, pdf.get_y())
+        pdf.ln(6)
+        pdf.set_font("Helvetica", "", 10)
+        pdf.set_text_color(40, 40, 40)
+
+        if has_pred:
+            _add_section_header(pdf, "Scoruri Predictive Faliment")
+            altman = pred.get("altman_z", {}) or {}
+            piotroski = pred.get("piotroski_f", {}) or {}
+            beneish = pred.get("beneish_m", {}) or {}
+            zmijewski = pred.get("zmijewski_x", {}) or {}
+            zmi_state = "Distres" if zmijewski.get("distress") else ("OK" if zmijewski.get("available") else "Indisponibil")
+            for ln_ in [
+                f"Altman Z'': {altman.get('z_score', 'N/A')} ({altman.get('zone', 'INDISPONIBIL')})",
+                f"Piotroski F: {piotroski.get('f_score', 'N/A')}/{piotroski.get('max_possible', 9)} ({piotroski.get('grade', 'N/A')})",
+                f"Beneish M: {beneish.get('m_score', 'N/A')} ({beneish.get('risk', 'INDISPONIBIL')})",
+                f"Zmijewski X: {zmijewski.get('x_score', 'N/A')} ({zmi_state})",
+            ]:
+                pdf.multi_cell(0, 6, _sanitize(ln_), new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(2)
+            pdf.set_font("Helvetica", "B", 10)
+            pdf.multi_cell(0, 6, _sanitize(f"Concluzie: {pred.get('summary', '')} ({pred.get('distress_signals', 0)} semnale)"), new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Helvetica", "", 10)
+            pdf.ln(4)
+
+        if has_bench:
+            _add_section_header(pdf, f"Benchmark Sector CAEN {bench.get('caen_code', '')}")
+            rows = [["Indicator", "Firma", "Media sector", "Pozitie"]]
+            for c in bench["comparisons"]:
+                rows.append([
+                    str(c.get("metric", "")),
+                    _fmt_pdf_num(c.get("firma")),
+                    _fmt_pdf_num(c.get("media_sector")),
+                    str(c.get("pozitie", "")),
+                ])
+            _render_pdf_table(pdf, rows, has_header=True)
+
+    # ---- Page 2: Actionariat + Garantii/Istoric + Finantare ----
+    act = verified_data.get("actionariat", {})
+    rel = verified_data.get("relations", {})
+    risk = verified_data.get("risk", {})
+    aegrm_field = risk.get("aegrm_guarantees", {}) if isinstance(risk, dict) else {}
+    aegrm = aegrm_field.get("value") if isinstance(aegrm_field, dict) else None
+    hist = verified_data.get("historical_flags", [])
+    funding = verified_data.get("funding_programs", {})
+
+    act_ok = isinstance(act, dict) and act.get("available")
+    rel_flags = rel.get("flags", []) if isinstance(rel, dict) else []
+    aegrm_ok = isinstance(aegrm, dict) and aegrm.get("has_data")
+    hist_ok = isinstance(hist, list) and bool(hist)
+    fund_ok = isinstance(funding, dict) and funding.get("eligible")
+
+    if act_ok or rel_flags or aegrm_ok or hist_ok or fund_ok:
+        pdf.add_page()
+        pdf.start_section("Actionariat, Garantii si Finantare", level=0)
+        pdf.set_font("Helvetica", "B", 16)
+        pdf.set_text_color(99, 102, 241)
+        pdf.cell(0, 12, _sanitize("Actionariat, Garantii si Finantare"), new_x="LMARGIN", new_y="NEXT")
+        pdf.set_draw_color(99, 102, 241)
+        pdf.line(10, pdf.get_y(), 80, pdf.get_y())
+        pdf.ln(6)
+        pdf.set_font("Helvetica", "", 10)
+        pdf.set_text_color(40, 40, 40)
+
+        if act_ok or rel_flags:
+            _add_section_header(pdf, "Actionariat si Relatii")
+            if act_ok:
+                cap = act.get("capital_social")
+                stare = act.get("stare", "")
+                if cap or stare:
+                    extra = f" | Stare: {stare}" if stare else ""
+                    pdf.multi_cell(0, 6, _sanitize(f"Capital social: {_fmt_pdf_num(cap)}{extra}"), new_x="LMARGIN", new_y="NEXT")
+                for label, items in (("Asociati", act.get("asociati")), ("Administratori", act.get("administratori"))):
+                    names = _pdf_names(items)
+                    if names:
+                        pdf.set_font("Helvetica", "B", 10)
+                        pdf.multi_cell(0, 6, _sanitize(f"{label}:"), new_x="LMARGIN", new_y="NEXT")
+                        pdf.set_font("Helvetica", "", 10)
+                        for n in names:
+                            pdf.multi_cell(0, 5.5, _sanitize(f"  * {n}"), new_x="LMARGIN", new_y="NEXT")
+            for fl in rel_flags:
+                pdf.multi_cell(0, 5.5, _sanitize(f"[{fl.get('severity', 'INFO')}] {fl.get('type', '')}: {fl.get('detail', '')}"), new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(3)
+
+        if aegrm_ok or hist_ok:
+            _add_section_header(pdf, "Garantii si Istoric (OSINT)")
+            if aegrm_ok:
+                pdf.multi_cell(0, 6, _sanitize(f"Garantii reale mobiliare (AEGRM): {aegrm.get('count', 0)}"), new_x="LMARGIN", new_y="NEXT")
+                guarantees = aegrm.get("guarantees") or aegrm.get("results") or []
+                if isinstance(guarantees, list):
+                    for g in guarantees[:8]:
+                        txt = (g.get("descriere") or g.get("creditor") or g.get("title") or str(g)) if isinstance(g, dict) else str(g)
+                        pdf.multi_cell(0, 5.5, _sanitize(f"  * {str(txt)[:200]}"), new_x="LMARGIN", new_y="NEXT")
+            if hist_ok:
+                for fl in hist:
+                    if isinstance(fl, dict):
+                        label = fl.get("type") or fl.get("title") or "Semnal"
+                        detail = fl.get("detail") or fl.get("description") or ""
+                        date_raw = fl.get("date") or fl.get("data") or ""
+                        pdf.multi_cell(0, 5.5, _sanitize(f"- {label} {date_raw}: {detail}"[:200]), new_x="LMARGIN", new_y="NEXT")
+                    else:
+                        pdf.multi_cell(0, 5.5, _sanitize(f"- {fl}"), new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(3)
+
+        if fund_ok:
+            _add_section_header(pdf, "Programe de Finantare Eligibile")
+            if funding.get("summary"):
+                pdf.multi_cell(0, 6, _sanitize(str(funding["summary"])), new_x="LMARGIN", new_y="NEXT")
+                pdf.ln(1)
+            rows = [["Program", "Suma max (EUR)", "Termen"]]
+            for p in funding["eligible"]:
+                suma = p.get("suma_max_eur", 0)
+                suma_str = f"{suma:,.0f}" if isinstance(suma, int | float) and suma else "-"
+                rows.append([str(p.get("nume", "")), suma_str, str(p.get("termen", "") or "-")])
+            _render_pdf_table(pdf, rows, has_header=True)
+
+
 def generate_pdf(report_sections: dict, meta: dict, output_path: str, verified_data: dict = None, lang: str = "ro"):
     """Genereaza PDF din report_sections. 9D: watermark + TOC. B15: due_diligence + early_warnings. G5: i18n lang."""
     verified_data = verified_data or {}
@@ -454,6 +603,9 @@ def generate_pdf(report_sections: dict, meta: dict, output_path: str, verified_d
             elif isinstance(ew, str):
                 pdf.set_text_color(234, 179, 8)
                 pdf.cell(0, 6, _sanitize(f"- {ew}"), new_x="LMARGIN", new_y="NEXT")
+
+    # Rich fields previously dropped: predictive, benchmark, actionariat, AEGRM, historical, funding
+    _add_rich_fields_pdf(pdf, verified_data)
 
     # Sources page
     sources = meta.get("sources", [])
