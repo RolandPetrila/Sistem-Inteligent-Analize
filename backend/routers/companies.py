@@ -15,13 +15,16 @@ from backend.rate_limiter import rate_limit_read
 
 router = APIRouter()
 
+# IMB-B3: single source of truth for the companies projection (was duplicated 3x -> schema-drift risk).
+COMPANY_COLS = "id, cui, name, caen_code, county, is_active, is_favorite, last_analyzed_at, risk_score"
+
 
 @router.get("/favorites")
 async def list_favorites() -> dict:
     """Return only companies marked as favorite."""
     try:
         rows = await db.fetch_all(
-            "SELECT id, cui, name, caen_code, county, is_active, is_favorite, last_analyzed_at, risk_score FROM companies WHERE is_favorite = 1 ORDER BY last_analyzed_at DESC LIMIT 500"
+            f"SELECT {COMPANY_COLS} FROM companies WHERE is_favorite = 1 ORDER BY last_analyzed_at DESC LIMIT 500"
         )
         return {"companies": [dict(r) for r in rows], "total": len(rows)}
     except Exception as e:
@@ -194,7 +197,7 @@ async def list_companies(
     total = total_row["c"] if total_row else 0
 
     rows = await db.fetch_all(
-        f"SELECT id, cui, name, caen_code, county, is_active, is_favorite, last_analyzed_at, risk_score FROM companies {where} ORDER BY {order_by} LIMIT ? OFFSET ?",
+        f"SELECT {COMPANY_COLS} FROM companies {where} ORDER BY {order_by} LIMIT ? OFFSET ?",
         tuple(params + [limit, offset]),
     )
 
@@ -305,7 +308,7 @@ async def upsert_company_note(company_id: str, body: dict) -> dict:
 
 @router.get("/{company_id}")
 async def get_company(company_id: str) -> dict:
-    row = await db.fetch_one("SELECT id, cui, name, caen_code, county, is_active, is_favorite, last_analyzed_at, risk_score FROM companies WHERE id = ?", (company_id,))
+    row = await db.fetch_one(f"SELECT {COMPANY_COLS} FROM companies WHERE id = ?", (company_id,))
     if not row:
         raise HTTPException(status_code=404, detail="Company not found")
 

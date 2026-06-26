@@ -140,6 +140,21 @@ class VerificationAgent(BaseAgent):
         if official.get("diagnostics"):
             verified["agent_diagnostics"] = official["diagnostics"]
 
+        # IMB-B1: Propaga semnalele OSINT Monitorul Oficial (cesiuni/dizolvari/schimbari asociati).
+        # Altfel raman doar in official_data si nu ajung in synthesis / full_data / rapoarte.
+        hist = official.get("osint_historical")
+        if isinstance(hist, dict) and hist.get("historical_flags"):
+            verified["historical_flags"] = hist["historical_flags"]
+
+        # IMB-B2: Scoruri predictive de faliment (Altman/Piotroski/Beneish/Zmijewski) persistate in raport.
+        try:
+            from backend.agents.verification.predictive_models import (
+                calculate_all_predictive_scores,
+            )
+            verified["predictive_scores"] = calculate_all_predictive_scores(verified)
+        except Exception as _pe:
+            logger.debug(f"[verification] predictive scores error: {_pe}")
+
         # --- Diagnostic completitudine raport ---
         verified["completeness"] = self._check_completeness(verified, official, market)
 

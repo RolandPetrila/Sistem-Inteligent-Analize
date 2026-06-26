@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Plus,
   Trash2,
@@ -70,6 +71,8 @@ export default function CompareCompanies() {
   const [templateName, setTemplateName] = useState("");
   const [showSaveForm, setShowSaveForm] = useState(false);
 
+  const [searchParams, setSearchParams] = useSearchParams();
+
   useEffect(() => {
     api
       .listCompareTemplates()
@@ -77,6 +80,17 @@ export default function CompareCompanies() {
       .catch(() => {
         /* templates optional */
       });
+  }, []);
+
+  // IMB-F1: prefill first CUI from ?cui= (handoff from CompanyDetail "Compara")
+  useEffect(() => {
+    const prefill = (searchParams.get("cui") || "").replace(/\D/g, "");
+    if (prefill) {
+      setCuis((prev) => [prefill, ...prev.slice(1)]);
+      searchParams.delete("cui");
+      setSearchParams(searchParams, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadTemplate = (tpl: CompareTemplate) => {

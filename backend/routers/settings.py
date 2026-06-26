@@ -199,7 +199,7 @@ def _reload_settings(env: dict, updated_keys: list[str]):
             object.__setattr__(settings, attr, new_val)
 
 
-@router.post("/test-telegram")
+@router.post("/test-telegram", dependencies=[Depends(require_api_key)])
 async def test_telegram():
     """Trimite un mesaj test pe Telegram."""
     from backend.services.notification import send_telegram
@@ -210,7 +210,7 @@ async def test_telegram():
 TESTABLE_SERVICES = ["groq", "gemini", "tavily", "telegram"]
 
 
-@router.post("/test/{service}")
+@router.post("/test/{service}", dependencies=[Depends(require_api_key)])
 async def test_service(service: str):
     """Test conectivitate individual per serviciu (groq, gemini, tavily, telegram)."""
     from backend.errors import ErrorCode, RISError

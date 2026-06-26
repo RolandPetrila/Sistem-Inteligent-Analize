@@ -1,5 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Upload, Download, Loader2, CheckCircle, XCircle, FileSearch } from "lucide-react";
+import {
+  Upload,
+  Download,
+  Loader2,
+  CheckCircle,
+  XCircle,
+  FileSearch,
+} from "lucide-react";
 import clsx from "clsx";
 import { useToast } from "@/components/Toast";
 import { api } from "@/lib/api";
@@ -41,17 +48,30 @@ export default function BatchAnalysis() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [csvPreview, setCsvPreview] = useState<CsvPreviewRow[] | null>(null);
   const [showPreview, setShowPreview] = useState(false);
-  const [serverPreview, setServerPreview] = useState<ServerPreview | null>(null);
+  const [serverPreview, setServerPreview] = useState<ServerPreview | null>(
+    null,
+  );
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewConfirmed, setPreviewConfirmed] = useState(false);
 
   // R2 fix: CSV header keywords to detect and skip header row
-  const CSV_HEADER_KEYWORDS = ["cui", "firma", "company", "denumire", "nume", "name", "cod"];
+  const CSV_HEADER_KEYWORDS = [
+    "cui",
+    "firma",
+    "company",
+    "denumire",
+    "nume",
+    "name",
+    "cod",
+  ];
 
   // Parse CSV file client-side for preview and validation
   const parseCSVFile = useCallback(async (f: File) => {
     const text = await f.text();
-    let lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
+    let lines = text
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
 
     // R2 fix: Skip header row if first row contains known header keywords
     if (lines.length > 0) {
@@ -67,7 +87,8 @@ export default function BatchAnalysis() {
       const raw = line.split(/[,;]/)[0].replace(/"/g, "").trim();
       // Strip RO prefix for validation
       const cuiClean = raw.toUpperCase().replace(/^RO/, "").replace(/\s/g, "");
-      if (!cuiClean) return { raw, cui: cuiClean, valid: false, error: "Linie goala" };
+      if (!cuiClean)
+        return { raw, cui: cuiClean, valid: false, error: "Linie goala" };
       const result = validateCUI(cuiClean);
       return { raw, cui: result.cui, valid: result.valid, error: result.error };
     });
@@ -85,7 +106,10 @@ export default function BatchAnalysis() {
   const handleUpload = async () => {
     if (!file) return;
     setSubmitting(true);
-    logAction("BatchAnalysis", "upload", { fileName: file.name, size: file.size });
+    logAction("BatchAnalysis", "upload", {
+      fileName: file.name,
+      size: file.size,
+    });
 
     try {
       const data = await api.uploadBatch(file);
@@ -96,7 +120,9 @@ export default function BatchAnalysis() {
       if (intervalRef.current) clearInterval(intervalRef.current);
       const interval = setInterval(async () => {
         try {
-          const status = await api.getBatchStatus(data.batch_id) as unknown as BatchStatus;
+          const status = (await api.getBatchStatus(
+            data.batch_id,
+          )) as unknown as BatchStatus;
           setBatch(status);
 
           if (status.status === "DONE" || status.status === "FAILED") {
@@ -148,12 +174,16 @@ export default function BatchAnalysis() {
           <div
             className={clsx(
               "border-2 border-dashed rounded-xl p-8 text-center transition-colors",
-              file ? "border-accent-primary/50 bg-accent-primary/5" : "border-dark-border"
+              file
+                ? "border-accent-primary/50 bg-accent-primary/5"
+                : "border-dark-border",
             )}
           >
             <Upload className="w-10 h-10 text-gray-500 mx-auto mb-3" />
             <p className="text-sm text-gray-400 mb-3">
-              {file ? file.name : "Selecteaza un fisier CSV cu CUI-uri (un CUI per linie)"}
+              {file
+                ? file.name
+                : "Selecteaza un fisier CSV cu CUI-uri (un CUI per linie)"}
             </p>
             <input
               type="file"
@@ -205,7 +235,9 @@ export default function BatchAnalysis() {
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-xs">
-                  <span className="text-gray-400">{csvPreview.length} randuri</span>
+                  <span className="text-gray-400">
+                    {csvPreview.length} randuri
+                  </span>
                   <span className="text-green-400">
                     {csvPreview.filter((r) => r.valid).length} valide
                   </span>
@@ -222,7 +254,7 @@ export default function BatchAnalysis() {
                     key={i}
                     className={clsx(
                       "flex items-center justify-between px-3 py-1.5 text-sm border-t border-dark-border/50",
-                      i % 2 === 0 ? "bg-dark-card" : "bg-dark-surface"
+                      i % 2 === 0 ? "bg-dark-card" : "bg-dark-surface",
                     )}
                   >
                     <div className="flex items-center gap-2">
@@ -231,12 +263,16 @@ export default function BatchAnalysis() {
                       ) : (
                         <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
                       )}
-                      <span className={row.valid ? "text-gray-300" : "text-red-300"}>
+                      <span
+                        className={row.valid ? "text-gray-300" : "text-red-300"}
+                      >
                         {row.raw || "(gol)"}
                       </span>
                     </div>
                     {!row.valid && row.error && (
-                      <span className="text-[10px] text-red-400 ml-2">{row.error}</span>
+                      <span className="text-[10px] text-red-400 ml-2">
+                        {row.error}
+                      </span>
                     )}
                   </div>
                 ))}
@@ -254,11 +290,17 @@ export default function BatchAnalysis() {
           {serverPreview && !previewLoading && (
             <div className="border border-dark-border rounded-lg p-3 bg-dark-surface space-y-2">
               <div className="flex items-center gap-3 text-sm">
-                <span className="text-green-400 font-medium">{serverPreview.valid_count} CUI-uri valide</span>
+                <span className="text-green-400 font-medium">
+                  {serverPreview.valid_count} CUI-uri valide
+                </span>
                 {serverPreview.invalid_count > 0 && (
-                  <span className="text-red-400">{serverPreview.invalid_count} invalide</span>
+                  <span className="text-red-400">
+                    {serverPreview.invalid_count} invalide
+                  </span>
                 )}
-                <span className="text-gray-500">~{serverPreview.estimated_time_minutes} min estimat</span>
+                <span className="text-gray-500">
+                  ~{serverPreview.estimated_time_minutes} min estimat
+                </span>
               </div>
               {serverPreview.invalid_entries.length > 0 && (
                 <div className="space-y-0.5">
@@ -280,7 +322,8 @@ export default function BatchAnalysis() {
               )}
               {previewConfirmed && (
                 <p className="text-xs text-green-400 flex items-center gap-1">
-                  <CheckCircle className="w-3.5 h-3.5" /> Confirmat — apasa Porneste pentru a incepe
+                  <CheckCircle className="w-3.5 h-3.5" /> Confirmat — apasa
+                  Porneste pentru a incepe
                 </p>
               )}
             </div>
@@ -291,7 +334,8 @@ export default function BatchAnalysis() {
               onClick={handleUpload}
               disabled={
                 submitting ||
-                (csvPreview !== null && csvPreview.filter((r) => r.valid).length === 0) ||
+                (csvPreview !== null &&
+                  csvPreview.filter((r) => r.valid).length === 0) ||
                 (serverPreview !== null && !previewConfirmed)
               }
               className="btn-primary w-full flex items-center justify-center gap-2"
@@ -324,8 +368,8 @@ export default function BatchAnalysis() {
                 batch.status === "DONE"
                   ? "bg-green-500/20 text-green-400"
                   : batch.status === "FAILED"
-                  ? "bg-red-500/20 text-red-400"
-                  : "bg-blue-500/20 text-blue-400"
+                    ? "bg-red-500/20 text-red-400"
+                    : "bg-blue-500/20 text-blue-400",
               )}
             >
               {batch.status}
@@ -338,7 +382,13 @@ export default function BatchAnalysis() {
               <span>{batch.current_step}</span>
               <span>{batch.progress_percent}%</span>
             </div>
-            <div className="w-full h-2 bg-dark-surface rounded-full overflow-hidden">
+            <div
+              className="w-full h-2 bg-dark-surface rounded-full overflow-hidden"
+              role="progressbar"
+              aria-valuenow={batch.progress_percent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
               <div
                 className="h-full bg-accent-primary rounded-full transition-all duration-500"
                 style={{ width: `${batch.progress_percent}%` }}
@@ -355,14 +405,18 @@ export default function BatchAnalysis() {
             <div className="text-center p-3 bg-dark-surface rounded-lg">
               <div className="flex items-center justify-center gap-1">
                 <CheckCircle className="w-4 h-4 text-green-400" />
-                <p className="text-2xl font-bold text-green-400">{batch.completed}</p>
+                <p className="text-2xl font-bold text-green-400">
+                  {batch.completed}
+                </p>
               </div>
               <p className="text-xs text-gray-500">Complete</p>
             </div>
             <div className="text-center p-3 bg-dark-surface rounded-lg">
               <div className="flex items-center justify-center gap-1">
                 <XCircle className="w-4 h-4 text-red-400" />
-                <p className="text-2xl font-bold text-red-400">{batch.failed}</p>
+                <p className="text-2xl font-bold text-red-400">
+                  {batch.failed}
+                </p>
               </div>
               <p className="text-xs text-gray-500">Erori</p>
             </div>
