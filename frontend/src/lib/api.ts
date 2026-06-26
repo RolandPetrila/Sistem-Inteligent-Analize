@@ -701,4 +701,82 @@ export const api = {
       edges: { source: string; target: string; label?: string }[];
       stats?: Record<string, unknown>;
     }>(`/companies/${companyId}/network`),
+
+  // FTS5 full-text company search
+  searchFts: (q: string, limit = 20) =>
+    request<
+      {
+        id: number;
+        name: string;
+        cui: string;
+        caen_code?: string;
+        county?: string;
+        city?: string;
+      }[]
+    >(`/companies/search/fts?q=${encodeURIComponent(q)}&limit=${limit}`),
+
+  // Quick-score (bulk, no AI) — POST /analysis/quick-score
+  quickScore: (cuis: string[]) =>
+    request<{
+      results: {
+        cui: string;
+        name?: string;
+        ca_last_year?: number | null;
+        angajati?: number | null;
+        tva_activ?: boolean;
+        inactiv_anaf?: boolean;
+        quick_score?: number;
+        risk?: string;
+        error?: string;
+      }[];
+      note: string;
+    }>("/analysis/quick-score", {
+      method: "POST",
+      body: JSON.stringify({ cuis }),
+    }),
+
+  // Monitoring audit-log for an alert
+  getMonitoringAuditLog: (alertId: string) =>
+    request<{
+      alert_id: string;
+      audit_log: {
+        timestamp?: string;
+        triggered_at?: string;
+        change_type: string;
+        old_value: string;
+        new_value: string;
+        severity: string;
+      }[];
+    }>(`/monitoring/${alertId}/audit-log`),
+
+  // Regenerate a single report section
+  regenerateSection: (jobId: string, sectionKey: string) =>
+    request<{
+      regen_id: string;
+      job_id: string;
+      section_key: string;
+      status: string;
+      current_length: number;
+      note: string;
+    }>(`/jobs/${jobId}/section/${sectionKey}/regenerate`, { method: "POST" }),
+
+  // Export SEAP tenders as .ics calendar file
+  exportIcs: async (reportId: string): Promise<Blob> => {
+    const res = await fetch(`${BASE}/reports/${reportId}/export/ics`);
+    if (!res.ok) {
+      const err = await res
+        .json()
+        .catch(() => ({ detail: `HTTP ${res.status}` }));
+      throw new ApiError(err.detail || `HTTP ${res.status}`, "", res.status);
+    }
+    return res.blob();
+  },
+
+  // Multi-year timeline report PDF (binary)
+  downloadTimelineReportPdf: async (cui: string): Promise<Blob> => {
+    const res = await fetch(`${BASE}/companies/${cui}/timeline-report/pdf`);
+    if (!res.ok)
+      throw new ApiError("Timeline PDF generation failed", "", res.status);
+    return res.blob();
+  },
 };

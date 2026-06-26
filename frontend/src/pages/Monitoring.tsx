@@ -1,5 +1,13 @@
 import { useEffect, useState, useMemo } from "react";
-import { Bell, BellOff, Trash2, RefreshCw, Plus, History } from "lucide-react";
+import {
+  Bell,
+  BellOff,
+  Trash2,
+  RefreshCw,
+  Plus,
+  History,
+  AlertCircle,
+} from "lucide-react";
 import clsx from "clsx";
 import { useToast } from "@/components/Toast";
 import { api } from "@/lib/api";
@@ -41,6 +49,16 @@ interface HistoryEntry {
   created_at?: string;
 }
 
+// Intrare in audit-log-ul unei alerte de monitorizare (vezi api.getMonitoringAuditLog)
+interface AuditEntry {
+  timestamp?: string;
+  triggered_at?: string;
+  change_type: string;
+  old_value: string;
+  new_value: string;
+  severity: string;
+}
+
 type HistoryFilter = "zi" | "saptamana" | "toate";
 
 export default function Monitoring() {
@@ -55,8 +73,13 @@ export default function Monitoring() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyFilter, setHistoryFilter] =
     useState<HistoryFilter>("saptamana");
+  // Eroare la incarcarea alertelor (pentru error-card + retry)
+  const [isError, setIsError] = useState(false);
+  // Alerta al carei audit-log este expandat (null = niciunul)
+  const [expandedAuditId, setExpandedAuditId] = useState<string | null>(null);
 
   const loadData = async () => {
+    setIsError(false);
     try {
       const [alertsRes, companiesRes, historyRes] = await Promise.all([
         api.listMonitoring(),
@@ -72,6 +95,7 @@ export default function Monitoring() {
         alerts: (alertsRes as { alerts: unknown[] }).alerts?.length,
       });
     } catch {
+      setIsError(true);
       toast("Eroare la incarcarea datelor de monitorizare", "error");
     } finally {
       setLoading(false);
@@ -167,6 +191,39 @@ export default function Monitoring() {
     );
   }
 
+  // Error-card + retry (mirror Companies.tsx isError pattern)
+  if (isError) {
+    return (
+      <div className="space-y-6 max-w-3xl">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Monitorizare Firme</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Primesti alerta cand se schimba ceva la firmele monitorizate
+          </p>
+        </div>
+        <div className="card text-center py-16">
+          <AlertCircle className="w-16 h-16 text-red-500/70 mx-auto mb-4" />
+          <p className="text-gray-300 text-lg">
+            Eroare la incarcarea monitorizarii
+          </p>
+          <p className="text-gray-500 text-sm mt-2">
+            Serverul a raspuns cu o eroare. Verifica conexiunea si incearca din
+            nou.
+          </p>
+          <button
+            onClick={() => {
+              setLoading(true);
+              loadData();
+            }}
+            className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-dark-card text-gray-200 hover:text-white transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" /> Reincearca
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 max-w-3xl">
       <div className="flex items-center justify-between">
@@ -239,49 +296,68 @@ export default function Monitoring() {
           {alerts.map((alert) => (
             <div
               key={alert.id}
-              className={clsx(
-                "card flex items-center justify-between",
-                !alert.is_active && "opacity-50",
-              )}
+              className={clsx("card", !alert.is_active && "opacity-50")}
             >
-              <div className="flex items-center gap-3">
-                {alert.is_active ? (
-                  <Bell className="w-5 h-5 text-green-400" />
-                ) : (
-                  <BellOff className="w-5 h-5 text-gray-600" />
-                )}
-                <div>
-                  <p className="text-sm font-medium text-white">
-                    {alert.company_name || "N/A"}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    CUI {alert.cui} |{" "}
-                    {FREQUENCY_LABELS[alert.check_frequency] ||
-                      alert.check_frequency}
-                    {alert.last_checked_at &&
-                      ` | Ultima verificare: ${new Date(alert.last_checked_at).toLocaleDateString("ro-RO")}`}
-                  </p>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {alert.is_active ? (
+                    <Bell className="w-5 h-5 text-green-400" />
+                  ) : (
+                    <BellOff className="w-5 h-5 text-gray-600" />
+                  )}
+                  <div>
+                    <p className="text-sm font-medium text-white">
+                      {alert.company_name || "N/A"}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      CUI {alert.cui} |{" "}
+                      {FREQUENCY_LABELS[alert.check_frequency] ||
+                        alert.check_frequency}
+                      {alert.last_checked_at &&
+                        ` | Ultima verificare: ${new Date(alert.last_checked_at).toLocaleDateString("ro-RO")}`}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => toggleAlert(alert.id)}
+                    className={clsx(
+                      "text-xs px-2 py-1 rounded",
+                      alert.is_active
+                        ? "bg-green-500/20 text-green-400"
+                        : "bg-gray-500/20 text-gray-400",
+                    )}
+                  >
+                    {alert.is_active ? "Activ" : "Inactiv"}
+                  </button>
+                  <button
+                    onClick={() =>
+                      setExpandedAuditId((cur) =>
+                        cur === alert.id ? null : alert.id,
+                      )
+                    }
+                    className={clsx(
+                      "p-1.5 hover:text-accent-secondary transition-colors",
+                      expandedAuditId === alert.id
+                        ? "text-accent-secondary"
+                        : "text-gray-600",
+                    )}
+                    title="Istoric modificari"
+                    aria-expanded={expandedAuditId === alert.id}
+                  >
+                    <History className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => deleteAlert(alert.id)}
+                    className="p-1.5 text-gray-600 hover:text-red-400"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => toggleAlert(alert.id)}
-                  className={clsx(
-                    "text-xs px-2 py-1 rounded",
-                    alert.is_active
-                      ? "bg-green-500/20 text-green-400"
-                      : "bg-gray-500/20 text-gray-400",
-                  )}
-                >
-                  {alert.is_active ? "Activ" : "Inactiv"}
-                </button>
-                <button
-                  onClick={() => deleteAlert(alert.id)}
-                  className="p-1.5 text-gray-600 hover:text-red-400"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
+              {expandedAuditId === alert.id && (
+                <AuditLogPanel alertId={alert.id} />
+              )}
             </div>
           ))}
         </div>
@@ -373,6 +449,115 @@ export default function Monitoring() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// Panou expandabil cu audit-log-ul unei alerte (incarca la deschidere)
+function AuditLogPanel({ alertId }: { alertId: string }) {
+  const { toast } = useToast();
+  const [entries, setEntries] = useState<AuditEntry[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    setError(false);
+    try {
+      const res = await api.getMonitoringAuditLog(alertId);
+      setEntries(res.audit_log ?? []);
+    } catch {
+      setError(true);
+      toast("Eroare la incarcarea istoricului de modificari", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, [alertId]);
+
+  return (
+    <div className="mt-3 pt-3 border-t border-dark-border">
+      {loading ? (
+        <div className="flex items-center gap-2 text-xs text-gray-500 py-1">
+          <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Se incarca
+          istoricul...
+        </div>
+      ) : error ? (
+        <div className="flex items-center justify-between gap-3 py-1">
+          <span className="text-xs text-red-400">
+            Nu am putut incarca istoricul de modificari
+          </span>
+          <button
+            onClick={load}
+            className="shrink-0 inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded
+                       bg-accent-primary/20 text-accent-secondary border border-accent-primary/30
+                       hover:bg-accent-primary/30 transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Reincearca
+          </button>
+        </div>
+      ) : !entries || entries.length === 0 ? (
+        <p className="text-xs text-gray-600 italic py-1">
+          Nicio modificare inregistrata
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {entries.map((entry, i) => {
+            const sev = (entry.severity || "").toUpperCase();
+            const sevClass =
+              sev === "RED"
+                ? "text-red-400 bg-red-500/10 border border-red-500/20"
+                : sev === "YELLOW"
+                  ? "text-amber-400 bg-amber-500/10 border border-amber-500/20"
+                  : sev === "GREEN"
+                    ? "text-green-400 bg-green-500/10 border border-green-500/20"
+                    : "text-gray-400 bg-gray-500/10 border border-gray-500/20";
+            const ts = entry.triggered_at || entry.timestamp || "";
+            return (
+              <li
+                key={i}
+                className="flex items-start gap-2 text-xs bg-dark-surface rounded-lg px-3 py-2"
+              >
+                <span
+                  className={clsx(
+                    "text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 mt-0.5",
+                    sevClass,
+                  )}
+                >
+                  {sev || "INFO"}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-gray-300 font-medium">
+                    {entry.change_type || "—"}
+                  </p>
+                  <p className="text-gray-500 mt-0.5 break-words">
+                    <span className="text-gray-400">
+                      {entry.old_value || "—"}
+                    </span>
+                    {" → "}
+                    <span className="text-gray-300">
+                      {entry.new_value || "—"}
+                    </span>
+                  </p>
+                </div>
+                {ts && (
+                  <span className="text-[10px] text-gray-600 shrink-0 whitespace-nowrap">
+                    {new Date(ts).toLocaleDateString("ro-RO", {
+                      day: "2-digit",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

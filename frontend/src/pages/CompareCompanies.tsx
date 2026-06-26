@@ -436,6 +436,12 @@ export default function CompareCompanies() {
             </div>
           </div>
 
+          {(result.companies?.length ?? 0) !== 2 && (
+            <p className="text-xs text-gray-500 -mt-2 mb-4">
+              Raportul PDF comparativ este disponibil doar pentru exact 2 firme.
+            </p>
+          )}
+
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-dark-border">

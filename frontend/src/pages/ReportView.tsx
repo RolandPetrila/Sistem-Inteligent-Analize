@@ -1,6 +1,12 @@
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  Calendar,
+  RefreshCw,
+} from "lucide-react";
 import clsx from "clsx";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
@@ -14,6 +20,34 @@ import { RadarChartSVG } from "@/components/report/RadarChartSVG";
 import { DeltaView } from "@/components/report/DeltaView";
 import { SimpleBarChart } from "@/components/report/SimpleBarChart";
 import { EmailModal } from "@/components/report/EmailModal";
+
+// A synthesis section value is normally an object {title, content, word_count};
+// the orchestrator error path stores a bare string instead — handle both.
+type ReportSectionValue =
+  | string
+  | { title?: string; content?: string; word_count?: number };
+
+// Sections that the backend can re-generate individually
+// (mirror of VALID_SECTIONS in backend/routers/jobs.py).
+const REGENERATABLE_SECTIONS: ReadonlySet<string> = new Set([
+  "executive_summary",
+  "company_profile",
+  "financial_analysis",
+  "risk_assessment",
+  "market_position",
+  "opportunities",
+  "recommendations",
+  "swot",
+  "competition",
+]);
+
+function getSectionText(value: ReportSectionValue): {
+  title: string | null;
+  content: string;
+} {
+  if (typeof value === "string") return { title: null, content: value };
+  return { title: value.title ?? null, content: value.content ?? "" };
+}
 
 interface ReportFull {
   id: string;
@@ -35,6 +69,7 @@ interface ReportFull {
       recommendation: string;
     };
     sources_used?: { name: string; level: number; status: string }[];
+    report_sections?: Record<string, ReportSectionValue>;
     [key: string]: unknown;
   } | null;
   sources: {
@@ -60,6 +95,8 @@ export default function ReportView() {
   const [predictiveScores, setPredictiveScores] = useState<any>(null);
   const [predictiveLoading, setPredictiveLoading] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [regeneratingKey, setRegeneratingKey] = useState<string | null>(null);
+  const [exportingIcs, setExportingIcs] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -231,6 +268,46 @@ export default function ReportView() {
     }
   };
 
+  // Export licitatii SEAP ca fisier calendar (.ics) — reutilizeaza pattern-ul
+  // de download din Blob (createObjectURL -> a.download -> click -> revoke).
+  const handleExportIcs = async () => {
+    if (exportingIcs) return;
+    setExportingIcs(true);
+    try {
+      const blob = await api.exportIcs(report.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `licitatii_${report.id}.ics`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast("Calendar licitatii descarcat (.ics).", "success");
+    } catch (e) {
+      // ApiError extinde Error; mesajul contine detaliul backend (ex. 404 fara licitatii).
+      const msg =
+        e instanceof Error ? e.message : "Eroare la exportul licitatiilor.";
+      toast(msg, "error");
+    } finally {
+      setExportingIcs(false);
+    }
+  };
+
+  // Regenereaza o singura sectiune narativa via backend.
+  const handleRegenerateSection = async (sectionKey: string) => {
+    if (regeneratingKey) return;
+    setRegeneratingKey(sectionKey);
+    try {
+      const res = await api.regenerateSection(report.job_id, sectionKey);
+      toast(`${res.status}: ${res.note}`, "info");
+    } catch (e) {
+      const msg =
+        e instanceof Error ? e.message : "Eroare la regenerarea sectiunii.";
+      toast(msg, "error");
+    } finally {
+      setRegeneratingKey(null);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-4xl">
       {/* Header + Risk Score Card (extracted component) */}
@@ -254,6 +331,19 @@ export default function ReportView() {
           }
         }}
       />
+
+      {/* Export licitatii SEAP in format calendar (.ics) */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleExportIcs}
+          disabled={exportingIcs}
+          className="btn-secondary flex items-center gap-1.5 text-sm"
+        >
+          <Calendar className="w-3.5 h-3.5" />
+          {exportingIcs ? "Se exporta..." : "Export licitatii (.ics)"}
+        </button>
+      </div>
+
       {shareUrl && (
         <div className="p-3 rounded-lg border border-accent-primary/30 bg-accent-primary/5 flex items-center gap-3">
           <span className="text-xs text-gray-400 flex-1 truncate">
@@ -573,6 +663,63 @@ export default function ReportView() {
             </pre>
           </div>
         )}
+      </div>
+
+      {/* Sectiuni narative raport + regenerare per sectiune */}
+      <div className="card">
+        <h3 className="text-sm font-semibold text-gray-400 uppercase mb-3">
+          Sectiuni Raport
+        </h3>
+        {(() => {
+          const sections = data?.report_sections;
+          const entries = sections ? Object.entries(sections) : [];
+          if (entries.length === 0) {
+            return (
+              <p className="text-xs text-gray-500 italic">
+                Sectiunile narative nu sunt disponibile pentru acest raport.
+              </p>
+            );
+          }
+          return (
+            <div className="space-y-3">
+              {entries.map(([key, value]) => {
+                const { title, content } = getSectionText(value);
+                const canRegenerate = REGENERATABLE_SECTIONS.has(key);
+                return (
+                  <div key={key} className="p-3 bg-dark-surface rounded-lg">
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <h4 className="text-sm font-medium text-gray-200">
+                        {title || key.replace(/_/g, " ")}
+                      </h4>
+                      {canRegenerate && (
+                        <button
+                          onClick={() => handleRegenerateSection(key)}
+                          disabled={regeneratingKey !== null}
+                          className="btn-secondary flex items-center gap-1.5 text-xs shrink-0"
+                        >
+                          <RefreshCw
+                            className={clsx(
+                              "w-3 h-3",
+                              regeneratingKey === key && "animate-spin",
+                            )}
+                          />
+                          {regeneratingKey === key
+                            ? "Se regenereaza..."
+                            : "Regenereaza"}
+                        </button>
+                      )}
+                    </div>
+                    {content && (
+                      <p className="text-xs text-gray-400 whitespace-pre-wrap max-h-60 overflow-auto">
+                        {content}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Sources Audit Panel */}

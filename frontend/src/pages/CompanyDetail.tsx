@@ -23,7 +23,11 @@ import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { logAction } from "@/lib/logger";
 import { ANALYSIS_TYPE_LABELS } from "@/lib/constants";
-import type { TimelineEvent, ScoringDimension } from "@/lib/types";
+import type {
+  TimelineEvent,
+  ScoringDimension,
+  ScoreTrendPoint,
+} from "@/lib/types";
 import { CompanyChat } from "@/components/company/CompanyChat";
 import { CompanyTimeline } from "@/components/company/CompanyTimeline";
 
@@ -114,6 +118,10 @@ export default function CompanyDetail() {
   const [autoReanalyzeLoading, setAutoReanalyzeLoading] = useState(false);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
+  // Evolutie Scor: trend numeric (window functions) + descarcare raport PDF
+  const [scoreTrend, setScoreTrend] = useState<ScoreTrendPoint[]>([]);
+  const [scoreTrendLoading, setScoreTrendLoading] = useState(false);
+  const [timelinePdfLoading, setTimelinePdfLoading] = useState(false);
   // F3-3: Tags & Note
   const [tags, setTags] = useState<string[]>([]);
   const [note, setNote] = useState("");
@@ -144,6 +152,16 @@ export default function CompanyDetail() {
         /* timeline is optional */
       })
       .finally(() => setTimelineLoading(false));
+
+    // Evolutie Scor: numeric trend (SQL window functions)
+    setScoreTrendLoading(true);
+    api
+      .getScoreTrend(Number(id))
+      .then((points) => setScoreTrend(points ?? []))
+      .catch(() => {
+        /* score trend optional */
+      })
+      .finally(() => setScoreTrendLoading(false));
 
     // F3-3: Fetch tags & note
     Promise.all([
@@ -218,6 +236,30 @@ export default function CompanyDetail() {
       toast("Nota salvata", "success");
     } catch {
       toast("Eroare la salvarea notei", "error");
+    }
+  };
+
+  // Descarca raport evolutie (PDF) — blob -> browser download
+  const handleDownloadTimelinePdf = async () => {
+    const cui = company?.cui;
+    if (!cui) {
+      toast("CUI indisponibil", "warning");
+      return;
+    }
+    setTimelinePdfLoading(true);
+    try {
+      const blob = await api.downloadTimelineReportPdf(cui);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `evolutie_${cui}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      logAction("CompanyDetail", "downloadTimelinePdf", { cui });
+    } catch {
+      toast("Eroare la generarea raportului de evolutie", "error");
+    } finally {
+      setTimelinePdfLoading(false);
     }
   };
 
@@ -673,6 +715,79 @@ export default function CompanyDetail() {
           </div>
         </div>
       )}
+
+      {/* Evolutie Scor — trend numeric (window functions) + raport PDF */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-gray-400 uppercase">
+            Evolutie Scor
+          </h3>
+          {company.cui && (
+            <button
+              onClick={handleDownloadTimelinePdf}
+              disabled={timelinePdfLoading}
+              className="btn-secondary flex items-center gap-2 text-sm focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+              aria-label="Descarca raport evolutie in format PDF"
+              title="Descarca raport evolutie (PDF)"
+            >
+              {timelinePdfLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              Descarca raport evolutie (PDF)
+            </button>
+          )}
+        </div>
+
+        {scoreTrendLoading ? (
+          <div className="h-[60px] bg-dark-surface rounded animate-pulse" />
+        ) : scoreTrend.length < 2 ? (
+          <p className="text-sm text-gray-600 italic">
+            Date insuficiente pentru grafic
+          </p>
+        ) : (
+          (() => {
+            // backend returneaza DESC (recent -> vechi); inversam pt. afisare stanga->dreapta
+            const ascending = [...scoreTrend].reverse();
+            const firstScore = ascending[0]?.score;
+            const lastScore = ascending[ascending.length - 1]?.score;
+            const latestDelta = scoreTrend[0]?.delta;
+            return (
+              <div className="flex items-center gap-4">
+                <ScoreSparkline
+                  history={ascending.map((p) => ({
+                    numeric_score: p.score ?? 0,
+                    recorded_at: p.created_at,
+                  }))}
+                />
+                <div className="text-xs text-gray-600 leading-relaxed">
+                  <p>Evolutie scor ({scoreTrend.length} analize)</p>
+                  <p className="font-mono">
+                    {firstScore ?? "—"} → {lastScore ?? "—"}
+                  </p>
+                  {latestDelta != null && latestDelta !== 0 && (
+                    <p
+                      className={clsx(
+                        "flex items-center gap-0.5 font-medium mt-0.5",
+                        latestDelta > 0 ? "text-green-400" : "text-red-400",
+                      )}
+                    >
+                      {latestDelta > 0 ? (
+                        <TrendingUp className="w-3 h-3" />
+                      ) : (
+                        <TrendingDown className="w-3 h-3" />
+                      )}
+                      {latestDelta > 0 ? "+" : ""}
+                      {latestDelta} ultima analiza
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })()
+        )}
+      </div>
 
       {/* Reports List */}
       <div className="card">

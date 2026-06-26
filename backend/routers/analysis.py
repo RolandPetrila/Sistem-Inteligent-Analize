@@ -120,17 +120,17 @@ async def parse_natural_query(data: ParseQueryRequest):
 async def quick_score_batch(body: dict):
     """F3-2: Scoring rapid pentru max 20 CUI-uri — doar ANAF TVA + Bilant, fara AI synthesis."""
     import asyncio
+    from datetime import date as _date
 
-    from backend.agents.tools.anaf_bilant_client import ANAFBilantClient
-    from backend.agents.tools.anaf_client import ANAFClient
+    from backend.agents.tools.anaf_bilant_client import get_bilant
+    from backend.agents.tools.anaf_client import get_anaf_data
     from backend.agents.tools.cui_validator import validate_cui
 
     cuis = body.get("cuis", [])[:20]
     if not cuis:
         raise RISError(ErrorCode.VALIDATION_ERROR, "Lista CUI goala")
 
-    anaf = ANAFClient()
-    bilant = ANAFBilantClient()
+    last_year = _date.today().year - 1
 
     async def score_one(cui: str) -> dict:
         val = validate_cui(cui)
@@ -138,20 +138,25 @@ async def quick_score_batch(body: dict):
             return {"cui": cui, "error": "CUI invalid"}
         try:
             tva_data, bil_data = await asyncio.gather(
-                anaf.get_company_info(cui),
-                bilant.get_latest_year(cui),
-                return_exceptions=True
+                get_anaf_data(cui),
+                get_bilant(cui, last_year),
+                return_exceptions=True,
             )
-            ca = bil_data.get("cifra_afaceri") if isinstance(bil_data, dict) else None
-            angajati = bil_data.get("numar_angajati") if isinstance(bil_data, dict) else None
-            inactiv = tva_data.get("stare_inactiv", False) if isinstance(tva_data, dict) else False
-            tva_activ = tva_data.get("tva_activ", False) if isinstance(tva_data, dict) else False
+            bil_ok = isinstance(bil_data, dict) and bil_data.get("found")
+            ca = bil_data.get("cifra_afaceri_neta") if bil_ok else None
+            angajati = bil_data.get("numar_mediu_salariati") if bil_ok else None
+            inactiv = tva_data.get("inactiv", False) if isinstance(tva_data, dict) else False
+            tva_activ = tva_data.get("platitor_tva", False) if isinstance(tva_data, dict) else False
 
             score = 50
-            if ca and ca > 1_000_000: score += 15
-            if ca and ca > 10_000_000: score += 10
-            if inactiv: score -= 30
-            if not tva_activ and ca and ca > 500_000: score -= 10
+            if ca and ca > 1_000_000:
+                score += 15
+            if ca and ca > 10_000_000:
+                score += 10
+            if inactiv:
+                score -= 30
+            if not tva_activ and ca and ca > 500_000:
+                score -= 10
             score = max(0, min(100, score))
 
             return {
