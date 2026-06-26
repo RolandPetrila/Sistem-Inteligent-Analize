@@ -13,6 +13,9 @@ import { api } from "@/lib/api";
 import { logAction } from "@/lib/logger";
 import { validateCUI } from "@/lib/cui-validator";
 
+// Persist active batch id so progress survives a page refresh / navigation
+const ACTIVE_BATCH_KEY = "ris_active_batch";
+
 interface BatchStatus {
   batch_id: string;
   status: string;
@@ -103,6 +106,71 @@ export default function BatchAnalysis() {
     };
   }, []);
 
+  // Shared polling loop — reused by upload + resume-on-mount
+  const startPolling = useCallback(
+    (batchId: string) => {
+      setPolling(true);
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      const interval = setInterval(async () => {
+        try {
+          const status = (await api.getBatchStatus(
+            batchId,
+          )) as unknown as BatchStatus;
+          setBatch(status);
+
+          if (status.status === "DONE" || status.status === "FAILED") {
+            clearInterval(interval);
+            intervalRef.current = null;
+            setPolling(false);
+            localStorage.removeItem(ACTIVE_BATCH_KEY);
+            if (status.status === "DONE") {
+              toast("Batch complet! Descarca ZIP-ul.", "success");
+            }
+          }
+        } catch {
+          clearInterval(interval);
+          intervalRef.current = null;
+          setPolling(false);
+          localStorage.removeItem(ACTIVE_BATCH_KEY);
+          toast("Eroare la verificarea statusului batch-ului", "warning");
+        }
+      }, 3000);
+      intervalRef.current = interval;
+    },
+    [toast],
+  );
+
+  // Resume an in-progress batch after a refresh / re-mount
+  useEffect(() => {
+    const storedId = localStorage.getItem(ACTIVE_BATCH_KEY);
+    if (!storedId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const status = (await api.getBatchStatus(
+          storedId,
+        )) as unknown as BatchStatus;
+        if (cancelled) return;
+        if (status.status === "DONE" || status.status === "FAILED") {
+          // Finished while away — show final state (ZIP still downloadable) + clear
+          localStorage.removeItem(ACTIVE_BATCH_KEY);
+          setBatch(status);
+        } else {
+          setBatch(status);
+          startPolling(storedId);
+        }
+      } catch {
+        // Not found / server error — drop the stale key
+        if (!cancelled) localStorage.removeItem(ACTIVE_BATCH_KEY);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Mount-once: startPolling captures the current toast; avoids re-running on render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleUpload = async () => {
     if (!file) return;
     setSubmitting(true);
@@ -115,32 +183,8 @@ export default function BatchAnalysis() {
       const data = await api.uploadBatch(file);
       toast(`Batch pornit: ${data.total_cuis} firme`, "success");
 
-      // Start polling (C23 fix: use ref for cleanup on unmount)
-      setPolling(true);
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      const interval = setInterval(async () => {
-        try {
-          const status = (await api.getBatchStatus(
-            data.batch_id,
-          )) as unknown as BatchStatus;
-          setBatch(status);
-
-          if (status.status === "DONE" || status.status === "FAILED") {
-            clearInterval(interval);
-            intervalRef.current = null;
-            setPolling(false);
-            if (status.status === "DONE") {
-              toast("Batch complet! Descarca ZIP-ul.", "success");
-            }
-          }
-        } catch {
-          clearInterval(interval);
-          intervalRef.current = null;
-          setPolling(false);
-          toast("Eroare la verificarea statusului batch-ului", "warning");
-        }
-      }, 3000);
-      intervalRef.current = interval;
+      // Persist so progress survives a refresh / navigation
+      localStorage.setItem(ACTIVE_BATCH_KEY, data.batch_id);
 
       setBatch({
         batch_id: data.batch_id,
@@ -152,6 +196,8 @@ export default function BatchAnalysis() {
         failed: 0,
         current_cui: "",
       });
+
+      startPolling(data.batch_id);
     } catch {
       toast("Eroare la pornirea batch-ului", "error");
     } finally {
@@ -446,6 +492,7 @@ export default function BatchAnalysis() {
               onClick={() => {
                 setBatch(null);
                 setFile(null);
+                localStorage.removeItem(ACTIVE_BATCH_KEY);
               }}
               className="btn-secondary w-full"
             >

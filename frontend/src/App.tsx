@@ -16,6 +16,9 @@ const Monitoring = lazy(() => import("./pages/Monitoring"));
 const BatchAnalysis = lazy(() => import("./pages/BatchAnalysis"));
 const CompanyDetail = lazy(() => import("./pages/CompanyDetail"));
 const NetworkGraph = lazy(() => import("./pages/NetworkGraph"));
+const SectorDashboard = lazy(() => import("./pages/SectorDashboard"));
+const OcrPage = lazy(() => import("./pages/OcrPage"));
+const QuickTools = lazy(() => import("./pages/QuickTools"));
 
 function PageLoader() {
   return (
@@ -64,6 +67,9 @@ export default function App() {
           <Route path="/compare" element={<CompareCompanies />} />
           <Route path="/monitoring" element={<Monitoring />} />
           <Route path="/batch" element={<BatchAnalysis />} />
+          <Route path="/quick-tools" element={<QuickTools />} />
+          <Route path="/sector" element={<SectorDashboard />} />
+          <Route path="/ocr" element={<OcrPage />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<NotFound />} />
         </Route>

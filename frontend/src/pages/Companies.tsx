@@ -9,8 +9,14 @@ import {
   Star,
   AlertCircle,
   RefreshCw,
+  CheckSquare,
+  Square,
+  MinusSquare,
+  ArrowLeftRight,
+  Bell,
+  X,
 } from "lucide-react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import clsx from "clsx";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
@@ -111,12 +117,16 @@ const riskBadge = (score: number | null | undefined) => {
 
 export default function Companies() {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  // Bulk-select state (scoped to current page/view — cleared on filter/page change)
+  const [selected, setSelected] = useState<Record<string, Company>>({});
+  const [bulkMonitoring, setBulkMonitoring] = useState(false);
 
   const sort = searchParams.get("sort") || "last_analyzed";
   const filterCounty = searchParams.get("county") || "";
@@ -169,9 +179,10 @@ export default function Companies() {
     }
   }, [companiesData]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Reset page to 0 when filters change
+  // Reset page to 0 + clear bulk selection when filters change
   useEffect(() => {
     setPage(0);
+    setSelected({});
   }, [
     debouncedSearch,
     sort,
@@ -249,7 +260,94 @@ export default function Companies() {
 
   const goToPage = (p: number) => {
     setPage(p);
+    setSelected({});
     // G3: TanStack Query auto-refetches when page changes in queryKey
+  };
+
+  // ----- Bulk select (scoped to current page) -----
+  const selectedList = Object.values(selected);
+  const selectedCount = selectedList.length;
+  const allCurrentSelected =
+    filteredCompanies.length > 0 &&
+    filteredCompanies.every((c) => selected[c.id]);
+  const someCurrentSelected =
+    filteredCompanies.some((c) => selected[c.id]) && !allCurrentSelected;
+
+  const toggleSelect = (company: Company, e: React.MouseEvent) => {
+    // Card is a <Link>; mirror the favorites button — cancel nav + stop bubbling
+    e.preventDefault();
+    e.stopPropagation();
+    setSelected((prev) => {
+      const next = { ...prev };
+      if (next[company.id]) {
+        delete next[company.id];
+      } else {
+        next[company.id] = company;
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelected((prev) => {
+      const next = { ...prev };
+      if (allCurrentSelected) {
+        filteredCompanies.forEach((c) => delete next[c.id]);
+      } else {
+        filteredCompanies.forEach((c) => {
+          next[c.id] = c;
+        });
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelected({});
+
+  const compareSelected = () => {
+    const cuis = selectedList
+      .map((c) => c.cui)
+      .filter((cui): cui is string => Boolean(cui));
+    if (cuis.length < 2) {
+      toast("Selecteaza cel putin 2 firme cu CUI pentru comparatie", "warning");
+      return;
+    }
+    // CompareCompanies reads ?cui= (prefills the first). Pass all selected as
+    // repeated params (max 5) for forward-compat; a comma list would be corrupted
+    // there by .replace(/\D/g, "").
+    const params = new URLSearchParams();
+    cuis.slice(0, 5).forEach((cui) => params.append("cui", cui));
+    logAction("Companies", "compareSelected", { count: cuis.length });
+    clearSelection();
+    navigate(`/compare?${params.toString()}`);
+  };
+
+  const monitorSelected = async () => {
+    if (selectedList.length === 0 || bulkMonitoring) return;
+    setBulkMonitoring(true);
+    let ok = 0;
+    let fail = 0;
+    for (const company of selectedList) {
+      try {
+        await api.createMonitoring({ company_id: company.id });
+        ok += 1;
+      } catch {
+        fail += 1;
+      }
+    }
+    logAction("Companies", "monitorSelected", { ok, fail });
+    if (ok > 0) {
+      toast(
+        fail > 0
+          ? `${ok} firme adaugate la monitorizare, ${fail} esuate`
+          : `${ok} firme adaugate la monitorizare`,
+        fail > 0 ? "warning" : "success",
+      );
+    } else {
+      toast("Eroare la adaugarea firmelor la monitorizare", "error");
+    }
+    setBulkMonitoring(false);
+    clearSelection();
   };
 
   return (
@@ -429,14 +527,103 @@ export default function Companies() {
         </div>
       ) : (
         <>
+          {/* Bulk action bar — sticky, shown when >=1 selected */}
+          {selectedCount > 0 && (
+            <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent-primary/40 bg-dark-card/95 px-4 py-3 shadow-lg backdrop-blur">
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-white">
+                  {selectedCount}{" "}
+                  {selectedCount === 1 ? "firma selectata" : "firme selectate"}
+                </span>
+                <button
+                  type="button"
+                  onClick={clearSelection}
+                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" /> Deselecteaza
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={compareSelected}
+                  className="btn-secondary flex items-center gap-2 text-sm"
+                >
+                  <ArrowLeftRight className="w-4 h-4" /> Compara selectate
+                </button>
+                <button
+                  type="button"
+                  onClick={monitorSelected}
+                  disabled={bulkMonitoring}
+                  className="btn-primary flex items-center gap-2 text-sm disabled:opacity-50"
+                >
+                  <Bell className="w-4 h-4" />
+                  {bulkMonitoring ? "Se adauga..." : "Monitorizeaza selectate"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Select all (current page) */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={
+                allCurrentSelected
+                  ? true
+                  : someCurrentSelected
+                    ? "mixed"
+                    : false
+              }
+              onClick={toggleSelectAll}
+              className="flex items-center gap-2 rounded px-1.5 py-1 text-xs text-gray-400 hover:text-gray-200 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+            >
+              {allCurrentSelected ? (
+                <CheckSquare className="w-4 h-4 text-accent-primary" />
+              ) : someCurrentSelected ? (
+                <MinusSquare className="w-4 h-4 text-accent-primary" />
+              ) : (
+                <Square className="w-4 h-4 text-gray-600" />
+              )}
+              {allCurrentSelected
+                ? "Deselecteaza toate"
+                : "Selecteaza toate (pagina curenta)"}
+            </button>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredCompanies.map((company) => (
               <Link
                 key={company.id}
                 to={`/company/${company.id}`}
-                className="card hover:border-accent-primary/30 transition-colors group"
+                className={clsx(
+                  "card transition-colors group",
+                  selected[company.id]
+                    ? "border-accent-primary/60 bg-accent-primary/5"
+                    : "hover:border-accent-primary/30",
+                )}
               >
                 <div className="flex items-start gap-3">
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={Boolean(selected[company.id])}
+                    onClick={(e) => toggleSelect(company, e)}
+                    className="shrink-0 mt-0.5 p-1 rounded hover:bg-dark-hover transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+                    aria-label={
+                      selected[company.id]
+                        ? "Deselecteaza firma"
+                        : "Selecteaza firma"
+                    }
+                    title={selected[company.id] ? "Deselecteaza" : "Selecteaza"}
+                  >
+                    {selected[company.id] ? (
+                      <CheckSquare className="w-4 h-4 text-accent-primary" />
+                    ) : (
+                      <Square className="w-4 h-4 text-gray-600 group-hover:text-gray-400" />
+                    )}
+                  </button>
                   <Building2 className="w-8 h-8 text-accent-secondary shrink-0" />
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-white truncate group-hover:text-accent-secondary">

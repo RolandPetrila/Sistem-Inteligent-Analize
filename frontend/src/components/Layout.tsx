@@ -26,6 +26,9 @@ import {
   Info,
   Moon,
   Sun,
+  Zap,
+  PieChart,
+  ScanLine,
 } from "lucide-react";
 import clsx from "clsx";
 import GlobalSearch from "./GlobalSearch";
@@ -44,6 +47,9 @@ const ROUTE_LABELS: Record<string, string> = {
   "new-analysis": "Analiza Noua",
   batch: "Batch",
   analysis: "Progres Analiza",
+  "quick-tools": "Instrumente Rapide",
+  sector: "Sector CAEN",
+  ocr: "OCR Documente",
 };
 
 function Breadcrumbs() {
@@ -102,6 +108,9 @@ const navItems = [
   { to: "/compare", label: "Comparator", icon: ArrowUpDown },
   { to: "/monitoring", label: "Monitorizare", icon: Bell },
   { to: "/batch", label: "Batch Analysis", icon: Layers },
+  { to: "/quick-tools", label: "Instrumente Rapide", icon: Zap },
+  { to: "/sector", label: "Sector CAEN", icon: PieChart },
+  { to: "/ocr", label: "OCR Documente", icon: ScanLine },
   { to: "/settings", label: "Configurare", icon: Settings },
 ];
 
