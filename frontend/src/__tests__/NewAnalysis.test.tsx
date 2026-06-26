@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { validateCUI } from "../lib/cui-validator";
 
 // Mock api
@@ -106,19 +107,32 @@ describe("Draft key localStorage", () => {
   });
 });
 
+const createTestQueryClient = () =>
+  new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+
 // --- Render test ---
 describe("NewAnalysis page render", () => {
+  let queryClient: QueryClient;
+
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    queryClient = createTestQueryClient();
   });
 
   it("se randeaza fara crash", async () => {
     const { default: NewAnalysis } = await import("../pages/NewAnalysis");
     const { container } = render(
-      <MemoryRouter>
-        <NewAnalysis />
-      </MemoryRouter>,
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <NewAnalysis />
+        </MemoryRouter>
+      </QueryClientProvider>,
     );
     expect(container).toBeTruthy();
   });

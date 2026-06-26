@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // Mock api
 vi.mock("@/lib/api", () => ({
@@ -70,17 +71,30 @@ describe("riskBadge helper", () => {
   });
 });
 
+const createTestQueryClient = () =>
+  new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+
 describe("Companies page render", () => {
+  let queryClient: QueryClient;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    queryClient = createTestQueryClient();
   });
 
   it("se randeaza fara crash", async () => {
     const { default: Companies } = await import("../pages/Companies");
     const { container } = render(
-      <MemoryRouter>
-        <Companies />
-      </MemoryRouter>,
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <Companies />
+        </MemoryRouter>
+      </QueryClientProvider>,
     );
     expect(container).toBeTruthy();
   });
@@ -88,9 +102,11 @@ describe("Companies page render", () => {
   it("afiseaza titlul Companii", async () => {
     const { default: Companies } = await import("../pages/Companies");
     render(
-      <MemoryRouter>
-        <Companies />
-      </MemoryRouter>,
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <Companies />
+        </MemoryRouter>
+      </QueryClientProvider>,
     );
     expect(screen.getByText("Companii")).toBeInTheDocument();
   });
@@ -101,9 +117,11 @@ describe("Companies page render", () => {
 
     const { default: Companies } = await import("../pages/Companies");
     render(
-      <MemoryRouter>
-        <Companies />
-      </MemoryRouter>,
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <Companies />
+        </MemoryRouter>
+      </QueryClientProvider>,
     );
 
     // Componenta afiseaza loading initial, asa ca verificam ca nu crapa
