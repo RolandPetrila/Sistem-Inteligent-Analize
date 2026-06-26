@@ -1,6 +1,11 @@
 """F15: Tests for html_generator — _render_content (headers, lists, tables, bold)."""
 
-from backend.reports.html_generator import _build_table, _render_content, _render_inline
+from backend.reports.html_generator import (
+    _build_rich_fields_html,
+    _build_table,
+    _render_content,
+    _render_inline,
+)
 
 
 class TestRenderInline:
@@ -154,3 +159,66 @@ class TestRenderEdgeCases:
         result = _render_content(content)
         assert "<table" in result
         assert "<thead>" not in result
+
+
+class TestRichFields:
+    """Wave C: previously-dropped rich fields now rendered in HTML reports."""
+
+    def _sample(self):
+        return {
+            "predictive_scores": {
+                "altman_z": {"z_score": 2.9, "zone": "SAFE"},
+                "piotroski_f": {"f_score": 7, "max_possible": 9, "grade": "STRONG"},
+                "beneish_m": {"m_score": -2.5, "risk": "OK"},
+                "zmijewski_x": {"x_score": -1.2, "distress": False, "available": True},
+                "distress_signals": 0,
+                "summary": "Indicatori in zona normala",
+            },
+            "benchmark": {
+                "available": True, "caen_code": "6201", "caen_section_name": "IT",
+                "nr_firme_sector": 1200,
+                "comparisons": [{"metric": "Cifra de afaceri", "firma": 500000,
+                                 "media_sector": 450000, "ratio": 1.1, "pozitie": "Peste medie"}],
+            },
+            "actionariat": {"available": True, "asociati": [{"nume": "Ion Popescu"}],
+                            "administratori": ["Maria Ionescu"], "capital_social": 200, "stare": "activa"},
+            "relations": {"flags": [{"type": "ONE_PERSON", "detail": "Admin = asociat", "severity": "INFO"}]},
+            "risk": {"aegrm_guarantees": {"value": {"has_data": True, "count": 2,
+                     "has_guarantees": True, "guarantees": [{"descriere": "Gaj auto"}]}}},
+            "historical_flags": [{"type": "CESIUNE", "detail": "Cesiune 2023",
+                                  "date": "2023-05", "severity": "YELLOW"}],
+            "funding_programs": {"eligible": [{"nume": "Start-Up Nation", "suma_max_eur": 200000,
+                                "termen": "2026-12-31", "link": "https://example.ro"}],
+                                "count": 1, "summary": "1 program eligibil"},
+        }
+
+    def test_all_sections_rendered(self):
+        html, nav = _build_rich_fields_html(self._sample())
+        for marker in ['id="predictive"', 'id="benchmark"', 'id="actionariat"',
+                       'id="garantii"', 'id="funding"']:
+            assert marker in html
+        assert "Start-Up Nation" in html
+        assert "Altman" in html
+        assert "Gaj auto" in html
+        assert "CESIUNE" in html
+        assert 'href="#predictive"' in nav
+        assert 'href="#funding"' in nav
+
+    def test_empty_when_no_rich_data(self):
+        html, nav = _build_rich_fields_html({})
+        assert html == ""
+        assert nav == ""
+
+    def test_funding_link_xss_safe(self):
+        data = {"funding_programs": {"eligible": [
+            {"nume": "<script>alert(1)</script>", "suma_max_eur": 1000,
+             "termen": "", "link": "javascript:alert(1)"}], "count": 1, "summary": "x"}}
+        html, _ = _build_rich_fields_html(data)
+        assert "<script>alert(1)</script>" not in html
+        assert "&lt;script&gt;" in html
+        assert 'href="javascript:' not in html
+
+    def test_aegrm_skipped_when_no_data(self):
+        data = {"risk": {"aegrm_guarantees": {"value": {"has_data": False}}}}
+        html, nav = _build_rich_fields_html(data)
+        assert 'id="garantii"' not in html
