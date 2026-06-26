@@ -2,8 +2,11 @@
 Report service layer — logica de business extrasa din routers/reports.py (F9-3).
 Ruterele raman thin wrappers peste aceste functii.
 """
+import asyncio
 import json
 from pathlib import Path
+
+from loguru import logger
 
 from backend.config import settings
 from backend.database import db
@@ -36,13 +39,15 @@ async def get_report_by_id(report_id: str) -> dict | None:
         (report_id,),
     )
     if not row:
+        logger.debug(f"[report_service] report not found: {report_id}")
         return None
 
     full_data = None
     if row["full_data"]:
         try:
             full_data = json.loads(row["full_data"])
-        except (json.JSONDecodeError, TypeError):
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.warning(f"[report_service] full_data parse failed for {report_id}: {e}")
             full_data = None
 
     formats = []
@@ -103,14 +108,23 @@ async def list_reports(
         tuple(params + [limit, offset]),
     )
 
+    # F10: batch the blocking Path.exists() stat calls off the event loop
+    # (was: one synchronous os.stat per row inside this async function).
+    one_pager_paths = [
+        Path(settings.outputs_dir) / row["job_id"] / "raport_executiv.pdf"
+        for row in rows
+    ]
+    one_pager_flags = await asyncio.to_thread(
+        lambda paths=one_pager_paths: [p.exists() for p in paths]
+    )
+
     reports = []
-    for row in rows:
+    for row, has_one_pager in zip(rows, one_pager_flags, strict=True):
         formats = []
         for fmt in ["pdf", "docx", "excel", "html", "pptx"]:
             if row.get(f"{fmt}_path"):
                 formats.append(fmt)
-        one_pager = Path(settings.outputs_dir) / row["job_id"] / "raport_executiv.pdf"
-        if one_pager.exists():
+        if has_one_pager:
             formats.append("one_pager")
         reports.append({
             "id": row["id"],
@@ -125,6 +139,10 @@ async def list_reports(
             "formats_available": formats,
         })
 
+    logger.debug(
+        f"[report_service] list_reports -> {len(reports)}/{total} "
+        f"(type={report_type}, company={company_id})"
+    )
     return {"reports": reports, "total": total}
 
 
@@ -145,11 +163,17 @@ async def get_report_data(report_id: str, section: str | None = None) -> dict | 
         "SELECT full_data FROM reports WHERE id = ?", (report_id,)
     )
     if not row:
+        logger.debug(f"[report_service] get_report_data: report not found: {report_id}")
         return None
 
-    data = json.loads(row["full_data"]) if row.get("full_data") else {}
+    try:
+        data = json.loads(row["full_data"]) if row.get("full_data") else {}
+    except (json.JSONDecodeError, TypeError) as e:
+        logger.warning(f"[report_service] get_report_data parse failed for {report_id}: {e}")
+        data = {}
 
     if section and section not in ALLOWED_SECTIONS:
+        logger.warning(f"[report_service] invalid section requested: {section}")
         raise ValueError(
             f"Sectiune invalida. Permise: {sorted(ALLOWED_SECTIONS)}"
         )

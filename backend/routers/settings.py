@@ -3,6 +3,7 @@ Settings API — citeste/scrie variabile .env din UI.
 Cheile API sunt mascate la citire.
 """
 
+import os
 import shutil
 import time
 from pathlib import Path
@@ -88,21 +89,40 @@ def _write_env(env: dict[str, str]):
 MAX_ENV_BACKUPS = 5
 
 
+def _env_backup_dir() -> Path:
+    """F3: keep .env backups OUTSIDE the repo tree — they contain cleartext secrets."""
+    base = os.environ.get("LOCALAPPDATA")
+    root = (Path(base) / "RIS") if base else (Path.home() / ".ris")
+    d = root / "env-backups"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def _backup_env():
-    """Create a timestamped backup of .env before writing. Keep max 5 backups."""
+    """Create a timestamped backup of .env before writing, OUTSIDE the repo tree.
+    Keep max MAX_ENV_BACKUPS. (F3: avoid cleartext secrets at rest in the project folder.)"""
     if not ENV_PATH.exists():
         return
     try:
+        backup_dir = _env_backup_dir()
         ts = int(time.time())
-        backup_path = ENV_PATH.parent / f".env.bak.{ts}"
+        backup_path = backup_dir / f".env.bak.{ts}"
         shutil.copy2(str(ENV_PATH), str(backup_path))
-        logger.info(f"Settings: .env backed up to {backup_path.name}")
+        logger.info(f"Settings: .env backed up to {backup_path}")
 
         # Cleanup old backups — keep only the newest MAX_ENV_BACKUPS
-        backups = sorted(ENV_PATH.parent.glob(".env.bak.*"), key=lambda p: p.stat().st_mtime, reverse=True)
+        backups = sorted(backup_dir.glob(".env.bak.*"), key=lambda p: p.stat().st_mtime, reverse=True)
         for old in backups[MAX_ENV_BACKUPS:]:
             old.unlink()
             logger.debug(f"Settings: removed old backup {old.name}")
+
+        # F3: clean up any legacy backups previously written into the repo root
+        for legacy in ENV_PATH.parent.glob(".env.bak.*"):
+            try:
+                legacy.unlink()
+                logger.debug(f"Settings: removed legacy in-repo backup {legacy.name}")
+            except Exception:
+                pass
     except Exception as e:
         logger.warning(f"Settings: .env backup failed: {e}")
 

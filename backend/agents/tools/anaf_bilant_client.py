@@ -9,6 +9,7 @@ from datetime import date
 
 from loguru import logger
 
+from backend.agents.tools.retry import with_retry
 from backend.http_client import get_client
 
 ANAF_BILANT_URL = "https://webservicesp.anaf.ro/bilant"
@@ -29,29 +30,27 @@ async def get_bilant(cui: str, year: int) -> dict:
     client = get_client()
     logger.debug(f"ANAF Bilant: CUI={cui_clean} an={year}")
 
-    # C2 fix: Retry once on transient errors (timeout, 5xx)
-    response = None
-    for attempt in range(2):
-        try:
-            response = await client.get(ANAF_BILANT_URL, params=params)
-            if response.status_code < 500:
-                break
-            if attempt == 0:
-                logger.debug(f"ANAF Bilant: retrying {cui_clean}/{year} after HTTP {response.status_code}")
-                await asyncio.sleep(2)
-        except Exception as e:
-            if attempt == 0:
-                logger.debug(f"ANAF Bilant: retrying {cui_clean}/{year} after {e}")
-                await asyncio.sleep(2)
-            else:
-                return {"cui": cui_clean, "year": year, "found": False, "error": str(e)[:100]}
+    # F19: route transient-error retry through the shared with_retry helper.
+    # _fetch raises on HTTP 5xx so with_retry retries it; 4xx is returned as-is.
+    async def _fetch():
+        resp = await client.get(ANAF_BILANT_URL, params=params)
+        if resp.status_code >= 500:
+            resp.raise_for_status()
+        return resp
 
-    if response is None or response.status_code != 200:
+    try:
+        response = await with_retry(
+            _fetch, retries=2, backoff=[2, 5], source_name="ANAF Bilant"
+        )
+    except Exception as e:
+        return {"cui": cui_clean, "year": year, "found": False, "error": str(e)[:100]}
+
+    if response.status_code != 200:
         return {
             "cui": cui_clean,
             "year": year,
             "found": False,
-            "error": f"HTTP {response.status_code if response else 'no response'}",
+            "error": f"HTTP {response.status_code}",
         }
 
     # D2 fix: Safe JSON parsing

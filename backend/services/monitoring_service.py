@@ -213,9 +213,10 @@ async def run_monitoring_check() -> list[dict]:
                 old_data = json.loads(last_report["full_data"])
                 old_company = old_data.get("company", {})
 
-                # Helper to extract old value
-                def _old(key, default=""):
-                    f = old_company.get(key, {})
+                # Helper to extract old value (F21/B023: bind old_company explicitly
+                # so the closure doesn't capture the loop variable).
+                def _old(key, default="", _src=old_company):
+                    f = _src.get(key, {})
                     return f.get("value", default) if isinstance(f, dict) else default
 
                 # Verifica stare

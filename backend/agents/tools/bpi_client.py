@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 
 from loguru import logger
 
+from backend.agents.tools.retry import with_retry
 from backend.http_client import get_client
 
 # BPI-01: Procedural markers — keyword must appear near one of these
@@ -75,8 +76,12 @@ async def _check_buletinul_ro(cui: str) -> dict | None:
     client = get_client()
     url = f"https://www.buletinul.ro/cautare?q={cui}"
 
+    async def _do_get():
+        return await client.get(url, follow_redirects=True, timeout=10)
+
     try:
-        resp = await client.get(url, follow_redirects=True, timeout=10)
+        # F19: one retry on transient errors before falling back to Tavily.
+        resp = await with_retry(_do_get, retries=1, backoff=[2], source_name="BPI buletinul.ro")
         if resp.status_code in (403, 429, 503):
             return None  # Site blocks — fall through to Tavily
 
