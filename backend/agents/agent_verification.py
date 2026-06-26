@@ -110,6 +110,46 @@ class VerificationAgent(BaseAgent):
         # --- Matricea Relatii (ADV5) ---
         verified["relations"] = self._detect_relations(official)
 
+        # --- F15: Programe de finantare eligibile (modul existent, acum cablat in pipeline) ---
+        try:
+            import re as _re
+
+            from backend.agents.tools.funding_programs import (
+                get_funding_summary,
+                match_programs,
+            )
+            _co = verified.get("company", {})
+            _fin = verified.get("financial", {})
+
+            def _uw(x):
+                return x.get("value") if isinstance(x, dict) else x
+
+            _caen = str(_uw(_co.get("caen_code", "")) or "")
+            _ang = 0
+            for _k in ("numar_angajati", "angajati", "numar_mediu_salariati", "nr_angajati"):
+                _v = _uw(_fin.get(_k)) if _k in _fin else _uw(_co.get(_k))
+                if isinstance(_v, int | float) and _v > 0:
+                    _ang = int(_v)
+                    break
+            _vech = 0
+            for _k in ("data_inregistrare", "an_infiintare", "data_infiintare"):
+                _v = _uw(_co.get(_k))
+                if _v:
+                    _m = _re.search(r"(19|20)\d{2}", str(_v))
+                    if _m:
+                        _vech = max(0, datetime.now(UTC).year - int(_m.group(0)))
+                        break
+            _eligible = match_programs(caen_code=_caen, angajati=_ang, vechime_ani=_vech)
+            verified["funding_programs"] = {
+                "eligible": _eligible[:10],
+                "count": len(_eligible),
+                "summary": get_funding_summary(_eligible),
+                "profile_used": {"caen": _caen, "angajati": _ang, "vechime_ani": _vech},
+            }
+        except Exception as _fund_e:
+            logger.debug(f"[verification] funding match error: {_fund_e}")
+            verified["funding_programs"] = {"eligible": [], "count": 0, "summary": ""}
+
         # --- Dynamic thresholds din DB proprie (percentile CAEN + judet) ---
         caen_for_dyn = ""
         county_for_dyn = None

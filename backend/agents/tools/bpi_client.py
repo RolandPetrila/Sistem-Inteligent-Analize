@@ -41,8 +41,12 @@ def _keyword_has_procedural_context(keyword: str, context: str) -> bool:
     return any(marker in kw_context for marker in _PROCEDURAL_MARKERS)
 
 
-async def check_insolvency(cui: str) -> dict:
-    """EP1: Verifica daca CUI apare in Buletinul Procedurilor de Insolventa."""
+async def check_insolvency(cui: str, use_tavily_fallback: bool = True) -> dict:
+    """EP1: Verifica daca CUI apare in Buletinul Procedurilor de Insolventa.
+
+    use_tavily_fallback=False -> doar sursa gratuita buletinul.ro (fara consum quota Tavily);
+    folosit de monitorizarea recurenta ca sa nu epuizeze quota la verificari periodice.
+    """
     cui_clean = _normalize_cui(cui)
     checked_at = datetime.now(UTC).isoformat()
 
@@ -55,13 +59,14 @@ async def check_insolvency(cui: str) -> dict:
     except Exception as e:
         logger.debug(f"BPI direct check failed: {e}")
 
-    # Fallback: Tavily search
-    try:
-        result = await _check_via_tavily(cui_clean)
-        result["checked_at"] = checked_at
-        return result
-    except Exception as e:
-        logger.warning(f"BPI Tavily fallback failed: {e}")
+    # Fallback: Tavily search (skip when quota must be preserved)
+    if use_tavily_fallback:
+        try:
+            result = await _check_via_tavily(cui_clean)
+            result["checked_at"] = checked_at
+            return result
+        except Exception as e:
+            logger.warning(f"BPI Tavily fallback failed: {e}")
 
     return {
         "found": False,

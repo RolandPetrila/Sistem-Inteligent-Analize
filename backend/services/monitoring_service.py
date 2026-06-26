@@ -255,6 +255,41 @@ async def run_monitoring_check() -> list[dict]:
                         changes.append({"field": "Split TVA", "old": old_split, "new": new_split, "severity": sev})
                         await _log_audit(alert_id, cui, company_name, "split_tva", old_split, new_split, sev)
 
+                # PII#4: Insolventa BPI — tranzitie spre insolventa (sursa gratuita; fara Tavily quota)
+                try:
+                    from backend.agents.tools.bpi_client import check_insolvency
+                    bpi = await check_insolvency(cui, use_tavily_fallback=False)
+                    new_insolv = bool(bpi.get("found"))
+                    old_risk = old_data.get("risk", {}) or {}
+                    _oi = old_risk.get("insolventa") or old_risk.get("bpi") or {}
+                    old_insolv = bool(_oi.get("found")) if isinstance(_oi, dict) else bool(_oi)
+                    if new_insolv and not old_insolv:
+                        new_val = bpi.get("status") or "Insolventa"
+                        if not await _is_duplicate_alert(alert_id, "insolventa", new_val):
+                            changes.append({"field": "Insolventa", "old": "Fara", "new": new_val, "severity": "RED"})
+                            await _log_audit(alert_id, cui, company_name, "insolventa", "Fara", new_val, "RED")
+                except Exception as _bpi_e:
+                    logger.debug(f"[monitoring] BPI check error for {cui}: {_bpi_e}")
+
+                # PII#4: Scadere cifra de afaceri > 30% vs ultimul raport
+                try:
+                    _ocf = old_data.get("financial", {}).get("cifra_afaceri", {})
+                    old_ca = _ocf.get("value") if isinstance(_ocf, dict) else _ocf
+                    if isinstance(old_ca, int | float) and old_ca > 0:
+                        from datetime import date as _date
+
+                        from backend.agents.tools.anaf_bilant_client import get_bilant
+                        fresh = await get_bilant(cui, _date.today().year - 1)
+                        new_ca = fresh.get("cifra_afaceri_neta") if fresh.get("found") else None
+                        if isinstance(new_ca, int | float) and new_ca >= 0:
+                            drop = (old_ca - new_ca) / old_ca
+                            if drop > 0.30 and not await _is_duplicate_alert(alert_id, "ca_drop", str(int(new_ca))):
+                                new_val = f"{new_ca:,.0f} RON (-{drop * 100:.0f}%)"
+                                changes.append({"field": "Cifra Afaceri", "old": f"{old_ca:,.0f} RON", "new": new_val, "severity": "YELLOW"})
+                                await _log_audit(alert_id, cui, company_name, "ca_drop", str(int(old_ca)), str(int(new_ca)), "YELLOW")
+                except Exception as _ca_e:
+                    logger.debug(f"[monitoring] CA-drop check error for {cui}: {_ca_e}")
+
                 # Determine max severity — including critical combinations
                 max_severity = _determine_combined_severity(changes)
 

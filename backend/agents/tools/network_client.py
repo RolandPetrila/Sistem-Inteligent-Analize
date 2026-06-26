@@ -10,6 +10,9 @@ Upgrade-uri:
 - Detects shell companies: persoane cu 5+ firme active = potential conflict interes
 """
 
+
+import time
+
 from loguru import logger
 
 from backend.database import db
@@ -52,15 +55,25 @@ async def store_administrators(cui: str, company_name: str, administrators: list
             logger.debug(f"[network] store admin error for {cui}/{name}: {e}")
 
     logger.debug(f"[network] Stored {len(administrators)} persons for CUI {cui}")
+    _NETWORK_CACHE["data"] = None  # F6: invalidate network cache after write
 
 
-async def _load_full_network() -> tuple[dict, dict]:
+_NETWORK_CACHE: dict = {"data": None, "ts": 0.0}
+_NETWORK_TTL_S = 300  # F6: cache the full-network load 5 min (invalidated on writes)
+
+
+async def _load_full_network() -> tuple[dict, dict, dict]:
     """
-    Incarca toata reteaua din DB intr-o structura in-memory.
+    Incarca toata reteaua din DB intr-o structura in-memory (cu cache TTL — F6).
     Returns:
         cui_to_persons: {cui -> [person_name, ...]}
         person_to_cuis: {person_name -> [(cui, company_name, is_active), ...]}
+        cui_to_info:    {cui -> {"company_name": str, "is_active": int|None}}
     """
+    cached = _NETWORK_CACHE.get("data")
+    if cached is not None and (time.monotonic() - _NETWORK_CACHE["ts"]) < _NETWORK_TTL_S:
+        return cached
+
     rows = await db.fetch_all(
         """
         SELECT ca.cui, ca.person_name, ca.company_name, ca.role, c.is_active
@@ -71,6 +84,7 @@ async def _load_full_network() -> tuple[dict, dict]:
 
     cui_to_persons: dict[str, list[str]] = {}
     person_to_cuis: dict[str, list[tuple]] = {}
+    cui_to_info: dict[str, dict] = {}
 
     for row in rows:
         cui = row["cui"]
@@ -78,16 +92,19 @@ async def _load_full_network() -> tuple[dict, dict]:
         company_name = row["company_name"] or "N/A"
         is_active = row["is_active"]
 
-        if cui not in cui_to_persons:
-            cui_to_persons[cui] = []
+        cui_to_persons.setdefault(cui, [])
         if person not in cui_to_persons[cui]:
             cui_to_persons[cui].append(person)
 
-        if person not in person_to_cuis:
-            person_to_cuis[person] = []
-        person_to_cuis[person].append((cui, company_name, is_active))
+        person_to_cuis.setdefault(person, []).append((cui, company_name, is_active))
 
-    return cui_to_persons, person_to_cuis
+        if cui not in cui_to_info:
+            cui_to_info[cui] = {"company_name": company_name, "is_active": is_active}
+
+    result = (cui_to_persons, person_to_cuis, cui_to_info)
+    _NETWORK_CACHE["data"] = result
+    _NETWORK_CACHE["ts"] = time.monotonic()
+    return result
 
 
 def _build_networkx_graph(
@@ -251,7 +268,7 @@ async def get_company_network(cui: str, max_depth: int = 4) -> dict:
 
     if _NX_AVAILABLE:
         try:
-            cui_to_persons, person_to_cuis = await _load_full_network()
+            cui_to_persons, person_to_cuis, cui_to_info = await _load_full_network()
 
             if len(cui_to_persons) > 1:
                 G = _build_networkx_graph(cui_to_persons, person_to_cuis)
@@ -262,20 +279,17 @@ async def get_company_network(cui: str, max_depth: int = 4) -> dict:
                 nx_stats["graph_edges"] = G.number_of_edges()
                 nx_stats["reachable_companies"] = len(deep_companies)
 
-                # Adauga firmele gasite la depth > 1 care nu sunt in depth-1
+                # Adauga firmele gasite la depth > 1 care nu sunt in depth-1.
+                # F6: foloseste cui_to_info (deja incarcat) in loc de fetch_one per firma (N+1).
                 for deep_cui, depth in deep_companies.items():
                     if deep_cui not in companies_map and depth > 1:
-                        # Gasim datele firmei din DB
-                        company_row = await db.fetch_one(
-                            "SELECT name, is_active FROM companies WHERE cui = ?",
-                            (deep_cui,)
-                        )
+                        info = cui_to_info.get(deep_cui, {})
                         companies_map[deep_cui] = {
                             "cui": deep_cui,
-                            "company_name": company_row["name"] if company_row else "N/A",
+                            "company_name": info.get("company_name", "N/A"),
                             "persons": [],
-                            "is_active": company_row["is_active"] if company_row else None,
-                            "has_profile": company_row is not None,
+                            "is_active": info.get("is_active"),
+                            "has_profile": info.get("is_active") is not None,
                             "depth": depth,
                         }
                     elif deep_cui in companies_map:
