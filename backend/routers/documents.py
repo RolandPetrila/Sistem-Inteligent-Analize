@@ -53,10 +53,10 @@ async def extract_text_from_document(file: UploadFile = File(...)) -> dict:
         raise HTTPException(
             status_code=502,
             detail=f"Eroare Mistral API: {e.response.status_code}",
-        )
+        ) from e
     except Exception as e:
         logger.error(f"[OCR] Unexpected error: {e}")
-        raise HTTPException(status_code=500, detail="Eroare la procesarea documentului")
+        raise HTTPException(status_code=500, detail="Eroare la procesarea documentului") from e
 
 
 async def _ocr_pdf(content: bytes, filename: str) -> dict:

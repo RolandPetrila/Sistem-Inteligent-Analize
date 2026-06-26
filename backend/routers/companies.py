@@ -25,7 +25,7 @@ async def list_favorites() -> dict:
         )
         return {"companies": [dict(r) for r in rows], "total": len(rows)}
     except Exception as e:
-        logger.debug(f"[companies] is_favorite column: {e}")
+        logger.warning(f"[companies] list_favorites query failed: {e}", exc_info=True)
         return {"companies": [], "total": 0}
 
 
@@ -465,7 +465,7 @@ async def get_predictive_scores(cui: str):
     try:
         verified_data = json.loads(report["full_data"])
     except (json.JSONDecodeError, TypeError, ValueError):
-        raise HTTPException(status_code=500, detail="Date raport invalide")
+        raise HTTPException(status_code=500, detail="Date raport invalide") from None
 
     scores = calculate_all_predictive_scores(verified_data)
     scores["cui"] = cui
@@ -637,7 +637,7 @@ async def download_company_timeline_pdf(
         logger.exception(f"[timeline_pdf] eroare generare pentru CUI {cui}")
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
-        raise HTTPException(status_code=500, detail="Eroare internă generare PDF evolutie")
+        raise HTTPException(status_code=500, detail="Eroare internă generare PDF evolutie") from None
 
 
 # ─── RAG Chat with Company ────────────────────────────────────────────────────
@@ -693,7 +693,7 @@ async def chat_with_company(company_id: str, req: ChatRequest):
     try:
         full_data = json.loads(report["full_data"])
     except (json.JSONDecodeError, TypeError):
-        raise HTTPException(status_code=500, detail="Date raport corupte")
+        raise HTTPException(status_code=500, detail="Date raport corupte") from None
 
     company_name = company["name"]
     context_parts = []

@@ -45,7 +45,7 @@ async def get_analysis_type(analysis_type: str):
         atype = AnalysisType(analysis_type)
     except ValueError:
         from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail="Analysis type not found")
+        raise HTTPException(status_code=404, detail="Analysis type not found") from None
 
     meta = ANALYSIS_TYPES_META[atype]
     return AnalysisTypeResponse(

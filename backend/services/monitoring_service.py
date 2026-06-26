@@ -292,7 +292,7 @@ async def run_monitoring_check() -> list[dict]:
                                 )
                                 logger.info(f"[monitoring] companies.is_active=0 sync pentru CUI {cui}")
                             except Exception as _e:
-                                logger.debug(f"[monitoring] is_active sync error: {_e}")
+                                logger.warning(f"[monitoring] is_active sync error: {_e}", exc_info=True)
                             break
                 else:
                     logger.info(f"[monitoring] Alert [{max_severity}] throttled for {company_name}")

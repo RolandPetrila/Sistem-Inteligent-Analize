@@ -25,13 +25,6 @@ class Database:
         await self._db.execute("PRAGMA mmap_size=268435456")
         await self._db.execute("PRAGMA temp_store=MEMORY")
         self._db.row_factory = aiosqlite.Row
-        # H3: Indexuri lipsă identificate în audit R16
-        await self._db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_score_history_recorded ON score_history(recorded_at)"
-        )
-        await self._db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_reports_job_id ON reports(job_id)"
-        )
         # Dynamic percentile scoring: stocheaza CA real per firma pentru percentile CAEN
         try:
             await self._db.execute(
@@ -235,6 +228,18 @@ class Database:
             await self.db.commit()
         except Exception as e:
             logger.debug(f"Migration index reports.share_token (expected if exists): {e}")
+        # Indexes that depend on tables created by the migrations above. Kept here (not in
+        # connect()) so a fresh install — where these tables don't exist yet at connect() time —
+        # doesn't fail. idx_score_history_recorded also serves the risk-movers recorded_at scan.
+        for idx_sql in [
+            "CREATE INDEX IF NOT EXISTS idx_score_history_recorded ON score_history(recorded_at)",
+            "CREATE INDEX IF NOT EXISTS idx_reports_job_id ON reports(job_id)",
+        ]:
+            try:
+                await self.db.execute(idx_sql)
+                await self.db.commit()
+            except Exception as e:
+                logger.debug(f"Migration index (expected if exists): {e}")
         logger.info(f"Migrations complete ({len(migration_files)} files)")
 
 

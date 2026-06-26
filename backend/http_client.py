@@ -4,35 +4,11 @@ Refolosit de toate tools/*.py si services/*.py.
 Se initializeaza in lifespan (main.py) si se inchide la shutdown.
 """
 
-import ipaddress
-from urllib.parse import urlparse
-
 import httpx
 
-_BLOCKED_RANGES = [
-    ipaddress.ip_network("10.0.0.0/8"),
-    ipaddress.ip_network("172.16.0.0/12"),
-    ipaddress.ip_network("192.168.0.0/16"),
-    ipaddress.ip_network("127.0.0.0/8"),
-    ipaddress.ip_network("169.254.0.0/16"),
-    ipaddress.ip_network("::1/128"),
-]
-
-
-def _validate_url_not_ssrf(url: str) -> None:
-    """Block requests to private/internal IPs (SSRF prevention)."""
-    try:
-        parsed = urlparse(url)
-        hostname = parsed.hostname
-        if not hostname:
-            return
-        ip = ipaddress.ip_address(hostname)
-        if any(ip in net for net in _BLOCKED_RANGES):
-            raise ValueError(f"SSRF blocked: request to private IP {ip}")
-    except ValueError as e:
-        if "SSRF blocked" in str(e):
-            raise
-        # hostname is a domain name, not an IP — OK
+# F8: removed dead _validate_url_not_ssrf() — it was never wired into any fetch path
+# (only checked literal IPs, no DNS resolution), giving a false sense of SSRF protection.
+# If SSRF guarding is needed later, implement it with DNS resolution at the actual fetch call site.
 
 _client: httpx.AsyncClient | None = None
 

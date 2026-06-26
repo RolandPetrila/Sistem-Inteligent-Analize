@@ -60,7 +60,7 @@ async def download_one_pager(report_id: str):
     try:
         one_pager_path.relative_to(outputs_root)
     except ValueError:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="Access denied") from None
     if not one_pager_path.exists():
         raise HTTPException(status_code=404, detail="1-Pager not generated for this report")
 
@@ -90,7 +90,7 @@ async def download_report(report_id: str, format: str):
     try:
         full_path.relative_to(outputs_root)
     except ValueError:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="Access denied") from None
     if not full_path.exists():
         raise HTTPException(status_code=404, detail="File not found on disk")
 
@@ -121,7 +121,7 @@ async def get_report_data(
     try:
         result = await _get_report_data(report_id, section)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     if result is None:
         raise HTTPException(status_code=404, detail="Report not found")
     return result
@@ -238,7 +238,7 @@ async def send_report_email(report_id: str, data: SendEmailRequest) -> dict:
     try:
         full_path.relative_to(outputs_root)
     except ValueError:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="Access denied") from None
 
     subject = data.subject or f"Raport RIS — {row.get('title', 'Raport')}"
 
@@ -314,7 +314,7 @@ async def get_public_report(token: str):
     try:
         html_path.relative_to(outputs_root)
     except ValueError:
-        raise HTTPException(status_code=403, detail="Acces refuzat")
+        raise HTTPException(status_code=403, detail="Acces refuzat") from None
 
     if not html_path.exists():
         raise HTTPException(status_code=404, detail="Raport HTML indisponibil pe disk")
