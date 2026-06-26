@@ -82,11 +82,15 @@ export default function CompareCompanies() {
       });
   }, []);
 
-  // IMB-F1: prefill first CUI from ?cui= (handoff from CompanyDetail "Compara")
+  // IMB-F1 + bulk: prefill CUI(s) from ?cui= (handoff from CompanyDetail "Compara"
+  // single, or Companies bulk-select "Compara selectate" multiple ?cui=A&cui=B).
   useEffect(() => {
-    const prefill = (searchParams.get("cui") || "").replace(/\D/g, "");
-    if (prefill) {
-      setCuis((prev) => [prefill, ...prev.slice(1)]);
+    const prefills = searchParams
+      .getAll("cui")
+      .map((c) => c.replace(/\D/g, ""))
+      .filter((c) => c.length >= 2);
+    if (prefills.length > 0) {
+      setCuis(prefills.length >= 2 ? prefills.slice(0, 5) : [prefills[0], ""]);
       searchParams.delete("cui");
       setSearchParams(searchParams, { replace: true });
     }

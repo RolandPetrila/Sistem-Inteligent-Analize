@@ -142,6 +142,9 @@ async def quick_score_batch(body: dict):
                 get_bilant(cui, last_year),
                 return_exceptions=True,
             )
+            # Most recent year is often unfiled mid-year -> fall back one year for CA.
+            if not (isinstance(bil_data, dict) and bil_data.get("found")):
+                bil_data = await get_bilant(cui, last_year - 1)
             bil_ok = isinstance(bil_data, dict) and bil_data.get("found")
             ca = bil_data.get("cifra_afaceri_neta") if bil_ok else None
             angajati = bil_data.get("numar_mediu_salariati") if bil_ok else None

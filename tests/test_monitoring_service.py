@@ -2,6 +2,7 @@
 Teste pentru monitoring_service — _determine_severity, _determine_combined_severity, run_monitoring_check.
 Pattern: import inline, mock DB via patch, @pytest.mark.asyncio pentru async.
 """
+import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -150,3 +151,63 @@ class TestRunMonitoringCheck:
 
             assert results[0]["severity"] == "RED"
             assert results[0]["changed"] is True
+
+    @pytest.mark.asyncio
+    async def test_bpi_transition_fires_insolventa_change(self):
+        """PII#4: insolvency now vs non-insolvent last report -> Insolventa change."""
+        fake_alert = {"id": "a-bpi", "company_id": 5, "telegram_notify": 0,
+                      "cui": "12345678", "name": "Insolv SRL"}
+        old_data = {
+            "company": {},
+            "risk": {"bpi_insolventa": {"value": {"found": False}}},
+            "financial": {"cifra_afaceri": {"value": 100000}},
+        }
+        with patch("backend.services.monitoring_service.db") as mock_db, \
+             patch("backend.services.monitoring_service.get_anaf_data") as mock_anaf, \
+             patch("backend.services.monitoring_service._is_duplicate_alert") as mock_dup, \
+             patch("backend.services.monitoring_service._log_audit") as mock_log, \
+             patch("backend.agents.tools.bpi_client.check_insolvency") as mock_bpi, \
+             patch("backend.agents.tools.anaf_bilant_client.get_bilant") as mock_bil:
+            mock_db.fetch_all = AsyncMock(return_value=[fake_alert])
+            mock_db.fetch_one = AsyncMock(return_value={"full_data": json.dumps(old_data)})
+            mock_db.execute = AsyncMock()
+            mock_anaf.return_value = {"found": True}
+            mock_dup.return_value = False
+            mock_log.return_value = None
+            mock_bpi.return_value = {"found": True, "status": "Faliment"}
+            mock_bil.return_value = {"found": False}
+
+            from backend.services.monitoring_service import run_monitoring_check
+            results = await run_monitoring_check()
+            changes = results[0]["changes"]
+            assert any(c["field"] == "Insolventa" for c in changes), changes
+
+    @pytest.mark.asyncio
+    async def test_bpi_already_insolvent_no_realert(self):
+        """PII#4: last report already insolvent -> no repeat Insolventa (transition only)."""
+        fake_alert = {"id": "a-bpi2", "company_id": 6, "telegram_notify": 0,
+                      "cui": "12345678", "name": "Insolv SRL"}
+        old_data = {
+            "company": {},
+            "risk": {"bpi_insolventa": {"value": {"found": True}}},
+            "financial": {},
+        }
+        with patch("backend.services.monitoring_service.db") as mock_db, \
+             patch("backend.services.monitoring_service.get_anaf_data") as mock_anaf, \
+             patch("backend.services.monitoring_service._is_duplicate_alert") as mock_dup, \
+             patch("backend.services.monitoring_service._log_audit") as mock_log, \
+             patch("backend.agents.tools.bpi_client.check_insolvency") as mock_bpi, \
+             patch("backend.agents.tools.anaf_bilant_client.get_bilant") as mock_bil:
+            mock_db.fetch_all = AsyncMock(return_value=[fake_alert])
+            mock_db.fetch_one = AsyncMock(return_value={"full_data": json.dumps(old_data)})
+            mock_db.execute = AsyncMock()
+            mock_anaf.return_value = {"found": True}
+            mock_dup.return_value = False
+            mock_log.return_value = None
+            mock_bpi.return_value = {"found": True, "status": "Faliment"}
+            mock_bil.return_value = {"found": False}
+
+            from backend.services.monitoring_service import run_monitoring_check
+            results = await run_monitoring_check()
+            changes = results[0]["changes"]
+            assert not any(c["field"] == "Insolventa" for c in changes), changes

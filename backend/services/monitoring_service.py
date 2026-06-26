@@ -261,8 +261,12 @@ async def run_monitoring_check() -> list[dict]:
                     bpi = await check_insolvency(cui, use_tavily_fallback=False)
                     new_insolv = bool(bpi.get("found"))
                     old_risk = old_data.get("risk", {}) or {}
-                    _oi = old_risk.get("insolventa") or old_risk.get("bpi") or {}
-                    old_insolv = bool(_oi.get("found")) if isinstance(_oi, dict) else bool(_oi)
+                    # _verify_risk stores risk["bpi_insolventa"]/["insolvency"] as _make_field
+                    # wrappers ({"value": {...}}) — unwrap before reading .found so this is a real
+                    # transition check (else old_insolv was always False -> alert every cycle).
+                    _ow = old_risk.get("bpi_insolventa") or old_risk.get("insolvency") or {}
+                    _ov = _ow.get("value", _ow) if isinstance(_ow, dict) else {}
+                    old_insolv = bool(_ov.get("found")) if isinstance(_ov, dict) else False
                     if new_insolv and not old_insolv:
                         new_val = bpi.get("status") or "Insolventa"
                         if not await _is_duplicate_alert(alert_id, "insolventa", new_val):
