@@ -83,3 +83,51 @@ class TestGenerateDocx:
         finally:
             if os.path.exists(path):
                 os.remove(path)
+
+    def test_functioneaza_cu_rich_fields_aegrm_historical(self):
+        """TASK 2: populated AEGRM + historical OSINT flags (cu diacritice) prin DOCX.
+        Sectiunea 'Garantii si Istoric (OSINT)' nu e atinsa de firme curate (fara
+        semnale), deci asta e singura acoperire pentru calea populata DOCX."""
+        from backend.reports.docx_generator import generate_docx
+
+        verified_data = {
+            "risk": {
+                "aegrm_guarantees": {
+                    "value": {
+                        "has_data": True,
+                        "count": 2,
+                        "has_guarantees": True,
+                        "guarantees": [
+                            {"descriere": "Gaj mobiliar — autovehicul, garanție către BCR"},
+                            {"creditor": "Banca Transilvania S.A. — ipotecă mobiliară"},
+                        ],
+                    }
+                }
+            },
+            "historical_flags": [
+                {
+                    "type": "cesiune_parti_sociale",
+                    "label": "Cesiune părți sociale detectată",
+                    "severity": "HIGH",
+                    "detail": "Schimbare asociați — cesiune 60% părți sociale",
+                    "date": "2023-05-12",
+                },
+                {
+                    "type": "dizolvare_lichidare",
+                    "label": "Dizolvare / Lichidare / Radiere",
+                    "severity": "CRITICAL",
+                    "detail": "Mențiune privind dizolvarea voluntară înregistrată la ONRC",
+                    "date": "2024-01-08",
+                },
+            ],
+        }
+
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as f:
+            path = f.name
+        try:
+            generate_docx(_make_sections(), _make_meta(), path, verified_data)
+            assert os.path.exists(path)
+            assert os.path.getsize(path) > 0
+        finally:
+            if os.path.exists(path):
+                os.remove(path)

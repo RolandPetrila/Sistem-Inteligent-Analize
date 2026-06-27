@@ -1,4 +1,7 @@
-"""F17: Tests for pdf_generator — _sanitize latin-1 encoding."""
+"""F17: Tests for pdf_generator — _sanitize latin-1 encoding + rich-field rendering."""
+
+import os
+import tempfile
 
 from backend.reports.pdf_generator import _sanitize
 
@@ -49,3 +52,81 @@ class TestSanitize:
         # Characters outside latin-1 should be replaced with ?
         result = _sanitize("Emoji: \U0001f600")
         assert "\U0001f600" not in result
+
+
+def _rich_verified_data() -> dict:
+    """TASK 2: populated AEGRM guarantees + historical OSINT flags with Romanian
+    diacritics (ă/ț/ș/î/â). Real (clean) firms never populate these fields, so this
+    fixture is the ONLY coverage exercising the PDF rich-field rendering — and the
+    diacritics probe the latin-1 sanitization (fpdf2/Helvetica) on OSINT signal text."""
+    return {
+        "risk": {
+            "aegrm_guarantees": {
+                "value": {
+                    "has_data": True,
+                    "count": 2,
+                    "has_guarantees": True,
+                    "guarantees": [
+                        {"descriere": "Gaj mobiliar — autovehicul, garanție către BCR"},
+                        {"creditor": "Banca Transilvania S.A. — ipotecă mobiliară"},
+                    ],
+                }
+            }
+        },
+        "historical_flags": [
+            {
+                "type": "cesiune_parti_sociale",
+                "label": "Cesiune părți sociale detectată",
+                "severity": "HIGH",
+                "detail": "Schimbare asociați — cesiune 60% părți sociale către o terță persoană",
+                "date": "2023-05-12",
+            },
+            {
+                "type": "dizolvare_lichidare",
+                "label": "Dizolvare / Lichidare / Radiere",
+                "severity": "CRITICAL",
+                "detail": "Mențiune privind dizolvarea voluntară înregistrată la ONRC",
+                "date": "2024-01-08",
+            },
+        ],
+    }
+
+
+class TestRichFieldsPdf:
+    """TASK 2: exercise the POPULATED AEGRM + historical OSINT rendering through the
+    real PDF generator. The OSINT 'Garantii si Istoric' section is structurally
+    unreachable via clean firms (no signals), so this is the only place the PDF
+    latin-1 path runs with diacritic-laden signal text — it MUST NOT raise."""
+
+    def test_pdf_renders_rich_fields_with_diacritics(self):
+        from backend.reports.pdf_generator import generate_pdf
+
+        sections = {
+            "executive_summary": {"title": "Rezumat Executiv", "content": "Firma analizată."}
+        }
+        # generate_pdf expects meta["risk_score"] as the color label string
+        # (used as a color_map key), matching what the pipeline passes — not a dict.
+        meta = {
+            "title": "Raport RIS",
+            "company_name": "Test SRL",
+            "report_level": 2,
+            "generated_at": "2026-06-27T10:00:00",
+            "sources_count": 3,
+            "risk_score": "Galben",
+            "numeric_score": 55,
+            # generate_pdf iterates sources as dicts (src.get("level")), matching the pipeline.
+            "sources": [
+                {"name": "ANAF", "level": 1, "status": "OK"},
+                {"name": "ONRC", "level": 2, "status": "OK"},
+            ],
+        }
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            path = f.name
+        try:
+            # Must not raise on the latin-1 OSINT diacritic path:
+            generate_pdf(sections, meta, path, _rich_verified_data())
+            assert os.path.exists(path)
+            assert os.path.getsize(path) > 0
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
