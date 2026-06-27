@@ -135,8 +135,10 @@ def _add_rich_fields_docx(doc, verified_data: dict):
         if hist_ok:
             for fl in hist:
                 if isinstance(fl, dict):
-                    label = fl.get("type") or fl.get("title") or "Semnal"
-                    detail = fl.get("detail") or fl.get("description") or ""
+                    # osint_client emits {type(slug), label(human), severity, snippet};
+                    # prefer the human label + snippet, fall back to other shapes.
+                    label = fl.get("label") or fl.get("type") or fl.get("title") or "Semnal"
+                    detail = fl.get("snippet") or fl.get("detail") or fl.get("description") or ""
                     date_raw = fl.get("date") or fl.get("data") or ""
                     doc.add_paragraph(f"{label} {date_raw}: {detail}"[:240], style="List Bullet")
                 else:

@@ -73,20 +73,20 @@ def _rich_verified_data() -> dict:
                 }
             }
         },
+        # Exact shape emitted by osint_client.search_monitorul_oficial:
+        # {type(slug), label(human), severity, snippet} — NO detail/date.
         "historical_flags": [
             {
                 "type": "cesiune_parti_sociale",
                 "label": "Cesiune părți sociale detectată",
                 "severity": "HIGH",
-                "detail": "Schimbare asociați — cesiune 60% părți sociale către o terță persoană",
-                "date": "2023-05-12",
+                "snippet": "Schimbare asociați — cesiune 60% părți sociale către o terță persoană",
             },
             {
                 "type": "dizolvare_lichidare",
                 "label": "Dizolvare / Lichidare / Radiere",
                 "severity": "CRITICAL",
-                "detail": "Mențiune privind dizolvarea voluntară înregistrată la ONRC",
-                "date": "2024-01-08",
+                "snippet": "Mențiune privind dizolvarea voluntară înregistrată la ONRC",
             },
         ],
     }

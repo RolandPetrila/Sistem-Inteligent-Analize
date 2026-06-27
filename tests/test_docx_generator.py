@@ -104,20 +104,19 @@ class TestGenerateDocx:
                     }
                 }
             },
+            # Exact shape emitted by osint_client: {type, label, severity, snippet}.
             "historical_flags": [
                 {
                     "type": "cesiune_parti_sociale",
                     "label": "Cesiune părți sociale detectată",
                     "severity": "HIGH",
-                    "detail": "Schimbare asociați — cesiune 60% părți sociale",
-                    "date": "2023-05-12",
+                    "snippet": "Schimbare asociați — cesiune 60% părți sociale",
                 },
                 {
                     "type": "dizolvare_lichidare",
                     "label": "Dizolvare / Lichidare / Radiere",
                     "severity": "CRITICAL",
-                    "detail": "Mențiune privind dizolvarea voluntară înregistrată la ONRC",
-                    "date": "2024-01-08",
+                    "snippet": "Mențiune privind dizolvarea voluntară înregistrată la ONRC",
                 },
             ],
         }

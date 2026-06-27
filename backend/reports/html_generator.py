@@ -618,8 +618,10 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
                 if isinstance(fl, dict):
                     sev = str(fl.get("severity", "INFO")).upper()
                     c = {"RED": "#ef4444", "YELLOW": "#eab308", "HIGH": "#ef4444", "MEDIUM": "#eab308"}.get(sev, "#6366f1")
-                    label = _escape(str(fl.get("type") or fl.get("title") or fl.get("category") or "Semnal"))
-                    detail = _escape(str(fl.get("detail") or fl.get("description") or fl.get("text") or "")[:240])
+                    # osint_client emits {type(slug), label(human), severity, snippet};
+                    # prefer the human label + snippet, fall back to other shapes.
+                    label = _escape(str(fl.get("label") or fl.get("type") or fl.get("title") or fl.get("category") or "Semnal"))
+                    detail = _escape(str(fl.get("snippet") or fl.get("detail") or fl.get("description") or fl.get("text") or "")[:240])
                     date_raw = fl.get("date") or fl.get("data") or ""
                     date_html = f'<span style="color:#64748b;font-size:0.8em">{_escape(str(date_raw))}</span> ' if date_raw else ""
                     body += (f'<div style="padding:8px 12px;margin-bottom:6px;background:#16213e;border-radius:6px;border-left:3px solid {c}">'

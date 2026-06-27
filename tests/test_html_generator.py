@@ -222,3 +222,19 @@ class TestRichFields:
         data = {"risk": {"aegrm_guarantees": {"value": {"has_data": False}}}}
         html, nav = _build_rich_fields_html(data)
         assert 'id="garantii"' not in html
+
+    def test_historical_flags_real_osint_shape(self):
+        """TASK 2: osint_client emits {type(slug), label(human), severity, snippet}.
+        The OSINT section MUST render the human label + snippet, not the raw slug —
+        regression guard for the field-mapping fix (renderers prefer label/snippet)."""
+        data = {"historical_flags": [{
+            "type": "cesiune_parti_sociale",
+            "label": "Cesiune parti sociale detectata",
+            "severity": "HIGH",
+            "snippet": "cesiune 60% parti sociale catre o terta persoana",
+        }]}
+        html, nav = _build_rich_fields_html(data)
+        assert 'id="garantii"' in html
+        assert "Cesiune parti sociale detectata" in html  # human label
+        assert "cesiune 60%" in html                       # snippet, not dropped
+        assert 'href="#garantii"' in nav
