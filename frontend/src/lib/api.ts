@@ -23,13 +23,14 @@ async function request<T>(
   path: string,
   options?: RequestInit,
   _attempt = 0,
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
 ): Promise<T> {
   const method = options?.method || "GET";
   const start = performance.now();
 
   // R2 Fix: Fresh AbortController for each attempt
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   let res: Response;
   try {
@@ -74,7 +75,7 @@ async function request<T>(
     const retryAfter = parseInt(res.headers.get("Retry-After") || "3", 10);
     const delay = Math.min(retryAfter * 1000, 10_000);
     await new Promise((r) => setTimeout(r, delay));
-    return request<T>(path, options, _attempt + 1);
+    return request<T>(path, options, _attempt + 1, timeoutMs);
   }
 
   if (res.status === 429) {
@@ -100,7 +101,7 @@ async function request<T>(
   if (res.status === 503 && _attempt < 1) {
     logApi(method, path, 503, durationMs, "Service unavailable, retrying");
     await new Promise((r) => setTimeout(r, 2000));
-    return request<T>(path, options, _attempt + 1);
+    return request<T>(path, options, _attempt + 1, timeoutMs);
   }
 
   if (!res.ok) {
@@ -749,16 +750,21 @@ export const api = {
       }[];
     }>(`/monitoring/${alertId}/audit-log`),
 
-  // Regenerate a single report section
+  // Regenerate a single report section (re-runs synthesis for one section).
+  // Quality-route sections (e.g. executive_summary via Claude CLI) can take well
+  // over the default 30s, so use an extended client timeout (~server ceiling 210s).
   regenerateSection: (jobId: string, sectionKey: string) =>
     request<{
-      regen_id: string;
       job_id: string;
       section_key: string;
       status: string;
-      current_length: number;
-      note: string;
-    }>(`/jobs/${jobId}/section/${sectionKey}/regenerate`, { method: "POST" }),
+      section: { title?: string; content?: string; word_count?: number };
+    }>(
+      `/jobs/${jobId}/section/${sectionKey}/regenerate`,
+      { method: "POST" },
+      0,
+      220_000,
+    ),
 
   // Export SEAP tenders as .ics calendar file
   exportIcs: async (reportId: string): Promise<Blob> => {

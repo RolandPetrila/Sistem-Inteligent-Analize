@@ -43,97 +43,10 @@ class SynthesisAgent(BaseAgent, SynthesisProvidersMixin):
         total = len(sections_config)
 
         for i, section in enumerate(sections_config):
-            key = section["key"]
-            title = section["title"]
-            word_target = section.get("word_count", 300)
-
-            # ER2: Skip AI generation if section has insufficient data
-            if not self._has_sufficient_data(key, verified_data):
-                logger.warning(f"[synthesis] Section {key}: insufficient data, using fallback")
-                report_sections[key] = {
-                    "title": title,
-                    "content": (
-                        f"Sectiunea '{title}' nu a putut fi generata din cauza datelor insuficiente "
-                        f"disponibile in sursele publice consultate. Pentru o analiza completa, "
-                        f"sunt necesare date suplimentare care nu au fost identificate in sursele accesate. "
-                        f"Se recomanda obtinerea acestor informatii direct de la companie."
-                    ),
-                    "word_count": 0,
-                }
-                continue
-
-            # 8C: Provider routing per section type (overrides simple word-based routing)
-            route = section.get("route_preference", "quality")
-            if word_target <= 200:
-                route = "fast"
-            logger.info(f"[synthesis] Section {i+1}/{total}: {title} ({word_target}w, route={route})")
-
-            if route == "fast":
-                # B9 fix: Fast route — speed priority: Groq → concurrent fallback (Cerebras+Mistral+Gemini)
-                # 10F M4.5: Token Budget Enforcement — check if prompt fits provider context
-                # FIX #30: Build prompt once, reuse for token check + generation
-                initial_provider = "groq"
-                prompt = self._build_section_prompt(section, verified_data, initial_provider)
-                initial_provider = self._check_token_budget(prompt, initial_provider)
-
-                if initial_provider == "groq":
-                    text = await self._generate_with_groq(prompt)
-                else:
-                    text = None
-
-                # FIX #9: After primary failure, launch remaining providers concurrently
-                if not text:
-                    text = await self._concurrent_fallback(
-                        section, verified_data,
-                        providers=["cerebras", "mistral", "gemini"],
-                    )
-            else:
-                # B9 fix: Quality route — quality priority: Claude → concurrent fallback (Gemini+Groq+Mistral)
-                # 10F M4.5: Token Budget Enforcement
-                # FIX #30: Build prompt once, reuse for token check + generation
-                initial_provider = "claude"
-                prompt = self._build_section_prompt(section, verified_data, initial_provider)
-                initial_provider = self._check_token_budget(prompt, initial_provider)
-
-                if initial_provider == "claude":
-                    text = await self._generate_with_claude(prompt)
-                else:
-                    text = None
-
-                # FIX #9: After primary failure, launch remaining providers concurrently
-                if not text:
-                    text = await self._concurrent_fallback(
-                        section, verified_data,
-                        providers=["gemini", "groq", "mistral"],
-                    )
-
-            if not text:
-                text = await self._generate_with_cerebras(
-                    self._build_section_prompt(section, verified_data, "cerebras"))
-            # 10F M4.2: Structured Degradation 3-Tier
-            if not text:
-                text = self._degraded_fallback(section, verified_data)
-
-            # CoT: Strip <analiza_secreta> scratchpad before storing
-            text = self._strip_scratchpad(text)
-
-            # 10B M4.1: Output Validation — check for invented data, impossible stats
-            text = self._validate_output(text, verified_data, section)
-
-            # Reflexion: verifica consistenta text vs scoring numeric (sectiuni critice)
-            text = await self._reflexion_check(text, verified_data, section)
-
-            # ER1: Verify numbers in generated text against verified_data
-            is_ok, discrepancies = self._verify_numbers_in_text(text, verified_data, key)
-            if not is_ok and len(discrepancies) > 2:
-                logger.warning(f"[synthesis] Section {key}: {len(discrepancies)} number discrepancies, adding note")
-                text += "\n\n[Nota: Verificati cifrele din aceasta sectiune cu sursele primare.]"
-
-            report_sections[key] = {
-                "title": title,
-                "content": text,
-                "word_count": len(text.split()),
-            }
+            logger.info(f"[synthesis] Section {i+1}/{total}: {section['title']}")
+            report_sections[section["key"]] = await self.generate_section(
+                section, verified_data
+            )
 
         # 10B M4.3: Cross-Section Coherence — verify consistency between sections
         report_sections = self._check_cross_section_coherence(report_sections, verified_data)
@@ -153,6 +66,106 @@ class SynthesisAgent(BaseAgent, SynthesisProvidersMixin):
             "key_takeaways": key_takeaways,
             "current_step": f"Sinteza completa: {len(report_sections)} sectiuni",
             "progress": 0.75,
+        }
+
+    async def generate_section(self, section: dict, verified_data: dict) -> dict:
+        """Genereaza (sau re-genereaza) o singura sectiune de raport.
+
+        Extras din bucla execute() pentru a fi reutilizat la regenerarea on-demand
+        (POST /api/jobs/{id}/section/{key}/regenerate). Pipeline identic cu generarea
+        initiala: routing provider -> fallback in cascada -> strip scratchpad ->
+        output validation -> reflexion -> verificare cifre.
+        Returneaza dict-ul stocat in report_sections: {"title", "content", "word_count"}.
+        """
+        key = section["key"]
+        title = section["title"]
+        word_target = section.get("word_count", 300)
+
+        # ER2: Skip AI generation if section has insufficient data
+        if not self._has_sufficient_data(key, verified_data):
+            logger.warning(f"[synthesis] Section {key}: insufficient data, using fallback")
+            return {
+                "title": title,
+                "content": (
+                    f"Sectiunea '{title}' nu a putut fi generata din cauza datelor insuficiente "
+                    f"disponibile in sursele publice consultate. Pentru o analiza completa, "
+                    f"sunt necesare date suplimentare care nu au fost identificate in sursele accesate. "
+                    f"Se recomanda obtinerea acestor informatii direct de la companie."
+                ),
+                "word_count": 0,
+            }
+
+        # 8C: Provider routing per section type (overrides simple word-based routing)
+        route = section.get("route_preference", "quality")
+        if word_target <= 200:
+            route = "fast"
+        logger.info(f"[synthesis] Generating section '{title}' ({word_target}w, route={route})")
+
+        if route == "fast":
+            # B9 fix: Fast route — speed priority: Groq → concurrent fallback (Cerebras+Mistral+Gemini)
+            # 10F M4.5: Token Budget Enforcement — check if prompt fits provider context
+            # FIX #30: Build prompt once, reuse for token check + generation
+            initial_provider = "groq"
+            prompt = self._build_section_prompt(section, verified_data, initial_provider)
+            initial_provider = self._check_token_budget(prompt, initial_provider)
+
+            if initial_provider == "groq":
+                text = await self._generate_with_groq(prompt)
+            else:
+                text = None
+
+            # FIX #9: After primary failure, launch remaining providers concurrently
+            if not text:
+                text = await self._concurrent_fallback(
+                    section, verified_data,
+                    providers=["cerebras", "mistral", "gemini"],
+                )
+        else:
+            # B9 fix: Quality route — quality priority: Claude → concurrent fallback (Gemini+Groq+Mistral)
+            # 10F M4.5: Token Budget Enforcement
+            # FIX #30: Build prompt once, reuse for token check + generation
+            initial_provider = "claude"
+            prompt = self._build_section_prompt(section, verified_data, initial_provider)
+            initial_provider = self._check_token_budget(prompt, initial_provider)
+
+            if initial_provider == "claude":
+                text = await self._generate_with_claude(prompt)
+            else:
+                text = None
+
+            # FIX #9: After primary failure, launch remaining providers concurrently
+            if not text:
+                text = await self._concurrent_fallback(
+                    section, verified_data,
+                    providers=["gemini", "groq", "mistral"],
+                )
+
+        if not text:
+            text = await self._generate_with_cerebras(
+                self._build_section_prompt(section, verified_data, "cerebras"))
+        # 10F M4.2: Structured Degradation 3-Tier
+        if not text:
+            text = self._degraded_fallback(section, verified_data)
+
+        # CoT: Strip <analiza_secreta> scratchpad before storing
+        text = self._strip_scratchpad(text)
+
+        # 10B M4.1: Output Validation — check for invented data, impossible stats
+        text = self._validate_output(text, verified_data, section)
+
+        # Reflexion: verifica consistenta text vs scoring numeric (sectiuni critice)
+        text = await self._reflexion_check(text, verified_data, section)
+
+        # ER1: Verify numbers in generated text against verified_data
+        is_ok, discrepancies = self._verify_numbers_in_text(text, verified_data, key)
+        if not is_ok and len(discrepancies) > 2:
+            logger.warning(f"[synthesis] Section {key}: {len(discrepancies)} number discrepancies, adding note")
+            text += "\n\n[Nota: Verificati cifrele din aceasta sectiune cu sursele primare.]"
+
+        return {
+            "title": title,
+            "content": text,
+            "word_count": len(text.split()),
         }
 
     async def _generate_key_takeaways(self, full_report_text: str) -> str:

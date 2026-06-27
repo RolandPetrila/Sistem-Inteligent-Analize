@@ -219,6 +219,16 @@ async def _save_job_results(
     cui = official.get("cui", "")
     risk_score = verified_data.get("risk_score", {}).get("score")
 
+    # TASK1 (2026-06-27): Persist Agent 5 narrative sections into full_data so ReportView
+    # can render them and the per-section "Regenereaza" button works. report_sections is a
+    # declared state key (state.py) merged into final_state by synthesis_agent.execute().
+    # Set on verified_data BEFORE the INSERT below (line dumps verified_data) — the delta
+    # UPDATE re-dumps the same dict, so it persists there too. delta_service reads only
+    # financial/risk_score/company, so it ignores this key (no spurious deltas).
+    report_sections = final_state.get("report_sections") or {}
+    if report_sections:
+        verified_data["report_sections"] = report_sections
+
     # Upsert company
     if cui or company_name:
         company_id = str(uuid.uuid4())

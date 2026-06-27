@@ -292,13 +292,26 @@ export default function ReportView() {
     }
   };
 
-  // Regenereaza o singura sectiune narativa via backend.
+  // Regenereaza o singura sectiune narativa via backend si actualizeaza imediat
+  // continutul afisat (backend-ul a persistat deja noua sectiune in full_data).
   const handleRegenerateSection = async (sectionKey: string) => {
     if (regeneratingKey) return;
     setRegeneratingKey(sectionKey);
     try {
       const res = await api.regenerateSection(report.job_id, sectionKey);
-      toast(`${res.status}: ${res.note}`, "info");
+      setReport((prev) => {
+        if (!prev) return prev;
+        const prevData = prev.full_data ?? {};
+        const prevSections = prevData.report_sections ?? {};
+        return {
+          ...prev,
+          full_data: {
+            ...prevData,
+            report_sections: { ...prevSections, [sectionKey]: res.section },
+          },
+        };
+      });
+      toast("Sectiune regenerata.", "success");
     } catch (e) {
       const msg =
         e instanceof Error ? e.message : "Eroare la regenerarea sectiunii.";

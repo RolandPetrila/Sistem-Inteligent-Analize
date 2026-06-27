@@ -3,6 +3,7 @@ TST-02: Router tests with FastAPI TestClient.
 Tests API endpoints: health, stats, jobs CRUD, companies, reports, settings, monitoring.
 """
 
+import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -170,3 +171,90 @@ class TestCacheEndpoint:
         with patch("backend.services.cache_service.get_stats", new_callable=AsyncMock, return_value={"total": 0}):
             resp = client.get("/api/cache/stats")
         assert resp.status_code == 200
+
+
+class TestRegenerateSection:
+    """TASK1 (2026-06-27): POST /jobs/{id}/section/{key}/regenerate.
+
+    Re-ruleaza sinteza unei singure sectiuni si persista noul continut in full_data.
+    """
+
+    def _report_row(self, sections=None):
+        full_data = {
+            "company": {"cui": {"value": "12345678"}, "denumire": {"value": "TEST SRL"}},
+            "financial": {
+                "cifra_afaceri": {"value": 1_000_000},
+                "profit_net": {"value": 100_000},
+            },
+            "risk_score": {"score": "Verde", "numeric_score": 80},
+            "completeness": {"score": 90},
+        }
+        if sections is not None:
+            full_data["report_sections"] = sections
+        return {
+            "id": "report-1",
+            "full_data": json.dumps(full_data),
+            "report_type": "FULL_COMPANY_PROFILE",
+            "report_level": 2,
+        }
+
+    def test_regenerate_persists_new_content(self, client):
+        captured = {}
+
+        async def fake_execute(sql, params=None):
+            if "UPDATE reports SET full_data" in sql:
+                captured["full_data"] = params[0]
+
+        new_section = {
+            "title": "Rezumat Executiv",
+            "content": "CONTINUT NOU REGENERAT prin sinteza.",
+            "word_count": 4,
+        }
+        old_sections = {
+            "executive_summary": {
+                "title": "Rezumat Executiv",
+                "content": "VECHI",
+                "word_count": 1,
+            },
+        }
+
+        with patch("backend.routers.jobs.db") as mock_db, \
+             patch("backend.security.settings") as mock_settings, \
+             patch(
+                 "backend.agents.agent_synthesis.synthesis_agent.generate_section",
+                 new=AsyncMock(return_value=new_section),
+             ):
+            mock_settings.ris_api_key = ""
+            mock_db.fetch_one = AsyncMock(return_value=self._report_row(old_sections))
+            mock_db.execute = AsyncMock(side_effect=fake_execute)
+            resp = client.post("/api/jobs/job-1/section/executive_summary/regenerate")
+
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["section_key"] == "executive_summary"
+        assert body["status"] == "done"
+        assert body["section"]["content"] == "CONTINUT NOU REGENERAT prin sinteza."
+        # Persistat: UPDATE reports a primit full_data cu noul continut
+        assert "full_data" in captured
+        saved = json.loads(captured["full_data"])
+        assert (
+            saved["report_sections"]["executive_summary"]["content"]
+            == "CONTINUT NOU REGENERAT prin sinteza."
+        )
+
+    def test_regenerate_invalid_section_returns_400(self, client):
+        with patch("backend.routers.jobs.db") as mock_db, \
+             patch("backend.security.settings") as mock_settings:
+            mock_settings.ris_api_key = ""
+            mock_db.fetch_one = AsyncMock(return_value=self._report_row())
+            mock_db.execute = AsyncMock()
+            resp = client.post("/api/jobs/job-1/section/nonexistent_xyz/regenerate")
+        assert resp.status_code == 400
+
+    def test_regenerate_report_not_found_returns_404(self, client):
+        with patch("backend.routers.jobs.db") as mock_db, \
+             patch("backend.security.settings") as mock_settings:
+            mock_settings.ris_api_key = ""
+            mock_db.fetch_one = AsyncMock(return_value=None)
+            resp = client.post("/api/jobs/job-1/section/executive_summary/regenerate")
+        assert resp.status_code == 404

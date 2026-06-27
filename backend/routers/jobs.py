@@ -290,26 +290,16 @@ async def regenerate_section(
     section_key: str,
     api_key: str = Depends(require_api_key),
 ):
-    """F3-7: Re-genereaza o singura sectiune dintr-un raport existent.
-    Citeste starea din DB, re-ruleaza sinteza DOAR pentru sectiunea ceruta.
+    """F3-7 / TASK1: Re-genereaza o singura sectiune narativa dintr-un raport existent.
+
+    Incarca verified_data persistat, re-ruleaza sinteza DOAR pentru sectiunea ceruta,
+    persista noul continut in reports.full_data si il returneaza (ReportView il afiseaza).
     """
-
-    # Valideaza section_key
-    VALID_SECTIONS = {
-        "executive_summary", "company_profile", "financial_analysis",
-        "risk_assessment", "market_position", "opportunities",
-        "recommendations", "swot", "competition"
-    }
-    if section_key not in VALID_SECTIONS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Sectiune invalida. Valori acceptate: {sorted(VALID_SECTIONS)}"
-        )
-
-    # Gaseste raportul
+    # Gaseste raportul + tipul/nivelul (necesare pentru config-ul sectiunilor)
     report = await db.fetch_one(
-        "SELECT r.full_data, r.id FROM reports r WHERE r.job_id = ? LIMIT 1",
-        (job_id,)
+        "SELECT id, full_data, report_type, report_level FROM reports "
+        "WHERE job_id = ? ORDER BY created_at DESC LIMIT 1",
+        (job_id,),
     )
     if not report:
         raise HTTPException(status_code=404, detail=f"Raport negasit pentru job {job_id}")
@@ -318,23 +308,71 @@ async def regenerate_section(
         full_data = json.loads(report["full_data"]) if report["full_data"] else {}
     except (json.JSONDecodeError, TypeError, ValueError):
         raise HTTPException(status_code=500, detail="Date raport invalide") from None
+    if not isinstance(full_data, dict) or not full_data:
+        raise HTTPException(
+            status_code=422,
+            detail="Raportul nu contine date verificate — regenerare imposibila.",
+        )
 
-    # Extrage sectiunea curenta
-    current_sections = full_data.get("report_sections", {})
-    current_content = current_sections.get(section_key, "")
+    # Reconstituie verified_data asa cum l-a vazut sinteza initiala: exclude cheile
+    # adaugate POST-sinteza (report_sections / key_takeaways / delta) ca sa nu umfle
+    # prompt-ul si sa nu fie taiate datele reale la truncarea per-provider.
+    verified_data = {
+        k: v for k, v in full_data.items()
+        if k not in ("report_sections", "key_takeaways", "delta")
+    }
 
-    # Re-genereaza sectiunea via synthesis agent (async task)
-    # Nota: Implementare completa necesita integrare cu LangGraph state
-    # Aceasta versiune returneaza un job async pentru regenerare
-    regen_id = str(uuid.uuid4())
+    # Valideaza dinamic section_key contra sectiunilor reale ale acestui tip de raport
+    from backend.prompts.section_prompts import get_sections_for_analysis
+    analysis_type = report["report_type"] or "CUSTOM_REPORT"
+    report_level = report["report_level"] or 2
+    sections_config = get_sections_for_analysis(analysis_type, report_level, verified_data)
+    section = next((s for s in sections_config if s["key"] == section_key), None)
+    if section is None:
+        valid = sorted(s["key"] for s in sections_config)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Sectiunea '{section_key}' nu face parte din acest raport. Valide: {valid}",
+        )
 
-    logger.info(f"[section_regen] Job {job_id}, section '{section_key}' — regen_id={regen_id}")
+    # Re-ruleaza sinteza DOAR pentru aceasta sectiune. Plafon server-side anti-hang
+    # (Claude CLI quality-route are timeout intern de ~200s; wait_for il margineste global).
+    from backend.agents.agent_synthesis import synthesis_agent
+    try:
+        new_section = await asyncio.wait_for(
+            synthesis_agent.generate_section(section, verified_data),
+            timeout=210,
+        )
+    except TimeoutError:
+        logger.warning(f"[section_regen] Job {job_id} section '{section_key}' timed out (>210s)")
+        raise HTTPException(
+            status_code=504, detail="Regenerarea sectiunii a depasit timpul maxim."
+        ) from None
+    except Exception as e:
+        logger.error(f"[section_regen] Job {job_id} section '{section_key}' failed: {e}")
+        raise HTTPException(
+            status_code=500, detail="Regenerarea sectiunii a esuat."
+        ) from None
+
+    # Persista noul continut in full_data.report_sections (single source pentru ReportView)
+    sections = full_data.get("report_sections")
+    if not isinstance(sections, dict):
+        sections = {}
+    sections[section_key] = new_section
+    full_data["report_sections"] = sections
+    await db.execute(
+        "UPDATE reports SET full_data = ? WHERE id = ?",
+        (json.dumps(full_data, ensure_ascii=False, default=str), report["id"]),
+    )
+
+    logger.info(
+        f"[section_regen] Job {job_id} section '{section_key}' regenerated "
+        f"({new_section.get('word_count', 0)} words)"
+    )
 
     return {
-        "regen_id": regen_id,
         "job_id": job_id,
         "section_key": section_key,
-        "status": "queued",
-        "current_length": len(current_content),
-        "note": "Regenerare sectiune queued. Verificati /api/jobs/{job_id}/status pentru rezultat.",
+        "status": "done",
+        "section": new_section,
     }
