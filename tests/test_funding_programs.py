@@ -2,6 +2,9 @@
 F8-1: Teste pentru modul funding_programs.
 Testeaza matching programe finantare, filtrare, get_funding_summary.
 """
+
+from datetime import date
+
 from backend.agents.tools.funding_programs import _load_programs, get_funding_summary, match_programs
 
 
@@ -38,12 +41,16 @@ class TestLoadPrograms:
 
 class TestMatchPrograms:
     def test_firma_it_eligibila(self):
-        # Firma IT cu 5 angajati, 2 ani, fara datorii — eligibila la PNRR Digitalizare
+        # Firma IT mica, curata trebuie sa aiba cel putin un program eligibil.
+        # Testam CONTRACTUL (set ne-gol, doar programe active si ne-expirate),
+        # nu un ID de program anume — programele expira si testul ar deveni fragil la data.
         result = match_programs(caen_code="6201", angajati=5, vechime_ani=2, are_datorii_anaf=False)
         assert isinstance(result, list)
-        # PNRR IMM Digitalizare trebuie sa apara (activ, regiuni=toate, CAEN 6201 nu e exclus)
-        ids = [p["id"] for p in result]
-        assert "pnrr_imm_digitalizare" in ids
+        assert len(result) > 0
+        today = date.today().isoformat()
+        for p in result:
+            termen = p.get("termen", "")
+            assert not termen or termen >= today, f"Program expirat returnat: {p['id']} ({termen})"
 
     def test_firma_cu_datorii_exclude(self):
         # Firma cu datorii ANAF nu poate accesa fonduri (toate programele au datorii_anaf=False)
