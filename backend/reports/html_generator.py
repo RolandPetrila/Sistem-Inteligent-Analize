@@ -575,6 +575,51 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
     </section>''')
         nav += '<a href="#eurostat" class="nav-link">Benchmark UE</a>\n'
 
+    # ---- Istoric Achizitii Publice (SICAP/SEAP) ----
+    market = verified_data.get("market", {})
+    seap_field = market.get("seap", {}) if isinstance(market, dict) else {}
+    seap = seap_field.get("value", seap_field) if isinstance(seap_field, dict) else {}
+    if isinstance(seap, dict) and (seap.get("total_contracts", 0) or 0) > 0:
+        tot = seap.get("total_contracts", 0)
+        cc = seap.get("contracts_count", 0) or len(seap.get("contracts", []) or [])
+        dc = seap.get("direct_count", 0) or len(seap.get("direct_acquisitions", []) or [])
+        tval = seap.get("total_value")
+        body = (f'<p style="color:#22c55e;font-weight:600">{tot} contracte publice castigate '
+                f'({cc} licitatii + {dc} achizitii directe)'
+                f'{f" &middot; valoare totala ~{_escape(_fmt_num(tval))} RON" if tval else ""}</p>')
+
+        def _seap_rows(items):
+            rows_html = ""
+            for it in (items or [])[:8]:
+                if not isinstance(it, dict):
+                    continue
+                title = _escape(str(it.get("title", ""))[:120]) or "(fara titlu)"
+                auth = _escape(str(it.get("authority", "")))
+                val = it.get("value")
+                cur = _escape(str(it.get("currency", "RON")))
+                date = _escape(str(it.get("date", ""))[:10])
+                val_s = f"{_escape(_fmt_num(val))} {cur}" if isinstance(val, (int, float)) else ""
+                rows_html += (f'<li style="color:#cbd5e1"><strong>{title}</strong>'
+                              f'{f" &mdash; {auth}" if auth else ""}'
+                              f'{f" &middot; {val_s}" if val_s else ""}'
+                              f'{f" &middot; {date}" if date else ""}</li>')
+            return rows_html
+
+        cw = _seap_rows(seap.get("contracts"))
+        dw = _seap_rows(seap.get("direct_acquisitions"))
+        if cw:
+            body += ('<h3 style="color:#818cf8;margin:14px 0 6px;font-size:1em">Licitatii castigate</h3>'
+                     f'<ul class="list-disc ml-6">{cw}</ul>')
+        if dw:
+            body += ('<h3 style="color:#818cf8;margin:14px 0 6px;font-size:1em">Achizitii directe</h3>'
+                     f'<ul class="list-disc ml-6">{dw}</ul>')
+        out.append(f'''
+    <section id="achizitii" class="report-section">
+        <h2>Istoric Achizitii Publice (SICAP)</h2>
+        {body}
+    </section>''')
+        nav += '<a href="#achizitii" class="nav-link">Achizitii Publice</a>\n'
+
     # ---- Actionariat + relatii ----
     act = verified_data.get("actionariat", {})
     rel = verified_data.get("relations", {})

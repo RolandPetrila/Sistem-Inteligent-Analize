@@ -185,6 +185,33 @@ def _add_rich_fields_docx(doc, verified_data: dict):
             doc.add_paragraph(f"{ind.get('label', '')}: RO {ro_s} | UE27 {eu_s}", style="List Bullet")
         doc.add_paragraph("Sursa: Eurostat (Structural Business Statistics).")
 
+    _market = verified_data.get("market", {})
+    _seap_field = _market.get("seap", {}) if isinstance(_market, dict) else {}
+    seap = _seap_field.get("value", _seap_field) if isinstance(_seap_field, dict) else {}
+    if isinstance(seap, dict) and (seap.get("total_contracts", 0) or 0) > 0:
+        doc.add_heading("Istoric Achizitii Publice (SICAP)", level=1)
+        tot = seap.get("total_contracts", 0)
+        cc = seap.get("contracts_count", 0) or len(seap.get("contracts", []) or [])
+        dc = seap.get("direct_count", 0) or len(seap.get("direct_acquisitions", []) or [])
+        tval = seap.get("total_value")
+        summ = f"{tot} contracte publice castigate ({cc} licitatii + {dc} achizitii directe)"
+        if tval:
+            summ += f" - valoare totala ~{_fmt_docx_num(tval)} RON"
+        doc.add_paragraph(summ)
+        for label, items in (("Licitatii castigate", seap.get("contracts")), ("Achizitii directe", seap.get("direct_acquisitions"))):
+            its = [i for i in (items or []) if isinstance(i, dict)][:8]
+            if not its:
+                continue
+            doc.add_heading(label, level=2)
+            for it in its:
+                title = str(it.get("title", "") or "(fara titlu)")[:120]
+                auth = str(it.get("authority", ""))
+                val = it.get("value")
+                cur = str(it.get("currency", "RON"))
+                val_s = f" ({_fmt_docx_num(val)} {cur})" if isinstance(val, (int, float)) else ""
+                auth_s = f" - {auth}" if auth else ""
+                doc.add_paragraph(f"{title}{auth_s}{val_s}", style="List Bullet")
+
     funding = verified_data.get("funding_programs", {})
     if isinstance(funding, dict) and funding.get("eligible"):
         doc.add_page_break()

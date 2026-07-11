@@ -291,8 +291,12 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
     sanc_ok = isinstance(sanc, dict) and sanc.get("status") in ("clean", "hit", "unavailable")
     eust = verified_data.get("eurostat_sector", {})
     eust_ok = isinstance(eust, dict) and eust.get("available") and eust.get("indicators")
+    _market = verified_data.get("market", {})
+    _seap_field = _market.get("seap", {}) if isinstance(_market, dict) else {}
+    seap = _seap_field.get("value", _seap_field) if isinstance(_seap_field, dict) else {}
+    seap_ok = isinstance(seap, dict) and (seap.get("total_contracts", 0) or 0) > 0
 
-    if act_ok or rel_flags or aegrm_ok or hist_ok or fund_ok or sanc_ok or eust_ok:
+    if act_ok or rel_flags or aegrm_ok or hist_ok or fund_ok or sanc_ok or eust_ok or seap_ok:
         pdf.add_page()
         pdf.start_section("Actionariat, Garantii si Finantare", level=0)
         pdf.set_font("Helvetica", "B", 16)
@@ -384,6 +388,33 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
             pdf.multi_cell(0, 5, _sanitize("Sursa: Eurostat (Structural Business Statistics)."), new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("Helvetica", "", 10)
             pdf.set_text_color(40, 40, 40)
+            pdf.ln(3)
+
+        if seap_ok:
+            _add_section_header(pdf, "Istoric Achizitii Publice (SICAP)")
+            tot = seap.get("total_contracts", 0)
+            cc = seap.get("contracts_count", 0) or len(seap.get("contracts", []) or [])
+            dc = seap.get("direct_count", 0) or len(seap.get("direct_acquisitions", []) or [])
+            tval = seap.get("total_value")
+            summ = f"{tot} contracte publice castigate ({cc} licitatii + {dc} achizitii directe)"
+            if tval:
+                summ += f" - valoare totala ~{_fmt_pdf_num(tval)} RON"
+            pdf.multi_cell(0, 6, _sanitize(summ), new_x="LMARGIN", new_y="NEXT")
+            for label, items in (("Licitatii castigate", seap.get("contracts")), ("Achizitii directe", seap.get("direct_acquisitions"))):
+                its = [i for i in (items or []) if isinstance(i, dict)][:8]
+                if not its:
+                    continue
+                pdf.set_font("Helvetica", "B", 10)
+                pdf.multi_cell(0, 6, _sanitize(f"{label}:"), new_x="LMARGIN", new_y="NEXT")
+                pdf.set_font("Helvetica", "", 10)
+                for it in its:
+                    title = str(it.get("title", "") or "(fara titlu)")[:100]
+                    auth = str(it.get("authority", ""))
+                    val = it.get("value")
+                    cur = str(it.get("currency", "RON"))
+                    val_s = f" ({_fmt_pdf_num(val)} {cur})" if isinstance(val, (int, float)) else ""
+                    auth_s = f" - {auth}" if auth else ""
+                    pdf.multi_cell(0, 5.5, _sanitize(f"  * {title}{auth_s}{val_s}"[:200]), new_x="LMARGIN", new_y="NEXT")
             pdf.ln(3)
 
         if fund_ok:

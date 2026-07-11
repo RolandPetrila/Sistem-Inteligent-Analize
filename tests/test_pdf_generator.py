@@ -110,6 +110,14 @@ def _rich_verified_data() -> dict:
                 "EMP_ENT_NR": {"label": "Angajați / firmă", "ro": 4, "eu": 5, "nace": "J62"},
             },
         },
+        # SEAP procurement history (wrapped like verified["market"]["seap"]) — diacritics probe latin-1.
+        "market": {"seap": {"value": {
+            "total_contracts": 2, "contracts_count": 1, "direct_count": 1, "total_value": 900000,
+            "contracts": [{"title": "Lucrări reabilitare școală", "value": 850000, "currency": "RON",
+                           "authority": "Primăria Târgoviște", "date": "2025-01-15"}],
+            "direct_acquisitions": [{"title": "Achiziție consumabile", "value": 5000,
+                                     "authority": "Spitalul Județean", "date": "2024-09-10"}],
+        }}},
     }
 
 

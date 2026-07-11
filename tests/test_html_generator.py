@@ -268,6 +268,26 @@ class TestRichFields:
         html, _ = _build_rich_fields_html(data)
         assert 'id="eurostat"' not in html
 
+    def test_seap_procurement_history_rendered(self):
+        # SEAP data is wrapped by _make_field -> {"value": {...}} in verified["market"]["seap"]
+        data = {"market": {"seap": {"value": {
+            "total_contracts": 3, "contracts_count": 2, "direct_count": 1, "total_value": 1500000,
+            "contracts": [{"title": "Reparatii drum judetean", "value": 800000, "currency": "RON",
+                           "authority": "Primaria Cluj", "date": "2025-03-01"}],
+            "direct_acquisitions": [{"title": "Consumabile birou", "value": 12000,
+                                     "authority": "Spitalul X", "date": "2024-11-01"}],
+        }}}}
+        html, nav = _build_rich_fields_html(data)
+        assert 'id="achizitii"' in html
+        assert "contracte publice castigate" in html
+        assert "Primaria Cluj" in html
+        assert 'href="#achizitii"' in nav
+
+    def test_seap_skipped_when_no_contracts(self):
+        data = {"market": {"seap": {"value": {"total_contracts": 0, "contracts": [], "direct_acquisitions": []}}}}
+        html, _ = _build_rich_fields_html(data)
+        assert 'id="achizitii"' not in html
+
     def test_historical_flags_real_osint_shape(self):
         """TASK 2: osint_client emits {type(slug), label(human), severity, snippet}.
         The OSINT section MUST render the human label + snippet, not the raw slug —

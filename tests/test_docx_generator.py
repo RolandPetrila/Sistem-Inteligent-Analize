@@ -120,6 +120,27 @@ class TestGenerateDocx:
             if os.path.exists(path):
                 os.remove(path)
 
+    def test_seap_procurement_history_rendered(self):
+        """Istoric achizitii publice SEAP cu diacritice — nu trebuie sa arunce."""
+        from backend.reports.docx_generator import generate_docx
+
+        verified_data = {"market": {"seap": {"value": {
+            "total_contracts": 2, "contracts_count": 1, "direct_count": 1, "total_value": 900000,
+            "contracts": [{"title": "Lucrări reabilitare școală", "value": 850000, "currency": "RON",
+                           "authority": "Primăria Târgoviște", "date": "2025-01-15"}],
+            "direct_acquisitions": [{"title": "Achiziție consumabile", "value": 5000,
+                                     "authority": "Spitalul Județean", "date": "2024-09-10"}],
+        }}}}
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as f:
+            path = f.name
+        try:
+            generate_docx(_make_sections(), _make_meta(), path, verified_data)
+            assert os.path.exists(path)
+            assert os.path.getsize(path) > 0
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
     def test_functioneaza_cu_meta_incomplet(self):
         from backend.reports.docx_generator import generate_docx
 
