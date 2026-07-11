@@ -178,3 +178,30 @@ async def quick_score_batch(body: dict):
 
     results = await asyncio.gather(*[score_one(c) for c in cuis])
     return {"results": list(results), "note": "Scoring rapid — doar ANAF, fara AI synthesis"}
+
+
+class ViesRequest(BaseModel):
+    country_code: str
+    vat_number: str
+    requester_country: str | None = None
+    requester_vat: str | None = None
+
+
+@router.post("/vies")
+async def check_vies(body: ViesRequest):
+    """Validare TVA intracomunitar UE via VIES (Comisia Europeana). Fara cheie, per-tranzactie.
+
+    Verifica un partener/contraparte din UE: numar TVA valid + denumire/adresa inregistrata.
+    Optional requester_* -> intoarce `consultation_number` (dovada legala a verificarii).
+    """
+    from backend.agents.tools.vies_client import validate_vat
+
+    if not body.country_code or not body.vat_number:
+        raise RISError(ErrorCode.VALIDATION_ERROR, "country_code si vat_number sunt obligatorii")
+
+    return await validate_vat(
+        body.country_code,
+        body.vat_number,
+        requester_country=body.requester_country,
+        requester_vat=body.requester_vat,
+    )

@@ -736,6 +736,26 @@ export const api = {
       body: JSON.stringify({ cuis }),
     }),
 
+  // VIES — validare TVA intracomunitar UE (partener/contraparte) — POST /analysis/vies
+  checkVies: (countryCode: string, vatNumber: string) =>
+    request<{
+      available: boolean;
+      valid: boolean | null;
+      country_code?: string;
+      vat_number?: string;
+      name?: string;
+      address?: string;
+      request_date?: string;
+      consultation_number?: string;
+      error?: string;
+    }>("/analysis/vies", {
+      method: "POST",
+      body: JSON.stringify({
+        country_code: countryCode,
+        vat_number: vatNumber,
+      }),
+    }),
+
   // Monitoring audit-log for an alert
   getMonitoringAuditLog: (alertId: string) =>
     request<{

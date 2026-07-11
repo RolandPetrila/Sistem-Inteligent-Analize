@@ -6,6 +6,9 @@ import {
   Loader2,
   Building2,
   ChevronRight,
+  Globe,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import clsx from "clsx";
 import { api } from "@/lib/api";
@@ -16,8 +19,41 @@ import { useDebounce } from "@/hooks/useDebounce";
 type FtsResult = Awaited<ReturnType<typeof api.searchFts>>[number];
 type QuickScoreResponse = Awaited<ReturnType<typeof api.quickScore>>;
 type QuickScoreRow = QuickScoreResponse["results"][number];
+type ViesResponse = Awaited<ReturnType<typeof api.checkVies>>;
 
 const MAX_CUIS = 20;
+
+// Coduri de tara UE folosite ca prefix TVA in VIES (Grecia = EL, Irlanda de Nord = XI)
+const VIES_COUNTRIES = [
+  "RO",
+  "AT",
+  "BE",
+  "BG",
+  "CY",
+  "CZ",
+  "DE",
+  "DK",
+  "EE",
+  "EL",
+  "ES",
+  "FI",
+  "FR",
+  "HR",
+  "HU",
+  "IE",
+  "IT",
+  "LT",
+  "LU",
+  "LV",
+  "MT",
+  "NL",
+  "PL",
+  "PT",
+  "SE",
+  "SI",
+  "SK",
+  "XI",
+];
 
 // Formatare cifra de afaceri (RON) cu fallback pentru valori lipsa
 const formatCA = (value: number | null | undefined): string =>
@@ -117,6 +153,32 @@ export default function QuickTools() {
       toast(msg, "error");
     } finally {
       setScoring(false);
+    }
+  };
+
+  // ---- Tool 3: Validare TVA intracomunitar UE (VIES) ----
+  const [viesCountry, setViesCountry] = useState("RO");
+  const [viesVat, setViesVat] = useState("");
+  const [viesResult, setViesResult] = useState<ViesResponse | null>(null);
+  const [viesLoading, setViesLoading] = useState(false);
+
+  const handleVies = async () => {
+    const vat = viesVat.trim();
+    if (!vat) {
+      toast("Introdu numarul TVA", "warning");
+      return;
+    }
+    setViesLoading(true);
+    setViesResult(null);
+    try {
+      const data = await api.checkVies(viesCountry, vat);
+      setViesResult(data);
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : "Eroare la validarea VIES";
+      toast(msg, "error");
+    } finally {
+      setViesLoading(false);
     }
   };
 
@@ -270,6 +332,102 @@ export default function QuickTools() {
         )}
 
         {note && <p className="text-xs text-gray-500 mt-1">{note}</p>}
+      </div>
+
+      {/* Tool 3: Validare TVA intracomunitar UE (VIES) */}
+      <div className="card space-y-4">
+        <div className="flex items-center gap-2">
+          <Globe className="w-5 h-5 text-accent-primary" />
+          <h2 className="text-lg font-semibold text-white">
+            Validare TVA UE (VIES)
+          </h2>
+        </div>
+
+        <p className="text-sm text-gray-500">
+          Verifica un partener/contraparte din UE: numar TVA valid + denumire si
+          adresa inregistrata oficial. Sursa: Comisia Europeana (VIES).
+        </p>
+
+        <div className="flex items-end gap-3 flex-wrap">
+          <div>
+            <label
+              className="block text-xs text-gray-500 mb-1"
+              htmlFor="vies-country"
+            >
+              Tara
+            </label>
+            <select
+              id="vies-country"
+              className="input-field"
+              value={viesCountry}
+              onChange={(e) => setViesCountry(e.target.value)}
+            >
+              {VIES_COUNTRIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex-1 min-w-[180px]">
+            <label
+              className="block text-xs text-gray-500 mb-1"
+              htmlFor="vies-vat"
+            >
+              Numar TVA (fara prefix tara)
+            </label>
+            <input
+              id="vies-vat"
+              className="input-field w-full font-mono"
+              placeholder="14837428"
+              value={viesVat}
+              onChange={(e) => setViesVat(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleVies()}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleVies}
+            disabled={viesLoading || !viesVat.trim()}
+            className="btn-primary flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {viesLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Globe className="w-4 h-4" />
+            )}
+            Valideaza
+          </button>
+        </div>
+
+        {viesResult && (
+          <div className="rounded-lg border border-dark-border p-4 bg-white/5">
+            {!viesResult.available ? (
+              <p className="text-sm text-yellow-400">
+                VIES indisponibil:{" "}
+                {viesResult.error ?? "sursa temporar indisponibila"}
+              </p>
+            ) : viesResult.valid ? (
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-green-400 font-semibold">
+                  <CheckCircle2 className="w-4 h-4" />
+                  TVA valid intracomunitar
+                </div>
+                {viesResult.name && (
+                  <p className="text-sm text-gray-200">{viesResult.name}</p>
+                )}
+                {viesResult.address && (
+                  <p className="text-xs text-gray-500">{viesResult.address}</p>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-red-400 font-semibold">
+                <XCircle className="w-4 h-4" />
+                TVA invalid / neinregistrat in VIES
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
