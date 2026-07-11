@@ -12,6 +12,9 @@ data/*.db-shm
 # Persisted auto-generated secret key (never commit)
 data/.secret_key
 
+# Sanctions lists local cache (auto-refetched 24h, ~8MB — never commit)
+data/sanctions_cache.json
+
 # Generated reports
 outputs/
 
