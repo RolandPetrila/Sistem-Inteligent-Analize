@@ -2,7 +2,7 @@
 
 **Data:** 2026-07-11
 **Autor:** Claude (Opus) + 3 clustere de cercetare la sursă primară + validare advisor
-**Status:** PROPUNERE — se implementează DOAR după ce user-ul răspunde la Q1 + Q2 (deciziile de scop de mai jos)
+**Status:** ✅ VALUL 1 LIVRAT (2026-07-12) — Q1=Comercial, Q2=Volum mic, Q3=VIES+Sancțiuni+Eurostat. Implementate + live-testate + comise (`b1cecd2`→`6b6832d`), 414 pytest. Deferred: dump ONRC (Q2), TED, GLEIF, PEP (plătit).
 **Regulă:** FREE-ONLY (fără abonament, fără billing obligatoriu) — `feedback_free_only_policy.md`
 
 ---
