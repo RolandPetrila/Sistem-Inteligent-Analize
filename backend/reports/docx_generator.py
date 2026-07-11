@@ -144,6 +144,32 @@ def _add_rich_fields_docx(doc, verified_data: dict):
                 else:
                     doc.add_paragraph(str(fl), style="List Bullet")
 
+    sanc = verified_data.get("sanctions", {})
+    if isinstance(sanc, dict) and sanc.get("status") in ("clean", "hit", "unavailable"):
+        doc.add_heading("Screening Sanctiuni", level=1)
+        lists = ", ".join(sanc.get("lists_checked", []) or []) or "-"
+        n_checked = len(sanc.get("checked", []) or [])
+        ddate = str(sanc.get("data_date", ""))[:10]
+        status = sanc.get("status")
+        if status == "hit":
+            hits = sanc.get("hits", [])
+            p = doc.add_paragraph()
+            p.add_run(f"ATENTIE: {len(hits)} potentiale potriviri - verificare manuala necesara").bold = True
+            for h in hits[:20]:
+                doc.add_paragraph(
+                    f"{h.get('query', '')} ~ {h.get('matched_name', '')} "
+                    f"[{h.get('source', '')}, {h.get('type', '')}]",
+                    style="List Bullet",
+                )
+        elif status == "clean":
+            doc.add_paragraph(f"Screening sanctiuni: CURAT - {n_checked} nume verificate, 0 potriviri")
+        else:
+            doc.add_paragraph("Screening sanctiuni: indisponibil (liste temporar inaccesibile)")
+        doc.add_paragraph(
+            f"Liste oficiale: {lists}{f' - actualizat {ddate}' if ddate else ''}. "
+            "Nu include PEP (persoane expuse politic)."
+        )
+
     funding = verified_data.get("funding_programs", {})
     if isinstance(funding, dict) and funding.get("eligible"):
         doc.add_page_break()

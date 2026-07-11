@@ -593,6 +593,40 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
     </section>''')
             nav += '<a href="#actionariat" class="nav-link">Actionariat</a>\n'
 
+    # ---- Screening sanctiuni (OFAC + UE FSF + ONU) ----
+    sanc = verified_data.get("sanctions", {})
+    if isinstance(sanc, dict) and sanc.get("status") in ("clean", "hit", "unavailable"):
+        status = sanc.get("status")
+        lists = ", ".join(sanc.get("lists_checked", []) or []) or "—"
+        n_checked = len(sanc.get("checked", []) or [])
+        ddate = str(sanc.get("data_date", ""))[:10]
+        body = ""
+        if status == "hit":
+            hits = sanc.get("hits", [])
+            body += (f'<p style="color:#ef4444;font-weight:700">&#9888; {len(hits)} potentiale potriviri pe '
+                     'listele de sanctiuni — verificare manuala necesara</p><ul class="list-disc ml-6">')
+            for h in hits[:20]:
+                body += (f'<li style="color:#cbd5e1"><strong>{_escape(str(h.get("query", "")))}</strong> &asymp; '
+                         f'{_escape(str(h.get("matched_name", "")))} '
+                         f'<span style="color:#94a3b8">[{_escape(str(h.get("source", "")))}, '
+                         f'{_escape(str(h.get("type", "")))}]</span></li>')
+            body += "</ul>"
+        elif status == "clean":
+            body += (f'<p style="color:#22c55e;font-weight:600">&#10004; Screening sanctiuni: CURAT — '
+                     f'{n_checked} nume verificate, 0 potriviri</p>')
+        else:
+            body += ('<p style="color:#94a3b8">Screening sanctiuni: indisponibil '
+                     '(liste temporar inaccesibile)</p>')
+        body += (f'<p style="color:#64748b;font-size:.85em;margin-top:6px">Liste oficiale: {_escape(lists)}'
+                 f'{f" &middot; actualizat {_escape(ddate)}" if ddate else ""}. '
+                 'Nu include PEP (persoane expuse politic).</p>')
+        out.append(f'''
+    <section id="sanctions" class="report-section">
+        <h2>Screening Sanctiuni</h2>
+        {body}
+    </section>''')
+        nav += '<a href="#sanctions" class="nav-link">Sanctiuni</a>\n'
+
     # ---- AEGRM garantii + semnale istorice OSINT ----
     risk = verified_data.get("risk", {})
     aegrm_field = risk.get("aegrm_guarantees", {}) if isinstance(risk, dict) else {}

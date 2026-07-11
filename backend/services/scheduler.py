@@ -17,6 +17,7 @@ BACKUP_INTERVAL = 24 * 3600     # 24 ore (o data pe zi)
 CACHE_CLEANUP_INTERVAL = 12 * 3600  # 12 ore
 AUTO_REANALYZE_INTERVAL = 6 * 3600  # 6 ore (verifica ce firme trebuie re-analizate)
 LOG_CLEANUP_INTERVAL = 24 * 3600    # 24 ore (curata log-uri rotite > 7 zile)
+SANCTIONS_REFRESH_INTERVAL = 24 * 3600  # 24 ore (pre-incarca listele OFAC/UE/ONU)
 
 _running = True
 
@@ -68,7 +69,7 @@ async def start_scheduler() -> asyncio.Task:
     global _running, _task
     _running = True
     _task = asyncio.create_task(_scheduler_loop())
-    logger.info("[scheduler] Started — monitoring 6h, backup 24h, cache cleanup 12h, auto-reanalyze 6h, log cleanup 24h")
+    logger.info("[scheduler] Started — monitoring 6h, backup 24h, cache cleanup 12h, auto-reanalyze 6h, log cleanup 24h, sanctions refresh 24h")
     return _task
 
 
@@ -92,6 +93,7 @@ async def _scheduler_loop():
     last_cache_cleanup = await _get_checkpoint("cache_cleanup")
     last_auto_reanalyze = await _get_checkpoint("auto_reanalyze")
     last_log_cleanup = await _get_checkpoint("log_cleanup")
+    last_sanctions = await _get_checkpoint("sanctions_refresh")
 
     # Asteapta 30s dupa startup (sa fie totul initializat)
     await asyncio.sleep(30)
@@ -129,6 +131,12 @@ async def _scheduler_loop():
             last_log_cleanup = now
             await _save_checkpoint("log_cleanup")
 
+        # Refresh liste sanctiuni (pre-warm cache — evita download de ~20MB la prima analiza)
+        if now - last_sanctions >= SANCTIONS_REFRESH_INTERVAL:
+            await _run_sanctions_refresh_safe()
+            last_sanctions = now
+            await _save_checkpoint("sanctions_refresh")
+
         # Sleep 60s intre verificari
         await asyncio.sleep(60)
 
@@ -163,6 +171,16 @@ async def _run_cache_cleanup_safe():
         logger.info(f"[scheduler] Cache cleanup: {count} expired entries removed")
     except Exception as e:
         logger.error(f"[scheduler] Cache cleanup error: {e}")
+
+
+async def _run_sanctions_refresh_safe():
+    """Pre-incarca listele de sanctiuni (OFAC/UE/ONU) — analizele nu prind cache rece."""
+    try:
+        from backend.agents.tools.sanctions_client import refresh
+        meta = await refresh()
+        logger.info(f"[scheduler] Sanctions refresh: {meta.get('total', 0)} intrari din {meta.get('sources', [])}")
+    except Exception as e:
+        logger.error(f"[scheduler] Sanctions refresh error: {e}")
 
 
 async def _auto_reanalyze_job():

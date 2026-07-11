@@ -287,8 +287,10 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
     aegrm_ok = isinstance(aegrm, dict) and aegrm.get("has_data")
     hist_ok = isinstance(hist, list) and bool(hist)
     fund_ok = isinstance(funding, dict) and funding.get("eligible")
+    sanc = verified_data.get("sanctions", {})
+    sanc_ok = isinstance(sanc, dict) and sanc.get("status") in ("clean", "hit", "unavailable")
 
-    if act_ok or rel_flags or aegrm_ok or hist_ok or fund_ok:
+    if act_ok or rel_flags or aegrm_ok or hist_ok or fund_ok or sanc_ok:
         pdf.add_page()
         pdf.start_section("Actionariat, Garantii si Finantare", level=0)
         pdf.set_font("Helvetica", "B", 16)
@@ -340,6 +342,30 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
                         pdf.multi_cell(0, 5.5, _sanitize(f"- {label} {date_raw}: {detail}"[:200]), new_x="LMARGIN", new_y="NEXT")
                     else:
                         pdf.multi_cell(0, 5.5, _sanitize(f"- {fl}"), new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(3)
+
+        if sanc_ok:
+            _add_section_header(pdf, "Screening Sanctiuni")
+            lists = ", ".join(sanc.get("lists_checked", []) or []) or "-"
+            n_checked = len(sanc.get("checked", []) or [])
+            ddate = str(sanc.get("data_date", ""))[:10]
+            sanc_status = sanc.get("status")
+            if sanc_status == "hit":
+                hits = sanc.get("hits", [])
+                pdf.set_font("Helvetica", "B", 10)
+                pdf.multi_cell(0, 6, _sanitize(f"ATENTIE: {len(hits)} potentiale potriviri - verificare manuala necesara"), new_x="LMARGIN", new_y="NEXT")
+                pdf.set_font("Helvetica", "", 10)
+                for h in hits[:20]:
+                    pdf.multi_cell(0, 5.5, _sanitize(f"  * {h.get('query', '')} ~ {h.get('matched_name', '')} [{h.get('source', '')}, {h.get('type', '')}]"[:200]), new_x="LMARGIN", new_y="NEXT")
+            elif sanc_status == "clean":
+                pdf.multi_cell(0, 6, _sanitize(f"Screening sanctiuni: CURAT - {n_checked} nume verificate, 0 potriviri"), new_x="LMARGIN", new_y="NEXT")
+            else:
+                pdf.multi_cell(0, 6, _sanitize("Screening sanctiuni: indisponibil (liste temporar inaccesibile)"), new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Helvetica", "", 8)
+            pdf.set_text_color(120, 120, 120)
+            pdf.multi_cell(0, 5, _sanitize(f"Liste oficiale: {lists}{f' - actualizat {ddate}' if ddate else ''}. Nu include PEP."), new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Helvetica", "", 10)
+            pdf.set_text_color(40, 40, 40)
             pdf.ln(3)
 
         if fund_ok:

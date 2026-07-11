@@ -89,6 +89,18 @@ def _rich_verified_data() -> dict:
                 "snippet": "Mențiune privind dizolvarea voluntară înregistrată la ONRC",
             },
         ],
+        # Sanctions HIT with diacritics -> exercises the PDF latin-1 path on names.
+        "sanctions": {
+            "status": "hit",
+            "hits": [
+                {"query": "Ștefan Popescu", "matched_name": "POPESCU, Ștefán",
+                 "source": "OFAC", "type": "individual"},
+            ],
+            "checked": ["Firma Țăndărei SRL", "Ștefan Popescu"],
+            "lists_checked": ["OFAC", "EU", "UN"],
+            "data_date": "2026-07-11T00:00:00Z",
+            "total_entries": 53000,
+        },
     }
 
 

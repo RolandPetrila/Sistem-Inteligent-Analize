@@ -110,6 +110,9 @@ class VerificationAgent(BaseAgent):
         # --- Matricea Relatii (ADV5) ---
         verified["relations"] = self._detect_relations(official)
 
+        # --- Screening sanctiuni (liste oficiale OFAC + UE FSF + ONU) ---
+        verified["sanctions"] = await self._screen_sanctions(official, verified)
+
         # --- F15: Programe de finantare eligibile (modul existent, acum cablat in pipeline) ---
         try:
             import re as _re
@@ -740,6 +743,52 @@ class VerificationAgent(BaseAgent):
             f"{len(result['administratori'])} administratori"
         )
         return result
+
+    async def _screen_sanctions(self, official: dict, verified: dict) -> dict:
+        """
+        Ecraneaza firma + administratori/asociati contra listelor oficiale de sanctiuni
+        (OFAC + UE FSF + ONU). Rezilient: nicio eroare nu opreste analiza.
+        NU acopera PEP (persoane expuse politic) — sursa free acopera doar sanctiuni.
+        """
+        import asyncio
+
+        try:
+            from backend.agents.tools.sanctions_client import screen
+
+            names: list[str] = []
+            # Denumire firma (ANAF preferat, apoi ONRC)
+            anaf = official.get("anaf", {}) or {}
+            onrc = official.get("onrc_structured", {}) or {}
+            for src in (anaf.get("denumire"), onrc.get("denumire")):
+                if src and str(src).strip():
+                    names.append(str(src).strip())
+                    break
+            # Administratori + asociati
+            act = verified.get("actionariat", {})
+            if isinstance(act, dict):
+                for items in (act.get("administratori"), act.get("asociati")):
+                    for it in items or []:
+                        nm = (it.get("nume") or it.get("name") or it.get("denumire")) if isinstance(it, dict) else it
+                        if nm and str(nm).strip():
+                            names.append(str(nm).strip())
+
+            # Dedup pastrand ordinea
+            seen: set[str] = set()
+            uniq = [n for n in names if not (n.lower() in seen or seen.add(n.lower()))]
+            if not uniq:
+                return {"status": "unavailable", "hits": [], "checked": [], "note": "Fara nume de ecranat"}
+
+            # Timeout: pe cache rece se descarca ~20MB; nu blocam analiza la nesfarsit
+            result = await asyncio.wait_for(screen(uniq), timeout=45)
+            if result.get("hits"):
+                logger.warning(f"[verification] SANCTIONS HIT: {len(result['hits'])} potentiale potriviri")
+            return result
+        except TimeoutError:
+            logger.warning("[verification] Screening sanctiuni: timeout (cache rece) — degradat la indisponibil")
+            return {"status": "unavailable", "hits": [], "checked": [], "error": "timeout"}
+        except Exception as e:
+            logger.warning(f"[verification] Screening sanctiuni esuat: {e}")
+            return {"status": "unavailable", "hits": [], "checked": [], "error": str(e)}
 
     def _calculate_risk_score(self, verified: dict, dynamic_thresholds: dict | None = None) -> dict:
         """Delegheaza la modul separat verification/scoring.py."""

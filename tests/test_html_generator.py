@@ -223,6 +223,34 @@ class TestRichFields:
         html, nav = _build_rich_fields_html(data)
         assert 'id="garantii"' not in html
 
+    def test_sanctions_clean_rendered(self):
+        data = {"sanctions": {"status": "clean", "hits": [],
+                              "checked": ["FIRMA SRL", "Ion Popescu"],
+                              "lists_checked": ["OFAC", "EU", "UN"],
+                              "data_date": "2026-07-11T00:00:00Z", "total_entries": 53000}}
+        html, nav = _build_rich_fields_html(data)
+        assert 'id="sanctions"' in html
+        assert "CURAT" in html
+        assert "OFAC" in html
+        assert "PEP" in html  # limitarea explicita e mentionata
+        assert 'href="#sanctions"' in nav
+
+    def test_sanctions_hit_rendered_and_xss_safe(self):
+        data = {"sanctions": {"status": "hit",
+                              "hits": [{"query": "<script>x</script>", "matched_name": "IONESCU, Ștefan",
+                                        "source": "OFAC", "type": "individual"}],
+                              "checked": ["x"], "lists_checked": ["OFAC"],
+                              "data_date": "2026-07-11", "total_entries": 100}}
+        html, _ = _build_rich_fields_html(data)
+        assert 'id="sanctions"' in html
+        assert "verificare manuala" in html
+        assert "IONESCU" in html
+        assert "<script>x</script>" not in html  # escapat
+
+    def test_sanctions_skipped_when_absent(self):
+        html, nav = _build_rich_fields_html({})
+        assert 'id="sanctions"' not in html
+
     def test_historical_flags_real_osint_shape(self):
         """TASK 2: osint_client emits {type(slug), label(human), severity, snippet}.
         The OSINT section MUST render the human label + snippet, not the raw slug —

@@ -72,6 +72,30 @@ class TestGenerateDocx:
             if os.path.exists(path):
                 os.remove(path)
 
+    def test_sanctions_hit_rendered(self):
+        """Screening sanctiuni HIT cu diacritice — nu trebuie sa arunce, fisier valid."""
+        from backend.reports.docx_generator import generate_docx
+
+        verified_data = {
+            "sanctions": {
+                "status": "hit",
+                "hits": [{"query": "Ștefan Popescu", "matched_name": "POPESCU, Ștefán",
+                          "source": "OFAC", "type": "individual"}],
+                "checked": ["Firma Țăndărei SRL", "Ștefan Popescu"],
+                "lists_checked": ["OFAC", "EU", "UN"],
+                "data_date": "2026-07-11T00:00:00Z", "total_entries": 53000,
+            }
+        }
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as f:
+            path = f.name
+        try:
+            generate_docx(_make_sections(), _make_meta(), path, verified_data)
+            assert os.path.exists(path)
+            assert os.path.getsize(path) > 0
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
     def test_functioneaza_cu_meta_incomplet(self):
         from backend.reports.docx_generator import generate_docx
 
