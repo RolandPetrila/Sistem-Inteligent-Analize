@@ -107,6 +107,9 @@ class VerificationAgent(BaseAgent):
         # --- Benchmark Financiar CAEN (DF6) ---
         verified["benchmark"] = self._build_benchmark(verified, caen_ctx)
 
+        # --- Benchmark sector UE (Eurostat SBS) ---
+        verified["eurostat_sector"] = await self._fetch_eurostat_sector(caen_ctx, official)
+
         # --- Matricea Relatii (ADV5) ---
         verified["relations"] = self._detect_relations(official)
 
@@ -789,6 +792,25 @@ class VerificationAgent(BaseAgent):
         except Exception as e:
             logger.warning(f"[verification] Screening sanctiuni esuat: {e}")
             return {"status": "unavailable", "hits": [], "checked": [], "error": str(e)}
+
+    async def _fetch_eurostat_sector(self, caen_ctx: dict, official: dict) -> dict:
+        """Context sector UE (Eurostat SBS) — complementar benchmark RO. Rezilient + timeout."""
+        import asyncio
+
+        try:
+            caen_code = str(caen_ctx.get("caen_code") or "") if isinstance(caen_ctx, dict) else ""
+            if not caen_code:
+                caen_code = str((official.get("anaf") or {}).get("cod_caen") or "")
+            if not caen_code:
+                return {"available": False, "source": "Eurostat", "reason": "CAEN necunoscut"}
+            from backend.agents.tools.eurostat_client import get_sector_context
+            return await asyncio.wait_for(get_sector_context(caen_code), timeout=20)
+        except TimeoutError:
+            logger.warning("[verification] Eurostat: timeout")
+            return {"available": False, "source": "Eurostat", "error": "timeout"}
+        except Exception as e:
+            logger.warning(f"[verification] Eurostat esuat: {e}")
+            return {"available": False, "source": "Eurostat", "error": str(e)}
 
     def _calculate_risk_score(self, verified: dict, dynamic_thresholds: dict | None = None) -> dict:
         """Delegheaza la modul separat verification/scoring.py."""

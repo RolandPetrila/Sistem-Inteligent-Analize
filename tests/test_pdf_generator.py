@@ -101,6 +101,15 @@ def _rich_verified_data() -> dict:
             "data_date": "2026-07-11T00:00:00Z",
             "total_entries": 53000,
         },
+        # Eurostat sector benchmark — diacritics in label probe the latin-1 path.
+        "eurostat_sector": {
+            "available": True, "nace_used": "J62", "nace_label": "Computer programming",
+            "year": "2024",
+            "indicators": {
+                "ENT_NR": {"label": "Număr firme", "ro": 45240, "eu": 1008501, "nace": "J62"},
+                "EMP_ENT_NR": {"label": "Angajați / firmă", "ro": 4, "eu": 5, "nace": "J62"},
+            },
+        },
     }
 
 

@@ -251,6 +251,23 @@ class TestRichFields:
         html, nav = _build_rich_fields_html({})
         assert 'id="sanctions"' not in html
 
+    def test_eurostat_section_rendered(self):
+        data = {"eurostat_sector": {"available": True, "nace_used": "J62",
+                "nace_label": "Computer programming", "year": "2024",
+                "indicators": {
+                    "ENT_NR": {"label": "Numar firme", "ro": 45240, "eu": 1008501, "nace": "J62"},
+                    "EMP_ENT_NR": {"label": "Angajati / firma", "ro": 4, "eu": 5, "nace": "J62"}}}}
+        html, nav = _build_rich_fields_html(data)
+        assert 'id="eurostat"' in html
+        assert "Eurostat" in html
+        assert "J62" in html
+        assert 'href="#eurostat"' in nav
+
+    def test_eurostat_skipped_when_unavailable(self):
+        data = {"eurostat_sector": {"available": False, "reason": "fara date"}}
+        html, _ = _build_rich_fields_html(data)
+        assert 'id="eurostat"' not in html
+
     def test_historical_flags_real_osint_shape(self):
         """TASK 2: osint_client emits {type(slug), label(human), severity, snippet}.
         The OSINT section MUST render the human label + snippet, not the raw slug —

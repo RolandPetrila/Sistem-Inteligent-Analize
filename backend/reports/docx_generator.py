@@ -170,6 +170,21 @@ def _add_rich_fields_docx(doc, verified_data: dict):
             "Nu include PEP (persoane expuse politic)."
         )
 
+    eust = verified_data.get("eurostat_sector", {})
+    if isinstance(eust, dict) and eust.get("available") and eust.get("indicators"):
+        doc.add_heading("Benchmark Sector UE (Eurostat)", level=1)
+        doc.add_paragraph(
+            f"Sector NACE {eust.get('nace_used', '')} - {eust.get('nace_label', '')} "
+            f"(an {eust.get('year', '')})"
+        )
+        for ind in eust["indicators"].values():
+            ro = ind.get("ro")
+            eu = ind.get("eu")
+            ro_s = _fmt_docx_num(ro) if ro is not None else "-"
+            eu_s = _fmt_docx_num(eu) if eu is not None else "-"
+            doc.add_paragraph(f"{ind.get('label', '')}: RO {ro_s} | UE27 {eu_s}", style="List Bullet")
+        doc.add_paragraph("Sursa: Eurostat (Structural Business Statistics).")
+
     funding = verified_data.get("funding_programs", {})
     if isinstance(funding, dict) and funding.get("eligible"):
         doc.add_page_break()

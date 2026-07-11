@@ -96,6 +96,30 @@ class TestGenerateDocx:
             if os.path.exists(path):
                 os.remove(path)
 
+    def test_eurostat_sector_rendered(self):
+        """Benchmark sector UE (Eurostat) — nu trebuie sa arunce, fisier valid."""
+        from backend.reports.docx_generator import generate_docx
+
+        verified_data = {
+            "eurostat_sector": {
+                "available": True, "nace_used": "J62", "nace_label": "Computer programming",
+                "year": "2024",
+                "indicators": {
+                    "ENT_NR": {"label": "Numar firme", "ro": 45240, "eu": 1008501, "nace": "J62"},
+                    "EMP_ENT_NR": {"label": "Angajati / firma", "ro": 4, "eu": 5, "nace": "J62"},
+                },
+            }
+        }
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as f:
+            path = f.name
+        try:
+            generate_docx(_make_sections(), _make_meta(), path, verified_data)
+            assert os.path.exists(path)
+            assert os.path.getsize(path) > 0
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
     def test_functioneaza_cu_meta_incomplet(self):
         from backend.reports.docx_generator import generate_docx
 

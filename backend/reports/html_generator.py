@@ -552,6 +552,29 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
     </section>''')
         nav += '<a href="#benchmark" class="nav-link">Benchmark</a>\n'
 
+    # ---- Benchmark sector UE (Eurostat) ----
+    eust = verified_data.get("eurostat_sector", {})
+    if isinstance(eust, dict) and eust.get("available") and eust.get("indicators"):
+        rows = ""
+        for ind in eust["indicators"].values():
+            ro = ind.get("ro")
+            eu = ind.get("eu")
+            rows += (f'<tr><td style="padding:4px 10px;color:#cbd5e1">{_escape(str(ind.get("label", "")))}</td>'
+                     f'<td style="padding:4px 10px;color:#e2e8f0;text-align:right">{_escape(_fmt_num(ro)) if ro is not None else "&mdash;"}</td>'
+                     f'<td style="padding:4px 10px;color:#e2e8f0;text-align:right">{_escape(_fmt_num(eu)) if eu is not None else "&mdash;"}</td></tr>')
+        out.append(f'''
+    <section id="eurostat" class="report-section">
+        <h2>Benchmark Sector UE (Eurostat)</h2>
+        <p style="color:#94a3b8;font-size:.9em">Sector NACE {_escape(str(eust.get("nace_used", "")))} &middot; {_escape(str(eust.get("nace_label", "")))} &middot; an {_escape(str(eust.get("year", "")))}</p>
+        <table style="border-collapse:collapse;margin-top:8px"><thead><tr>
+            <th style="padding:4px 10px;text-align:left;color:#818cf8">Indicator</th>
+            <th style="padding:4px 10px;text-align:right;color:#818cf8">Romania</th>
+            <th style="padding:4px 10px;text-align:right;color:#818cf8">UE27</th>
+        </tr></thead><tbody>{rows}</tbody></table>
+        <p style="color:#64748b;font-size:.8em;margin-top:6px">Sursa: Eurostat (Structural Business Statistics).</p>
+    </section>''')
+        nav += '<a href="#eurostat" class="nav-link">Benchmark UE</a>\n'
+
     # ---- Actionariat + relatii ----
     act = verified_data.get("actionariat", {})
     rel = verified_data.get("relations", {})

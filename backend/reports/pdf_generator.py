@@ -289,8 +289,10 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
     fund_ok = isinstance(funding, dict) and funding.get("eligible")
     sanc = verified_data.get("sanctions", {})
     sanc_ok = isinstance(sanc, dict) and sanc.get("status") in ("clean", "hit", "unavailable")
+    eust = verified_data.get("eurostat_sector", {})
+    eust_ok = isinstance(eust, dict) and eust.get("available") and eust.get("indicators")
 
-    if act_ok or rel_flags or aegrm_ok or hist_ok or fund_ok or sanc_ok:
+    if act_ok or rel_flags or aegrm_ok or hist_ok or fund_ok or sanc_ok or eust_ok:
         pdf.add_page()
         pdf.start_section("Actionariat, Garantii si Finantare", level=0)
         pdf.set_font("Helvetica", "B", 16)
@@ -364,6 +366,22 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
             pdf.set_font("Helvetica", "", 8)
             pdf.set_text_color(120, 120, 120)
             pdf.multi_cell(0, 5, _sanitize(f"Liste oficiale: {lists}{f' - actualizat {ddate}' if ddate else ''}. Nu include PEP."), new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Helvetica", "", 10)
+            pdf.set_text_color(40, 40, 40)
+            pdf.ln(3)
+
+        if eust_ok:
+            _add_section_header(pdf, "Benchmark Sector UE (Eurostat)")
+            pdf.multi_cell(0, 6, _sanitize(f"Sector NACE {eust.get('nace_used', '')} - {eust.get('nace_label', '')} (an {eust.get('year', '')})"), new_x="LMARGIN", new_y="NEXT")
+            for ind in eust["indicators"].values():
+                ro = ind.get("ro")
+                eu = ind.get("eu")
+                ro_s = _fmt_pdf_num(ro) if ro is not None else "-"
+                eu_s = _fmt_pdf_num(eu) if eu is not None else "-"
+                pdf.multi_cell(0, 5.5, _sanitize(f"  * {ind.get('label', '')}: RO {ro_s} | UE27 {eu_s}"), new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Helvetica", "", 8)
+            pdf.set_text_color(120, 120, 120)
+            pdf.multi_cell(0, 5, _sanitize("Sursa: Eurostat (Structural Business Statistics)."), new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("Helvetica", "", 10)
             pdf.set_text_color(40, 40, 40)
             pdf.ln(3)
