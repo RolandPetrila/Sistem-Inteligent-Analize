@@ -55,7 +55,8 @@ async def get_contracts_won(cui: str, page_size: int = 20, use_cache: bool = Tru
 
         async def _fetch_notices():
             c = get_client()
-            return await c.post(SEAP_NOTICES_URL, json=payload)
+            # Referer OBLIGATORIU la api-pub SICAP — fara el da HTTP 403 (bug istoric: lipsea)
+            return await c.post(SEAP_NOTICES_URL, json=payload, headers=_SICAP_HEADERS)
 
         logger.debug(f"SEAP: searching notices for CUI {cui_clean}")
         response = await with_retry(_fetch_notices, retries=1, backoff=[3], source_name="SEAP notices")
@@ -98,7 +99,7 @@ async def get_contracts_won(cui: str, page_size: int = 20, use_cache: bool = Tru
 
         async def _fetch_direct():
             c = get_client()
-            return await c.post(SEAP_DIRECT_URL, json=da_payload)
+            return await c.post(SEAP_DIRECT_URL, json=da_payload, headers=_SICAP_HEADERS)
 
         logger.debug(f"SEAP: searching direct acquisitions for CUI {cui_clean}")
         response = await with_retry(_fetch_direct, retries=1, backoff=[3], source_name="SEAP direct")
