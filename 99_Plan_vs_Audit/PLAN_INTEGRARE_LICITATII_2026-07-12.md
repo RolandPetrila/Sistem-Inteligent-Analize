@@ -19,7 +19,7 @@
 
 1. **⭐ IMEDIAT (doar RIS):** randează `verified["market"]["seap"]` → secțiune „Istoric Achiziții Publice (SICAP)" în HTML/PDF/DOCX. ~half-day, zero TENDERS. **ROI maxim** — expune ce RIS deja are.
 2. **TENDERS Angle B = amânat** (redundant + nepopulat).
-3. **Angle A (oportunități viitoare)** = singurul lucru nou; fezabil în clientul SEAP propriu RIS (discovery open-tenders pe CPV) — tot fără TENDERS; necesită CAEN→CPV.
+3. **Angle A (oportunități viitoare)** = ✅ **LIVRAT** în clientul SEAP propriu RIS (fără TENDERS). `caen_cpv_map.py` (mapare orientativă CAEN→CPV) + `seap_client.search_open_tenders` (SICAP `GetCNoticeList`, proceduri deschise, filtrare locală pe prefix CPV) + secțiune „Oportunități de Contracte (SICAP)" în raport. Commit `06988f0`. Confirmat live (CAEN 4120→15 licitații construcții).
 4. **TENDERS separat** — deep-link RIS→dashboard TENDERS al firmei (Mosslein), nu merge.
 
 > Secțiunile 2-5 de mai jos rămân ca referință pt scenariul API-TENDERS, dar NU mai sunt calea recomandată după Faza 0.
