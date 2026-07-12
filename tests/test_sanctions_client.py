@@ -8,9 +8,9 @@ import backend.agents.tools.sanctions_client as sc
 @pytest.fixture(autouse=True)
 def _reset_index():
     """Reseteaza indexul global intre teste (evita contaminare)."""
-    saved = sc._index, sc._meta
+    saved = sc._index, sc._records_tok, sc._meta
     yield
-    sc._index, sc._meta = saved
+    sc._index, sc._records_tok, sc._meta = saved
     sc._index = None
 
 
@@ -84,9 +84,9 @@ class TestParsers:
 
 
 # ---- Screening ----
-def _inject(records):
-    sc._index = sc._build_index(records)
-    sc._meta = {"sources": ["OFAC", "EU", "UN"], "total": len(records), "built_at": "2026-07-11T00:00:00Z"}
+def _inject(records, sources=("OFAC", "EU", "UN")):
+    sc._index, sc._records_tok = sc._build_index(records)
+    sc._meta = {"sources": list(sources), "total": len(records), "built_at": "2026-07-11T00:00:00Z"}
 
 
 class TestScreen:
@@ -128,3 +128,32 @@ class TestScreen:
                 m.patch.object(sc, "_build_from_sources", side_effect=_fake_build):
             r = await sc.screen(["Anything"])
         assert r["status"] == "unavailable"
+
+    async def test_reports_completeness_partial(self):
+        # Doar OFAC incarcat (EU+UN cazute) -> verdict NEautoritar, semnalat
+        _inject([{"name": "Some Real Sanctioned Entity", "type": "entity", "source": "OFAC"}], sources=["OFAC"])
+        r = await sc.screen(["Firma Curata SRL"])
+        assert r["complete"] is False
+        assert set(r["lists_missing"]) == {"EU", "UN"}
+        assert r["lists_checked"] == ["OFAC"]
+
+    async def test_reports_completeness_full(self):
+        _inject([{"name": "Some Real Sanctioned Entity", "type": "entity", "source": "OFAC"}])
+        r = await sc.screen(["Firma Curata SRL"])
+        assert r["complete"] is True
+        assert r["lists_missing"] == []
+
+    async def test_subset_match_individual(self):
+        # Nume administrator 2-token continut intr-un nume formal sanctionat 3-token
+        _inject([{"name": "Ali Hassan Mohammed", "type": "individual", "source": "UN"}])
+        r = await sc.screen(["Ali Mohammed"])
+        assert r["status"] == "hit"
+        assert r["hits"][0]["matched_name"] == "Ali Hassan Mohammed"
+
+    async def test_subset_generic_capped(self):
+        # Un nume generic care ar fi subset in prea multe intrari -> peste cap -> ignorat
+        recs = [{"name": f"Ion Popescu Variant{i} Extra", "type": "individual", "source": "UN"}
+                for i in range(15)]
+        _inject(recs)
+        r = await sc.screen(["Ion Popescu"])
+        assert r["status"] == "clean"

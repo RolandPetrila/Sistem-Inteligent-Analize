@@ -210,6 +210,13 @@ def _fmt_pdf_num(v) -> str:
     return str(v) if v is not None else "-"
 
 
+def _fmt_pdf_ratio(v) -> str:
+    """Format pastrand 1 zecimala pt valori ne-intregi (indicatori tip rata)."""
+    if isinstance(v, int | float):
+        return f"{v:,.0f}" if float(v).is_integer() else f"{v:,.1f}"
+    return str(v) if v is not None else "-"
+
+
 def _pdf_names(items) -> list[str]:
     res = []
     for it in items or []:
@@ -290,7 +297,7 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
     sanc = verified_data.get("sanctions", {})
     sanc_ok = isinstance(sanc, dict) and sanc.get("status") in ("clean", "hit", "unavailable")
     eust = verified_data.get("eurostat_sector", {})
-    eust_ok = isinstance(eust, dict) and eust.get("available") and eust.get("indicators")
+    eust_ok = isinstance(eust, dict) and eust.get("available") and isinstance(eust.get("indicators"), dict)
     _market = verified_data.get("market", {})
     _seap_field = _market.get("seap", {}) if isinstance(_market, dict) else {}
     seap = _seap_field.get("value", _seap_field) if isinstance(_seap_field, dict) else {}
@@ -357,7 +364,7 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
             ddate = str(sanc.get("data_date", ""))[:10]
             sanc_status = sanc.get("status")
             if sanc_status == "hit":
-                hits = sanc.get("hits", [])
+                hits = sanc.get("hits") or []
                 pdf.set_font("Helvetica", "B", 10)
                 pdf.multi_cell(0, 6, _sanitize(f"ATENTIE: {len(hits)} potentiale potriviri - verificare manuala necesara"), new_x="LMARGIN", new_y="NEXT")
                 pdf.set_font("Helvetica", "", 10)
@@ -367,6 +374,10 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
                 pdf.multi_cell(0, 6, _sanitize(f"Screening sanctiuni: CURAT - {n_checked} nume verificate, 0 potriviri"), new_x="LMARGIN", new_y="NEXT")
             else:
                 pdf.multi_cell(0, 6, _sanitize("Screening sanctiuni: indisponibil (liste temporar inaccesibile)"), new_x="LMARGIN", new_y="NEXT")
+            if sanc_status in ("clean", "hit") and not sanc.get("complete", True):
+                missing = ", ".join(sanc.get("lists_missing", []) or [])
+                n_lists = len(sanc.get("lists_checked", []) or [])
+                pdf.multi_cell(0, 5.5, _sanitize(f"  ATENTIE: screening partial {n_lists}/3 surse ({missing} indisponibile) - verdict neautoritar"), new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("Helvetica", "", 8)
             pdf.set_text_color(120, 120, 120)
             pdf.multi_cell(0, 5, _sanitize(f"Liste oficiale: {lists}{f' - actualizat {ddate}' if ddate else ''}. Nu include PEP."), new_x="LMARGIN", new_y="NEXT")
@@ -378,10 +389,12 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
             _add_section_header(pdf, "Benchmark Sector UE (Eurostat)")
             pdf.multi_cell(0, 6, _sanitize(f"Sector NACE {eust.get('nace_used', '')} - {eust.get('nace_label', '')} (an {eust.get('year', '')})"), new_x="LMARGIN", new_y="NEXT")
             for ind in eust["indicators"].values():
+                if not isinstance(ind, dict):
+                    continue
                 ro = ind.get("ro")
                 eu = ind.get("eu")
-                ro_s = _fmt_pdf_num(ro) if ro is not None else "-"
-                eu_s = _fmt_pdf_num(eu) if eu is not None else "-"
+                ro_s = _fmt_pdf_ratio(ro) if ro is not None else "-"
+                eu_s = _fmt_pdf_ratio(eu) if eu is not None else "-"
                 pdf.multi_cell(0, 5.5, _sanitize(f"  * {ind.get('label', '')}: RO {ro_s} | UE27 {eu_s}"), new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("Helvetica", "", 8)
             pdf.set_text_color(120, 120, 120)

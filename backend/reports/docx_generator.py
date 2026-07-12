@@ -40,6 +40,13 @@ def _fmt_docx_num(v) -> str:
     return str(v) if v is not None else "-"
 
 
+def _fmt_docx_ratio(v) -> str:
+    """Format pastrand 1 zecimala pt valori ne-intregi (indicatori tip rata)."""
+    if isinstance(v, int | float):
+        return f"{v:,.0f}" if float(v).is_integer() else f"{v:,.1f}"
+    return str(v) if v is not None else "-"
+
+
 def _docx_names(items) -> list[str]:
     res = []
     for it in items or []:
@@ -152,7 +159,7 @@ def _add_rich_fields_docx(doc, verified_data: dict):
         ddate = str(sanc.get("data_date", ""))[:10]
         status = sanc.get("status")
         if status == "hit":
-            hits = sanc.get("hits", [])
+            hits = sanc.get("hits") or []
             p = doc.add_paragraph()
             p.add_run(f"ATENTIE: {len(hits)} potentiale potriviri - verificare manuala necesara").bold = True
             for h in hits[:20]:
@@ -165,23 +172,32 @@ def _add_rich_fields_docx(doc, verified_data: dict):
             doc.add_paragraph(f"Screening sanctiuni: CURAT - {n_checked} nume verificate, 0 potriviri")
         else:
             doc.add_paragraph("Screening sanctiuni: indisponibil (liste temporar inaccesibile)")
+        if status in ("clean", "hit") and not sanc.get("complete", True):
+            missing = ", ".join(sanc.get("lists_missing", []) or [])
+            n_lists = len(sanc.get("lists_checked", []) or [])
+            doc.add_paragraph(
+                f"ATENTIE: screening partial {n_lists}/3 surse "
+                f"({missing} indisponibile) - verdict neautoritar."
+            )
         doc.add_paragraph(
             f"Liste oficiale: {lists}{f' - actualizat {ddate}' if ddate else ''}. "
             "Nu include PEP (persoane expuse politic)."
         )
 
     eust = verified_data.get("eurostat_sector", {})
-    if isinstance(eust, dict) and eust.get("available") and eust.get("indicators"):
+    if isinstance(eust, dict) and eust.get("available") and isinstance(eust.get("indicators"), dict):
         doc.add_heading("Benchmark Sector UE (Eurostat)", level=1)
         doc.add_paragraph(
             f"Sector NACE {eust.get('nace_used', '')} - {eust.get('nace_label', '')} "
             f"(an {eust.get('year', '')})"
         )
         for ind in eust["indicators"].values():
+            if not isinstance(ind, dict):
+                continue
             ro = ind.get("ro")
             eu = ind.get("eu")
-            ro_s = _fmt_docx_num(ro) if ro is not None else "-"
-            eu_s = _fmt_docx_num(eu) if eu is not None else "-"
+            ro_s = _fmt_docx_ratio(ro) if ro is not None else "-"
+            eu_s = _fmt_docx_ratio(eu) if eu is not None else "-"
             doc.add_paragraph(f"{ind.get('label', '')}: RO {ro_s} | UE27 {eu_s}", style="List Bullet")
         doc.add_paragraph("Sursa: Eurostat (Structural Business Statistics).")
 

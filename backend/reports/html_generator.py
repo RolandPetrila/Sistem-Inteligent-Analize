@@ -489,6 +489,13 @@ def _fmt_num(v) -> str:
     return str(v) if v is not None else "—"
 
 
+def _fmt_ratio(v) -> str:
+    """Format pastrand 1 zecimala pt valori ne-intregi (indicatori tip rata: angajati/firma etc.)."""
+    if isinstance(v, int | float):
+        return f"{v:,.0f}" if float(v).is_integer() else f"{v:,.1f}"
+    return str(v) if v is not None else "—"
+
+
 def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
     """Surface rich verification fields previously dropped from reports:
     predictive_scores, benchmark, actionariat + relations, aegrm_guarantees,
@@ -554,14 +561,16 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
 
     # ---- Benchmark sector UE (Eurostat) ----
     eust = verified_data.get("eurostat_sector", {})
-    if isinstance(eust, dict) and eust.get("available") and eust.get("indicators"):
+    if isinstance(eust, dict) and eust.get("available") and isinstance(eust.get("indicators"), dict):
         rows = ""
         for ind in eust["indicators"].values():
+            if not isinstance(ind, dict):
+                continue
             ro = ind.get("ro")
             eu = ind.get("eu")
             rows += (f'<tr><td style="padding:4px 10px;color:#cbd5e1">{_escape(str(ind.get("label", "")))}</td>'
-                     f'<td style="padding:4px 10px;color:#e2e8f0;text-align:right">{_escape(_fmt_num(ro)) if ro is not None else "&mdash;"}</td>'
-                     f'<td style="padding:4px 10px;color:#e2e8f0;text-align:right">{_escape(_fmt_num(eu)) if eu is not None else "&mdash;"}</td></tr>')
+                     f'<td style="padding:4px 10px;color:#e2e8f0;text-align:right">{_escape(_fmt_ratio(ro)) if ro is not None else "&mdash;"}</td>'
+                     f'<td style="padding:4px 10px;color:#e2e8f0;text-align:right">{_escape(_fmt_ratio(eu)) if eu is not None else "&mdash;"}</td></tr>')
         out.append(f'''
     <section id="eurostat" class="report-section">
         <h2>Benchmark Sector UE (Eurostat)</h2>
@@ -590,9 +599,7 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
 
         def _seap_rows(items):
             rows_html = ""
-            for it in (items or [])[:8]:
-                if not isinstance(it, dict):
-                    continue
+            for it in [i for i in (items or []) if isinstance(i, dict)][:8]:
                 title = _escape(str(it.get("title", ""))[:120]) or "(fara titlu)"
                 auth = _escape(str(it.get("authority", "")))
                 val = it.get("value")
@@ -670,7 +677,7 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
         ddate = str(sanc.get("data_date", ""))[:10]
         body = ""
         if status == "hit":
-            hits = sanc.get("hits", [])
+            hits = sanc.get("hits") or []
             body += (f'<p style="color:#ef4444;font-weight:700">&#9888; {len(hits)} potentiale potriviri pe '
                      'listele de sanctiuni — verificare manuala necesara</p><ul class="list-disc ml-6">')
             for h in hits[:20]:
@@ -685,6 +692,11 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
         else:
             body += ('<p style="color:#94a3b8">Screening sanctiuni: indisponibil '
                      '(liste temporar inaccesibile)</p>')
+        if status in ("clean", "hit") and not sanc.get("complete", True):
+            missing = ", ".join(sanc.get("lists_missing", []) or [])
+            n_lists = len(sanc.get("lists_checked", []) or [])
+            body += (f'<p style="color:#eab308;font-size:.85em">&#9888; Screening partial: {n_lists}/3 surse'
+                     f'{f" ({_escape(missing)} indisponibile)" if missing else ""} — verdict neautoritar, verificati ulterior.</p>')
         body += (f'<p style="color:#64748b;font-size:.85em;margin-top:6px">Liste oficiale: {_escape(lists)}'
                  f'{f" &middot; actualizat {_escape(ddate)}" if ddate else ""}. '
                  'Nu include PEP (persoane expuse politic).</p>')

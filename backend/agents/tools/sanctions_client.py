@@ -13,6 +13,7 @@ juridice + stopwords eliminate). Evita false pozitive de tip substring. Rezultat
 "potentiale potriviri de verificat manual", nu verdicte automate.
 """
 
+import asyncio
 import csv
 import io
 import json
@@ -141,8 +142,13 @@ def _parse_un(text: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Fetch + cache
 # ---------------------------------------------------------------------------
+EXPECTED_SOURCES = ("OFAC", "EU", "UN")
+_MAX_SUBSET_PER_QUERY = 10  # peste atat, tokenii sunt prea generici -> zgomot, ignoram subset
+
 _index: dict[str, list[dict]] | None = None
+_records_tok: list[tuple[frozenset, dict]] = []  # (tokens, record) pt subset match multi-token
 _meta: dict = {"sources": [], "total": 0, "built_at": ""}
+_load_lock = asyncio.Lock()
 
 
 async def _fetch(url: str, source: str) -> str:
@@ -177,6 +183,9 @@ async def _build_from_sources() -> dict:
                 records.extend(recs)
                 sources_ok.append(source)
                 logger.info(f"[sanctions] {source}: {len(recs)} intrari")
+            else:
+                # 200-OK dar 0 intrari parsate = format schimbat / pagina maintenance -> NU tacut
+                logger.warning(f"[sanctions] {source}: 0 intrari parsate — posibil format schimbat / maintenance")
         except Exception as e:
             logger.warning(f"[sanctions] {source} esuat: {e}")
 
@@ -187,17 +196,21 @@ async def _build_from_sources() -> dict:
     }
 
 
-def _build_index(records: list[dict]) -> dict[str, list[dict]]:
+def _build_index(records: list[dict]) -> tuple[dict[str, list[dict]], list[tuple[frozenset, dict]]]:
+    """Construieste indexul exact (cheie sortata) + lista (tokens, rec) pt subset match multi-token."""
     index: dict[str, list[dict]] = {}
+    records_tok: list[tuple[frozenset, dict]] = []
     for rec in records:
+        toks = _norm_tokens(rec["name"])
         k = _key(rec["name"])
-        if not k:
-            continue
-        bucket = index.setdefault(k, [])
-        # dedup pe (source, name)
-        if not any(r["source"] == rec["source"] and r["name"] == rec["name"] for r in bucket):
-            bucket.append(rec)
-    return index
+        if k:
+            bucket = index.setdefault(k, [])
+            # dedup pe (source, name)
+            if not any(r["source"] == rec["source"] and r["name"] == rec["name"] for r in bucket):
+                bucket.append(rec)
+        if len(toks) >= 2:
+            records_tok.append((toks, rec))
+    return index, records_tok
 
 
 def _load_cache() -> dict | None:
@@ -222,24 +235,54 @@ def _save_cache(data: dict) -> None:
         logger.debug(f"[sanctions] cache save fail: {e}")
 
 
+def _read_cache_raw() -> dict | None:
+    """Citeste cache-ul de pe disc ignorand TTL (pt comparatie completitudine la persist)."""
+    try:
+        if os.path.exists(CACHE_PATH):
+            with open(CACHE_PATH, encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return None
+
+
+def _persist_if_not_downgrade(data: dict) -> None:
+    """Salveaza pe disc DOAR daca nu retrogradeaza un cache mai complet (evita otravirea 24h)."""
+    new_sources = set(data.get("sources", []))
+    existing = _read_cache_raw()
+    if existing and set(existing.get("sources", [])) > new_sources:
+        logger.warning(
+            f"[sanctions] fetch partial {sorted(new_sources)} < cache existent "
+            f"{sorted(existing.get('sources', []))} — pastrez cache-ul mai complet"
+        )
+        return
+    _save_cache(data)
+
+
 async def ensure_loaded(force: bool = False) -> bool:
     """Asigura ca indexul e in memorie. Returneaza True daca sunt date disponibile."""
-    global _index, _meta
+    global _index, _records_tok, _meta
     if _index is not None and not force:
         return bool(_index)
 
-    data = None if force else _load_cache()
-    if data is None:
-        data = await _build_from_sources()
-        if data["records"]:
-            _save_cache(data)
+    async with _load_lock:
+        # Re-check dupa lock: alt task poate fi incarcat deja indexul cat am asteptat
+        if _index is not None and not force:
+            return bool(_index)
 
-    _index = _build_index(data.get("records", []))
-    _meta = {
-        "sources": data.get("sources", []),
-        "total": len(data.get("records", [])),
-        "built_at": data.get("built_at", ""),
-    }
+        data = None if force else _load_cache()
+        if data is None:
+            data = await _build_from_sources()
+            # Persista chiar si partial (evita re-download storms), dar fara a retrograda un cache complet
+            if data["records"]:
+                _persist_if_not_downgrade(data)
+
+        _index, _records_tok = _build_index(data.get("records", []))
+        _meta = {
+            "sources": data.get("sources", []),
+            "total": len(data.get("records", [])),
+            "built_at": data.get("built_at", ""),
+        }
     return bool(_index)
 
 
@@ -264,23 +307,39 @@ async def screen(names: list[str]) -> dict:
     """
     clean_names = [n.strip() for n in (names or []) if n and n.strip()]
     ok = await ensure_loaded()
+
+    sources = list(_meta.get("sources", []))
+    complete = set(sources) >= set(EXPECTED_SOURCES)
+    lists_missing = sorted(set(EXPECTED_SOURCES) - set(sources))
+    base = {
+        "checked": clean_names,
+        "lists_checked": sources,
+        "lists_missing": lists_missing,   # surse temporar indisponibile
+        "complete": complete,             # False -> verdictul NU e autoritar (verifica ulterior)
+        "total_entries": _meta.get("total", 0),
+        "data_date": _meta.get("built_at", ""),
+    }
+
     if not ok or _index is None:
-        return {
-            "status": "unavailable",
-            "hits": [],
-            "checked": clean_names,
-            "lists_checked": _meta.get("sources", []),
-            "total_entries": _meta.get("total", 0),
-            "data_date": _meta.get("built_at", ""),
-        }
+        return {"status": "unavailable", "hits": [], **base}
 
     hits: list[dict] = []
     seen = set()
     for query in clean_names:
-        k = _key(query)
-        if not k or k not in _index:
-            continue
-        for rec in _index[k]:
+        matched_recs: list[dict] = []
+        qtoks = _norm_tokens(query)
+        qkey = _key(query)
+        # 1. Potrivire exacta / independenta de ordine (rapid, O(1))
+        if qkey and qkey in _index:
+            matched_recs.extend(_index[qkey])
+        # 2. Subset: nume individual (>=2 tokeni) continut intr-un nume formal mai lung
+        #    (ex. "Ali Mohammed" in "Ali Hassan Mohammed"). Cap anti-zgomot: daca tokenii
+        #    sunt prea generici (> _MAX_SUBSET_PER_QUERY potriviri), ii ignoram.
+        if len(qtoks) >= 2:
+            subset = [rec for rtoks, rec in _records_tok if qtoks < rtoks]
+            if 0 < len(subset) <= _MAX_SUBSET_PER_QUERY:
+                matched_recs.extend(subset)
+        for rec in matched_recs:
             dedup = (query, rec["source"], rec["name"])
             if dedup in seen:
                 continue
@@ -292,11 +351,4 @@ async def screen(names: list[str]) -> dict:
                 "type": rec["type"],
             })
 
-    return {
-        "status": "hit" if hits else "clean",
-        "hits": hits,
-        "checked": clean_names,
-        "lists_checked": _meta.get("sources", []),
-        "total_entries": _meta.get("total", 0),
-        "data_date": _meta.get("built_at", ""),
-    }
+    return {"status": "hit" if hits else "clean", "hits": hits, **base}

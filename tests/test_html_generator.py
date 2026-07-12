@@ -256,12 +256,22 @@ class TestRichFields:
                 "nace_label": "Computer programming", "year": "2024",
                 "indicators": {
                     "ENT_NR": {"label": "Numar firme", "ro": 45240, "eu": 1008501, "nace": "J62"},
-                    "EMP_ENT_NR": {"label": "Angajati / firma", "ro": 4, "eu": 5, "nace": "J62"}}}}
+                    "EMP_ENT_NR": {"label": "Angajati / firma", "ro": 4.3, "eu": 5.7, "nace": "J62"}}}}
         html, nav = _build_rich_fields_html(data)
         assert 'id="eurostat"' in html
         assert "Eurostat" in html
         assert "J62" in html
+        assert "4.3" in html  # rata cu zecimale pastrata, NU rotunjita la "4"
         assert 'href="#eurostat"' in nav
+
+    def test_sanctions_partial_completeness_warning(self):
+        data = {"sanctions": {"status": "clean", "hits": [], "checked": ["Firma SRL"],
+                              "lists_checked": ["OFAC"], "lists_missing": ["EU", "UN"],
+                              "complete": False, "data_date": "2026-07-11", "total_entries": 100}}
+        html, _ = _build_rich_fields_html(data)
+        assert 'id="sanctions"' in html
+        assert "Screening partial" in html
+        assert "neautoritar" in html
 
     def test_eurostat_skipped_when_unavailable(self):
         data = {"eurostat_sector": {"available": False, "reason": "fara date"}}

@@ -104,3 +104,28 @@ class TestValidateVat:
         assert r["valid"] is True
         assert r["name"] == "ACME GMBH"
         assert r["address"] == "BERLIN"
+
+    async def test_gb_rejected_as_non_eu(self):
+        # GB a iesit din UE -> nu se mai mapeaza la XI -> respins ca ne-UE (nu rezultat inselator)
+        with patch("backend.agents.tools.vies_client.get_client") as mc:
+            r = await validate_vat("GB", "123456789")
+        assert r["available"] is False
+        assert r["valid"] is None
+        assert "ne-UE" in r["error"]
+        mc.return_value.post.assert_not_called()
+
+    async def test_soap_missing_valid_returns_unavailable(self):
+        # REST pica, SOAP intoarce XML fara <valid> (fault) -> indisponibil, NU valid=False
+        soap_no_valid = MagicMock(spec=httpx.Response)
+        soap_no_valid.raise_for_status.return_value = None
+        soap_no_valid.text = "<env:Envelope><env:Body><env:Fault>oops</env:Fault></env:Body></env:Envelope>"
+        posts = AsyncMock(side_effect=[
+            httpx.ConnectError("boom"), httpx.ConnectError("boom"),
+            httpx.ConnectError("boom"), soap_no_valid,
+        ])
+        with patch("backend.agents.tools.vies_client.get_client") as mc, \
+                patch("backend.agents.tools.retry.asyncio.sleep", new_callable=AsyncMock):
+            mc.return_value.post = posts
+            r = await validate_vat("DE", "123456789")
+        assert r["available"] is False
+        assert r["valid"] is None

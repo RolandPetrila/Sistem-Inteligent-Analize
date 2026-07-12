@@ -26,8 +26,9 @@ EU_VAT_COUNTRY_CODES = {
     "SE", "SI", "SK", "XI",
 }
 
-# Alias uzual ISO -> cod VIES
-_COUNTRY_ALIAS = {"GR": "EL", "UK": "XI", "GB": "XI"}
+# Alias uzual ISO -> cod VIES. NU mapam GB/UK -> XI: Marea Britanie a iesit din UE si nu e
+# validabila in VIES; doar Irlanda de Nord (XI) ramane. GB -> respins corect ca ne-UE.
+_COUNTRY_ALIAS = {"GR": "EL"}
 
 SOAP_ENVELOPE = (
     '<?xml version="1.0" encoding="UTF-8"?>'
@@ -175,7 +176,11 @@ async def _validate_soap(cc: str, vat: str) -> dict:
         m = re.search(rf"<(?:\w+:)?{tag}>(.*?)</(?:\w+:)?{tag}>", xml, re.S)
         return m.group(1).strip() if m else ""
 
+    valid_raw = _tag("valid").lower()
+    if valid_raw not in ("true", "false"):
+        # Lipsa <valid> = SOAP fault / shape drift -> indisponibil, NU "invalid" (fals-negativ)
+        return _unavailable(cc, vat, "raspuns SOAP fara camp valid (fault sau format schimbat)")
     return _shape(
-        cc, vat, _tag("valid").lower() == "true",
+        cc, vat, valid_raw == "true",
         _tag("name"), _tag("address"), _tag("requestDate"), "",
     )
