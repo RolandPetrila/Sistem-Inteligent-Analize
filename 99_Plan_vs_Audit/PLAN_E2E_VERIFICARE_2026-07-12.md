@@ -266,12 +266,54 @@ sursele de bază ANAF/BNR/ONRC) ca să nu irosesc cotă nou pe firme noi fără 
   a fost deja verificat live in sesiunea anterioara (PID schimbat dupa self-exit + WinSW
   onfailure). Cod nemodificat de atunci.
 
+### BUG REAL #7 (gasit de advisor, verificare adversariala) — sectiunea "opportunities" nu stia de Angle A v2
+
+- Job TENDER_OPPORTUNITIES avea 15 licitatii SICAP REALE in `tender_opportunities.opportunities`
+  (confirmat separat la fix-ul export/ics), dar sectiunea narativa "Oportunitati" — sectiunea
+  CENTRALA pentru acest tip de analiza — tot cadea pe fallback "date insuficiente". Trecuse
+  initial drept "comportament corect anti-halucinare" pana la re-verificare adversariala.
+- Root cause: `_has_sufficient_data("opportunities")` verifica doar `market.seap.total_contracts`
+  (Angle B, contracte CASTIGATE) + `web_presence.opportunities` (camp nescris niciodata) — nu
+  stia de cheia noua `tender_opportunities` (Angle A v2). Chiar daca gate-ul trecea,
+  `section_data_map["opportunities"]` nu includea `tender_opportunities` in promptul AI.
+- Fix: gate + context map actualizate. Commit `d3e8dd1`. **Verificat live pe job nou**:
+  sectiunea trece de la ~350 caractere fallback la 3080 caractere text narativ real, cu
+  licitatii concrete (titlu, valoare, deadline, eligibilitate CAEN).
+- **Bonus descoperire, NU reparata (feature lipsa, nu bug de wiring)**: gate-ul pentru
+  sectiunea "competition" verifica `web_presence.competitors` — camp care nu e scris
+  NICAIERI in cod (grep confirmat in agent_official.py + agent_verification.py). Tipul de
+  analiza `COMPETITION_ANALYSIS` nu are, de fapt, nicio colectare reala de date despre
+  competitori — sectiunea cade mereu pe fallback, structural, nu ocazional. Nu e o cheie
+  gresita de reparat (ca #5/#7), ci o functionalitate niciodata implementata. NEVERIFICAT
+  live (nu am rulat un job COMPETITION_ANALYSIS) — semnalat, nu construit acum.
+
+## Onestitate asupra scope-ului acoperit (limite reale ale acestei verificari)
+
+- **6 din 9 AnalysisType NU au fost rulate deloc**: COMPETITION_ANALYSIS, FUNDING_OPPORTUNITIES,
+  MARKET_ENTRY_ANALYSIS, LEAD_GENERATION, MONITORING_SETUP, CUSTOM_REPORT. Am confirmat ca
+  fiecare tip produce un set diferit de sectiuni — deci cele 6 netestate pot avea propriile
+  bug-uri de wiring specifice tipului (ca #7, gasit doar prin testarea efectiva a TENDER_
+  OPPORTUNITIES). "Toate fluxurile" NU a fost atins literal — doar un esantion reprezentativ.
+- **Degradarea sub sarcina concurenta NU e 100% eliminata**, doar mult redusa: re-testul cu 2
+  joburi simultane a aratat 1/10 sectiuni tot picand ("ALL providers failed") cand Groq+Cerebras
+  au fost rate-limitate simultan. Batch analysis (feature reala, folosita) ruleaza exact in
+  acest regim de concurenta — deci riscul e activ, nu doar teoretic. Fix real ar necesita
+  retry/backoff pe 429, nu doar modelul Cerebras corect — neaplicat acum (scope mai mare).
+- **Toata verificarea a fost la nivel de API** (curl / apeluri directe), NU prin browser. Fix-urile
+  care ating UI-ul (score-trend afisat in CompanyDetail, sector dashboard) sunt verificate ca
+  API-ul raspunde corect cu date reale, dar NU am deschis efectiv paginile in browser sa confirm
+  ca frontend-ul le randeaza corect vizual.
+
 ## Sumar final
 
-**6 bug-uri reale gasite si reparate** (toate live-verificate, 440 pytest PASSED la fiecare
+**7 bug-uri reale gasite si reparate** (toate live-verificate, 440 pytest PASSED la fiecare
 pas, 0 erori TypeScript): Cerebras model retras din catalog, `companies.caen_code`/`county`
 niciodata populate (rupea /sector), `score-trend` type mismatch, `timeline-report/pdf` crash
-Unicode, `export/ics` cheie gresita, `settings test/{service}` incomplet. Plus 1 finding
-nefixat intentionat (SYNTHESIS_MODE — decizie lasata userului) + 2 observatii minore
-(coherence-checker fals-pozitiv, Settings.tsx nu expune toti providerii). Artefacte de test
-curatate de pe firma reala (Mosslein). Cleanup local (`$TEMP`) nu afecteaza proiectul.
+Unicode, `export/ics` cheie gresita, `settings test/{service}` incomplet, sectiunea
+"opportunities" nu stia de Angle A v2 (gasit prin verificare adversariala advisor — cel mai
+relevant pt plangerea initiala a userului). Plus 1 finding nefixat intentionat (SYNTHESIS_MODE
+— decizie lasata userului), 1 feature lipsa descoperita dar neconstruita (competition analysis
+nu colecteaza deloc date reale despre competitori), 2 observatii minore (coherence-checker
+fals-pozitiv, Settings.tsx nu expune toti providerii), si 3 limite oneste de scop (6/9
+AnalysisType netestate, degradare sub concurenta redusa dar nu eliminata, verificare doar la
+nivel API nu si vizual in browser). Artefacte de test curatate de pe firma reala (Mosslein).
