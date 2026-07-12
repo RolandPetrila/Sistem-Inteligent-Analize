@@ -460,6 +460,13 @@ def calculate_risk_score(verified: dict, dynamic_thresholds: dict | None = None)
     jur_score = 85
     jur_reasons = []
     insolvency = risk_data.get("insolvency", {})
+    # BUG REAL gasit+reparat 2026-07-13: `litigation` era asignat DOAR in ramura
+    # "else" (Portal Just SOAP indisponibil) de mai jos, dar folosit neconditionat
+    # mai tarziu (calcul confidence). Cat timp Portal Just a fost mereu picat (pana
+    # azi), ramura "if" nu rula niciodata si bug-ul era latent — odata Portal Just
+    # reparat (vezi just_client.py), ramura noua a inceput sa ruleze si a scos la
+    # iveala UnboundLocalError ("cannot access local variable 'litigation'").
+    litigation = risk_data.get("litigation", {})
     if isinstance(insolvency, dict):
         val = insolvency.get("value", {})
         if isinstance(val, dict) and val.get("found"):
@@ -505,7 +512,6 @@ def calculate_risk_score(verified: dict, dynamic_thresholds: dict | None = None)
             jur_reasons.append({"text": "Niciun dosar judecatoresc (Portal Just SOAP)", "impact": 5})
     else:
         # Fallback la Tavily estimation daca Portal Just nu e disponibil
-        litigation = risk_data.get("litigation", {})
         if isinstance(litigation, dict):
             val = litigation.get("value", {})
             if isinstance(val, dict):
