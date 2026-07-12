@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<title>RIS — Audit Functii (live)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background:#0f1117; color:#e2e8f0; margin:0; padding:24px; line-height:1.5; }
+h1 { font-size:1.6em; margin-bottom:4px; }
+h2 { font-size:1.25em; margin-top:36px; border-bottom:1px solid #2a2f3a; padding-bottom:8px; }
+h3 { font-size:1.05em; margin-top:22px; display:flex; justify-content:space-between; align-items:center; }
+.subtitle { color:#94a3b8; font-size:0.9em; margin-bottom:20px; }
+.stats-bar { display:flex; gap:14px; flex-wrap:wrap; margin:16px 0 28px; }
+.stat-card { background:#1a1d29; border:1px solid #2a2f3a; border-radius:10px; padding:14px 18px; min-width:140px; }
+.stat-card .num { font-size:1.7em; font-weight:700; color:#818cf8; }
+.stat-card .label { font-size:0.8em; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em; }
+.key-bar { background:#1a1d29; border:1px solid #2a2f3a; border-radius:10px; padding:14px 18px; margin-bottom:20px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.key-bar input { background:#0f1117; border:1px solid #2a2f3a; color:#e2e8f0; padding:8px 10px; border-radius:6px; font-family:monospace; min-width:280px; }
+.key-bar a { color:#818cf8; text-decoration:none; }
+.key-bar a:hover { text-decoration:underline; }
+.warning-box { background:#2d1a1a; border:1px solid #7f1d1d; border-radius:8px; padding:12px 16px; margin:16px 0; font-size:0.9em; }
+.info-box { background:#1a2332; border:1px solid #1e3a5f; border-radius:8px; padding:12px 16px; margin:16px 0; font-size:0.88em; color:#cbd5e1; }
+table { width:100%; border-collapse:collapse; margin:8px 0 4px; font-size:0.87em; }
+th { text-align:left; color:#94a3b8; font-weight:600; padding:8px 10px; border-bottom:1px solid #2a2f3a; font-size:0.8em; text-transform:uppercase; letter-spacing:0.04em; }
+td { padding:8px 10px; border-bottom:1px solid #1e2230; vertical-align:top; }
+tr:hover td { background:#161925; }
+code { background:#1e2230; padding:2px 6px; border-radius:4px; font-size:0.92em; color:#a5b4fc; }
+.method { font-weight:700; padding:2px 8px; border-radius:4px; font-size:0.82em; }
+.method-get { background:#0f3d2e; color:#4ade80; }
+.method-post { background:#1e3a5f; color:#60a5fa; }
+.method-put { background:#3d2e0f; color:#facc15; }
+.method-delete { background:#3d0f0f; color:#f87171; }
+.method-ws { background:#2e0f3d; color:#c084fc; }
+.badge { padding:2px 8px; border-radius:10px; font-size:0.78em; font-weight:600; }
+.badge-pass { background:#0f3d2e; color:#4ade80; }
+.badge-fail { background:#3d2e0f; color:#facc15; }
+.evidence { color:#94a3b8; font-size:0.92em; max-width:420px; }
+.improve { color:#fbbf24; font-size:0.9em; max-width:320px; }
+.cat-count { font-size:0.75em; color:#64748b; font-weight:400; }
+.btn-test { background:#312e81; color:#c7d2fe; border:none; padding:5px 11px; border-radius:6px; cursor:pointer; font-size:0.82em; white-space:nowrap; }
+.btn-test:hover { background:#4338ca; }
+.btn-test:disabled { opacity:0.5; cursor:wait; }
+.curl-cmd { font-size:0.76em; word-break:break-all; color:#64748b; }
+.filters { display:flex; gap:8px; margin:14px 0; flex-wrap:wrap; }
+.filters button { background:#1a1d29; border:1px solid #2a2f3a; color:#cbd5e1; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:0.85em; }
+.filters button.active { background:#312e81; border-color:#4338ca; color:#c7d2fe; }
+.result-ok { color:#4ade80; }
+.result-fail { color:#f87171; }
+footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:#64748b; font-size:0.82em; }
+.toc { display:flex; gap:14px; flex-wrap:wrap; margin:14px 0 24px; }
+.toc a { color:#a5b4fc; text-decoration:none; font-size:0.88em; background:#1a1d29; padding:5px 10px; border-radius:6px; border:1px solid #2a2f3a; }
+</style>
+</head>
+<body>
+
+<h1>RIS — Audit Functii (dashboard live)</h1>
+<div class="subtitle">Generat din codul real la commit <code>3527c94</code> — regenereaza cu <code>python tools/generate_audit_dashboard.py</code> dupa orice functie noua.</div>
+
+<div class="stats-bar">
+  <div class="stat-card"><div class="num">56/88</div><div class="label">Endpoint-uri REST+WS testate</div></div>
+  <div class="stat-card"><div class="num">9/9</div><div class="label">Tipuri de analiza</div></div>
+  <div class="stat-card"><div class="num">5/5</div><div class="label">Provideri AI</div></div>
+  <div class="stat-card"><div class="num">3/18</div><div class="label">Surse externe cu test live</div></div>
+  <div class="stat-card"><div class="num">8/8</div><div class="label">Formate raport</div></div>
+  <div class="stat-card"><div class="num">0/15</div><div class="label">Pagini verificate vizual</div></div>
+</div>
+
+
+
+<div class="key-bar">
+  <strong>Cheie API RIS (X-RIS-Key):</strong>
+  <input type="password" id="risKeyInput" placeholder="lipeste aici cheia locala, ramane doar in acest browser">
+  <button class="btn-test" id="saveKeyBtn">Salveaza in sesiune</button>
+  <span id="keyStatus"></span>
+  <a href="/settings" target="_blank">→ Editeaza chei/credentiale in Settings (pagina reala, mascata+autentificata)</a>
+</div>
+
+<div class="info-box">
+  Cheile/token-urile propriu-zise NU sunt afisate niciunde in acest fisier (nici mascate, nici in clar) — per regula
+  de securitate a proiectului. Butoanele "Testeaza live" apeleaza endpoint-uri existente care returneaza DOAR
+  ok/eroare. Pentru editare foloseste linkul catre pagina Settings reala. Comenzile <code>curl</code> afisate pentru
+  actiunile cu efect real (creeaza/modifica/sterge date, trimite mesaje, consuma cota, reporneste serviciul) sunt
+  doar de copiat manual — nu ruleaza automat.
+</div>
+
+<div class="toc">
+  <a href="#endpoints">Endpoint-uri REST+WS</a>
+  <a href="#analysistypes">Tipuri de analiza</a>
+  <a href="#providers">Provideri AI</a>
+  <a href="#external">Surse externe</a>
+  <a href="#notif">Notificari</a>
+  <a href="#scheduler">Scheduler</a>
+  <a href="#formats">Formate raport</a>
+  <a href="#pages">Pagini frontend</a>
+</div>
+
+<h2 id="endpoints">Endpoint-uri REST + WebSocket (88 total)</h2>
+<div class="filters">
+  <button class="active" data-filter="all">Toate (88)</button>
+  <button data-filter="tested">Testate (56)</button>
+  <button data-filter="untested">Netestate (32)</button>
+  <button data-filter="safe">Testabile live acum</button>
+</div>
+
+<div class="cat-block" data-catblock="Analysis">
+  <h3>Analysis <span class="cat-count">3/5 testate</span></h3>
+  <table class="ep-table">
+    <thead><tr><th>Metoda</th><th>Path</th><th>Status</th><th>Dovada / notă</th><th>Test</th></tr></thead>
+    <tbody>
+<tr data-cat="Analysis" data-tested="true">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/analysis/parse-query</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: 95% confidence, extras corect analysis_type+CUI.</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/analysis/parse-query&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="Analysis" data-tested="true">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/analysis/quick-score</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: batch 2 CUI, date reale ANAF+Bilant. Fix aplicat (import gresit).</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/analysis/quick-score&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="Analysis" data-tested="false">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/analysis/types</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Neverificat direct in sweep-ul E2E.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/analysis/types">Testeaza live</button></td>
+</tr>
+<tr data-cat="Analysis" data-tested="false">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/analysis/types/{analysis_type}</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Neverificat direct.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/analysis/types/{analysis_type}">Testeaza live</button></td>
+</tr>
+<tr data-cat="Analysis" data-tested="true">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/analysis/vies</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: validare TVA live, date reale UE.</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/analysis/vies&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+    </tbody>
+  </table>
+</div>
+<div class="cat-block" data-catblock="Batch">
+  <h3>Batch <span class="cat-count">4/5 testate</span></h3>
+  <table class="ep-table">
+    <thead><tr><th>Metoda</th><th>Path</th><th>Status</th><th>Dovada / notă</th><th>Test</th></tr></thead>
+    <tbody>
+<tr data-cat="Batch" data-tested="true">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/batch</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: create real (2 CUI), progress, DONE 2/2.</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/batch&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="Batch" data-tested="true">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/batch/preview</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: validare CSV fara side-effects.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="POST" data-path="/api/batch/preview">Testeaza live</button></td>
+</tr>
+<tr data-cat="Batch" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/batch/{batch_id}</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: poll progress.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/batch/{batch_id}">Testeaza live</button></td>
+</tr>
+<tr data-cat="Batch" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/batch/{batch_id}/download</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: ZIP 14 fisiere (7 formate x 2 firme + CSV).</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/batch/{batch_id}/download">Testeaza live</button></td>
+</tr>
+<tr data-cat="Batch" data-tested="false">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/batch/{batch_id}/resume</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Implementat Faza 9E, neretestat in acest sweep.</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/batch/{batch_id}/resume&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+    </tbody>
+  </table>
+</div>
+<div class="cat-block" data-catblock="Companies">
+  <h3>Companies <span class="cat-count">14/21 testate</span></h3>
+  <table class="ep-table">
+    <thead><tr><th>Metoda</th><th>Path</th><th>Status</th><th>Dovada / notă</th><th>Test</th></tr></thead>
+    <tbody>
+<tr data-cat="Companies" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/companies</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Bug #2 fix verification: ?caen=3600 filtreaza corect.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/companies">Testeaza live</button></td>
+</tr>
+<tr data-cat="Companies" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/companies/export/csv</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: export CSV CRM-ready OK.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/companies/export/csv">Testeaza live</button></td>
+</tr>
+<tr data-cat="Companies" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/companies/favorites</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: OK.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/companies/favorites">Testeaza live</button></td>
+</tr>
+<tr data-cat="Companies" data-tested="false">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/companies/import</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Neverificat in sweep — creeaza/suprascrie companii din CSV.</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/companies/import&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="Companies" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/companies/search/fts</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: FTS5 search OK.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/companies/search/fts">Testeaza live</button></td>
+</tr>
+<tr data-cat="Companies" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/companies/stats/risk-movers</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: OK.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/companies/stats/risk-movers">Testeaza live</button></td>
+</tr>
+<tr data-cat="Companies" data-tested="false">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/companies/{company_id}</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Folosit implicit in UI, neverificat explicit izolat.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/companies/{company_id}">Testeaza live</button></td>
+</tr>
+<tr data-cat="Companies" data-tested="true">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/companies/{company_id}/auto-reanalyze</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: OK.</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/companies/{company_id}/auto-reanalyze&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="Companies" data-tested="false">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/companies/{company_id}/chat</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">RAG chat — neverificat in sweep.</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/companies/{company_id}/chat&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="Companies" data-tested="true">
+  <td><span class="method method-put">PUT</span></td>
+  <td><code>/api/companies/{company_id}/favorite</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: toggle favorite OK.</td>
+  <td><code class="curl-cmd">curl -X PUT &quot;$BASE_URL/api/companies/{company_id}/favorite&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="Companies" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/companies/{company_id}/network</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: OK (gol pt Mosslein).</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/companies/{company_id}/network">Testeaza live</button></td>
+</tr>
+<tr data-cat="Companies" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/companies/{company_id}/note</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: OK.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/companies/{company_id}/note">Testeaza live</button></td>
+</tr>
+<tr data-cat="Companies" data-tested="false">
+  <td><span class="method method-put">PUT</span></td>
+  <td><code>/api/companies/{company_id}/note</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Neverificat explicit separat de GET.</td>
+  <td><code class="curl-cmd">curl -X PUT &quot;$BASE_URL/api/companies/{company_id}/note&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="Companies" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/companies/{company_id}/score-trend</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">BUG #3 FIX: int-&gt;str UUID. Verificat live 200 OK dupa fix.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/companies/{company_id}/score-trend">Testeaza live</button></td>
+</tr>
+<tr data-cat="Companies" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/companies/{company_id}/tags</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: OK.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/companies/{company_id}/tags">Testeaza live</button></td>
+</tr>
+<tr data-cat="Companies" data-tested="false">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/companies/{company_id}/tags</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Neverificat explicit separat de GET.</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/companies/{company_id}/tags&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="Companies" data-tested="false">
+  <td><span class="method method-delete">DELETE</span></td>
+  <td><code>/api/companies/{company_id}/tags/{tag}</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Neverificat.</td>
+  <td><code class="curl-cmd">curl -X DELETE &quot;$BASE_URL/api/companies/{company_id}/tags/{tag}&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot;</code></td>
+</tr>
+<tr data-cat="Companies" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/companies/{company_id}/timeline</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: OK (gol pt Mosslein — plauzibil, nu bug).</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/companies/{company_id}/timeline">Testeaza live</button></td>
+</tr>
+<tr data-cat="Companies" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/companies/{cui}/predictive</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: Altman/Piotroski/Beneish/Zmijewski OK.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/companies/{cui}/predictive">Testeaza live</button></td>
+</tr>
+<tr data-cat="Companies" data-tested="false">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/companies/{cui}/timeline-report</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Doar varianta /pdf confirmata explicit.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/companies/{cui}/timeline-report">Testeaza live</button></td>
+</tr>
+<tr data-cat="Companies" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/companies/{cui}/timeline-report/pdf</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">BUG #4 FIX: crash Unicode em-dash. Verificat live 200 OK dupa fix.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/companies/{cui}/timeline-report/pdf">Testeaza live</button></td>
+</tr>
+    </tbody>
+  </table>
+</div>
+<div class="cat-block" data-catblock="Compare">
+  <h3>Compare <span class="cat-count">6/7 testate</span></h3>
+  <table class="ep-table">
+    <thead><tr><th>Metoda</th><th>Path</th><th>Status</th><th>Dovada / notă</th><th>Test</th></tr></thead>
+    <tbody>
+<tr data-cat="Compare" data-tested="true">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/compare</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: 2 firme side-by-side OK.</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/compare&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="Compare" data-tested="true">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/compare/report</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: PDF comparativ OK.</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/compare/report&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="Compare" data-tested="true">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/compare/sector</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">BUG #2 FIX verification: caen_section=36 returneaza acum date.</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/compare/sector&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="Compare" data-tested="false">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/compare/sector/{caen_code}/dashboard</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Nu s-a confirmat separat de POST /compare/sector.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/compare/sector/{caen_code}/dashboard">Testeaza live</button></td>
+</tr>
+<tr data-cat="Compare" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/compare/templates</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: CRUD templates OK.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/compare/templates">Testeaza live</button></td>
+</tr>
+<tr data-cat="Compare" data-tested="true">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/compare/templates</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: CRUD templates OK.</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/compare/templates&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="Compare" data-tested="true">
+  <td><span class="method method-delete">DELETE</span></td>
+  <td><code>/api/compare/templates/{template_id}</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: CRUD templates OK.</td>
+  <td><code class="curl-cmd">curl -X DELETE &quot;$BASE_URL/api/compare/templates/{template_id}&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot;</code></td>
+</tr>
+    </tbody>
+  </table>
+</div>
+<div class="cat-block" data-catblock="Jobs">
+  <h3>Jobs <span class="cat-count">5/9 testate</span></h3>
+  <table class="ep-table">
+    <thead><tr><th>Metoda</th><th>Path</th><th>Status</th><th>Dovada / notă</th><th>Test</th></tr></thead>
+    <tbody>
+<tr data-cat="Jobs" data-tested="false">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/jobs</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Listare — neconfirmata explicit in sweep.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/jobs">Testeaza live</button></td>
+</tr>
+<tr data-cat="Jobs" data-tested="true">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/jobs</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Folosit extensiv in TOATE testele — creeaza job real (cost/cota).</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/jobs&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="Jobs" data-tested="false">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/jobs/diagnostics/latest</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Neverificat explicit.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/jobs/diagnostics/latest">Testeaza live</button></td>
+</tr>
+<tr data-cat="Jobs" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/jobs/{job_id}</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Poll status folosit extensiv in toate testele.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/jobs/{job_id}">Testeaza live</button></td>
+</tr>
+<tr data-cat="Jobs" data-tested="false">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/jobs/{job_id}/cancel</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Neverificat in sweep.</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/jobs/{job_id}/cancel&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="Jobs" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/jobs/{job_id}/diagnostics</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: completeness gate real (88/100, gap-uri cu motiv).</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/jobs/{job_id}/diagnostics">Testeaza live</button></td>
+</tr>
+<tr data-cat="Jobs" data-tested="false">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/jobs/{job_id}/retry-source/{source}</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Checklist item, nicio sursa cazuta reprodusa in sweep.</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/jobs/{job_id}/retry-source/{source}&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="Jobs" data-tested="true">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/jobs/{job_id}/section/{section_key}/regenerate</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">TASK1 2026-06-27: smoke live PASS, regen company_profile+executive_summary.</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/jobs/{job_id}/section/{section_key}/regenerate&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="Jobs" data-tested="true">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/jobs/{job_id}/start</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Folosit extensiv in toate testele.</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/jobs/{job_id}/start&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+    </tbody>
+  </table>
+</div>
+<div class="cat-block" data-catblock="Monitoring">
+  <h3>Monitoring <span class="cat-count">9/9 testate</span></h3>
+  <table class="ep-table">
+    <thead><tr><th>Metoda</th><th>Path</th><th>Status</th><th>Dovada / notă</th><th>Test</th></tr></thead>
+    <tbody>
+<tr data-cat="Monitoring" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/monitoring</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: create-&gt;list-&gt;toggle-&gt;audit-log-&gt;health-&gt;history-&gt;check-now-&gt;suppress-&gt;delete, toate OK.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/monitoring">Testeaza live</button></td>
+</tr>
+<tr data-cat="Monitoring" data-tested="true">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/monitoring</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Vezi nota GET /api/monitoring.</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/monitoring&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="Monitoring" data-tested="true">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/monitoring/check-now</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Vezi nota GET /api/monitoring (0 alerte declansate — real, nu placeholder).</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/monitoring/check-now&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="Monitoring" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/monitoring/health</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Vezi nota GET /api/monitoring.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/monitoring/health">Testeaza live</button></td>
+</tr>
+<tr data-cat="Monitoring" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/monitoring/history</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Vezi nota GET /api/monitoring.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/monitoring/history">Testeaza live</button></td>
+</tr>
+<tr data-cat="Monitoring" data-tested="true">
+  <td><span class="method method-delete">DELETE</span></td>
+  <td><code>/api/monitoring/{alert_id}</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Vezi nota GET /api/monitoring.</td>
+  <td><code class="curl-cmd">curl -X DELETE &quot;$BASE_URL/api/monitoring/{alert_id}&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot;</code></td>
+</tr>
+<tr data-cat="Monitoring" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/monitoring/{alert_id}/audit-log</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Vezi nota GET /api/monitoring.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/monitoring/{alert_id}/audit-log">Testeaza live</button></td>
+</tr>
+<tr data-cat="Monitoring" data-tested="true">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/monitoring/{alert_id}/suppress</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Vezi nota GET /api/monitoring.</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/monitoring/{alert_id}/suppress&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="Monitoring" data-tested="true">
+  <td><span class="method method-put">PUT</span></td>
+  <td><code>/api/monitoring/{alert_id}/toggle</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Vezi nota GET /api/monitoring.</td>
+  <td><code class="curl-cmd">curl -X PUT &quot;$BASE_URL/api/monitoring/{alert_id}/toggle&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+    </tbody>
+  </table>
+</div>
+<div class="cat-block" data-catblock="NLQ">
+  <h3>NLQ <span class="cat-count">1/1 testate</span></h3>
+  <table class="ep-table">
+    <thead><tr><th>Metoda</th><th>Path</th><th>Status</th><th>Dovada / notă</th><th>Test</th></tr></thead>
+    <tbody>
+<tr data-cat="NLQ" data-tested="true">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/ask</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: raspuns structurat inteligent, date reale.</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/ask&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+    </tbody>
+  </table>
+</div>
+<div class="cat-block" data-catblock="Notifications">
+  <h3>Notifications <span class="cat-count">0/3 testate</span></h3>
+  <table class="ep-table">
+    <thead><tr><th>Metoda</th><th>Path</th><th>Status</th><th>Dovada / notă</th><th>Test</th></tr></thead>
+    <tbody>
+<tr data-cat="Notifications" data-tested="false">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/notifications</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Neverificat direct in sweep (implementat Faza R12).</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/notifications">Testeaza live</button></td>
+</tr>
+<tr data-cat="Notifications" data-tested="false">
+  <td><span class="method method-put">PUT</span></td>
+  <td><code>/api/notifications/read-all</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Neverificat.</td>
+  <td><code class="curl-cmd">curl -X PUT &quot;$BASE_URL/api/notifications/read-all&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="Notifications" data-tested="false">
+  <td><span class="method method-put">PUT</span></td>
+  <td><code>/api/notifications/{notification_id}/read</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Neverificat.</td>
+  <td><code class="curl-cmd">curl -X PUT &quot;$BASE_URL/api/notifications/{notification_id}/read&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+    </tbody>
+  </table>
+</div>
+<div class="cat-block" data-catblock="OCR">
+  <h3>OCR <span class="cat-count">1/1 testate</span></h3>
+  <table class="ep-table">
+    <thead><tr><th>Metoda</th><th>Path</th><th>Status</th><th>Dovada / notă</th><th>Test</th></tr></thead>
+    <tbody>
+<tr data-cat="OCR" data-tested="true">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/documents/ocr</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: upload imagine, text extras corect (Mistral).</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/documents/ocr&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+    </tbody>
+  </table>
+</div>
+<div class="cat-block" data-catblock="Reports">
+  <h3>Reports <span class="cat-count">9/10 testate</span></h3>
+  <table class="ep-table">
+    <thead><tr><th>Metoda</th><th>Path</th><th>Status</th><th>Dovada / notă</th><th>Test</th></tr></thead>
+    <tbody>
+<tr data-cat="Reports" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/reports</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: listare OK.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/reports">Testeaza live</button></td>
+</tr>
+<tr data-cat="Reports" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/reports/public/{token}</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Vezi share — acces public fara auth confirmat.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/reports/public/{token}">Testeaza live</button></td>
+</tr>
+<tr data-cat="Reports" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/reports/{report_id}</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Folosit implicit la fiecare verificare de raport.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/reports/{report_id}">Testeaza live</button></td>
+</tr>
+<tr data-cat="Reports" data-tested="false">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/reports/{report_id}/data</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Neverificat explicit in acest sweep.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/reports/{report_id}/data">Testeaza live</button></td>
+</tr>
+<tr data-cat="Reports" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/reports/{report_id}/delta</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: corect 'prima analiza' pt tip nou.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/reports/{report_id}/delta">Testeaza live</button></td>
+</tr>
+<tr data-cat="Reports" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/reports/{report_id}/download/one_pager</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Tier 1: 200 OK, dimensiune reala.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/reports/{report_id}/download/one_pager">Testeaza live</button></td>
+</tr>
+<tr data-cat="Reports" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/reports/{report_id}/download/{format}</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Tier 1: 5 formate (PDF/DOCX/HTML/Excel/PPTX) 200 OK.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/reports/{report_id}/download/{format}">Testeaza live</button></td>
+</tr>
+<tr data-cat="Reports" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/reports/{report_id}/export/ics</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">BUG #5 FIX: cheie JSON gresita. Verificat live 200 OK, .ics valid 15 evenimente.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/reports/{report_id}/export/ics">Testeaza live</button></td>
+</tr>
+<tr data-cat="Reports" data-tested="true">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/reports/{report_id}/send-email</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: esuat CORECT (GMAIL_* neconfigurat) — cod OK, gap config.</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/reports/{report_id}/send-email&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="Reports" data-tested="true">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/reports/{report_id}/share</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Tier 1: share link public HTTP 200 fara auth, 37KB continut real.</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/reports/{report_id}/share&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+    </tbody>
+  </table>
+</div>
+<div class="cat-block" data-catblock="Settings">
+  <h3>Settings <span class="cat-count">2/4 testate</span></h3>
+  <table class="ep-table">
+    <thead><tr><th>Metoda</th><th>Path</th><th>Status</th><th>Dovada / notă</th><th>Test</th></tr></thead>
+    <tbody>
+<tr data-cat="Settings" data-tested="false">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/settings</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Folosit de UI Settings.tsx, neconfirmat explicit in sweep.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/settings">Testeaza live</button></td>
+</tr>
+<tr data-cat="Settings" data-tested="false">
+  <td><span class="method method-put">PUT</span></td>
+  <td><code>/api/settings</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Scrie .env — netestat live in sweep (foloseste pagina Settings reala).</td>
+  <td><code class="curl-cmd">curl -X PUT &quot;$BASE_URL/api/settings&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="Settings" data-tested="true">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/settings/test-telegram</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">E2E 2026-07-12: trimis cu succes (mesaj Telegram real).</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/settings/test-telegram&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="Settings" data-tested="true">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/settings/test/{service}</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">BUG #6 FIX: mistral+cerebras adaugate. Toate 6 servicii (groq/gemini/mistral/cerebras/tavily/telegram) HTTP 200.</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/settings/test/{service}&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+    </tbody>
+  </table>
+</div>
+<div class="cat-block" data-catblock="System">
+  <h3>System <span class="cat-count">2/13 testate</span></h3>
+  <table class="ep-table">
+    <thead><tr><th>Metoda</th><th>Path</th><th>Status</th><th>Dovada / notă</th><th>Test</th></tr></thead>
+    <tbody>
+<tr data-cat="System" data-tested="false">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/cache/stats</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Neverificat explicit.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/cache/stats">Testeaza live</button></td>
+</tr>
+<tr data-cat="System" data-tested="false">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/frontend-log</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Folosit doar de frontend (nu API testat direct).</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/frontend-log&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="System" data-tested="false">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/frontend-log/recent</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Neverificat.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/frontend-log/recent">Testeaza live</button></td>
+</tr>
+<tr data-cat="System" data-tested="false">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/health</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Neapelat explicit — s-a folosit /api/version in schimb.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/health">Testeaza live</button></td>
+</tr>
+<tr data-cat="System" data-tested="false">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/health/deep</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Neverificat explicit in acest sweep.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/health/deep">Testeaza live</button></td>
+</tr>
+<tr data-cat="System" data-tested="false">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/restart</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Tier 3 — mecanism verificat anterior (PID schimbat) via WinSW direct, nu via acest endpoint API.</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/restart&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="System" data-tested="false">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/stats</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Folosit implicit de Dashboard, neconfirmat izolat.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/stats">Testeaza live</button></td>
+</tr>
+<tr data-cat="System" data-tested="false">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/stats/trend</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Folosit implicit de Dashboard, neconfirmat izolat.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/stats/trend">Testeaza live</button></td>
+</tr>
+<tr data-cat="System" data-tested="false">
+  <td><span class="method method-post">POST</span></td>
+  <td><code>/api/update</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Tier 3 — verificat prin cod+log intr-o sesiune anterioara, NU re-executat (ar intrerupe sesiunea).</td>
+  <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/update&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
+</tr>
+<tr data-cat="System" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/version</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Folosit repetat pt confirmare deploy commit dupa fiecare fix.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/version">Testeaza live</button></td>
+</tr>
+<tr data-cat="System" data-tested="false">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/health/status</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Alias legacy — neverificat.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/health/status">Testeaza live</button></td>
+</tr>
+<tr data-cat="System" data-tested="false">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/metrics</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">Prometheus endpoint — neverificat in sweep.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/metrics">Testeaza live</button></td>
+</tr>
+<tr data-cat="System" data-tested="true">
+  <td><span class="method method-ws">WS</span></td>
+  <td><code>/ws/jobs/{job_id}</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Tier 1: script real (lib websockets), 10 evenimente complete confirmate.</td>
+  <td><code class="curl-cmd">curl -X WS &quot;$BASE_URL/ws/jobs/{job_id}&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot;</code></td>
+</tr>
+    </tbody>
+  </table>
+</div>
+
+<h2 id="analysistypes">Tipuri de analiza (AnalysisType) — 9/9 testate</h2>
+<table><thead><tr><th>Tip</th><th>Testat</th><th>Nota</th></tr></thead><tbody><tr><td><strong>FULL_COMPANY_PROFILE</strong></td><td>✅</td><td>Testat extensiv in toate sesiunile — flux central.</td></tr>
+<tr><td><strong>PARTNER_RISK_ASSESSMENT</strong></td><td>✅</td><td>E2E 2026-07-12: 5 sectiuni, testat sub concurenta.</td></tr>
+<tr><td><strong>TENDER_OPPORTUNITIES</strong></td><td>✅</td><td>E2E 2026-07-12: 15 licitatii reale, bug #7 gasit+reparat aici.</td></tr>
+<tr><td><strong>COMPETITION_ANALYSIS</strong></td><td>✅</td><td>E2E Partea 2: completeness 88, dar sectiunea 'competition' e feature lipsa (fallback mereu).</td></tr>
+<tr><td><strong>FUNDING_OPPORTUNITIES</strong></td><td>✅</td><td>E2E Partea 2: bug #8 gasit+reparat (funding_programs).</td></tr>
+<tr><td><strong>MARKET_ENTRY_ANALYSIS</strong></td><td>✅</td><td>E2E Partea 2: bug #9 gasit+reparat (CUI neextras).</td></tr>
+<tr><td><strong>LEAD_GENERATION</strong></td><td>✅</td><td>E2E Partea 2 + Partea 3: bug #9 + feature lipsa construit + bug halucinare CUI reparat determinist.</td></tr>
+<tr><td><strong>MONITORING_SETUP</strong></td><td>✅</td><td>E2E Partea 2: deferred type, bug #10 gasit aici (KeyError anaf).</td></tr>
+<tr><td><strong>CUSTOM_REPORT</strong></td><td>✅</td><td>E2E Partea 2: bug #9 gasit+reparat, dar campul 'description' ramane feature lipsa (ignorat).</td></tr></tbody></table>
+
+<h2 id="providers">Provideri AI Sinteza — 5/5</h2>
+<table><thead><tr><th>Provider</th><th>Env var</th><th>Test live</th><th>Nota</th></tr></thead><tbody><tr><td><strong>Claude Code CLI</strong></td><td><code>SYNTHESIS_MODE=claude_code</code></td>
+<td>—</td>
+<td>NEACTIV in productie — .env are SYNTHESIS_MODE=autonomous (serviciul ruleaza ca SYSTEM, fara auth CLI). Vezi plan E2E.</td></tr>
+<tr><td><strong>Groq (Llama 4 Scout)</strong></td><td><code>GROQ_API_KEY</code></td>
+<td><button class="btn-test" data-kind="provider" data-provider="groq">Testeaza live</button></td>
+<td>Testabil live prin /api/settings/test/groq.</td></tr>
+<tr><td><strong>Gemini 2.5 Flash</strong></td><td><code>GOOGLE_AI_API_KEY</code></td>
+<td><button class="btn-test" data-kind="provider" data-provider="gemini">Testeaza live</button></td>
+<td>Testabil live prin /api/settings/test/gemini.</td></tr>
+<tr><td><strong>Mistral Small 3</strong></td><td><code>MISTRAL_API_KEY</code></td>
+<td><button class="btn-test" data-kind="provider" data-provider="mistral">Testeaza live</button></td>
+<td>Testabil live prin /api/settings/test/mistral (adaugat in acest sweep, bug #6).</td></tr>
+<tr><td><strong>Cerebras (gpt-oss-120b)</strong></td><td><code>CEREBRAS_API_KEY</code></td>
+<td><button class="btn-test" data-kind="provider" data-provider="cerebras">Testeaza live</button></td>
+<td>Testabil live prin /api/settings/test/cerebras. Model migrat 2026-07-12 (fostul model retras din catalog).</td></tr></tbody></table>
+
+<h2 id="external">Integrari surse externe de date — 18</h2>
+<table><thead><tr><th>Sursa</th><th>Modul</th><th>Cost/cheie</th><th>Status test</th><th>Imbunatatire sugerata</th></tr></thead><tbody><tr><td><strong>ANAF TVA/Stare</strong></td><td><code>anaf_client.py</code></td><td>Gratuit, fara cheie</td><td>Nu are endpoint dedicat de test conectivitate.</td><td class="improve">IMBUNATATIRE: adauga in TESTABLE_SERVICES.</td></tr>
+<tr><td><strong>ANAF Bilant</strong></td><td><code>anaf_bilant_client.py</code></td><td>Gratuit, fara cheie</td><td>Nu are endpoint dedicat de test.</td><td class="improve">IMBUNATATIRE: adauga in TESTABLE_SERVICES.</td></tr>
+<tr><td><strong>BNR (curs valutar)</strong></td><td><code>bnr_client.py</code></td><td>Gratuit, fara cheie</td><td>Nu are endpoint dedicat de test.</td><td class="improve">IMBUNATATIRE: adauga in TESTABLE_SERVICES.</td></tr>
+<tr><td><strong>openapi.ro (ONRC)</strong></td><td><code>openapi_client.py</code></td><td>OPENAPI_RO_KEY (100/luna free)</td><td>Nu are endpoint dedicat de test.</td><td class="improve">IMBUNATATIRE: adauga in TESTABLE_SERVICES + afiseaza cota ramasa live.</td></tr>
+<tr><td><strong>SEAP/SICAP (licitatii+contracte)</strong></td><td><code>seap_client.py</code></td><td>Gratuit, fara cheie</td><td>Nu are endpoint dedicat de test.</td><td class="improve">IMBUNATATIRE: adauga in TESTABLE_SERVICES.</td></tr>
+<tr><td><strong>Tavily Search</strong></td><td><code>tavily_client.py</code></td><td>TAVILY_API_KEY (1000/luna free)</td><td>TESTABIL live prin /api/settings/test/tavily.</td><td class="improve">OK — deja acoperit.</td></tr>
+<tr><td><strong>BPI Insolventa</strong></td><td><code>bpi_client.py</code></td><td>Gratuit + Tavily fallback</td><td>Nu are endpoint dedicat de test.</td><td class="improve">IMBUNATATIRE: adauga in TESTABLE_SERVICES.</td></tr>
+<tr><td><strong>Monitorul Oficial (OSINT)</strong></td><td><code>osint_client.py / monitorul_oficial_client.py</code></td><td>Gratuit + Tavily fallback</td><td>Nu are endpoint dedicat de test.</td><td class="improve">IMBUNATATIRE: adauga in TESTABLE_SERVICES.</td></tr>
+<tr><td><strong>VIES (TVA intracomunitar UE)</strong></td><td><code>vies_client.py</code></td><td>Gratuit, fara cheie</td><td>TESTABIL indirect prin POST /api/analysis/vies (are efect real, nu doar test).</td><td class="improve">OK partial.</td></tr>
+<tr><td><strong>Sanctiuni OFAC+UE+ONU</strong></td><td><code>sanctions_client.py</code></td><td>Gratuit, fara cheie (cache local 24h)</td><td>Nu are endpoint dedicat de test.</td><td class="improve">IMBUNATATIRE: adauga in TESTABLE_SERVICES (verifica varsta cache-ului local).</td></tr>
+<tr><td><strong>Eurostat (benchmark UE)</strong></td><td><code>eurostat_client.py</code></td><td>Gratuit, fara cheie</td><td>Nu are endpoint dedicat de test.</td><td class="improve">IMBUNATATIRE: adauga in TESTABLE_SERVICES.</td></tr>
+<tr><td><strong>INS TEMPO (statistici CAEN)</strong></td><td><code>caen_context.py</code></td><td>Gratuit, fara cheie</td><td>Nu are endpoint dedicat de test.</td><td class="improve">IMBUNATATIRE: adauga in TESTABLE_SERVICES.</td></tr>
+<tr><td><strong>AEGRM (garantii mobiliare)</strong></td><td><code>aegrm_client.py</code></td><td>Gratuit, fara cheie</td><td>AEGRM raportat DNS-dead in sesiunea 2026-06-27 (TASK2).</td><td class="improve">VERIFICA: DNS inca picat? Adauga test conectivitate.</td></tr>
+<tr><td><strong>Portal Just (dosare instanta)</strong></td><td><code>just_client.py</code></td><td>Gratuit, SOAP (necesita 'zeep')</td><td>Nu are endpoint dedicat de test. Fallback placeholder daca 'zeep' lipseste.</td><td class="improve">VERIFICA: e instalat 'zeep' in productie?</td></tr>
+<tr><td><strong>Brave Search</strong></td><td><code>brave_client.py</code></td><td>BRAVE_API_KEY (2000/luna free)</td><td>Nu are endpoint dedicat de test.</td><td class="improve">IMBUNATATIRE: adauga in TESTABLE_SERVICES.</td></tr>
+<tr><td><strong>Jina Reader</strong></td><td><code>jina_client.py</code></td><td>JINA_API_KEY optional (1M tok/zi cu cheie)</td><td>Nu are endpoint dedicat de test.</td><td class="improve">IMBUNATATIRE: adauga in TESTABLE_SERVICES.</td></tr>
+<tr><td><strong>Google Maps Places</strong></td><td><code>maps_client.py</code></td><td>GOOGLE_CLOUD_API_KEY ($200 credit/luna)</td><td>Nu are endpoint dedicat de test.</td><td class="improve">IMBUNATATIRE: adauga in TESTABLE_SERVICES + alerta cand se apropie de credit.</td></tr>
+<tr><td><strong>Mistral OCR</strong></td><td><code>documents.py (agent separat de sinteza Mistral)</code></td><td>MISTRAL_API_KEY</td><td>TESTABIL indirect prin POST /api/documents/ocr (are efect real).</td><td class="improve">OK partial.</td></tr></tbody></table>
+
+<h2 id="notif">Canale de notificare — 3</h2>
+<table><thead><tr><th>Canal</th><th>Env var</th><th>Status test</th><th>Imbunatatire sugerata</th></tr></thead><tbody><tr><td><strong>Telegram</strong></td><td><code>TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID</code></td><td>TESTABIL live prin POST /api/settings/test-telegram (trimite mesaj real).</td><td class="improve">OK.</td></tr>
+<tr><td><strong>Email (Gmail SMTP)</strong></td><td><code>GMAIL_USER + GMAIL_APP_PASSWORD</code></td><td>NU are endpoint dedicat de test — doar POST /reports/{id}/send-email (efect real, necesita raport existent).</td><td class="improve">IMBUNATATIRE: adauga /api/settings/test/email cu mesaj minimal, fara sa necesite un raport real.</td></tr>
+<tr><td><strong>Webhook (job complete)</strong></td><td><code>WEBHOOK_URL</code></td><td>NU are endpoint dedicat de test — se declanseaza doar la finalizarea reala a unui job.</td><td class="improve">IMBUNATATIRE: adauga /api/settings/test/webhook care trimite un payload sintetic la URL-ul configurat.</td></tr></tbody></table>
+
+<h2 id="scheduler">Task-uri Scheduler (background) — 7</h2>
+<table><thead><tr><th>Task</th><th>Functie</th><th>Frecventa</th><th>Verificare</th></tr></thead><tbody><tr><td><strong>Monitoring check</strong></td><td><code>_run_monitoring_safe</code></td><td>6h</td><td>Verificat prin tabela scheduler_state (status OK, timestamp recent).</td></tr>
+<tr><td><strong>Cache cleanup</strong></td><td><code>_run_cache_cleanup_safe</code></td><td>12h</td><td>Verificat prin scheduler_state.</td></tr>
+<tr><td><strong>Sanctions refresh</strong></td><td><code>_run_sanctions_refresh_safe</code></td><td>24h</td><td>Verificat prin scheduler_state (pre-warm cache local).</td></tr>
+<tr><td><strong>Auto-update check</strong></td><td><code>_run_auto_update_safe</code></td><td>10 min</td><td>Verificat prin scheduler_state — a rulat real dupa commit-uri (confirmat 2026-07-12).</td></tr>
+<tr><td><strong>Log cleanup</strong></td><td><code>_run_log_cleanup_safe</code></td><td>zilnic</td><td>Verificat prin scheduler_state (sterge log-uri rotite &gt;7 zile).</td></tr>
+<tr><td><strong>Backup DB</strong></td><td><code>_run_backup_safe</code></td><td>zilnic</td><td>Verificat prin scheduler_state + fisiere backups/.</td></tr>
+<tr><td><strong>Auto-reanalyze</strong></td><td><code>(flag per companie, verificat de scheduler)</code></td><td>periodic</td><td>Nemonitorizat separat in scheduler_state — verifica manual daca ruleaza.</td></tr></tbody></table>
+
+<h2 id="formats">Formate raport — 8/8</h2>
+<table><thead><tr><th>Format</th><th>Testat</th><th>Nota</th></tr></thead><tbody><tr><td><strong>PDF</strong></td><td>✅</td><td>Tier 1: HTTP 200, dimensiune reala.</td></tr>
+<tr><td><strong>DOCX</strong></td><td>✅</td><td>Tier 1: HTTP 200, dimensiune reala.</td></tr>
+<tr><td><strong>HTML</strong></td><td>✅</td><td>Tier 1: HTTP 200, verificat continut (inclusiv randare lead_candidates in Partea 3).</td></tr>
+<tr><td><strong>Excel (XLSX)</strong></td><td>✅</td><td>Tier 1: HTTP 200, dimensiune reala.</td></tr>
+<tr><td><strong>PPTX</strong></td><td>✅</td><td>Tier 1: HTTP 200, dimensiune reala.</td></tr>
+<tr><td><strong>1-Pager PDF</strong></td><td>✅</td><td>Tier 1: HTTP 200, dimensiune reala.</td></tr>
+<tr><td><strong>Share link public (HTML)</strong></td><td>✅</td><td>Tier 1: HTTP 200 fara auth, 37KB continut real.</td></tr>
+<tr><td><strong>ZIP batch</strong></td><td>✅</td><td>Tier 2: 14 fisiere (7 formate x 2 firme + CSV sumar).</td></tr></tbody></table>
+
+<h2 id="pages">Pagini frontend — 0/15 verificate vizual</h2>
+<div class="warning-box">Toata verificarea E2E a fost la nivel de API (curl / fetch), NU prin deschiderea efectiva a paginilor in browser. API-ul din spatele fiecarei pagini a fost confirmat functional, dar randarea vizuala reala NU a fost inspectata.</div>
+<table><thead><tr><th>Ruta</th><th>Componenta</th><th>Status</th></tr></thead><tbody><tr><td><code>/</code></td><td>Dashboard</td><td>❌ neverificat vizual in browser</td></tr>
+<tr><td><code>/new-analysis</code></td><td>NewAnalysis</td><td>❌ neverificat vizual in browser</td></tr>
+<tr><td><code>/analysis/:id</code></td><td>AnalysisProgress</td><td>❌ neverificat vizual in browser</td></tr>
+<tr><td><code>/reports</code></td><td>ReportsList</td><td>❌ neverificat vizual in browser</td></tr>
+<tr><td><code>/report/:id</code></td><td>ReportView</td><td>❌ neverificat vizual in browser</td></tr>
+<tr><td><code>/companies</code></td><td>Companies</td><td>❌ neverificat vizual in browser</td></tr>
+<tr><td><code>/company/:id</code></td><td>CompanyDetail</td><td>❌ neverificat vizual in browser</td></tr>
+<tr><td><code>/network/:cui</code></td><td>NetworkGraph</td><td>❌ neverificat vizual in browser</td></tr>
+<tr><td><code>/compare</code></td><td>CompareCompanies</td><td>❌ neverificat vizual in browser</td></tr>
+<tr><td><code>/monitoring</code></td><td>Monitoring</td><td>❌ neverificat vizual in browser</td></tr>
+<tr><td><code>/batch</code></td><td>BatchAnalysis</td><td>❌ neverificat vizual in browser</td></tr>
+<tr><td><code>/quick-tools</code></td><td>QuickTools</td><td>❌ neverificat vizual in browser</td></tr>
+<tr><td><code>/sector</code></td><td>SectorDashboard</td><td>❌ neverificat vizual in browser</td></tr>
+<tr><td><code>/ocr</code></td><td>OcrPage</td><td>❌ neverificat vizual in browser</td></tr>
+<tr><td><code>/settings</code></td><td>Settings</td><td>❌ neverificat vizual in browser</td></tr></tbody></table>
+
+<footer>
+  RIS — Audit Functii — regenerat din <code>tools/generate_audit_dashboard.py</code>.
+  Regula: acest fisier trebuie regenerat dupa orice endpoint/functie noua (vezi CLAUDE.md, sectiunea Audit Functii).
+</footer>
+
+<script src="/audit.js"></script>
+</body>
+</html>

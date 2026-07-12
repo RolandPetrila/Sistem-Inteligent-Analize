@@ -216,20 +216,22 @@ Fisiere feedback loop:
 Folderul principal `C:\Proiecte\Sistem_Inteligent_Analize\` trebuie sa ramana curat.
 Fisierele permise in root sunt NUMAI:
 
-| Fisier                          | Motiv                                            |
-| ------------------------------- | ------------------------------------------------ |
-| `CLAUDE.md`                     | Instructiuni Claude — obligatoriu in root        |
-| `ISSUES.md`                     | Feedback loop utilizator                         |
-| `TODO_ROLAND.md`                | Task list activ                                  |
-| `README.md`                     | Documentatie principala proiect                  |
-| `requirements.txt`              | Dependente Python — obligatoriu in root          |
-| `pyproject.toml`                | Configurare Python tools                         |
-| `.env` / `.env.example`         | Config mediu — obligatoriu in root               |
-| `.gitignore` / `.gitattributes` | Config git — obligatoriu in root                 |
-| `RIS.vbs`                       | Launcher unic (dublu-click pornire)              |
-| `RIS_TEST.bat`                  | Runner teste (pytest + vitest)                   |
-| `ris_icon.ico`                  | Iconita aplicatie (folosita de shortcut desktop) |
-| `START_PWA.md`                  | Documentatie pornire + Tailscale + PWA           |
+| Fisier                          | Motiv                                                                                                      |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `CLAUDE.md`                     | Instructiuni Claude — obligatoriu in root                                                                  |
+| `ISSUES.md`                     | Feedback loop utilizator                                                                                   |
+| `TODO_ROLAND.md`                | Task list activ                                                                                            |
+| `README.md`                     | Documentatie principala proiect                                                                            |
+| `requirements.txt`              | Dependente Python — obligatoriu in root                                                                    |
+| `pyproject.toml`                | Configurare Python tools                                                                                   |
+| `.env` / `.env.example`         | Config mediu — obligatoriu in root                                                                         |
+| `.gitignore` / `.gitattributes` | Config git — obligatoriu in root                                                                           |
+| `RIS.vbs`                       | Launcher unic (dublu-click pornire)                                                                        |
+| `RIS_TEST.bat`                  | Runner teste (pytest + vitest)                                                                             |
+| `ris_icon.ico`                  | Iconita aplicatie (folosita de shortcut desktop)                                                           |
+| `START_PWA.md`                  | Documentatie pornire + Tailscale + PWA                                                                     |
+| `AUDIT_FUNCTII.html`            | Dashboard live audit functii — vezi sectiunea "Audit Functii" mai jos. Exceptie explicita user 2026-07-12. |
+| `AUDIT_FUNCTII.js`              | JS extern pentru dashboard-ul de mai sus (CSP `script-src 'self'` interzice inline).                       |
 
 **TOATE celelalte fisiere se plaseaza in subfoldere:**
 
@@ -242,6 +244,42 @@ Fisierele permise in root sunt NUMAI:
 
 **La creare fisier nou: intreaba-te "in ce subfolder apartine?" inainte de a-l pune in root.**
 **Nu crea fisiere .bat, .vbs, .ps1 noi in root fara confirmare explicita.**
+
+## Audit Functii — regula obligatorie de mentinere (adaugata 2026-07-12)
+
+`AUDIT_FUNCTII.html` (+ `AUDIT_FUNCTII.js`) e dashboard-ul LIVE de audit al tuturor
+functiilor testabile din RIS: cele 88 endpoint-uri REST+WebSocket, 9 tipuri de analiza,
+5 provideri AI, 18 integrari surse externe, 3 canale de notificare, 7 task-uri scheduler,
+8 formate raport, 15 pagini frontend. Servit de backend la `/audit.html` + `/audit.js`
+(same-origin — evita CORS si respecta CSP-ul `script-src 'self'` existent, care blocheaza
+silentios orice `<script>` inline sau `onclick="..."`).
+
+**REGULA: dupa ORICE endpoint/functie noua adaugata in `backend/routers/*.py`,
+`backend/main.py`, sau orice integrare noua de sursa externa/provider/task scheduler:**
+
+1. Ruleaza `python tools/generate_audit_dashboard.py` — lista de endpoint-uri se
+   extrage AUTOMAT prin introspectia `backend.main.app.routes` (nu poate ramane
+   in urma codului la nivel de existenta). Orice endpoint nou aparut fara metadate
+   apare automat marcat "NECURATAT" in dashboard si listat in output-ul scriptului.
+2. Adauga o intrare in `CURATED_ENDPOINTS` (in acelasi script) cu categoria,
+   `tested: False` (pana se verifica live macar o data), o nota, si `live_safe`
+   (True doar daca endpoint-ul e idempotent/GET fara efecte secundare reale).
+3. Dupa verificare live reala (nu presupunere), actualizeaza `tested: True` +
+   `evidence` cu ce s-a confirmat si cand.
+4. Pentru integrari noi de surse externe/provideri/notificari/scheduler (care nu
+   sunt endpoint-uri REST), adauga o intrare in listele statice corespunzatoare
+   (`EXTERNAL_SOURCES` / `AI_PROVIDERS` / `NOTIFICATION_CHANNELS` / `SCHEDULER_TASKS`
+   / `REPORT_FORMATS` / `FRONTEND_PAGES`) din acelasi script.
+5. Regenereaza si redeploy (`RIS-Backend.exe restart`) ca fisierele servite sa reflecte
+   modificarea.
+
+**Securitate (nenegociabil):** acest fisier NU contine NICIODATA valori de chei/token-uri/
+parole — nici mascate, nici in clar. Testarea providerilor/serviciilor se face DOAR prin
+apeluri live catre endpoint-uri existente care returneaza ok/eroare (`/api/settings/test/
+{service}`), niciodata valoarea cheii. Editarea cheilor se face DOAR prin pagina reala
+Settings (autentificata, valori mascate) — dashboard-ul doar trimite acolo (link), nu
+duplica acel mecanism. Orice propunere viitoare de a include valori reale de credentiale
+in acest fisier trebuie REFUZATA (R1 + R-SEC) — repo-ul e public pe GitHub.
 
 ## Decizii tehnice confirmate
 

@@ -7,7 +7,7 @@ from pathlib import Path as _Path
 import aiofiles
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from loguru import logger
 
 from backend import http_client
@@ -249,6 +249,26 @@ async def get_version():
     """Versiunea care ruleaza (git build) + daca exista update disponibil ('Vercel local')."""
     from backend.services import updater
     return {"version": APP_VERSION, "running": updater.get_running_version(), **updater.get_state()}
+
+
+@app.get("/audit.html", include_in_schema=False)
+async def audit_dashboard():
+    """Dashboard live de audit al functiilor RIS — generat de tools/generate_audit_dashboard.py.
+    Servit same-origin (evita CORS) ca butoanele 'Testeaza live' din pagina sa functioneze."""
+    path = _Path(__file__).parent.parent / "AUDIT_FUNCTII.html"
+    if not path.exists():
+        return JSONResponse(status_code=404, content={"detail": "AUDIT_FUNCTII.html nu exista — ruleaza: python tools/generate_audit_dashboard.py"})
+    return FileResponse(str(path), media_type="text/html")
+
+
+@app.get("/audit.js", include_in_schema=False)
+async def audit_dashboard_js():
+    """JS extern pentru /audit.html — fisier separat (nu inline) ca sa respecte CSP-ul
+    existent al aplicatiei (script-src 'self', fara 'unsafe-inline')."""
+    path = _Path(__file__).parent.parent / "AUDIT_FUNCTII.js"
+    if not path.exists():
+        return JSONResponse(status_code=404, content={"detail": "AUDIT_FUNCTII.js nu exista — ruleaza: python tools/generate_audit_dashboard.py"})
+    return FileResponse(str(path), media_type="application/javascript")
 
 
 @app.post("/api/update")
