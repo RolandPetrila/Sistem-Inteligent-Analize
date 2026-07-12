@@ -191,3 +191,87 @@ sursele de bază ANAF/BNR/ONRC) ca să nu irosesc cotă nou pe firme noi fără 
   externe) — nu distinge intre ele, doar cauta orice 2 tipare "X.XM RON" in text.
   Severitate mica (doar log warning intern, nu ajunge in raportul afisat userului) — notat,
   nu reparat acum (in afara scope-ului acestei verificari E2E).
+
+### Restul Tier 2 — TOATE VERIFICATE OK (fara alte bug-uri noi)
+
+- Batch: preview → create real (2 CUI) → progress → DONE 2/2 → download ZIP (14 fisiere:
+  7 formate × 2 firme + sumar CSV). OK.
+- Monitoring: create → list → toggle → toggle back → audit-log → health → history →
+  check-now (real, 0 alerte declansate) → suppress → delete (cleanup). Toate OK.
+- Companii: fts search, risk-movers, favorites, tags, note, network, timeline, predictive,
+  export/csv, auto-reanalyze — toate OK. (network/timeline goale pt Mosslein — plauzibil,
+  nu au fost gasite date OSINT/relatii, nu neaparat bug.)
+- NLQ: `/api/ask` (raspuns structurat inteligent, date reale) + `parse-query` (95%
+  confidence, extras corect analysis_type + CUI). OK.
+- Quick tools: `quick-score` (batch 2 CUI, date reale ANAF+Bilant) + VIES (validare TVA
+  live, date reale UE). OK.
+- OCR: upload imagine test → text extras corect (Mistral). OK.
+- Reports: `delta` (corect "prima analiza" pt tip nou de raport), `list`. OK.
+- Settings: test groq/gemini (OK dinainte) — vezi bug separat mai jos pt mistral/cerebras.
+- **Efecte reale aprobate**: Telegram test → trimis cu succes. Email test → esuat CORECT
+  cu mesaj clar (`GMAIL_USER`/`GMAIL_APP_PASSWORD` goale in `.env` — gap de configurare
+  cunoscut dinainte, NU bug de cod).
+
+### BUG REAL #3: score-trend — company_id: int (ar fi trebuit str, UUID)
+
+- `GET /companies/{company_id}/score-trend` → HTTP 422 mereu pt orice apel real (frontend-ul
+  trimite UUID string, ruta declara `company_id: int`). `score_history.company_id` +
+  `companies.id` sunt `TEXT` (UUID) peste tot in schema si cod — feature complet
+  nefunctional de la introducere (CompanyDetail score trend / sparkline).
+- Fix: `company_id: int` → `company_id: str`. Commit `fff2feb`. Verificat live: 200 OK,
+  date reale (istoric scoruri + delta calculat corect via LAG window function).
+
+### BUG REAL #4: timeline-report/pdf — crash 100% reproductibil pe caracter Unicode
+
+- `GET /companies/{cui}/timeline-report/pdf` → HTTP 500 mereu. Traceback:
+  `FPDFUnicodeEncodingException` — caracterul em-dash "—" in `TimelinePdf.header()`
+  (apelat automat de fpdf la fiecare `add_page()`) trimis direct la fontul Helvetica
+  (latin-1), fara sa treaca prin helper-ul local `_sanitize()` deja folosit consecvent
+  in restul continutului fisierului. Acelasi risc latent la fallback-ul `"year"` lipsa.
+- Fix: ambele locuri infasurate cu `_sanitize()`. Commit `fff2feb`. Verificat live:
+  200 OK, PDF valid (2.4KB).
+
+### BUG REAL #5: export/ics — cheie JSON gresita, feature mort de la introducere
+
+- `GET /reports/{id}/export/ics` → HTTP 404 "Nu exista licitatii" chiar si pe raportul
+  TENDER_OPPORTUNITIES cu 15 licitatii deschise reale confirmate (deadline-uri, CPV-uri,
+  autoritati contractante). Cauza: citea `data["market"]["seap_tenders"]` — cheie
+  niciodata scrisa nicaieri in cod (grep confirmat 0 rezultate). Datele reale sunt in
+  `data["tender_opportunities"]["opportunities"]` (Angle A v2), cu campuri
+  `deadline`/`title`/`authority`/`value`/`notice_no` in loc de `deadline_date`/`id`.
+- Fix: cale + campuri corectate. Commit `9a069d2`. Verificat live: 200 OK, .ics valid
+  cu 15 evenimente reale (deadline-uri corecte, UID stabil din notice_no).
+
+### BUG REAL #6: settings test/{service} — Mistral + Cerebras netestabile
+
+- Descoperit imediat dupa fix-ul Cerebras (#Tier1): endpoint-ul de test conectivitate
+  suporta doar groq/gemini/tavily/telegram — Mistral si Cerebras (2 din 5 provideri
+  activi in lantul de sinteza) nu puteau fi verificati nici din UI, nici din API.
+  Exact genul de gol care a lasat bug-ul Cerebras (#Tier1) nedetectat luni de zile.
+- Fix: adaugate ambele, reutilizand `_PROVIDERS` din `synthesis_providers.py` (sursa
+  unica, evita alt drift). Commit `41ab809`. Verificat live: ambele HTTP 200.
+- Observatie NErezolvata (semnalata, nu fixata): `MISTRAL_API_KEY`/`CEREBRAS_API_KEY`
+  nu apar deloc in formularul Settings.tsx (doar 7 campuri: Tavily/Gemini/Synthesis mode/
+  Telegram x2/Gmail x2) — decizie de scop UI mai mare, las-o userului.
+
+### Tier 3 — verificat prin checkpoint DB (mai bun decat grep pe log)
+
+- `logs/ris_runtime.log` e filtrat WARNING+ (documentat in CLAUDE.md) — grep pe "scheduler"
+  a dat 0 rezultate fals-ingrijorator (loguru scrie INFO doar in sink-ul de fisier, nu si
+  in stdout-ul capturat de WinSW). Dovada reala: tabela `scheduler_state` — toate 7 task-uri
+  (backup/log_cleanup/monitoring/cache_cleanup/auto_reanalyze/sanctions_refresh/auto_update)
+  au timestamp recent + status "OK". `auto_update` a rulat la 14:42 UTC azi (dupa commiturile
+  mele), confirmand ca bucla de verificare la 10 min chiar functioneaza in productie.
+- `/api/update` + `/api/restart`: NU re-testate live (ar fi intrerupt sesiunea) — mecanismul
+  a fost deja verificat live in sesiunea anterioara (PID schimbat dupa self-exit + WinSW
+  onfailure). Cod nemodificat de atunci.
+
+## Sumar final
+
+**6 bug-uri reale gasite si reparate** (toate live-verificate, 440 pytest PASSED la fiecare
+pas, 0 erori TypeScript): Cerebras model retras din catalog, `companies.caen_code`/`county`
+niciodata populate (rupea /sector), `score-trend` type mismatch, `timeline-report/pdf` crash
+Unicode, `export/ics` cheie gresita, `settings test/{service}` incomplet. Plus 1 finding
+nefixat intentionat (SYNTHESIS_MODE — decizie lasata userului) + 2 observatii minore
+(coherence-checker fals-pozitiv, Settings.tsx nu expune toti providerii). Artefacte de test
+curatate de pe firma reala (Mosslein). Cleanup local (`$TEMP`) nu afecteaza proiectul.
