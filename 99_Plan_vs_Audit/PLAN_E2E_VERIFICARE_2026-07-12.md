@@ -289,11 +289,9 @@ sursele de bază ANAF/BNR/ONRC) ca să nu irosesc cotă nou pe firme noi fără 
 
 ## Onestitate asupra scope-ului acoperit (limite reale ale acestei verificari)
 
-- **6 din 9 AnalysisType NU au fost rulate deloc**: COMPETITION_ANALYSIS, FUNDING_OPPORTUNITIES,
-  MARKET_ENTRY_ANALYSIS, LEAD_GENERATION, MONITORING_SETUP, CUSTOM_REPORT. Am confirmat ca
-  fiecare tip produce un set diferit de sectiuni — deci cele 6 netestate pot avea propriile
-  bug-uri de wiring specifice tipului (ca #7, gasit doar prin testarea efectiva a TENDER_
-  OPPORTUNITIES). "Toate fluxurile" NU a fost atins literal — doar un esantion reprezentativ.
+- ~~6 din 9 AnalysisType NU au fost rulate deloc~~ **REZOLVAT in Partea 2** (vezi jos) — toate
+  9 tipuri testate live acum, 3 bug-uri suplimentare gasite + reparate (#8-10) + 3 feature-uri
+  lipsa documentate.
 - **Degradarea sub sarcina concurenta NU e 100% eliminata**, doar mult redusa: re-testul cu 2
   joburi simultane a aratat 1/10 sectiuni tot picand ("ALL providers failed") cand Groq+Cerebras
   au fost rate-limitate simultan. Batch analysis (feature reala, folosita) ruleaza exact in
@@ -304,16 +302,109 @@ sursele de bază ANAF/BNR/ONRC) ca să nu irosesc cotă nou pe firme noi fără 
   API-ul raspunde corect cu date reale, dar NU am deschis efectiv paginile in browser sa confirm
   ca frontend-ul le randeaza corect vizual.
 
-## Sumar final
+## PARTEA 2 — testare celelalte 6 AnalysisType (cerut explicit de user dupa raportul initial)
 
-**7 bug-uri reale gasite si reparate** (toate live-verificate, 440 pytest PASSED la fiecare
-pas, 0 erori TypeScript): Cerebras model retras din catalog, `companies.caen_code`/`county`
-niciodata populate (rupea /sector), `score-trend` type mismatch, `timeline-report/pdf` crash
-Unicode, `export/ics` cheie gresita, `settings test/{service}` incomplet, sectiunea
-"opportunities" nu stia de Angle A v2 (gasit prin verificare adversariala advisor — cel mai
-relevant pt plangerea initiala a userului). Plus 1 finding nefixat intentionat (SYNTHESIS_MODE
-— decizie lasata userului), 1 feature lipsa descoperita dar neconstruita (competition analysis
-nu colecteaza deloc date reale despre competitori), 2 observatii minore (coherence-checker
-fals-pozitiv, Settings.tsx nu expune toti providerii), si 3 limite oneste de scop (6/9
-AnalysisType netestate, degradare sub concurenta redusa dar nu eliminata, verificare doar la
-nivel API nu si vizual in browser). Artefacte de test curatate de pe firma reala (Mosslein).
+Metodologie identica: joburi reale, secvential (nu concurent, semnal curat), pe CUI 26313362.
+
+### BUG REAL #8: "opportunities" nu stia nici de funding_programs (AnalysisType FUNDING_OPPORTUNITIES)
+
+- Aceeasi familie ca #7, alt camp. `verified_data["funding_programs"]["eligible"]` avea date
+  REALE (1 program, 200.000 EUR, termen 2026-12-31) dar sectiunea centrala a tipului
+  FUNDING_OPPORTUNITIES cadea pe fallback — gate-ul + contextul stiau doar de
+  tender_opportunities (fix #7), nu si de funding_programs.
+- Fix: extins gate + section_data_map. Commit `e74392b`. Verificat live: 295→806 caractere,
+  text real cu programul de finantare corect descris.
+
+### BUG REAL #9 (cel mai sever gasit in toata sesiunea): MARKET_ENTRY_ANALYSIS + LEAD_GENERATION + CUSTOM_REPORT nu extrageau CUI din campul lor de intrare
+
+- Aceste 3 tipuri NU au camp dedicat "cui" in wizard — au "company" (Market Entry/Lead Gen)
+  sau "description" (Custom Report), text liber. `agent_official.py` citea DOAR
+  `input_params["cui"]` → mereu gol pt aceste 3 tipuri → **0/16 completitudine GARANTAT
+  pentru orice utilizator real**, indiferent ce scria, chiar daca includea explicit un CUI.
+- Verificat live INAINTE de fix: job MARKET_ENTRY_ANALYSIS cu
+  `company="MOSSLEIN SRL, CUI 26313362"` → completeness=0, 16/16 goluri,
+  executive_summary/swot/recommendations toate blocate (gate completeness<30%).
+- Fix: extragere CUI (regex) din ORICE camp text din `input_params`, nu doar un nume
+  hardcodat — evita sa reparam aceeasi problema per tip de-a lungul timpului. Commits
+  `1497ec7` (initial, "company") + `df7768d` (generalizat, acopera si "description").
+- **Verificat live pe toate 3, DUPA fix**: MARKET_ENTRY completeness 0→88 (executive_summary/
+  opportunities/swot/recommendations toate text real; doar "competition" ramane fallback —
+  vezi #Bug-conex mai jos). LEAD_GENERATION completeness 0→88. CUSTOM_REPORT completeness
+  0→88.
+- Acesta e cel mai sever bug gasit in toata sesiunea: afecta 3 din 9 tipuri de analiza,
+  GARANTAT (nu ocazional), pentru orice utilizator real care folosea wizard-ul normal.
+
+### BUG REAL #10: KeyError('anaf') — crash cand ANAF nu returneaza date
+
+- Descoperit testand MONITORING_SETUP (input_params={}). `official_data["anaf"]` accesat
+  direct dupa un `isinstance(official_data.get("anaf", {}), dict)` — verificarea foloseste
+  `.get()` cu default (mereu dict, mereu True), dar accesul de mai jos revenea la `[]`
+  direct → KeyError cand cheia real lipseste.
+- **NU limitat la tipul deferred**: orice CUI real unde ANAF nu raspunde SI openapi.ro nu
+  are caen_code (ambele surse esuate simultan) ar fi lovit acelasi crash in Agent 1
+  (folosit de toate cele 9 tipuri). Fix: `.get("anaf", {})` consecvent. Commit `ccda144`.
+
+### Feature-uri promise dar NEIMPLEMENTATE (descoperite, NU construite — decizii pentru user)
+
+1. **COMPETITION_ANALYSIS**: nicio colectare reala de date despre competitori nicaieri in
+   cod (`web_presence.competitors` nescris niciodata). Sectiunea "competition" — titulara
+   tipului — cade mereu pe fallback, pentru COMPETITION_ANALYSIS SI MARKET_ENTRY_ANALYSIS
+   (ambele o folosesc). Verificat live pe ambele tipuri, confirmat identic.
+2. **LEAD_GENERATION**: nu cauta/lista firme candidate care se potrivesc profilului
+   "ideal_client" — campul e capturat dar niciodata folosit pentru o cautare reala. Raportul
+   generat vorbeste despre firma solicitanta insasi, nu despre o lista de prospecti — tipul
+   nu livreaza ce promite ("Identifica firme care ar putea deveni clienti").
+3. **CUSTOM_REPORT**: campul "description" (cererea libera a userului — intreaga premisa a
+   tipului: "orice combinatie de sectiuni, cerere libera") nu e folosit NICAIERI in pipeline
+   (grep confirmat 0 rezultate) — raportul generat e identic structural cu un template fix
+   (5 sectiuni), indiferent ce cere userul in text.
+
+Toate 3 sunt feature-uri lipsa (nu bug-uri de wiring ca #1-10) — ar necesita constructie noua
+(cautare firme candidate, colectare date competitori, prompt dinamic din text liber), nu doar
+corectarea unei chei/tip gresit. Semnalate userului, nu implementate acum.
+
+### Job status inconsistent — documentat, NU investigat mai departe
+
+Job-ul MONITORING_SETUP de test a scris cu succes toate 5 formatele de raport pe disc, dar
+statusul din DB a ramas "PAUSED" — handler-ul de recovery la pornirea serviciului
+(`main.py:70-79`, marcheaza orice job "RUNNING" ca "PAUSED" la fiecare startup) l-a prins
+in fereastra RUNNING→DONE, la un restart care a avut loc la 20s dupa startul jobului (posibil
+auto-updater-ul, neclar). Nu am investigat mai departe — tipul e explicit "deferred" in cod.
+
+## Sumar final (dupa ambele parti — toate 9 AnalysisType testate)
+
+**10 bug-uri reale gasite si reparate** (toate live-verificate, 440 pytest PASSED la fiecare
+pas, 0 erori TypeScript):
+
+1. Cerebras — model retras din catalog, mort ~2-3 luni
+2. `companies.caen_code`/`county` niciodata populate — rupea `/sector`
+3. `score-trend` — type mismatch (int vs UUID text)
+4. `timeline-report/pdf` — crash Unicode 100% reproductibil
+5. `export/ics` — cheie JSON gresita (market.seap_tenders inexistent)
+6. `settings test/{service}` — Mistral+Cerebras netestabile
+7. sectiunea "opportunities" nu stia de `tender_opportunities` (gasit adversarial, advisor)
+8. sectiunea "opportunities" nu stia de `funding_programs`
+9. **MARKET_ENTRY_ANALYSIS + LEAD_GENERATION + CUSTOM_REPORT — CUI niciodata extras din
+   campul lor de intrare — 0/16 completitudine GARANTAT pt orice user real** (cel mai sever
+   bug al sesiunii, afecta 3/9 tipuri necondiional)
+10. `KeyError('anaf')` — crash cand ANAF nu returneaza date (afecteaza toate 9 tipurile in
+    conditii rare de esec dublu ANAF+openapi.ro)
+
+**3 feature-uri promise dar NEIMPLEMENTATE** (descoperite, NU construite — decizii pt user):
+COMPETITION_ANALYSIS + MARKET_ENTRY_ANALYSIS nu au nicio colectare reala de date despre
+competitori; LEAD_GENERATION nu cauta/lista firme candidate (doar vorbeste despre firma
+solicitanta); CUSTOM_REPORT ignora complet cererea libera a userului (template fix).
+
+**1 finding lasat la decizia userului**: SYNTHESIS_MODE=autonomous (Claude CLI ar cadea
+tacut pe fallback in configuratia actuala de serviciu SYSTEM).
+
+**1 inconsistenta documentata, neinvestigata pana la capat**: job MONITORING_SETUP completat
+cu succes (fisiere scrise) dar status DB "PAUSED" — prins de handler-ul de recovery la un
+restart cu cauza neclara.
+
+**2 observatii minore**: coherence-checker fals-pozitiv pe 2 sume monetare diferite;
+Settings.tsx nu expune toti cei 5 provideri de sinteza in formular.
+
+**Limite oneste ramase**: degradarea sub sarcina concurenta e mult redusa dar NU eliminata
+(retry/backoff pe 429 neaplicat — schimbare mai mare); toata verificarea a fost la nivel de
+API, nu vizual in browser. Artefacte de test curatate de pe firma reala (Mosslein).
