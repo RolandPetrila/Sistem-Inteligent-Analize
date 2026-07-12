@@ -120,16 +120,25 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 class ApiKeyMiddleware(BaseHTTPMiddleware):
-    """Daca RIS_API_KEY e setat in .env, cere header X-RIS-Key pe /api/ endpoints."""
+    """Daca RIS_API_KEY e setat in .env, cere header X-RIS-Key pe /api/ endpoints.
+
+    /api/reports/public/ e exceptat DELIBERAT — e link-ul de share extern
+    (destinatari fara cheie, vezi POST /api/reports/{id}/share), nu o gaura
+    de autentificare."""
 
     _EXEMPT_PATHS = ("/api/health", "/api/health/deep", "/api/frontend-log")
+    _EXEMPT_PREFIXES = ("/api/reports/public/",)
 
     async def dispatch(self, request: Request, call_next):
         if not settings.ris_api_key:
             return await call_next(request)
 
         path = request.url.path
-        if path in self._EXEMPT_PATHS or path.startswith("/ws/"):
+        if (
+            path in self._EXEMPT_PATHS
+            or path.startswith(self._EXEMPT_PREFIXES)
+            or path.startswith("/ws/")
+        ):
             return await call_next(request)
 
         if path.startswith("/api/"):

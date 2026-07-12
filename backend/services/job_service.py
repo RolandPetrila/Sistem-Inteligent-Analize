@@ -81,19 +81,23 @@ def _is_private_ip(hostname: str) -> bool:
         return True  # fail-safe: block if can't resolve
 
 
-async def _send_webhook_if_configured(job_id: str, report_data: dict):
-    """F3-1: Trimite POST webhook la URL configurat dupa finalizarea unui job."""
+async def _send_webhook_if_configured(job_id: str, report_data: dict) -> dict:
+    """F3-1: Trimite POST webhook la URL configurat dupa finalizarea unui job.
+
+    Returneaza un rezultat structurat (nu doar log) — reutilizat si de
+    POST /api/settings/test/webhook pentru un payload sintetic, ca sa nu
+    existe doua implementari ale acleiasi validari SSRF/HTTPS."""
     from backend.config import settings
     webhook_url = settings.webhook_url
     if not webhook_url:
-        return
+        return {"sent": False, "reason": "WEBHOOK_URL nu este configurat"}
     parsed = urlparse(webhook_url)
     if parsed.scheme != "https" or not parsed.hostname:
         logger.warning(f"[webhook] URL invalid sau non-HTTPS: {webhook_url[:50]}")
-        return
+        return {"sent": False, "reason": "URL invalid sau non-HTTPS"}
     if _is_private_ip(parsed.hostname):
         logger.warning("[webhook] Webhook URL blocat — IP privat/localhost detectat")
-        return
+        return {"sent": False, "reason": "URL blocat — IP privat/localhost detectat"}
     payload = {
         "event": "analysis_completed",
         "job_id": job_id,
@@ -106,10 +110,12 @@ async def _send_webhook_if_configured(job_id: str, report_data: dict):
     try:
         from backend.http_client import get_client
         c = get_client()
-        await c.post(webhook_url, json=payload, timeout=5)
+        r = await c.post(webhook_url, json=payload, timeout=5)
         logger.info(f"[webhook] Trimis OK pentru job {job_id}")
+        return {"sent": True, "status_code": r.status_code}
     except Exception as e:
         logger.warning(f"[webhook] Esuat: {e}")
+        return {"sent": False, "reason": str(e)[:200]}
 
 
 async def _prepare_job_state(job_id: str, ws_manager=None) -> tuple[dict, "AnalysisState", object]:

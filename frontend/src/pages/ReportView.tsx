@@ -24,8 +24,7 @@ import { EmailModal } from "@/components/report/EmailModal";
 // A synthesis section value is normally an object {title, content, word_count};
 // the orchestrator error path stores a bare string instead — handle both.
 type ReportSectionValue =
-  | string
-  | { title?: string; content?: string; word_count?: number };
+  string | { title?: string; content?: string; word_count?: number };
 
 // Sections that the backend can re-generate individually
 // (mirror of VALID_SECTIONS in backend/routers/jobs.py).
@@ -124,8 +123,8 @@ export default function ReportView() {
         const cui = rep.full_data?.company?.cui?.value as string | undefined;
         if (cui) {
           setPredictiveLoading(true);
-          fetch(`/api/companies/${cui}/predictive`)
-            .then((r) => (r.ok ? r.json() : null))
+          api
+            .getPredictive(cui)
             .then(setPredictiveScores)
             .catch(() => setPredictiveScores(null))
             .finally(() => setPredictiveLoading(false));
@@ -207,8 +206,7 @@ export default function ReportView() {
   };
 
   const scoringDimensions:
-    | Record<string, { score: number; weight: number }>
-    | undefined =
+    Record<string, { score: number; weight: number }> | undefined =
     riskScore?.dimensions ||
     (
       data?.scoring as

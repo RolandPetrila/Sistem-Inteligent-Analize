@@ -8,43 +8,38 @@ pentru istoricul planului initial pe faze.
 
 ---
 
-## URMATOAREA SESIUNE (checkpoint 2026-07-12)
+## SESIUNE 2026-07-12 (A+B+C+D) — COMPLETATA
 
-Snapshot complet: `~/.claude/context-snapshots/Sistem_Inteligent_Analize-checkpoint-2026-07-12/snapshot.md`
-Memorie: `project_ris_audit_dashboard` + `project_ris_next_actions` (in `~/.claude/projects/.../memory/`)
+Task cerut explicit de user: implementeaza recomandarile din `AUDIT_FUNCTII.html`
+(coloana "Imbunatatire sugerata"), apoi testeaza tot sistemul. Detalii complete in
+`CLAUDE.md` (sectiunea Status) si memory `project_ris_audit_dashboard_ping_registry`.
 
-**Task cerut explicit de user: implementeaza recomandarile din `AUDIT_FUNCTII.html`
-(coloana "Imbunatatire sugerata"), apoi testeaza tot sistemul.**
+**A** — `backend/agents/tools/connectivity.py` nou: `PING_REGISTRY` (15 functii `ping_*`,
+nu 15 blocuri `elif`), dispatch din `POST /api/settings/test/{service}`. Rezultate live:
+11/15 OK (ANAF TVA/Bilant, BNR, openapi.ro, SEAP, Monitorul Oficial, Sanctiuni, Eurostat,
+Brave, Jina, Google Maps), 4 FAIL reale — **BPI (buletinul.ro) DNS-dead**, **INS TEMPO
+timeout/offline**, **AEGRM tot DNS-dead** (confirmat, ca la 2026-06-27), **Portal Just:
+`zeep` NU e instalat** (`pip install zeep` — nefacut, decizie lasata userului).
 
-### A. Test conectivitate pentru 15 surse externe fara endpoint dedicat
+**B** — `POST /api/settings/test/email` (send_email minimal) + `POST /api/settings/test/webhook`
+(reutilizeaza `_send_webhook_if_configured` din `job_service.py`, acum returneaza rezultat
+structurat in loc de doar log).
 
-ANAF TVA, ANAF Bilant, BNR, openapi.ro/ONRC (+ cota ramasa), SEAP/SICAP, BPI Insolventa,
-Monitorul Oficial, Sanctiuni OFAC+UE+ONU (+ varsta cache), Eurostat, INS TEMPO,
-AEGRM (**verifica intai daca tot e DNS-dead**), Portal Just (**verifica daca `zeep` e
-instalat**), Brave Search, Jina Reader, Google Maps (+ alerta credit). Extinde
-`TESTABLE_SERVICES` din `backend/routers/settings.py`, sau proiecteaza un pattern
-generic (`async def ping()` per client) daca 15 blocuri `elif` hardcodate devin greu
-de intretinut.
+**C** — Confirmat live: `RIS_API_KEY` absent din `.env`, backend pe `0.0.0.0:8001`, TOATE
+`/api/*` fara autentificare (verificat cu curl, 200 fara header). Frontend nu trimitea deloc
+`X-RIS-Key`. Fix ales de user: cheie generata + `.env` (backend) + `frontend/.env`
+(`VITE_RIS_API_KEY`, gitignored) + `api.ts` (request() central + toate fetch()-urile brute +
+ChatInput.tsx + ReportView.tsx) trimit automat header-ul. `/api/reports/public/` exceptat
+explicit in `ApiKeyMiddleware` (share link extern). `tests/conftest.py` fixture nou —
+izoleaza pytest de `RIS_API_KEY` local. Verificat live: 401 fara cheie, 200 cu cheie, PWA
+functionala in browser (0 erori consola, toate cererile 200).
 
-### B. Test dedicat notificari
-
-`/api/settings/test/email` (mesaj minimal, fara raport real) + `/api/settings/test/webhook`
-(payload sintetic la `WEBHOOK_URL`).
-
-### C. Investigheaza finding de securitate NEVERIFICAT
-
-`GET /api/analysis/types` fara `X-RIS-Key` a raspuns HTTP 200 (asteptat 401). Ipoteza:
-`RIS_API_KEY` gol in `.env` → `ApiKeyMiddleware` compara `""=="")` → trece vacuu. Verifica
-daca e setat (fara sa afisezi valoarea); daca nu, seteaza unul sau fa middleware-ul
-fail-closed.
-
-### D. Dupa A+B+C — testeaza TOT sistemul
-
-1. `python tools/generate_audit_dashboard.py` — 0 endpoint-uri "NECURATAT".
-2. Verifica LIVE fiecare test nou (nu doar cod scris), marcheaza `tested: True` real.
-3. Redeploy + retest in browser (`http://localhost:8001/audit.html`) — click efectiv.
-4. `RIS_TEST.bat` — tinta 440+ pytest PASSED, 0 regresii.
-5. Update `CLAUDE.md` + memorie + commit + push.
+**D** — `AUDIT_FUNCTII.html` regenerat (0 necuratate) cu butoane "Testeaza live" pt toate
+sursele noi + rezultate reale in coloana Nota. 440 pytest PASSED. Vitest: 29/29 (4 fisiere:
+cui-validator, ReportView, Dashboard — fix mic aplicat (`getVersion` lipsea din mock,
+bug preexistent din sprintul "Auto-update" de azi, nelegat de sesiunea asta), NewAnalysis).
+`Companies.test.tsx` hang preexistent (confirmat si pe baseline fara modificarile mele) —
+neinvestigat, in afara scopului acestei sesiuni.
 
 ---
 

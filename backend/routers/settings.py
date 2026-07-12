@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends
 from loguru import logger
 from pydantic import BaseModel
 
+from backend.agents.tools.connectivity import PING_REGISTRY, run_ping
 from backend.config import settings
 from backend.security import require_api_key
 
@@ -227,16 +228,23 @@ async def test_telegram():
     return {"success": ok}
 
 
-TESTABLE_SERVICES = ["groq", "gemini", "mistral", "cerebras", "tavily", "telegram"]
+TESTABLE_SERVICES = ["groq", "gemini", "mistral", "cerebras", "tavily", "telegram", "email", "webhook"]
+
+# 15 surse externe fara endpoint dedicat (audit 2026-07-12) — dispatch generic prin
+# PING_REGISTRY in loc de blocuri elif suplimentare (vezi connectivity.py pt motiv).
+TESTABLE_SERVICES = TESTABLE_SERVICES + list(PING_REGISTRY.keys())
 
 
 @router.post("/test/{service}", dependencies=[Depends(require_api_key)])
 async def test_service(service: str):
-    """Test conectivitate individual per serviciu (groq, gemini, tavily, telegram)."""
+    """Test conectivitate individual per serviciu (groq, gemini, tavily, telegram + 15 surse externe)."""
     from backend.errors import ErrorCode, RISError
 
     if service not in TESTABLE_SERVICES:
         raise RISError(ErrorCode.VALIDATION_ERROR, f"Serviciu necunoscut: {service}. Valide: {', '.join(TESTABLE_SERVICES)}")
+
+    if service in PING_REGISTRY:
+        return await run_ping(service)
 
     try:
         if service == "tavily":
@@ -297,6 +305,29 @@ async def test_service(service: str):
             from backend.services.notification import send_telegram
             ok = await send_telegram("Test conexiune RIS — OK")
             return {"ok": ok, "message": "Telegram OK" if ok else "Telegram: eroare la trimitere"}
+
+        elif service == "email":
+            from backend.services.notification import send_email
+            if not settings.gmail_user or not settings.gmail_app_password:
+                return {"ok": False, "message": "GMAIL_USER / GMAIL_APP_PASSWORD nu sunt configurate"}
+            ok = await send_email(
+                to=settings.gmail_user,
+                subject="RIS - Test conectivitate email",
+                body_html="<p>Test conectivitate email RIS — mesaj minimal, fara raport real.</p>",
+            )
+            return {"ok": ok, "message": "Email OK" if ok else "Email: eroare la trimitere (verifica logs)"}
+
+        elif service == "webhook":
+            from backend.services.job_service import _send_webhook_if_configured
+            result = await _send_webhook_if_configured("test-ping", {
+                "company_name": "Firma Test SRL",
+                "cui": "00000000",
+                "risk_score": "Verde",
+                "numeric_score": 100,
+            })
+            if result.get("sent"):
+                return {"ok": True, "message": f"Webhook OK (HTTP {result.get('status_code')})"}
+            return {"ok": False, "message": f"Webhook: {result.get('reason')}"}
 
     except Exception as e:
         logger.warning(f"[settings] Test conexiune {service} esuat: {e}")

@@ -2,6 +2,16 @@ import { logApi } from "./logger";
 
 const BASE = "/api";
 const REQUEST_TIMEOUT_MS = 30_000;
+// Bagat la build-time (frontend/.env, VITE_RIS_API_KEY) — trimis pe fiecare
+// cerere cand backend-ul are RIS_API_KEY setat. Fara el, ApiKeyMiddleware
+// respinge orice /api/* cu 401 daca RIS_API_KEY e configurat server-side.
+const RIS_API_KEY = import.meta.env.VITE_RIS_API_KEY as string | undefined;
+
+// Pentru fetch()-urile din afara request() (download-uri binare, FormData) —
+// trebuie sa poarte acelasi header, altfel ApiKeyMiddleware le respinge cu 401.
+function risHeaders(extra?: Record<string, string>): HeadersInit {
+  return RIS_API_KEY ? { "X-RIS-Key": RIS_API_KEY, ...extra } : { ...extra };
+}
 
 // User-friendly error messages for common HTTP codes (Romanian)
 const HTTP_ERROR_MESSAGES: Record<number, string> = {
@@ -35,7 +45,11 @@ async function request<T>(
   let res: Response;
   try {
     res = await fetch(`${BASE}${path}`, {
-      headers: { "Content-Type": "application/json", ...options?.headers },
+      headers: {
+        "Content-Type": "application/json",
+        ...(RIS_API_KEY ? { "X-RIS-Key": RIS_API_KEY } : {}),
+        ...options?.headers,
+      },
       ...options,
       signal: controller.signal,
     });
@@ -250,7 +264,9 @@ export const api = {
     >(`/companies/${id}`),
 
   exportCompaniesCSV: async () => {
-    const res = await fetch(`${BASE}/companies/export/csv`);
+    const res = await fetch(`${BASE}/companies/export/csv`, {
+      headers: risHeaders(),
+    });
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -367,6 +383,7 @@ export const api = {
       `${BASE}/batch?analysis_type=${analysisType}&report_level=${reportLevel}`,
       {
         method: "POST",
+        headers: risHeaders(),
         body: (() => {
           const fd = new FormData();
           fd.append("file", file);
@@ -389,7 +406,7 @@ export const api = {
     const start = performance.now();
     const res = await fetch(`${BASE}/compare/report`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: risHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ cui_1: cui1, cui_2: cui2 }),
     });
     const ms = Math.round(performance.now() - start);
@@ -447,6 +464,10 @@ export const api = {
       `/companies/${id}/timeline`,
     ),
 
+  // Predictive scores (Altman/Piotroski/Beneish/Zmijewski)
+  getPredictive: (cui: string) =>
+    request<Record<string, unknown>>(`/companies/${cui}/predictive`),
+
   // Report email
   sendReportEmail: (
     reportId: string,
@@ -459,7 +480,9 @@ export const api = {
 
   // Download report in any format (PDF, DOCX, HTML, Excel, PPTX)
   downloadReport: async (reportId: string, format: string): Promise<Blob> => {
-    const res = await fetch(`${BASE}/reports/${reportId}/download/${format}`);
+    const res = await fetch(`${BASE}/reports/${reportId}/download/${format}`, {
+      headers: risHeaders(),
+    });
     if (!res.ok)
       throw new ApiError(`Download ${format} failed`, "", res.status);
     return res.blob();
@@ -467,7 +490,9 @@ export const api = {
 
   // Download one-pager PDF
   downloadOnePager: async (reportId: string): Promise<Blob> => {
-    const res = await fetch(`${BASE}/reports/${reportId}/download/one_pager`);
+    const res = await fetch(`${BASE}/reports/${reportId}/download/one_pager`, {
+      headers: risHeaders(),
+    });
     if (!res.ok)
       throw new ApiError("Download one-pager failed", "", res.status);
     return res.blob();
@@ -477,7 +502,7 @@ export const api = {
   downloadCompareReport: async (cui1: string, cui2: string): Promise<Blob> => {
     const res = await fetch(`${BASE}/compare/report`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: risHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ cui_1: cui1, cui_2: cui2 }),
     });
     if (!res.ok)
@@ -622,6 +647,7 @@ export const api = {
     fd.append("file", file);
     const res = await fetch(`${BASE}/batch/preview`, {
       method: "POST",
+      headers: risHeaders(),
       body: fd,
     });
     const ms = Math.round(performance.now() - start);
@@ -667,6 +693,7 @@ export const api = {
     formData.append("file", file);
     const res = await fetch(`${BASE}/documents/ocr`, {
       method: "POST",
+      headers: risHeaders(),
       body: formData,
     });
     if (!res.ok) {
@@ -801,7 +828,9 @@ export const api = {
 
   // Export SEAP tenders as .ics calendar file
   exportIcs: async (reportId: string): Promise<Blob> => {
-    const res = await fetch(`${BASE}/reports/${reportId}/export/ics`);
+    const res = await fetch(`${BASE}/reports/${reportId}/export/ics`, {
+      headers: risHeaders(),
+    });
     if (!res.ok) {
       const err = await res
         .json()
@@ -813,7 +842,9 @@ export const api = {
 
   // Multi-year timeline report PDF (binary)
   downloadTimelineReportPdf: async (cui: string): Promise<Blob> => {
-    const res = await fetch(`${BASE}/companies/${cui}/timeline-report/pdf`);
+    const res = await fetch(`${BASE}/companies/${cui}/timeline-report/pdf`, {
+      headers: risHeaders(),
+    });
     if (!res.ok)
       throw new ApiError("Timeline PDF generation failed", "", res.status);
     return res.blob();

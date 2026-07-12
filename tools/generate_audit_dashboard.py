@@ -191,30 +191,32 @@ AI_PROVIDERS = [
 ]
 
 EXTERNAL_SOURCES = [
-    ("ANAF TVA/Stare", "anaf_client.py", "Gratuit, fara cheie", "Nu are endpoint dedicat de test conectivitate.", "IMBUNATATIRE: adauga in TESTABLE_SERVICES."),
-    ("ANAF Bilant", "anaf_bilant_client.py", "Gratuit, fara cheie", "Nu are endpoint dedicat de test.", "IMBUNATATIRE: adauga in TESTABLE_SERVICES."),
-    ("BNR (curs valutar)", "bnr_client.py", "Gratuit, fara cheie", "Nu are endpoint dedicat de test.", "IMBUNATATIRE: adauga in TESTABLE_SERVICES."),
-    ("openapi.ro (ONRC)", "openapi_client.py", "OPENAPI_RO_KEY (100/luna free)", "Nu are endpoint dedicat de test.", "IMBUNATATIRE: adauga in TESTABLE_SERVICES + afiseaza cota ramasa live."),
-    ("SEAP/SICAP (licitatii+contracte)", "seap_client.py", "Gratuit, fara cheie", "Nu are endpoint dedicat de test.", "IMBUNATATIRE: adauga in TESTABLE_SERVICES."),
-    ("Tavily Search", "tavily_client.py", "TAVILY_API_KEY (1000/luna free)", "TESTABIL live prin /api/settings/test/tavily.", "OK — deja acoperit."),
-    ("BPI Insolventa", "bpi_client.py", "Gratuit + Tavily fallback", "Nu are endpoint dedicat de test.", "IMBUNATATIRE: adauga in TESTABLE_SERVICES."),
-    ("Monitorul Oficial (OSINT)", "osint_client.py / monitorul_oficial_client.py", "Gratuit + Tavily fallback", "Nu are endpoint dedicat de test.", "IMBUNATATIRE: adauga in TESTABLE_SERVICES."),
-    ("VIES (TVA intracomunitar UE)", "vies_client.py", "Gratuit, fara cheie", "TESTABIL indirect prin POST /api/analysis/vies (are efect real, nu doar test).", "OK partial."),
-    ("Sanctiuni OFAC+UE+ONU", "sanctions_client.py", "Gratuit, fara cheie (cache local 24h)", "Nu are endpoint dedicat de test.", "IMBUNATATIRE: adauga in TESTABLE_SERVICES (verifica varsta cache-ului local)."),
-    ("Eurostat (benchmark UE)", "eurostat_client.py", "Gratuit, fara cheie", "Nu are endpoint dedicat de test.", "IMBUNATATIRE: adauga in TESTABLE_SERVICES."),
-    ("INS TEMPO (statistici CAEN)", "caen_context.py", "Gratuit, fara cheie", "Nu are endpoint dedicat de test.", "IMBUNATATIRE: adauga in TESTABLE_SERVICES."),
-    ("AEGRM (garantii mobiliare)", "aegrm_client.py", "Gratuit, fara cheie", "AEGRM raportat DNS-dead in sesiunea 2026-06-27 (TASK2).", "VERIFICA: DNS inca picat? Adauga test conectivitate."),
-    ("Portal Just (dosare instanta)", "just_client.py", "Gratuit, SOAP (necesita 'zeep')", "Nu are endpoint dedicat de test. Fallback placeholder daca 'zeep' lipseste.", "VERIFICA: e instalat 'zeep' in productie?"),
-    ("Brave Search", "brave_client.py", "BRAVE_API_KEY (2000/luna free)", "Nu are endpoint dedicat de test.", "IMBUNATATIRE: adauga in TESTABLE_SERVICES."),
-    ("Jina Reader", "jina_client.py", "JINA_API_KEY optional (1M tok/zi cu cheie)", "Nu are endpoint dedicat de test.", "IMBUNATATIRE: adauga in TESTABLE_SERVICES."),
-    ("Google Maps Places", "maps_client.py", "GOOGLE_CLOUD_API_KEY ($200 credit/luna)", "Nu are endpoint dedicat de test.", "IMBUNATATIRE: adauga in TESTABLE_SERVICES + alerta cand se apropie de credit."),
-    ("Mistral OCR", "documents.py (agent separat de sinteza Mistral)", "MISTRAL_API_KEY", "TESTABIL indirect prin POST /api/documents/ocr (are efect real).", "OK partial."),
+    # (nume, modul, cost/cheie, status test, nota, ping_key pt butonul "Testeaza live" — None = fara buton)
+    ("ANAF TVA/Stare", "anaf_client.py", "Gratuit, fara cheie", "TESTABIL live prin POST /api/settings/test/anaf_tva. Verificat 2026-07-12: OK.", "OK — implementat in acest sprint (connectivity.py).", "anaf_tva"),
+    ("ANAF Bilant", "anaf_bilant_client.py", "Gratuit, fara cheie", "TESTABIL live. Verificat 2026-07-12: OK.", "OK — implementat.", "anaf_bilant"),
+    ("BNR (curs valutar)", "bnr_client.py", "Gratuit, fara cheie", "TESTABIL live. Verificat 2026-07-12: OK.", "OK — implementat.", "bnr"),
+    ("openapi.ro (ONRC)", "openapi_client.py", "OPENAPI_RO_KEY (100/luna free)", "TESTABIL live. Verificat 2026-07-12: OK, afiseaza si api_requests_remaining cand disponibil.", "OK — implementat. Consuma 1 request din cota lunara la fiecare test — foloseste cu grija.", "openapi_ro"),
+    ("SEAP/SICAP (licitatii+contracte)", "seap_client.py", "Gratuit, fara cheie", "TESTABIL live. Verificat 2026-07-12: OK (10 contracte gasite pt CUI test).", "OK — implementat.", "seap"),
+    ("Tavily Search", "tavily_client.py", "TAVILY_API_KEY (1000/luna free)", "TESTABIL live prin /api/settings/test/tavily.", "OK — deja acoperit.", "tavily"),
+    ("BPI Insolventa", "bpi_client.py", "Gratuit + Tavily fallback", "TESTABIL live (cale gratuita, use_tavily_fallback=False — nu consuma cota Tavily). Verificat 2026-07-12: FAIL — buletinul.ro DNS-dead (getaddrinfo failed).", "GASIT: sursa gratuita e picata acum — verifica din nou periodic; fallback Tavily tot functioneaza in fluxul normal de analiza.", "bpi"),
+    ("Monitorul Oficial (OSINT)", "osint_client.py / monitorul_oficial_client.py", "Gratuit + Tavily fallback", "TESTABIL live (ping reachability pe monitoruloficial.ro, fara Tavily). Verificat 2026-07-12: OK.", "OK — implementat.", "monitorul_oficial"),
+    ("VIES (TVA intracomunitar UE)", "vies_client.py", "Gratuit, fara cheie", "TESTABIL indirect prin POST /api/analysis/vies (are efect real, nu doar test).", "OK partial.", None),
+    ("Sanctiuni OFAC+UE+ONU", "sanctions_client.py", "Gratuit, fara cheie (cache local 24h)", "TESTABIL live (screen([]) — raporteaza sursele incarcate + varsta cache). Verificat 2026-07-12: OK (OFAC+EU+UN, 53128 intrari, cache 9.4h).", "OK — implementat.", "sanctions"),
+    ("Eurostat (benchmark UE)", "eurostat_client.py", "Gratuit, fara cheie", "TESTABIL live (CAEN test 6201). Verificat 2026-07-12: OK.", "OK — implementat.", "eurostat"),
+    ("INS TEMPO (statistici CAEN)", "caen_context.py", "Gratuit, fara cheie", "TESTABIL live. Verificat 2026-07-12: FAIL — timeout la statistici.insse.ro:8077 (cunoscut flaky/offline).", "GASIT: momentan indisponibil — sistemul are deja fallback pe dictionar local CAEN, nu blocheaza analize.", "ins_tempo"),
+    ("AEGRM (garantii mobiliare)", "aegrm_client.py", "Gratuit, fara cheie", "TESTABIL live (detecteaza explicit DNS-dead). Verificat 2026-07-12: FAIL — [Errno 11001] getaddrinfo failed.", "CONFIRMAT: tot DNS-dead ca la 2026-06-27, acum cu test automat care il semnaleaza clar.", "aegrm"),
+    ("Portal Just (dosare instanta)", "just_client.py", "Gratuit, SOAP (necesita 'zeep')", "TESTABIL live (verifica doar ca 'zeep' e instalat — un apel SOAP complet e prea lent/nesigur pt ping). Verificat 2026-07-12: FAIL — 'zeep' NU e instalat in acest mediu.", "GASIT: pip install zeep lipseste — portal.just.ro cade mereu pe fallback placeholder pana se instaleaza.", "just"),
+    ("Brave Search", "brave_client.py", "BRAVE_API_KEY (2000/luna free)", "TESTABIL live. Verificat 2026-07-12: OK.", "OK — implementat.", "brave"),
+    ("Jina Reader", "jina_client.py", "JINA_API_KEY optional (1M tok/zi cu cheie)", "TESTABIL live (fetch example.com). Verificat 2026-07-12: OK.", "OK — implementat.", "jina"),
+    ("Google Maps Places", "maps_client.py", "GOOGLE_CLOUD_API_KEY ($200 credit/luna)", "TESTABIL live. Verificat 2026-07-12: OK (raporteaza explicit REQUEST_DENIED / OVER_QUERY_LIMIT daca apar).", "OK — implementat. Alerta credit: Google nu expune cota ramasa prin acest API, doar starea request-ului.", "google_maps"),
+    ("Mistral OCR", "documents.py (agent separat de sinteza Mistral)", "MISTRAL_API_KEY", "TESTABIL indirect prin POST /api/documents/ocr (are efect real).", "OK partial.", None),
 ]
 
 NOTIFICATION_CHANNELS = [
-    ("Telegram", "TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID", "TESTABIL live prin POST /api/settings/test-telegram (trimite mesaj real).", "OK."),
-    ("Email (Gmail SMTP)", "GMAIL_USER + GMAIL_APP_PASSWORD", "NU are endpoint dedicat de test — doar POST /reports/{id}/send-email (efect real, necesita raport existent).", "IMBUNATATIRE: adauga /api/settings/test/email cu mesaj minimal, fara sa necesite un raport real."),
-    ("Webhook (job complete)", "WEBHOOK_URL", "NU are endpoint dedicat de test — se declanseaza doar la finalizarea reala a unui job.", "IMBUNATATIRE: adauga /api/settings/test/webhook care trimite un payload sintetic la URL-ul configurat."),
+    # (nume, env var, status test, nota, ping_key)
+    ("Telegram", "TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID", "TESTABIL live prin POST /api/settings/test-telegram (trimite mesaj real).", "OK.", None),
+    ("Email (Gmail SMTP)", "GMAIL_USER + GMAIL_APP_PASSWORD", "TESTABIL live prin POST /api/settings/test/email (mesaj minimal, fara raport real). Verificat 2026-07-12: raspuns corect 'nu e configurat' (GMAIL_* lipsesc).", "OK — implementat.", "email"),
+    ("Webhook (job complete)", "WEBHOOK_URL", "TESTABIL live prin POST /api/settings/test/webhook (payload sintetic, refoloseste validarea SSRF/HTTPS reala din job_service). Verificat 2026-07-12: raspuns corect 'nu e configurat' (WEBHOOK_URL lipseste).", "OK — implementat.", "webhook"),
 ]
 
 SCHEDULER_TASKS = [
@@ -445,14 +447,19 @@ def render_html(endpoint_data, uncurated, git_sha):
         for name, envvar, live, note in AI_PROVIDERS
     )
 
+    def _ping_button(ping_key):
+        if not ping_key:
+            return "—"
+        return f'<button class="btn-test" data-kind="provider" data-provider="{esc(ping_key)}">Testeaza live</button>'
+
     external_rows = "\n".join(
-        f'<tr><td><strong>{esc(name)}</strong></td><td><code>{esc(module)}</code></td><td>{esc(cost)}</td><td>{esc(status)}</td><td class="improve">{esc(improve)}</td></tr>'
-        for name, module, cost, status, improve in EXTERNAL_SOURCES
+        f'<tr><td><strong>{esc(name)}</strong></td><td><code>{esc(module)}</code></td><td>{esc(cost)}</td><td>{esc(status)}</td><td>{_ping_button(ping_key)}</td><td class="improve">{esc(improve)}</td></tr>'
+        for name, module, cost, status, improve, ping_key in EXTERNAL_SOURCES
     )
 
     notif_rows = "\n".join(
-        f'<tr><td><strong>{esc(name)}</strong></td><td><code>{esc(envvar)}</code></td><td>{esc(status)}</td><td class="improve">{esc(improve)}</td></tr>'
-        for name, envvar, status, improve in NOTIFICATION_CHANNELS
+        f'<tr><td><strong>{esc(name)}</strong></td><td><code>{esc(envvar)}</code></td><td>{esc(status)}</td><td>{_ping_button(ping_key)}</td><td class="improve">{esc(improve)}</td></tr>'
+        for name, envvar, status, improve, ping_key in NOTIFICATION_CHANNELS
     )
 
     sched_rows = "\n".join(
@@ -594,10 +601,10 @@ footer {{ margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color
 <table><thead><tr><th>Provider</th><th>Env var</th><th>Test live</th><th>Nota</th></tr></thead><tbody>{provider_rows}</tbody></table>
 
 <h2 id="external">Integrari surse externe de date — {len(EXTERNAL_SOURCES)}</h2>
-<table><thead><tr><th>Sursa</th><th>Modul</th><th>Cost/cheie</th><th>Status test</th><th>Imbunatatire sugerata</th></tr></thead><tbody>{external_rows}</tbody></table>
+<table><thead><tr><th>Sursa</th><th>Modul</th><th>Cost/cheie</th><th>Status test</th><th>Test</th><th>Nota</th></tr></thead><tbody>{external_rows}</tbody></table>
 
 <h2 id="notif">Canale de notificare — {len(NOTIFICATION_CHANNELS)}</h2>
-<table><thead><tr><th>Canal</th><th>Env var</th><th>Status test</th><th>Imbunatatire sugerata</th></tr></thead><tbody>{notif_rows}</tbody></table>
+<table><thead><tr><th>Canal</th><th>Env var</th><th>Status test</th><th>Test</th><th>Nota</th></tr></thead><tbody>{notif_rows}</tbody></table>
 
 <h2 id="scheduler">Task-uri Scheduler (background) — {len(SCHEDULER_TASKS)}</h2>
 <table><thead><tr><th>Task</th><th>Functie</th><th>Frecventa</th><th>Verificare</th></tr></thead><tbody>{sched_rows}</tbody></table>

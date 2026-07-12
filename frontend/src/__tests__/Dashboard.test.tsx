@@ -24,6 +24,12 @@ vi.mock("@/lib/api", () => ({
     healthDeep: vi.fn(() => Promise.reject(new Error("no health"))),
     getStatsTrend: vi.fn(() => Promise.resolve({ trend: [] })),
     getRiskMovers: vi.fn(() => Promise.resolve({ movers: [] })),
+    getVersion: vi.fn(() =>
+      Promise.resolve({
+        version: "test",
+        running: { sha: "test", date: "", branch: "main", build: "" },
+      }),
+    ),
   },
 }));
 

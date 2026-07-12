@@ -4,22 +4,7 @@
 
 Sistem local de Business Intelligence care ruleaza pe Windows 10. Extrage automat date din surse publice romanesti (ANAF, ONRC, SEAP, etc.), le proceseaza prin agenti AI si produce rapoarte profesionale.
 
-## 🔄 LA START SESIUNE NOUA (checkpoint 2026-07-12)
-
-**Task activ, cerut explicit de user:** implementeaza recomandarile semnalate in
-`AUDIT_FUNCTII.html` (coloana "Imbunatatire sugerata"), apoi testeaza tot sistemul.
-Detalii complete + checklist pas-cu-pas: `TODO_ROLAND.md` sectiunea "URMATOAREA SESIUNE"
-
-- snapshot `~/.claude/context-snapshots/Sistem_Inteligent_Analize-checkpoint-2026-07-12/snapshot.md`
-- memorie `project_ris_audit_dashboard` / `project_ris_next_actions`.
-
-Rezumat task: (A) adauga test conectivitate pentru 15 surse externe fara endpoint dedicat
-(ANAF/BNR/openapi.ro/SEAP/BPI/Monitorul Oficial/Sanctiuni/Eurostat/INS TEMPO/AEGRM/Just/
-Brave/Jina/Maps), (B) adauga test dedicat pentru Email+Webhook, (C) investigheaza finding
-de securitate NEVERIFICAT (`RIS_API_KEY` posibil gol → API deschis fara auth), (D) dupa
-implementare, regenereaza `AUDIT_FUNCTII.html` + testeaza LIVE (nu doar cod) + `RIS_TEST.bat`.
-
-**Context critic (evita sa repeti greseli din sesiunea anterioara):**
+## Context critic (evita sa repeti greseli din sesiuni anterioare)
 
 - CSP-ul aplicatiei (`script-src 'self'`, fara `unsafe-inline`) blocheaza SILENTIOS orice
   `<script>` inline sau `onclick="..."` — orice UI noua trebuie JS extern same-origin +
@@ -28,6 +13,12 @@ implementare, regenereaza `AUDIT_FUNCTII.html` + testeaza LIVE (nu doar cod) + `
   usage-ul INAINTE de import, in edit-uri separate.
 - Repo public pe GitHub — nu presupune ca orice date reale de firme terte pot fi publicate
   fara verificare.
+- **`RIS_API_KEY` e ACTIV din 2026-07-12** — toate `/api/*` cer header `X-RIS-Key` (exceptii:
+  `/api/health`, `/api/health/deep`, `/api/frontend-log`, `/api/reports/public/*`). Frontend-ul
+  trimite cheia automat DOAR daca a fost construit dupa ce `frontend/.env` (`VITE_RIS_API_KEY`,
+  gitignored, valoare IDENTICA cu `RIS_API_KEY` din `.env` root) exista — `npm run build` fara
+  acest fisier produce un build care primeste 401 pe orice apel API. Dupa orice schimbare a
+  cheii: actualizeaza AMBELE `.env`-uri, apoi rebuild frontend, apoi restart serviciu.
 
 ## Status
 
@@ -90,6 +81,7 @@ implementare, regenereaza `AUDIT_FUNCTII.html` + testeaza LIVE (nu doar cod) + `
 - **Auto-update local + versiune (2026-07-12, commits `0f79926`→`aef9ade`):** RIS = LOCAL, FĂRĂ Vercel/Supabase. Updater propriu („Vercel local"): `backend/services/updater.py` verifică git remote la 10min → `git pull --ff-only` + `npm build` + restart automat, cu safeguards (tree curat, build verificat, rollback la fail). `GET /api/version` (build git + update_available), `POST /api/update` (manual), `POST /api/restart`. Versiune afișată în header (`VersionBadge`, badge „la zi"/„actualizare disponibilă"). **Starter = iconița desktop (PWA Chrome către :8001)**; backend = serviciu Windows `RIS-Backend` (WinSW, auto-start la boot). **Restart:** Method B self-exit `os._exit(1)` → WinSW `onfailure=restart` (VERIFICAT live, PID schimbat). Serviciul rulează ca **SYSTEM** → git cu `-c safe.directory=*`. Dezactivare: `AUTO_UPDATE_ENABLED=false` în `.env`. **Utilizatorul dă doar refresh în PWA.**
 - **Verificare E2E completa toate fluxurile — TOATE 9 AnalysisType (2026-07-12, commits `4371d61`→`3b67cb7`):** COMPLETATA — testare directa pe serviciul LIVE (joburi reale, nu scripturi izolate). Plan complet: `99_Plan_vs_Audit/PLAN_E2E_VERIFICARE_2026-07-12.md`. **10 bug-uri reale gasite + reparate:** (1) Cerebras — model retras din catalogul vendorului, mort ~2-3 luni → migrat `gpt-oss-120b`; (2) `companies.caen_code`/`county` niciodata populate → `/sector`+`compare/sector`+filtrul `?caen=` goale silentios pt orice firma → fix + backfill; (3) `score-trend` — `company_id: int` vs schema UUID TEXT → HTTP 422 garantat → `str`; (4) `timeline-report/pdf` — crash Unicode 100% reproductibil → fix; (5) `export/ics` — cheie JSON inexistenta → fix; (6) `settings test/{service}` — Mistral+Cerebras netestabile → adaugate; (7) sectiunea "opportunities" nu stia de `tender_opportunities` (gasit adversarial, advisor) → fix, verificat 350→3080 caractere; (8) aceeasi sectiune nu stia nici de `funding_programs` → fix; (9, **cel mai sever**) MARKET_ENTRY_ANALYSIS + LEAD_GENERATION + CUSTOM_REPORT nu extrageau CUI din campul lor de intrare (n-au camp "cui" dedicat) → **0/16 completitudine GARANTAT pt orice utilizator real** pe 3/9 tipuri → fix generalizat (extrage CUI din orice camp text); (10) `KeyError('anaf')` — crash cand ANAF nu returneaza date, afecteaza toate 9 tipurile in conditii rare. **3 feature-uri promise dar NEIMPLEMENTATE** (semnalate, nu construite): COMPETITION_ANALYSIS+MARKET_ENTRY_ANALYSIS nu au nicio colectare reala de date despre competitori; LEAD_GENERATION nu cauta/lista firme candidate; CUSTOM_REPORT ignora complet cererea libera a userului (template fix). **1 inconsistenta documentata**: job completat cu succes (fisiere scrise) dar status DB "PAUSED" (handler recovery la un restart cu cauza neclara). **SYNTHESIS_MODE=autonomous investigat, NU comutat:** serviciul ruleaza ca SYSTEM, Claude CLI auth exista doar in profilul userului → switch simplu ar cadea tacut pe fallback (confirmat empiric) — 3 optiuni documentate, decizie lasata userului. Degradare sub concurenta mult redusa dar NU eliminata (retry/backoff pe 429 neaplicat). 440 pytest PASSED, 0 erori TypeScript, toate fix-urile verificate live.
 - **LEAD_GENERATION — feature lipsa implementat (2026-07-12, commits `950113c`→`33af688`):** COMPLETAT — cautare firme candidate pe tabela proprie `companies` (nu ONRC bulk, gol pe aceasta masina) + parsare AI (Groq) a criteriilor din `ideal_client` text liber. `backend/agents/tools/lead_search.py` (nou): `parse_lead_criteria()` + `search_candidate_companies()` (filtrare judet/CAEN + prioritate: crestere/licitatii/probleme). Sectiune noua `lead_candidates` in raport. **Bug serios reparat dupa 4 runde de testare live:** AI-ul amesteca CUI-ul firmei solicitante cu CUI-urile firmelor candidate — 3 incercari pe calea AI (prompt mai strict, route "quality", izolare completa context/JSON — verificat direct ca prompt-ul era curat) NU au oprit halucinarea. **Fix real:** sectiunea randata 100% determinist in Python (`_render_lead_candidates_content`), zero apel AI — CUI/CAEN/scor vin direct din date, imposibil de halucinat. Bug cosmetic conex reparat: randererul markdown strip-uie indentarea, deci un item numerotat + sub-bullet indentat rupea numerotarea vizuala (toate firmele aparea "1.") → consolidat fiecare candidat pe un singur rand. **Verificare suplimentara:** spot-check fidelitate numerica pe fix-urile #7/#8 din sweep-ul E2E (opportunities/funding) — cifre transcrise corect, fara probleme noi. 440 pytest PASSED. Memory: `project_ris_lead_generation_deterministic` — lectie generalizabila (date per-entitate = randare determinista, nu LLM).
+- **Audit follow-up A+B+C+D (2026-07-12):** COMPLETAT — implementate recomandarile din `AUDIT_FUNCTII.html`. **(A)** `backend/agents/tools/connectivity.py` nou — `PING_REGISTRY` cu 15 functii `ping_*` (pattern generic, nu 15 elif), dispatch din `POST /api/settings/test/{service}` existent. Verificat LIVE: 11/15 OK (ANAF TVA/Bilant, BNR, openapi.ro, SEAP, Monitorul Oficial, Sanctiuni, Eurostat, Brave, Jina, Google Maps), 4 gasite picate real — **BPI/buletinul.ro DNS-dead**, **INS TEMPO timeout**, **AEGRM tot DNS-dead** (confirmat, ca la 2026-06-27), **Portal Just: `zeep` neinstalat** in acest mediu (decizie de instalare lasata userului). **(B)** `POST /api/settings/test/email` + `/test/webhook` (webhook reutilizeaza `_send_webhook_if_configured` din `job_service.py`, acum cu rezultat structurat). **(C) FINDING DE SECURITATE CONFIRMAT + REPARAT:** `RIS_API_KEY` lipsea complet din `.env` → backend pe `0.0.0.0:8001` fara NICIO autentificare pe `/api/*` (verificat live: 200 fara header). Frontend nu trimitea deloc `X-RIS-Key`. Fix (ales de user dintre 3 optiuni): cheie noua generata, `.env` + `frontend/.env` (`VITE_RIS_API_KEY`, gitignored), `api.ts`+`ChatInput.tsx`+`ReportView.tsx` trimit automat header-ul, `/api/reports/public/*` exceptat explicit (share link extern), `tests/conftest.py` izoleaza pytest de cheia locala. Verificat live: 401 fara cheie / 200 cu cheie / PWA functionala in browser (0 erori consola). **(D)** `AUDIT_FUNCTII.html` regenerat (0 necuratate) cu butoane live pt toate sursele noi. 440 pytest PASSED, 29 vitest PASSED (+ fix mic bug preexistent `getVersion` lipsa din mock `Dashboard.test.tsx`). `Companies.test.tsx` are un hang preexistent confirmat si pe baseline — semnalat, neinvestigat (afara scop). Memory: `project_ris_audit_dashboard_ping_registry`.
 - **Feedback Loop:** ACTIV — RIS_TEST.bat, logs/ris_summary.log, ris_runtime.log, ris_frontend.log (5 componente), ISSUES.md, session startup protocol
 - **Git:** https://github.com/RolandPetrila/Sistem-Inteligent-Analize.git | 365 pytest + vitest
 - **16 pagini frontend** (adaugat SectorDashboard /sector, OcrPage /ocr, QuickTools /quick-tools)
@@ -156,6 +148,7 @@ Fisiere feedback loop:
 - `backend/agents/tools/seap_client.py` — SEAP e-licitatie.ro (licitatii + achizitii directe)
 - `backend/agents/tools/caen_context.py` — Context CAEN: 122 coduri + 96 sectiuni + benchmark + INS TEMPO live
 - `backend/agents/tools/monitorul_oficial_client.py` — G2: Monitorul Oficial Partea IV (cesiuni, dizolvari, radieri) + scoring penalty
+- `backend/agents/tools/connectivity.py` — PING_REGISTRY: test conectivitate pt 15 surse externe fara endpoint dedicat (dispatch din POST /api/settings/test/{service})
 - `backend/reports/i18n.py` — G5: i18n traduceri ro/en pentru rapoarte PDF/HTML
 - `backend/migrations/009_onrc_local.sql` — D1: tabel ONRC local dataset din data.gov.ro
 - `tools/import_onrc.py` — D1: script import CSV ONRC in SQLite (~660MB active + ~392MB radiate)

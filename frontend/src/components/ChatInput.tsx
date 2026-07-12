@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Send, Loader2, Sparkles } from "lucide-react";
-
+import { api } from "@/lib/api";
 
 interface ParseResult {
   analysis_type: string;
@@ -25,13 +25,8 @@ export default function ChatInput({ onParsed }: ChatInputProps) {
     setLoading(true);
     setResult(null);
     try {
-      const res = await fetch("/api/analysis/parse-query", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: query.trim() }),
-      });
-      const data: ParseResult = await res.json();
-      setResult(data);
+      const data = await api.parseQuery(query.trim());
+      setResult(data as ParseResult);
     } catch {
       console.warn("Failed to parse AI query");
     } finally {
@@ -73,9 +68,7 @@ export default function ChatInput({ onParsed }: ChatInputProps) {
         <div className="p-3 bg-dark-surface rounded-lg border border-dark-border">
           <p className="text-sm text-accent-light">{result.suggestion}</p>
           <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
-            <span>
-              Incredere: {Math.round(result.confidence * 100)}%
-            </span>
+            <span>Incredere: {Math.round(result.confidence * 100)}%</span>
             {result.input_params.cui && (
               <span>CUI: {result.input_params.cui}</span>
             )}
