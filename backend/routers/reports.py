@@ -167,7 +167,11 @@ async def export_seap_calendar(report_id: str) -> dict:
         raise RISError(ErrorCode.NOT_FOUND, "Raport negasit")
 
     data = json.loads(report["full_data"] or "{}")
-    tenders = data.get("market", {}).get("seap_tenders", [])
+    # tender_opportunities.opportunities = licitatii DESCHISE (Angle A v2, cu deadline).
+    # market.seap ("verified['market']['seap']") sunt contracte deja CASTIGATE (Angle B,
+    # fara deadline viitor) — cheia veche "market.seap_tenders" nu a fost niciodata scrisa
+    # nicaieri in cod, deci export-ul dadea mereu 404 chiar cand raportul avea licitatii reale.
+    tenders = data.get("tender_opportunities", {}).get("opportunities", [])
     if not tenders:
         raise RISError(ErrorCode.NOT_FOUND, "Nu exista licitatii in acest raport")
 
@@ -177,19 +181,20 @@ async def export_seap_calendar(report_id: str) -> dict:
     ]
     events_added = 0
     for t in tenders:
-        raw_deadline = str(t.get("deadline_date", ""))
+        raw_deadline = str(t.get("deadline", ""))
         try:
             dt = _date.fromisoformat(raw_deadline[:10])
             deadline = dt.strftime("%Y%m%d")
         except (ValueError, TypeError):
             continue
         title = str(t.get("title", "Licitatie SEAP"))[:60]
-        uid = t.get("id", str(_uuid.uuid4()))
+        uid = t.get("notice_no") or str(_uuid.uuid4())
+        authority = t.get("authority", "N/A")
         ics_lines += [
             "BEGIN:VEVENT",
             f"UID:{uid}@ris-local",
             f"SUMMARY:{title}",
-            f"DESCRIPTION:Valoare: {t.get('value', 'N/A')} RON\\nSursa: SEAP",
+            f"DESCRIPTION:Valoare: {t.get('value', 'N/A')} RON\\nAutoritate: {authority}\\nSursa: SICAP",
             f"DTSTART;VALUE=DATE:{deadline}",
             f"DTEND;VALUE=DATE:{deadline}",
             "STATUS:TENTATIVE",
