@@ -408,3 +408,62 @@ Settings.tsx nu expune toti cei 5 provideri de sinteza in formular.
 **Limite oneste ramase**: degradarea sub sarcina concurenta e mult redusa dar NU eliminata
 (retry/backoff pe 429 neaplicat — schimbare mai mare); toata verificarea a fost la nivel de
 API, nu vizual in browser. Artefacte de test curatate de pe firma reala (Mosslein).
+
+## PARTEA 3 — implementat feature-ul lipsa LEAD_GENERATION (cerut explicit de user)
+
+Decizii user (AskUserQuestion): sursa date = tabela proprie `companies` ACUM (nu se asteapta
+re-import ONRC bulk, gasit gol pe aceasta masina); parsare criterii = AI (Groq), nu regex.
+
+**Implementare** (`backend/agents/tools/lead_search.py`, nou): `parse_lead_criteria()` extrage
+judet+cuvinte cheie din `ideal_client` (text liber) via Groq; `search_candidate_companies()`
+cauta in `companies` (WHERE case-insensitive pe county + LIKE pe caen_description), filtrat
+dupa prioritate (crestere = scor in urcare in score_history; licitatii = contracte SEAP/tender
+in ultimul raport; probleme = risk_score Rosu/Galben). Cablat in `agent_verification.py` doar
+pentru `analysis_type == LEAD_GENERATION`. Sectiune noua `lead_candidates` in
+`section_prompts.py` (intre executive_summary si recommendations).
+
+**Bug serios descoperit si reparat prin 3 runde de testare live** (acelasi scenariu repetabil:
+Mosslein CUI 26313362 cauta firme cu probleme in Arad → gaseste KIZUR CUI 51024217 +
+AQUASTOP CUI 34436218):
+
+1. Runda 1: AI-ul detalia doar 1 din 2 candidati reali → prompt intarit sa listeze TOTI.
+2. Runda 2: AI-ul inventa o firma falsa ("MOSSLEIN" — de fapt solicitantul) SI reutiliza
+   CUI-ul solicitantului (26313362) pentru ambii candidati reali. Ipoteza gresita #1: route
+   preference "fast"→"quality" + instructiuni anti-amestecare in prompt.
+3. Runda 3 (dupa fix ipoteza #1): bug IDENTIC reprodus, inclusiv pe Gemini. Root cause real
+   gasit: `_build_context_summary`/`_build_section_prompt` injectau NECONDITIONAT profilul
+   firmei SOLICITANTE (CUI inclus) in prompt-ul oricarei sectiuni, inclusiv lead_candidates.
+   Fix: izolare verified_data la doar `{"lead_candidates": ...}` inainte de JSON dump +
+   sumar context dedicat per-candidat.
+4. Runda 4 (dupa fix root-cause): **bug STILL reprodus** — nu mai inventa firma falsa, dar tot
+   afisa CUI 26313362 la ambii candidati reali. Test direct (bypass job pipeline, apel direct
+   `_build_section_prompt` cu date sintetice curate) a confirmat prompt-ul construit e 100%
+   corect (`'26313362' in prompt` → False, ambele CUI reale prezente) — modelul AI halucina
+   chiar si cu input dovedit curat.
+
+**Fix final (advisor: "verbatim transcription of structured records is not an LLM job")**:
+sectiunea `lead_candidates` randata ACUM 100% determinist in Python
+(`_render_lead_candidates_content`), zero apel AI — CUI/CAEN/scor/judet vin direct din
+`verified_data`, imposibil de halucinat. Cod mort eliminat (izolare prompt, sumar context
+dedicat, gate `_has_sufficient_data`, intrare `section_data_map` — toate specifice
+lead_candidates si folosite doar pe calea AI acum eliminata). Bug cosmetic gasit si reparat
+in aceeasi sesiune: randererul markdown→HTML/PDF/DOCX face `strip()` pe fiecare linie, deci
+un item numerotat "N." urmat de sub-bullet indentat inchidea `<ol>` si redeschidea unul nou
+per candidat (toti candidatii afisati ca "1.") — consolidat fiecare candidat pe UN singur
+rand "- " ca sa ramana in aceeasi lista continua.
+
+**Verificat live dupa fix final** (job nou, acelasi scenariu): KIZUR → CUI 51024217, AQUASTOP
+→ CUI 34436218, ambele corecte si distincte, numerotare secventiala corecta in HTML (`<ul>`
+continuu, "1." si "2." in text). 440 pytest PASSED.
+
+**Verificare suplimentara ceruta de advisor** (fidelitate numerica pe fix-urile #7/#8 din
+Partea 1/2, NU doar "sectiunea s-a generat"): spot-check REAL vs AI text pe `opportunities`
+(TENDER_OPPORTUNITIES: 1.281.448,26 RON ↔ 1281448.26 real, deadline 24 iulie ↔ 2026-07-24T15;
+FUNDING_OPPORTUNITIES: 200.000 EUR ↔ 200000, 31.12.2026 ↔ 2026-12-31) — toate cifrele
+transcrise corect cand sectiunea chiar se genereaza (nu doar mentionate, ci EXACT valorile).
+Fallback-uri ocazionale la "date insuficiente" pe alte joburi din acelasi tip = limitarea deja
+documentata (rate-limit provideri sub sarcina), NU un bug nou de fidelitate a datelor.
+
+**Commits**: `950113c` (feature initial) → `388473b` (prompt fix) → `987c456` (route fix,
+insuficient) → `c054fec` (context/JSON isolation, insuficient) → `ae99662` (randare
+determinista, fix real) → `33af688` (fix formatare lista HTML/PDF/DOCX).
