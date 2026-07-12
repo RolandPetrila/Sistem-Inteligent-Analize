@@ -54,16 +54,21 @@ class OfficialAgent(BaseAgent):
     async def execute(self, state: AnalysisState) -> dict:
         params = state.get("input_params", {})
         cui = params.get("cui", "")
-        # MARKET_ENTRY_ANALYSIS + LEAD_GENERATION nu au camp dedicat "cui" in wizard —
-        # intrebarea lor e "company" (text liber, eticheta "CUI daca exista"). Fara acest
-        # fallback, "cui" era mereu gol pt aceste 2 tipuri -> 0 date oficiale colectate
+        # MARKET_ENTRY_ANALYSIS/LEAD_GENERATION/CUSTOM_REPORT nu au camp dedicat "cui" in
+        # wizard — intrebarea lor e text liber cu alt nume ("company"/"description"). Fara
+        # acest fallback, "cui" era mereu gol pt aceste tipuri -> 0 date oficiale colectate
         # NICIODATA, indiferent ce scria userul (chiar daca includea un CUI real in text).
+        # Cauta in ORICE camp text din input_params, nu doar unul hardcodat pe nume — evita
+        # sa reparam aceeasi problema de N ori pe viitor pt alte tipuri de analiza noi.
         # Descoperit prin verificare E2E.
         if not cui:
-            company_field = str(params.get("company", ""))
-            cui_match = re.search(r"\b(?:cui\s*)?(\d{6,10})\b", company_field, re.IGNORECASE)
-            if cui_match:
-                cui = cui_match.group(1)
+            for _val in params.values():
+                if not isinstance(_val, str) or not _val:
+                    continue
+                cui_match = re.search(r"\b(?:cui\s*)?(\d{6,10})\b", _val, re.IGNORECASE)
+                if cui_match:
+                    cui = cui_match.group(1)
+                    break
         company_name = params.get("company_name", "")
         job_id = state.get("job_id", "")
 
