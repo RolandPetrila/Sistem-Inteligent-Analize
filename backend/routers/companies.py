@@ -424,7 +424,7 @@ async def company_timeline(company_id: str) -> dict:
 
 @router.get("/{company_id}/score-trend")
 async def get_score_trend(
-    company_id: int,
+    company_id: str,
     limit: int = Query(20, ge=1, le=100),
 ):
     """Score trend cu LAG window function — delta per analiza."""

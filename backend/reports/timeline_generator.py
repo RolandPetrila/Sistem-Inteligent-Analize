@@ -99,7 +99,7 @@ class TimelinePdf(FPDF):
     def header(self):
         self.set_font("Helvetica", "B", 9)
         self.set_text_color(100, 100, 100)
-        self.cell(0, 6, "Roland Intelligence System — Evolutie Multi-An", align="L")
+        self.cell(0, 6, _sanitize("Roland Intelligence System — Evolutie Multi-An"), align="L")
         now = datetime.now(UTC).strftime("%d.%m.%Y %H:%M")
         self.cell(0, 6, now, align="R", new_x="LMARGIN", new_y="NEXT")
         self.set_draw_color(99, 102, 241)
@@ -194,7 +194,7 @@ def generate_timeline_pdf(timeline_data: dict, output_path: str) -> None:
             else:
                 pdf.set_fill_color(255, 255, 255)
 
-            year = str(row.get("year", "—"))
+            year = _sanitize(str(row.get("year", "—")))
             ca = _fmt_ron(row.get("ca"))
             profit_val = row.get("profit")
             profit_str = _fmt_ron(profit_val)
