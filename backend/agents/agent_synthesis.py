@@ -550,7 +550,7 @@ Reguli:
 
         # F10: Skip sections with computed/derived numbers (SWOT, recommendations)
         # AH-01: financial_analysis NO LONGER skipped — ratios must be validated
-        skip_sections = {"swot_analysis", "recommendations", "opportunities"}
+        skip_sections = {"swot_analysis", "recommendations", "opportunities", "lead_candidates"}
         if section_key in skip_sections:
             return True, []
 
@@ -653,6 +653,10 @@ Reguli:
             if isinstance(web, dict) and web.get("opportunities"):
                 return True
             return False
+
+        if section_key == "lead_candidates":
+            leads = verified_data.get("lead_candidates", {})
+            return isinstance(leads, dict) and bool(leads.get("candidates"))
 
         if section_key == "company_profile":
             company = verified_data.get("company", {})
@@ -828,6 +832,7 @@ Reguli:
             "swot_analysis": ["risk_score", "financial", "market"],
             "swot": ["risk_score", "financial", "market"],
             "opportunities": ["tender_opportunities", "funding_programs", "market", "benchmark"],
+            "lead_candidates": ["lead_candidates"],
             "recommendations": ["risk_score", "early_warnings"],
         }
         keys = section_data_map.get(section_key, ["company", "financial"])

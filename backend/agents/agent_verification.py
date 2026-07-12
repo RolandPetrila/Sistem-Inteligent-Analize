@@ -159,6 +159,11 @@ class VerificationAgent(BaseAgent):
             logger.debug(f"[verification] funding match error: {_fund_e}")
             verified["funding_programs"] = {"eligible": [], "count": 0, "summary": ""}
 
+        # --- Firme candidate (leads) — DOAR pt LEAD_GENERATION (implica un apel AI de
+        # parsare, gate-uit explicit ca sa nu incarce inutil celelalte 8 tipuri) ---
+        if state.get("analysis_type") == "LEAD_GENERATION":
+            verified["lead_candidates"] = await self._search_lead_candidates(state)
+
         # --- Dynamic thresholds din DB proprie (percentile CAEN + judet) ---
         caen_for_dyn = ""
         county_for_dyn = None
@@ -795,6 +800,48 @@ class VerificationAgent(BaseAgent):
         except Exception as e:
             logger.warning(f"[verification] Screening sanctiuni esuat: {e}")
             return {"status": "unavailable", "hits": [], "checked": [], "error": str(e)}
+
+    async def _search_lead_candidates(self, state: AnalysisState) -> dict:
+        """LEAD_GENERATION: cauta firme candidate in baza proprie RIS (companies), filtrate
+        dupa profilul liber "ideal_client" + prioritatea aleasa. Rezilient + timeout."""
+        import asyncio
+
+        from backend.agents.tools.lead_search import parse_lead_criteria, search_candidate_companies
+
+        params = state.get("input_params", {})
+        ideal_client = str(params.get("ideal_client", "")).strip()
+        priority = str(params.get("priority", ""))
+        count_raw = str(params.get("count", "10"))
+        try:
+            limit = 50 if not count_raw.isdigit() else int(count_raw)
+        except ValueError:
+            limit = 50
+
+        if not ideal_client:
+            return {"available": False, "reason": "Profilul clientului ideal nu a fost specificat"}
+
+        try:
+            filters = await asyncio.wait_for(parse_lead_criteria(ideal_client), timeout=20)
+            candidates = await asyncio.wait_for(
+                search_candidate_companies(filters, priority, limit), timeout=15
+            )
+            return {
+                "available": len(candidates) > 0,
+                "criteria_used": filters,
+                "priority": priority,
+                "candidates": candidates,
+                "count": len(candidates),
+                "pool_note": (
+                    "Cautare limitata la firmele deja analizate in RIS "
+                    "(nu un registru national complet — pool creste cu fiecare analiza noua)."
+                ),
+            }
+        except TimeoutError:
+            logger.warning("[verification] lead_candidates: timeout")
+            return {"available": False, "reason": "timeout"}
+        except Exception as e:
+            logger.warning(f"[verification] lead_candidates esuat: {e}")
+            return {"available": False, "reason": str(e)}
 
     async def _fetch_eurostat_sector(self, caen_ctx: dict, official: dict) -> dict:
         """Context sector UE (Eurostat SBS) — complementar benchmark RO. Rezilient + timeout."""

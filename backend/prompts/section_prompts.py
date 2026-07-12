@@ -123,6 +123,26 @@ SECTION_PROMPTS = {
         ),
         "word_count": {"1": 150, "2": 400, "3": 800},
     },
+    "lead_candidates": {
+        "title": "Firme Candidate (Leads)",
+        "prompt": (
+            "Prezinta firmele candidate identificate in datele furnizate (camp lead_candidates).\n"
+            "Per firma: denumire, CUI, CAEN/descriere activitate, judet, scor risc, motivul "
+            "potrivirii (match_reason, daca exista).\n"
+            "Grupeaza dupa relevanta pentru profilul cautat (camp criteria_used).\n"
+            "IMPORTANT: Mentioneaza EXPLICIT limitarea sursei de date (camp pool_note) — "
+            "cautarea acopera DOAR firme deja analizate in RIS, NU un registru national "
+            "complet. NU INVENTA firme, CUI-uri sau date care nu apar in lead_candidates.\n"
+            "Daca lista e goala sau scurta, spune asta clar si sugereaza extinderea criteriilor "
+            "de cautare sau analiza de firme noi pentru a creste baza de date.\n\n"
+            "EXEMPLU FRAGMENT (adapteaza la datele reale):\n"
+            "\"1. SC EXEMPLU CONSTRUCT S.R.L. (CUI 12345678) — CAEN 4120, Jud. Arad, scor risc "
+            "Verde (78/100). Potrivire: activeaza in constructii, zona cautata.\n"
+            "Nota: cautarea a acoperit doar firmele deja analizate in RIS — pentru o "
+            "prospectare mai ampla, ruleaza analize suplimentare pe firme noi din zona.\""
+        ),
+        "word_count": {"1": 150, "2": 400, "3": 700},
+    },
     "swot": {
         "title": "Analiza SWOT",
         "prompt": (
@@ -189,7 +209,7 @@ SECTIONS_PER_TYPE = {
         "executive_summary", "competition", "opportunities", "swot", "recommendations",
     ],
     "LEAD_GENERATION": [
-        "executive_summary", "recommendations",
+        "executive_summary", "lead_candidates", "recommendations",
     ],
     "CUSTOM_REPORT": [
         "executive_summary", "company_profile", "financial_analysis",
@@ -206,6 +226,7 @@ SECTION_PROVIDER_PREFERENCE = {
     "risk_assessment": "quality",
     "competition": "fast",
     "opportunities": "fast",
+    "lead_candidates": "fast",
     "swot": "fast",
     "recommendations": "quality",
 }
