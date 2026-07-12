@@ -227,7 +227,7 @@ async def test_telegram():
     return {"success": ok}
 
 
-TESTABLE_SERVICES = ["groq", "gemini", "tavily", "telegram"]
+TESTABLE_SERVICES = ["groq", "gemini", "mistral", "cerebras", "tavily", "telegram"]
 
 
 @router.post("/test/{service}", dependencies=[Depends(require_api_key)])
@@ -273,6 +273,25 @@ async def test_service(service: str):
                 timeout=10,
             )
             return {"ok": r.status_code == 200, "message": f"Gemini HTTP {r.status_code}"}
+
+        elif service in ("mistral", "cerebras"):
+            # Refolosim config-ul din synthesis_providers.py (aceeasi sursa ca fallback-ul
+            # real de sinteza) — evita sa reparam un model/URL hardcodat de 2 ori (asa a
+            # ramas Cerebras nedetectat: niciun test manual nu exista pt acest provider).
+            from backend.agents.synthesis_providers import SynthesisProvidersMixin
+            from backend.http_client import get_client
+            cfg = SynthesisProvidersMixin._PROVIDERS[service]
+            api_key = getattr(settings, cfg["api_key_attr"], "")
+            if not api_key:
+                return {"ok": False, "message": f"{cfg['api_key_attr'].upper()} nu este configurat"}
+            c = get_client()
+            r = await c.post(
+                cfg["url"],
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={"model": cfg["model"], "messages": [{"role": "user", "content": "1+1="}], "max_tokens": 5},
+                timeout=10,
+            )
+            return {"ok": r.status_code == 200, "message": f"{service.capitalize()} HTTP {r.status_code}"}
 
         elif service == "telegram":
             from backend.services.notification import send_telegram
