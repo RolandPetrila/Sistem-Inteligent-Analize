@@ -19,7 +19,14 @@ nu 15 blocuri `elif`), dispatch din `POST /api/settings/test/{service}`. Rezulta
 11/15 OK (ANAF TVA/Bilant, BNR, openapi.ro, SEAP, Monitorul Oficial, Sanctiuni, Eurostat,
 Brave, Jina, Google Maps), 4 FAIL reale — **BPI (buletinul.ro) DNS-dead**, **INS TEMPO
 timeout/offline**, **AEGRM tot DNS-dead** (confirmat, ca la 2026-06-27), **Portal Just:
-`zeep` NU e instalat** (`pip install zeep` — nefacut, decizie lasata userului).
+`zeep` NU e instalat** (fixat ulterior — vezi mai jos).
+
+**Portal Just — fix complet (2026-07-13, cerut de user "instaleaza zeep si retesteaza"):**
+retestarea a scos la iveala ca feature-ul nu functionase NICIODATA cu succes — 3 bug-uri
+suprapuse (parametri SOAP gresiti, `institutie` obligatoriu 246 valori fara wildcard —
+fix aprobat de user: mapare judet→Tribunalul+Curtea de Apel, parsare raspuns pe shape
+fictiv). Reparat integral, verificat cu date reale (242 dosare gasite pt "Popescu"/Cluj).
+443 pytest PASSED. Detalii: memory `project_ris_audit_dashboard_ping_registry`.
 
 **B** — `POST /api/settings/test/email` (send_email minimal) + `POST /api/settings/test/webhook`
 (reutilizeaza `_send_webhook_if_configured` din `job_service.py`, acum returneaza rezultat

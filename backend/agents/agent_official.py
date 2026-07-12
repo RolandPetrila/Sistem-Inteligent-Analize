@@ -235,10 +235,15 @@ class OfficialAgent(BaseAgent):
 
             # F1-1: Portal Just — dosare judecatoresti oficiale
             if company_name:
+                _judet = (
+                    (official_data.get("onrc_structured") or {}).get("judet")
+                    or (official_data.get("onrc_local") or {}).get("judet")
+                    or ""
+                )
                 just_result = await self._fetch_with_timeout(
-                    search_dosare(company_name, cui_clean),
+                    search_dosare(company_name, cui_clean, _judet),
                     "portal.just.ro",
-                    30,
+                    65,  # pana la 2 instante cautate secvential (Tribunal + Curte de Apel)
                 )
                 if just_result and just_result.get("found") is not False:
                     official_data["dosare_just"] = just_result
