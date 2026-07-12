@@ -631,6 +631,13 @@ Reguli:
             return False
 
         if section_key == "opportunities":
+            # Angle A v2 (licitatii SICAP deschise, cu deadline) — sursa PRIMARA reala.
+            # Gate-ul original nu stia de aceasta cheie (scrisa de agent_verification.py
+            # _fetch_tender_opportunities) -> sectiunea cadea mereu pe "date insuficiente"
+            # chiar si cu 15 licitatii reale disponibile. Descoperit prin verificare E2E.
+            tenders = verified_data.get("tender_opportunities", {})
+            if isinstance(tenders, dict) and tenders.get("opportunities"):
+                return True
             market = verified_data.get("market", {})
             if isinstance(market, dict):
                 seap = market.get("seap", {})
@@ -814,7 +821,7 @@ Reguli:
             "due_diligence": ["due_diligence"],
             "swot_analysis": ["risk_score", "financial", "market"],
             "swot": ["risk_score", "financial", "market"],
-            "opportunities": ["market", "benchmark"],
+            "opportunities": ["tender_opportunities", "market", "benchmark"],
             "recommendations": ["risk_score", "early_warnings"],
         }
         keys = section_data_map.get(section_key, ["company", "financial"])
