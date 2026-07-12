@@ -32,9 +32,11 @@ _state: dict = {
 
 
 def _git(*args, timeout: int = 90) -> tuple[int, str]:
+    # -c safe.directory=* : serviciul ruleaza ca NT AUTHORITY/SYSTEM, repo-ul e al userului ->
+    # git refuza ("dubious ownership") fara aceasta exceptie (self-contained, fara config global).
     try:
         r = subprocess.run(
-            ["git", *args], cwd=str(PROJECT_DIR),
+            ["git", "-c", "safe.directory=*", *args], cwd=str(PROJECT_DIR),
             capture_output=True, text=True, timeout=timeout,
         )
         return r.returncode, (r.stdout + r.stderr).strip()
