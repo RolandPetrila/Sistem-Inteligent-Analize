@@ -229,6 +229,23 @@ async def _save_job_results(
     if report_sections:
         verified_data["report_sections"] = report_sections
 
+    # Extrage caen_code + judet din verified_data["company"] (campuri OFICIAL-trust wrapped:
+    # {"value": ..., "trust": ..., "source": ...}) — aceeasi sursa folosita la randarea
+    # raportului. Erau mereu NULL in companies: INSERT-ul original nu le seta niciodata,
+    # nicio alta UPDATE nu le completa ulterior -> /sector + compare/sector + filtrul
+    # ?caen_code= din /api/companies erau rupte silentios pentru toate firmele.
+    company_info = verified_data.get("company") or {}
+
+    def _field(key: str) -> str | None:
+        raw = company_info.get(key)
+        val = raw.get("value") if isinstance(raw, dict) else raw
+        val = str(val).strip() if val else ""
+        return val or None
+
+    caen_code = _field("caen_code")
+    county = _field("judet")
+    caen_description = _field("caen_description")
+
     # Upsert company
     if cui or company_name:
         company_id = str(uuid.uuid4())
@@ -240,15 +257,18 @@ async def _save_job_results(
             company_id = existing["id"]
             await db.execute(
                 "UPDATE companies SET last_analyzed_at = datetime('now'), "
-                "analysis_count = analysis_count + 1 WHERE id = ?",
-                (company_id,),
+                "analysis_count = analysis_count + 1, "
+                "county = COALESCE(?, county), caen_code = COALESCE(?, caen_code), "
+                "caen_description = COALESCE(?, caen_description) "
+                "WHERE id = ?",
+                (county, caen_code, caen_description, company_id),
             )
         else:
             await db.execute(
-                "INSERT INTO companies (id, cui, name, county, first_analyzed_at, "
-                "last_analyzed_at, analysis_count) VALUES (?, ?, ?, ?, datetime('now'), "
-                "datetime('now'), 1)",
-                (company_id, cui or None, company_name or "N/A", None),
+                "INSERT INTO companies (id, cui, name, county, caen_code, caen_description, "
+                "first_analyzed_at, last_analyzed_at, analysis_count) "
+                "VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), 1)",
+                (company_id, cui or None, company_name or "N/A", county, caen_code, caen_description),
             )
 
         # F5: denormalize latest score onto companies (powers Companies list filter + sort).
