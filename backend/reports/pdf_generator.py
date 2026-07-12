@@ -302,8 +302,10 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
     _seap_field = _market.get("seap", {}) if isinstance(_market, dict) else {}
     seap = _seap_field.get("value", _seap_field) if isinstance(_seap_field, dict) else {}
     seap_ok = isinstance(seap, dict) and (seap.get("total_contracts", 0) or 0) > 0
+    opp = verified_data.get("tender_opportunities", {})
+    opp_ok = isinstance(opp, dict) and opp.get("available") and opp.get("count")
 
-    if act_ok or rel_flags or aegrm_ok or hist_ok or fund_ok or sanc_ok or eust_ok or seap_ok:
+    if act_ok or rel_flags or aegrm_ok or hist_ok or fund_ok or sanc_ok or eust_ok or seap_ok or opp_ok:
         pdf.add_page()
         pdf.start_section("Actionariat, Garantii si Finantare", level=0)
         pdf.set_font("Helvetica", "B", 16)
@@ -428,6 +430,26 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
                     val_s = f" ({_fmt_pdf_num(val)} {cur})" if isinstance(val, (int, float)) else ""
                     auth_s = f" - {auth}" if auth else ""
                     pdf.multi_cell(0, 5.5, _sanitize(f"  * {title}{auth_s}{val_s}"[:200]), new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(3)
+
+        if opp_ok:
+            _add_section_header(pdf, "Oportunitati de Contracte (SICAP)")
+            pdf.multi_cell(0, 6, _sanitize(f"{opp.get('count', 0)} licitatii deschise pe sector (ultimele {opp.get('days_back', 30)} zile)"), new_x="LMARGIN", new_y="NEXT")
+            for it in [i for i in (opp.get("opportunities") or []) if isinstance(i, dict)][:15]:
+                title = str(it.get("title", "") or "(fara titlu)")[:90]
+                auth = str(it.get("authority", ""))
+                cpv = str(it.get("cpv", ""))
+                val = it.get("value")
+                deadline = str(it.get("deadline", ""))[:10]
+                val_s = f" {_fmt_pdf_num(val)} RON" if isinstance(val, (int, float)) else ""
+                extra = f" [CPV {cpv}]" if cpv else ""
+                extra += f" (termen {deadline})" if deadline else ""
+                pdf.multi_cell(0, 5.5, _sanitize(f"  * {title} - {auth}{extra}{val_s}"[:200]), new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Helvetica", "", 8)
+            pdf.set_text_color(120, 120, 120)
+            pdf.multi_cell(0, 5, _sanitize("Orientativ - mapare CAEN->CPV la nivel de diviziune. Sursa: SICAP."), new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Helvetica", "", 10)
+            pdf.set_text_color(40, 40, 40)
             pdf.ln(3)
 
         if fund_ok:

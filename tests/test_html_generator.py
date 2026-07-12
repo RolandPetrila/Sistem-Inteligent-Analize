@@ -298,6 +298,25 @@ class TestRichFields:
         html, _ = _build_rich_fields_html(data)
         assert 'id="achizitii"' not in html
 
+    def test_tender_opportunities_rendered(self):
+        data = {"tender_opportunities": {"available": True, "count": 2, "days_back": 30,
+                "opportunities": [
+                    {"title": "Constructie scoala", "authority": "Primaria Cluj", "cpv": "45210000-2",
+                     "value": 500000, "deadline": "2026-08-01", "notice_no": "CN1"},
+                    {"title": "Reabilitare drum", "authority": "CJ Cluj", "cpv": "45233120-6",
+                     "value": 1200000, "deadline": "2026-08-15", "notice_no": "CN2"}]}}
+        html, nav = _build_rich_fields_html(data)
+        assert 'id="oportunitati"' in html
+        assert "licitatii deschise" in html
+        assert "45210000-2" in html
+        assert "Primaria Cluj" in html
+        assert 'href="#oportunitati"' in nav
+
+    def test_tender_opportunities_skipped_when_unavailable(self):
+        data = {"tender_opportunities": {"available": False, "reason": "CAEN necunoscut"}}
+        html, _ = _build_rich_fields_html(data)
+        assert 'id="oportunitati"' not in html
+
     def test_historical_flags_real_osint_shape(self):
         """TASK 2: osint_client emits {type(slug), label(human), severity, snippet}.
         The OSINT section MUST render the human label + snippet, not the raw slug —

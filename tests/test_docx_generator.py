@@ -141,6 +141,23 @@ class TestGenerateDocx:
             if os.path.exists(path):
                 os.remove(path)
 
+    def test_tender_opportunities_rendered(self):
+        """Angle A: oportunitati SICAP cu diacritice — nu trebuie sa arunce."""
+        from backend.reports.docx_generator import generate_docx
+
+        verified_data = {"tender_opportunities": {"available": True, "count": 1, "days_back": 30,
+            "opportunities": [{"title": "Construcție grădiniță", "authority": "Primăria Târgoviște",
+                               "cpv": "45214100-1", "value": 750000, "deadline": "2026-08-01", "notice_no": "CN5"}]}}
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as f:
+            path = f.name
+        try:
+            generate_docx(_make_sections(), _make_meta(), path, verified_data)
+            assert os.path.exists(path)
+            assert os.path.getsize(path) > 0
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
     def test_functioneaza_cu_meta_incomplet(self):
         from backend.reports.docx_generator import generate_docx
 

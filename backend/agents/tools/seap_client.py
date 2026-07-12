@@ -12,6 +12,10 @@ from backend.http_client import get_client
 
 SEAP_NOTICES_URL = "https://e-licitatie.ro/api-pub/NoticeCommon/GetCANoticeList/"
 SEAP_DIRECT_URL = "https://e-licitatie.ro/api-pub/DirectAcquisitionCommon/GetDirectAcquisitionList/"
+# Angle A: proceduri DESCHISE (oportunitati). api-pub cere Referer OBLIGATORIU, altfel respinge.
+SEAP_CNOTICE_URL = "https://e-licitatie.ro/api-pub/NoticeCommon/GetCNoticeList/"
+_SICAP_HEADERS = {"Content-Type": "application/json", "Referer": "https://e-licitatie.ro"}
+OPEN_NOTICE_TYPE_IDS = [2, 17]  # CN (anunt de participare) + SCN (simplificat) = proceduri deschise
 REQUEST_DELAY = 3
 
 
@@ -136,3 +140,110 @@ async def get_contracts_won(cui: str, page_size: int = 20, use_cache: bool = Tru
         await cache_service.set(cache_key, results, "seap_history")
 
     return results
+
+
+async def search_open_tenders(
+    caen_code: str,
+    days_back: int = 30,
+    max_pages: int = 2,
+    max_results: int = 15,
+    use_cache: bool = True,
+) -> dict:
+    """
+    Angle A: licitatii/proceduri DESCHISE relevante pt sectorul firmei.
+
+    Interogheaza SICAP GetCNoticeList (proceduri deschise, ultimele `days_back` zile), apoi
+    filtreaza LOCAL pe prefix CPV (diviziune) obtinut din maparea ORIENTATIVA CAEN->CPV.
+    Cache pe setul de prefixe CPV (firme din acelasi sector reutilizeaza). Rezilient: {available: False} la eroare.
+    """
+    from backend.agents.tools.caen_cpv_map import caen_to_cpv_prefixes
+
+    prefixes = set(caen_to_cpv_prefixes(caen_code))
+    if not prefixes:
+        return {"available": False, "reason": "CAEN necunoscut in maparea CPV", "caen_code": str(caen_code)}
+
+    cache_id = "".join(sorted(prefixes)) + f"_{days_back}"
+    if use_cache:
+        from backend.services import cache_service
+        cache_key = cache_service.make_cache_key("seap_open_tenders", cache_id)
+        cached = await cache_service.get(cache_key)
+        if cached is not None:
+            logger.debug(f"SEAP open tenders: cache hit pentru CAEN {caen_code}")
+            return cached
+
+    from datetime import UTC, datetime, timedelta
+    start = (datetime.now(UTC) - timedelta(days=days_back)).strftime("%Y-%m-%dT00:00:00.000Z")
+
+    matched: list[dict] = []
+    try:
+        for page in range(max_pages):
+            body = {
+                "sysNoticeTypeIds": OPEN_NOTICE_TYPE_IDS, "sortProperties": [],
+                "pageSize": 100, "pageIndex": page, "hasUnansweredQuestions": False,
+                "startTenderReceiptDeadline": None, "sysProcedureStateId": None,
+                "sysProcedurePhaseId": None, "startPublicationDate": start, "endPublicationDate": None,
+            }
+
+            async def _fetch(b=body):
+                c = get_client()
+                return await c.post(SEAP_CNOTICE_URL, json=b, headers=_SICAP_HEADERS)
+
+            resp = await with_retry(_fetch, retries=1, backoff=[3], source_name="SEAP open tenders")
+            if resp.status_code != 200:
+                logger.warning(f"SEAP CNoticeList HTTP {resp.status_code}")
+                break
+            data = resp.json()
+            items = data.get("items") or (data.get("searchResult") or {}).get("items") or []
+            if not items:
+                break
+            for it in items:
+                if not isinstance(it, dict):
+                    continue
+                cca = str(it.get("cpvCodeAndName") or "")
+                cpv = cca.split(" - ", 1)[0].strip() if cca else ""
+                cpv_div = "".join(c for c in cpv if c.isdigit())[:2]
+                if not cpv_div or cpv_div not in prefixes:
+                    continue
+                matched.append({
+                    "title": it.get("contractTitle", ""),
+                    "authority": it.get("contractingAuthorityNameAndFN", ""),
+                    "cpv": cpv,
+                    "cpv_name": cca.split(" - ", 1)[1].strip() if " - " in cca else "",
+                    "value": it.get("estimatedValueRon"),
+                    "deadline": it.get("maxTenderReceiptDeadline") or it.get("minTenderReceiptDeadline") or "",
+                    "notice_no": it.get("noticeNo", ""),
+                    "procedure_id": it.get("procedureId"),
+                })
+            if page < max_pages - 1:
+                await asyncio.sleep(REQUEST_DELAY)  # politicos intre pagini
+    except Exception as e:
+        logger.warning(f"[seap] search_open_tenders esuat: {e}")
+        return {"available": False, "error": str(e), "caen_code": str(caen_code)}
+
+    # dedup pe notice_no + plafon
+    seen: set = set()
+    uniq: list[dict] = []
+    for m in matched:
+        k = m["notice_no"] or (m["title"], m["authority"])
+        if k in seen:
+            continue
+        seen.add(k)
+        uniq.append(m)
+    uniq = uniq[:max_results]
+
+    result = {
+        "available": True,
+        "source": "SICAP",
+        "source_url": "https://e-licitatie.ro",
+        "caen_code": str(caen_code),
+        "cpv_prefixes": sorted(prefixes),
+        "days_back": days_back,
+        "count": len(uniq),
+        "opportunities": uniq,
+        "note": "Orientativ — filtrare pe mapare CAEN->CPV la nivel de diviziune",
+    }
+    if use_cache:
+        from backend.services import cache_service
+        cache_key = cache_service.make_cache_key("seap_open_tenders", cache_id)
+        await cache_service.set(cache_key, result, "seap_open_tenders")
+    return result

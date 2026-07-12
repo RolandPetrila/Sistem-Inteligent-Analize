@@ -118,6 +118,10 @@ def _rich_verified_data() -> dict:
             "direct_acquisitions": [{"title": "Achiziție consumabile", "value": 5000,
                                      "authority": "Spitalul Județean", "date": "2024-09-10"}],
         }}},
+        # Angle A: oportunitati deschise cu diacritice -> exercita calea latin-1 PDF.
+        "tender_opportunities": {"available": True, "count": 1, "days_back": 30,
+            "opportunities": [{"title": "Construcție grădiniță în Târgoviște", "authority": "Primăria Târgoviște",
+                               "cpv": "45214100-1", "value": 750000, "deadline": "2026-08-01", "notice_no": "CN5"}]},
     }
 
 

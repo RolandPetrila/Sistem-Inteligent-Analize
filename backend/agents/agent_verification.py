@@ -110,6 +110,9 @@ class VerificationAgent(BaseAgent):
         # --- Benchmark sector UE (Eurostat SBS) ---
         verified["eurostat_sector"] = await self._fetch_eurostat_sector(caen_ctx, official)
 
+        # --- Oportunitati de contracte: licitatii deschise pe sector (SICAP, Angle A) ---
+        verified["tender_opportunities"] = await self._fetch_tender_opportunities(caen_ctx, official)
+
         # --- Matricea Relatii (ADV5) ---
         verified["relations"] = self._detect_relations(official)
 
@@ -811,6 +814,25 @@ class VerificationAgent(BaseAgent):
         except Exception as e:
             logger.warning(f"[verification] Eurostat esuat: {e}")
             return {"available": False, "source": "Eurostat", "error": str(e)}
+
+    async def _fetch_tender_opportunities(self, caen_ctx: dict, official: dict) -> dict:
+        """Angle A: licitatii deschise pe sectorul firmei (mapare CAEN->CPV orientativa). Rezilient + timeout."""
+        import asyncio
+
+        try:
+            caen_code = str(caen_ctx.get("caen_code") or "") if isinstance(caen_ctx, dict) else ""
+            if not caen_code:
+                caen_code = str((official.get("anaf") or {}).get("cod_caen") or "")
+            if not caen_code:
+                return {"available": False, "reason": "CAEN necunoscut"}
+            from backend.agents.tools.seap_client import search_open_tenders
+            return await asyncio.wait_for(search_open_tenders(caen_code), timeout=25)
+        except TimeoutError:
+            logger.warning("[verification] Oportunitati SICAP: timeout")
+            return {"available": False, "error": "timeout"}
+        except Exception as e:
+            logger.warning(f"[verification] Oportunitati SICAP esuat: {e}")
+            return {"available": False, "error": str(e)}
 
     def _calculate_risk_score(self, verified: dict, dynamic_thresholds: dict | None = None) -> dict:
         """Delegheaza la modul separat verification/scoring.py."""
