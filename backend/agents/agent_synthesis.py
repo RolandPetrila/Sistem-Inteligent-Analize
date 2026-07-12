@@ -631,10 +631,16 @@ Reguli:
             return False
 
         if section_key == "opportunities":
-            # Angle A v2 (licitatii SICAP deschise, cu deadline) — sursa PRIMARA reala.
-            # Gate-ul original nu stia de aceasta cheie (scrisa de agent_verification.py
-            # _fetch_tender_opportunities) -> sectiunea cadea mereu pe "date insuficiente"
-            # chiar si cu 15 licitatii reale disponibile. Descoperit prin verificare E2E.
+            # Sectiunea "opportunities" e PARTAJATA intre 3 tipuri de analiza (TENDER_
+            # OPPORTUNITIES, FUNDING_OPPORTUNITIES, MARKET_ENTRY_ANALYSIS) cu surse de date
+            # complet diferite. Gate-ul original nu stia nici de tender_opportunities, nici
+            # de funding_programs -> cadea mereu pe "date insuficiente" chiar cu date reale
+            # disponibile (15 licitatii SICAP / programe de finantare eligibile). Descoperit
+            # prin verificare E2E (tender_opportunities) + testare AnalysisType FUNDING_
+            # OPPORTUNITIES (funding_programs).
+            funding = verified_data.get("funding_programs", {})
+            if isinstance(funding, dict) and funding.get("eligible"):
+                return True
             tenders = verified_data.get("tender_opportunities", {})
             if isinstance(tenders, dict) and tenders.get("opportunities"):
                 return True
@@ -821,7 +827,7 @@ Reguli:
             "due_diligence": ["due_diligence"],
             "swot_analysis": ["risk_score", "financial", "market"],
             "swot": ["risk_score", "financial", "market"],
-            "opportunities": ["tender_opportunities", "market", "benchmark"],
+            "opportunities": ["tender_opportunities", "funding_programs", "market", "benchmark"],
             "recommendations": ["risk_score", "early_warnings"],
         }
         keys = section_data_map.get(section_key, ["company", "financial"])
