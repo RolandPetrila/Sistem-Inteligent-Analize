@@ -92,7 +92,7 @@ Fisiere feedback loop:
 
 - Backend: Python 3.13 + FastAPI + SQLite (aiosqlite, WAL mode)
 - Frontend: React 19 + Vite + TypeScript + Tailwind CSS
-- AI: Claude CLI (Opus) + Groq (Llama 4 Scout) + Mistral (Small 3) + Gemini (2.5 Flash) + Cerebras (Qwen 3 235B) — 5-level fallback + smart routing
+- AI: Claude CLI (Opus) + Groq (Llama 4 Scout) + Mistral (Small 3) + Gemini (2.5 Flash) + Cerebras (gpt-oss-120b, migrat de la Qwen 3 235B retras din catalog 2026-07-12) — 5-level fallback + smart routing
 - ONRC: openapi.ro (100 req/luna gratuit, date structurate)
 - Licitatii: SEAP e-licitatie.ro API (contracte publice)
 - Search: Tavily API (1000 req/luna gratuit)
@@ -246,7 +246,7 @@ Fisierele permise in root sunt NUMAI:
 1. Synthesis via Claude Code CLI subprocess ($0, calitate maxima)
 2. Groq (Llama 4 Scout) ca fallback rapid (gratuit)
 3. Gemini 2.5 Flash ca fallback autonom (gratuit)
-4. Cerebras (Qwen 3 235B) ca fallback final (gratuit, 1M tokeni/zi)
+4. Cerebras (gpt-oss-120b, ex-Qwen 3 235B retras din catalog) ca fallback final (gratuit, 1M tokeni/zi)
 5. Mistral Small 3 ca fallback european (1B tokeni/luna gratuit)
 6. fpdf2 pentru PDF (zero dependinte native Windows)
 7. TypeScript pentru frontend

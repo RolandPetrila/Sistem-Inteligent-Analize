@@ -89,7 +89,10 @@ class SynthesisProvidersMixin:
         },
         "cerebras": {
             "url": "https://api.cerebras.ai/v1/chat/completions",
-            "model": "qwen-3-235b-a22b-instruct-2507",
+            # Qwen 3 235B a fost retras din catalogul Cerebras (verificat live 2026-07-12,
+            # GET /v1/models -> 404 "model_not_found" pe id-ul vechi). Inlocuit cu gpt-oss-120b
+            # (cel mai capabil disponibil acum din: gemma-4-31b, zai-glm-4.7, gpt-oss-120b).
+            "model": "gpt-oss-120b",
             "api_key_attr": "cerebras_api_key",
         },
         # F7.2: DeepSeek R1 — financial reasoning specialist

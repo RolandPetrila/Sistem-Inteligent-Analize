@@ -297,7 +297,7 @@ Reguli:
             "groq": 20000,     # 131K context (Llama 4 Scout)
             "mistral": 20000,  # 128K context (Small 3)
             "gemini": 400000,  # D8 fix: 1M context → use 400K chars for data
-            "cerebras": 20000, # 128K context (Qwen 3 235B)
+            "cerebras": 20000, # 128K context (gpt-oss-120b)
         }
         json_limit = max_json_chars.get(provider, 15000)
         data_json = json.dumps(verified_data, ensure_ascii=False, default=str, indent=2)
@@ -868,7 +868,7 @@ Reguli:
         "groq": 131_000,    # D7 fix: Llama 4 Scout has 131K context
         "gemini": 1_000_000, # D8 fix: Gemini 2.5 Flash has 1M context
         "mistral": 128_000,  # Mistral Small 3 has 128K context
-        "cerebras": 128_000, # Qwen 3 235B has 128K context
+        "cerebras": 128_000, # gpt-oss-120b has 128K context
     }
     # Provider preference order: from largest to smallest context
     _PROVIDER_SIZE_ORDER = ["claude", "gemini", "mistral", "cerebras", "groq"]
