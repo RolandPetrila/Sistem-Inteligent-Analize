@@ -50,8 +50,8 @@ OUTPUT_JS = ROOT / "AUDIT_FUNCTII.js"
 # ─────────────────────────────────────────────────────────────────────────────
 CURATED_ENDPOINTS = {
     # ── analysis.py ──
-    "GET /api/analysis/types": {"cat": "Analysis", "tested": False, "evidence": "Neverificat direct in sweep-ul E2E.", "live_safe": True},
-    "GET /api/analysis/types/{analysis_type}": {"cat": "Analysis", "tested": False, "evidence": "Neverificat direct.", "live_safe": True},
+    "GET /api/analysis/types": {"cat": "Analysis", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200 (cu X-RIS-Key).", "live_safe": True},
+    "GET /api/analysis/types/{analysis_type}": {"cat": "Analysis", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200 pt FULL_COMPANY_PROFILE.", "live_safe": True},
     "POST /api/analysis/parse-query": {"cat": "Analysis", "tested": True, "evidence": "E2E 2026-07-12: 95% confidence, extras corect analysis_type+CUI.", "live_safe": False},
     "POST /api/analysis/quick-score": {"cat": "Analysis", "tested": True, "evidence": "E2E 2026-07-12: batch 2 CUI, date reale ANAF+Bilant. Fix aplicat (import gresit).", "live_safe": False},
     "POST /api/analysis/vies": {"cat": "Analysis", "tested": True, "evidence": "E2E 2026-07-12: validare TVA live, date reale UE.", "live_safe": False},
@@ -73,7 +73,7 @@ CURATED_ENDPOINTS = {
     "GET /api/companies/search/fts": {"cat": "Companies", "tested": True, "evidence": "E2E 2026-07-12: FTS5 search OK.", "live_safe": True},
     "POST /api/companies/import": {"cat": "Companies", "tested": False, "evidence": "Neverificat in sweep — creeaza/suprascrie companii din CSV.", "live_safe": False},
     "GET /api/companies/export/csv": {"cat": "Companies", "tested": True, "evidence": "E2E 2026-07-12: export CSV CRM-ready OK.", "live_safe": True},
-    "GET /api/companies/{company_id}": {"cat": "Companies", "tested": False, "evidence": "Folosit implicit in UI, neverificat explicit izolat.", "live_safe": True},
+    "GET /api/companies/{company_id}": {"cat": "Companies", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200, date reale MOSSLEIN S.R.L.", "live_safe": True},
     "PUT /api/companies/{company_id}/favorite": {"cat": "Companies", "tested": True, "evidence": "E2E 2026-07-12: toggle favorite OK.", "live_safe": False},
     "POST /api/companies/{company_id}/auto-reanalyze": {"cat": "Companies", "tested": True, "evidence": "E2E 2026-07-12: OK.", "live_safe": False},
     "GET /api/companies/{company_id}/timeline": {"cat": "Companies", "tested": True, "evidence": "E2E 2026-07-12: OK (gol pt Mosslein — plauzibil, nu bug).", "live_safe": True},
@@ -86,7 +86,7 @@ CURATED_ENDPOINTS = {
     "POST /api/companies/{company_id}/chat": {"cat": "Companies", "tested": False, "evidence": "RAG chat — neverificat in sweep.", "live_safe": False},
     "GET /api/companies/{company_id}/network": {"cat": "Companies", "tested": True, "evidence": "E2E 2026-07-12: OK (gol pt Mosslein).", "live_safe": True},
     "GET /api/companies/{cui}/predictive": {"cat": "Companies", "tested": True, "evidence": "E2E 2026-07-12: Altman/Piotroski/Beneish/Zmijewski OK.", "live_safe": True},
-    "GET /api/companies/{cui}/timeline-report": {"cat": "Companies", "tested": False, "evidence": "Doar varianta /pdf confirmata explicit.", "live_safe": True},
+    "GET /api/companies/{cui}/timeline-report": {"cat": "Companies", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200 (varianta JSON, nu doar /pdf).", "live_safe": True},
     "GET /api/companies/{cui}/timeline-report/pdf": {"cat": "Companies", "tested": True, "evidence": "BUG #4 FIX: crash Unicode em-dash. Verificat live 200 OK dupa fix.", "live_safe": True},
 
     # ── compare.py ──
@@ -96,15 +96,15 @@ CURATED_ENDPOINTS = {
     "POST /api/compare/templates": {"cat": "Compare", "tested": True, "evidence": "E2E 2026-07-12: CRUD templates OK.", "live_safe": False},
     "DELETE /api/compare/templates/{template_id}": {"cat": "Compare", "tested": True, "evidence": "E2E 2026-07-12: CRUD templates OK.", "live_safe": False},
     "POST /api/compare/sector": {"cat": "Compare", "tested": True, "evidence": "BUG #2 FIX verification: caen_section=36 returneaza acum date.", "live_safe": False},
-    "GET /api/compare/sector/{caen_code}/dashboard": {"cat": "Compare", "tested": False, "evidence": "Nu s-a confirmat separat de POST /compare/sector.", "live_safe": True},
+    "GET /api/compare/sector/{caen_code}/dashboard": {"cat": "Compare", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200 pt caen_code=3600.", "live_safe": True},
 
     # ── documents.py ──
     "POST /api/documents/ocr": {"cat": "OCR", "tested": True, "evidence": "E2E 2026-07-12: upload imagine, text extras corect (Mistral).", "live_safe": False},
 
     # ── jobs.py ──
     "POST /api/jobs": {"cat": "Jobs", "tested": True, "evidence": "Folosit extensiv in TOATE testele — creeaza job real (cost/cota).", "live_safe": False},
-    "GET /api/jobs": {"cat": "Jobs", "tested": False, "evidence": "Listare — neconfirmata explicit in sweep.", "live_safe": True},
-    "GET /api/jobs/diagnostics/latest": {"cat": "Jobs", "tested": False, "evidence": "Neverificat explicit.", "live_safe": True},
+    "GET /api/jobs": {"cat": "Jobs", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200, listare reala.", "live_safe": True},
+    "GET /api/jobs/diagnostics/latest": {"cat": "Jobs", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200, job real DONE.", "live_safe": True},
     "GET /api/jobs/{job_id}": {"cat": "Jobs", "tested": True, "evidence": "Poll status folosit extensiv in toate testele.", "live_safe": True},
     "POST /api/jobs/{job_id}/start": {"cat": "Jobs", "tested": True, "evidence": "Folosit extensiv in toate testele.", "live_safe": False},
     "GET /api/jobs/{job_id}/diagnostics": {"cat": "Jobs", "tested": True, "evidence": "E2E 2026-07-12: completeness gate real (88/100, gap-uri cu motiv).", "live_safe": True},
@@ -124,7 +124,7 @@ CURATED_ENDPOINTS = {
     "GET /api/monitoring/health": {"cat": "Monitoring", "tested": True, "evidence": "Vezi nota GET /api/monitoring.", "live_safe": True},
 
     # ── notifications.py ──
-    "GET /api/notifications": {"cat": "Notifications", "tested": False, "evidence": "Neverificat direct in sweep (implementat Faza R12).", "live_safe": True},
+    "GET /api/notifications": {"cat": "Notifications", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200.", "live_safe": True},
     "PUT /api/notifications/{notification_id}/read": {"cat": "Notifications", "tested": False, "evidence": "Neverificat.", "live_safe": False},
     "PUT /api/notifications/read-all": {"cat": "Notifications", "tested": False, "evidence": "Neverificat.", "live_safe": False},
 
@@ -133,7 +133,7 @@ CURATED_ENDPOINTS = {
     "GET /api/reports/{report_id}": {"cat": "Reports", "tested": True, "evidence": "Folosit implicit la fiecare verificare de raport.", "live_safe": True},
     "GET /api/reports/{report_id}/download/one_pager": {"cat": "Reports", "tested": True, "evidence": "Tier 1: 200 OK, dimensiune reala.", "live_safe": True},
     "GET /api/reports/{report_id}/download/{format}": {"cat": "Reports", "tested": True, "evidence": "Tier 1: 5 formate (PDF/DOCX/HTML/Excel/PPTX) 200 OK.", "live_safe": True},
-    "GET /api/reports/{report_id}/data": {"cat": "Reports", "tested": False, "evidence": "Neverificat explicit in acest sweep.", "live_safe": True},
+    "GET /api/reports/{report_id}/data": {"cat": "Reports", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200, date reale raport LEAD_GENERATION.", "live_safe": True},
     "GET /api/reports/{report_id}/delta": {"cat": "Reports", "tested": True, "evidence": "E2E 2026-07-12: corect 'prima analiza' pt tip nou.", "live_safe": True},
     "GET /api/reports/{report_id}/export/ics": {"cat": "Reports", "tested": True, "evidence": "BUG #5 FIX: cheie JSON gresita. Verificat live 200 OK, .ics valid 15 evenimente.", "live_safe": True},
     "POST /api/reports/{report_id}/send-email": {"cat": "Reports", "tested": True, "evidence": "E2E 2026-07-12: esuat CORECT (GMAIL_* neconfigurat) — cod OK, gap config.", "live_safe": False},
@@ -141,24 +141,24 @@ CURATED_ENDPOINTS = {
     "GET /api/reports/public/{token}": {"cat": "Reports", "tested": True, "evidence": "Vezi share — acces public fara auth confirmat.", "live_safe": True},
 
     # ── settings.py ──
-    "GET /api/settings": {"cat": "Settings", "tested": False, "evidence": "Folosit de UI Settings.tsx, neconfirmat explicit in sweep.", "live_safe": True},
+    "GET /api/settings": {"cat": "Settings", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200, chei mascate corect.", "live_safe": True},
     "PUT /api/settings": {"cat": "Settings", "tested": False, "evidence": "Scrie .env — netestat live in sweep (foloseste pagina Settings reala).", "live_safe": False},
     "POST /api/settings/test-telegram": {"cat": "Settings", "tested": True, "evidence": "E2E 2026-07-12: trimis cu succes (mesaj Telegram real).", "live_safe": False},
     "POST /api/settings/test/{service}": {"cat": "Settings", "tested": True, "evidence": "BUG #6 FIX: mistral+cerebras adaugate. Toate 6 servicii (groq/gemini/mistral/cerebras/tavily/telegram) HTTP 200.", "live_safe": False},
 
     # ── main.py (direct) ──
     "POST /api/frontend-log": {"cat": "System", "tested": False, "evidence": "Folosit doar de frontend (nu API testat direct).", "live_safe": False},
-    "GET /api/frontend-log/recent": {"cat": "System", "tested": False, "evidence": "Neverificat.", "live_safe": True},
-    "GET /api/health": {"cat": "System", "tested": False, "evidence": "Neapelat explicit — s-a folosit /api/version in schimb.", "live_safe": True},
+    "GET /api/frontend-log/recent": {"cat": "System", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200.", "live_safe": True},
+    "GET /api/health": {"cat": "System", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200.", "live_safe": True},
     "GET /api/version": {"cat": "System", "tested": True, "evidence": "Folosit repetat pt confirmare deploy commit dupa fiecare fix.", "live_safe": True},
-    "POST /api/update": {"cat": "System", "tested": False, "evidence": "Tier 3 — verificat prin cod+log intr-o sesiune anterioara, NU re-executat (ar intrerupe sesiunea).", "live_safe": False},
-    "POST /api/restart": {"cat": "System", "tested": False, "evidence": "Tier 3 — mecanism verificat anterior (PID schimbat) via WinSW direct, nu via acest endpoint API.", "live_safe": False},
-    "GET /metrics": {"cat": "System", "tested": False, "evidence": "Prometheus endpoint — neverificat in sweep.", "live_safe": True},
-    "GET /api/cache/stats": {"cat": "System", "tested": False, "evidence": "Neverificat explicit.", "live_safe": True},
-    "GET /api/health/deep": {"cat": "System", "tested": False, "evidence": "Neverificat explicit in acest sweep.", "live_safe": True},
-    "GET /health/status": {"cat": "System", "tested": False, "evidence": "Alias legacy — neverificat.", "live_safe": True},
-    "GET /api/stats": {"cat": "System", "tested": False, "evidence": "Folosit implicit de Dashboard, neconfirmat izolat.", "live_safe": True},
-    "GET /api/stats/trend": {"cat": "System", "tested": False, "evidence": "Folosit implicit de Dashboard, neconfirmat izolat.", "live_safe": True},
+    "POST /api/update": {"cat": "System", "tested": False, "evidence": "Tier 3 — verificat prin cod+log intr-o sesiune anterioara, NU re-executat (ar intrerupe sesiunea/ar declansa pull+rebuild+restart real).", "live_safe": False},
+    "POST /api/restart": {"cat": "System", "tested": False, "evidence": "Tier 3 — mecanism verificat anterior (PID schimbat) via WinSW direct, nu via acest endpoint API (ar intrerupe sesiunea curenta).", "live_safe": False},
+    "GET /metrics": {"cat": "System", "tested": True, "evidence": "GASIT 2026-07-13: HTTP 200 dar body {\"error\":\"prometheus-client not installed\"} — endpoint neconectat real, pachetul lipseste.", "live_safe": True},
+    "GET /api/cache/stats": {"cat": "System", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200, 30 intrari reale in cache.", "live_safe": True},
+    "GET /api/health/deep": {"cat": "System", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200, status healthy, 4/5 provideri AI OK.", "live_safe": True},
+    "GET /health/status": {"cat": "System", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200 (alias legacy functional).", "live_safe": True},
+    "GET /api/stats": {"cat": "System", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200.", "live_safe": True},
+    "GET /api/stats/trend": {"cat": "System", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200.", "live_safe": True},
 
     # ── WebSocket ──
     "WS /ws/jobs/{job_id}": {"cat": "System", "tested": True, "evidence": "Tier 1: script real (lib websockets), 10 evenimente complete confirmate.", "live_safe": False},
@@ -241,11 +241,22 @@ REPORT_FORMATS = [
 ]
 
 FRONTEND_PAGES = [
-    ("/", "Dashboard"), ("/new-analysis", "NewAnalysis"), ("/analysis/:id", "AnalysisProgress"),
-    ("/reports", "ReportsList"), ("/report/:id", "ReportView"), ("/companies", "Companies"),
-    ("/company/:id", "CompanyDetail"), ("/network/:cui", "NetworkGraph"), ("/compare", "CompareCompanies"),
-    ("/monitoring", "Monitoring"), ("/batch", "BatchAnalysis"), ("/quick-tools", "QuickTools"),
-    ("/sector", "SectorDashboard"), ("/ocr", "OcrPage"), ("/settings", "Settings"),
+    # (ruta, componenta, verificat_vizual, nota)
+    ("/", "Dashboard", True, "Verificat live 2026-07-13: render OK, date reale (54 rapoarte, integrari OK)."),
+    ("/new-analysis", "NewAnalysis", True, "Verificat live 2026-07-13: render OK, wizard + template-uri."),
+    ("/analysis/:id", "AnalysisProgress", True, "Verificat live 2026-07-13: render OK (job finalizat, progres 100%)."),
+    ("/reports", "ReportsList", True, "Verificat live 2026-07-13: render OK, 54 rapoarte listate."),
+    ("/report/:id", "ReportView", True, "Verificat live 2026-07-13: render OK, scor+dimensiuni+download-uri."),
+    ("/companies", "Companies", True, "GASIT+REPARAT 2026-07-13: badge scor risc arata mereu 'N/A' (citea camp inexistent `last_score` — corect: `last_risk_score_numeric`, lipsea si din SELECT-ul backend COMPANY_COLS). Reparat, verificat live cu scoruri reale (86/100 etc)."),
+    ("/company/:id", "CompanyDetail", True, "GASIT+REPARAT 2026-07-13: cardurile 'Analize'/'Prima Analiza'/descriere CAEN goale — COMPANY_COLS nu includea analysis_count/first_analyzed_at/caen_description/city (existau in DB, niciodata expuse). Reparat, verificat live (28 analize, 20.03.2026)."),
+    ("/network/:cui", "NetworkGraph", True, "Verificat live 2026-07-13: render OK, empty-state corect (fara date retea)."),
+    ("/compare", "CompareCompanies", True, "Verificat live 2026-07-13: render OK."),
+    ("/monitoring", "Monitoring", True, "Verificat live 2026-07-13: render OK, empty-state corect."),
+    ("/batch", "BatchAnalysis", True, "Verificat live 2026-07-13: render OK."),
+    ("/quick-tools", "QuickTools", True, "Verificat live 2026-07-13: render OK."),
+    ("/sector", "SectorDashboard", True, "Verificat live 2026-07-13: render OK."),
+    ("/ocr", "OcrPage", True, "Verificat live 2026-07-13: render OK."),
+    ("/settings", "Settings", True, "Verificat live 2026-07-13: render OK, chei mascate, teste providers vizibile."),
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -473,9 +484,10 @@ def render_html(endpoint_data, uncurated, git_sha):
     )
 
     page_rows = "\n".join(
-        f'<tr><td><code>{esc(path)}</code></td><td>{esc(comp)}</td><td>❌ neverificat vizual in browser</td></tr>'
-        for path, comp in FRONTEND_PAGES
+        f'<tr><td><code>{esc(path)}</code></td><td>{esc(comp)}</td><td>{"✅" if ok else "❌ neverificat vizual in browser"}</td><td class="evidence">{esc(note)}</td></tr>'
+        for path, comp, ok, note in FRONTEND_PAGES
     )
+    pages_verified = sum(1 for _, _, ok, _ in FRONTEND_PAGES if ok)
 
     uncurated_html = ""
     if uncurated:
@@ -553,7 +565,7 @@ footer {{ margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color
   <div class="stat-card"><div class="num">5/5</div><div class="label">Provideri AI</div></div>
   <div class="stat-card"><div class="num">{sum(1 for x in EXTERNAL_SOURCES if 'OK' in x[3] or 'TESTABIL' in x[3])}/{len(EXTERNAL_SOURCES)}</div><div class="label">Surse externe cu test live</div></div>
   <div class="stat-card"><div class="num">8/8</div><div class="label">Formate raport</div></div>
-  <div class="stat-card"><div class="num">0/{len(FRONTEND_PAGES)}</div><div class="label">Pagini verificate vizual</div></div>
+  <div class="stat-card"><div class="num">{pages_verified}/{len(FRONTEND_PAGES)}</div><div class="label">Pagini verificate vizual</div></div>
 </div>
 
 {uncurated_html}
@@ -612,9 +624,9 @@ footer {{ margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color
 <h2 id="formats">Formate raport — 8/8</h2>
 <table><thead><tr><th>Format</th><th>Testat</th><th>Nota</th></tr></thead><tbody>{fmt_rows}</tbody></table>
 
-<h2 id="pages">Pagini frontend — 0/{len(FRONTEND_PAGES)} verificate vizual</h2>
-<div class="warning-box">Toata verificarea E2E a fost la nivel de API (curl / fetch), NU prin deschiderea efectiva a paginilor in browser. API-ul din spatele fiecarei pagini a fost confirmat functional, dar randarea vizuala reala NU a fost inspectata.</div>
-<table><thead><tr><th>Ruta</th><th>Componenta</th><th>Status</th></tr></thead><tbody>{page_rows}</tbody></table>
+<h2 id="pages">Pagini frontend — {pages_verified}/{len(FRONTEND_PAGES)} verificate vizual</h2>
+<div class="info-box">Verificare vizuala live 2026-07-13 (Chrome, browser real, nu doar curl/fetch) — toate 15 pagini deschise, screenshot + console errors verificate. 1 bug real gasit + reparat (Companies/CompanyDetail — vezi coloana Nota).</div>
+<table><thead><tr><th>Ruta</th><th>Componenta</th><th>Status</th><th>Nota</th></tr></thead><tbody>{page_rows}</tbody></table>
 
 <footer>
   RIS — Audit Functii — regenerat din <code>tools/generate_audit_dashboard.py</code>.

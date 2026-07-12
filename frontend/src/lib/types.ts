@@ -12,11 +12,7 @@ export type AnalysisType =
   | "CUSTOM_REPORT";
 
 export type TrustLevel =
-  | "OFICIAL"
-  | "VERIFICAT"
-  | "ESTIMAT"
-  | "NECONCLUDENT"
-  | "INDISPONIBIL";
+  "OFICIAL" | "VERIFICAT" | "ESTIMAT" | "NECONCLUDENT" | "INDISPONIBIL";
 
 export type RiskScore = "Verde" | "Galben" | "Rosu";
 
@@ -59,6 +55,8 @@ export interface Company {
   last_analyzed_at: string | null;
   analysis_count: number;
   is_favorite?: number | boolean;
+  risk_score?: RiskScore | null;
+  last_risk_score_numeric?: number | null;
 }
 
 export interface AnalysisTypeInfo {

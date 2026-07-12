@@ -646,10 +646,7 @@ export default function Companies() {
                           : "Neanalizata"}
                       </p>
                       {/* F6-1: Badge scor risc */}
-                      {riskBadge(
-                        (company as unknown as Record<string, unknown>)
-                          .last_score as number | null | undefined,
-                      )}
+                      {riskBadge(company.last_risk_score_numeric)}
                     </div>
                   </div>
                   <button

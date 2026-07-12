@@ -16,7 +16,10 @@ from backend.rate_limiter import rate_limit_read
 router = APIRouter()
 
 # IMB-B3: single source of truth for the companies projection (was duplicated 3x -> schema-drift risk).
-COMPANY_COLS = "id, cui, name, caen_code, county, is_active, is_favorite, last_analyzed_at, risk_score"
+COMPANY_COLS = (
+    "id, cui, name, caen_code, caen_description, county, city, is_active, is_favorite, "
+    "first_analyzed_at, last_analyzed_at, analysis_count, risk_score, last_risk_score_numeric"
+)
 
 
 @router.get("/favorites")

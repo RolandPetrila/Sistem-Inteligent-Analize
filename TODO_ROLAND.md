@@ -48,6 +48,25 @@ bug preexistent din sprintul "Auto-update" de azi, nelegat de sesiunea asta), Ne
 `Companies.test.tsx` hang preexistent (confirmat si pe baseline fara modificarile mele) —
 neinvestigat, in afara scopului acestei sesiuni.
 
+## SESIUNE 2026-07-13 (partea 2) — Audit complet 74/88 endpoint-uri + 15/15 pagini vizual
+
+User a cerut: citeste tot ce a ramas netestat din `AUDIT_FUNCTII.html` + continua executia.
+
+**Endpoint-uri:** 18 GET-uri sigure testate live (74/88, de la 56/88). GASIT: `/metrics`
+raspunde 200 dar `prometheus-client` nu e instalat (endpoint gol). **14 RAMASE DELIBERAT
+netestate** (efecte reale/disruptive — companies/import, settings PUT, restart, update,
+jobs/cancel, jobs/retry-source, companies/chat, batch/resume, + cateva minore) — **necesita
+alegerea ta explicita** inainte de rulare, vezi memory pt lista completa.
+
+**Pagini frontend:** 15/15 verificate vizual in Chrome real. **2 bug-uri UI reale gasite +
+reparate:** (1) badge scor risc pe `/companies` afisa mereu "N/A" (camp inexistent
+`last_score` + `last_risk_score_numeric` lipsea din `COMPANY_COLS`); (2) cardurile
+"Analize"/"Prima Analiza"/CAEN pe `/company/:id` erau goale (`COMPANY_COLS` nu includea
+`analysis_count`/`first_analyzed_at`/`caen_description`/`city`, desi existau in DB de mult).
+Ambele reparate: `COMPANY_COLS` extins, `frontend/src/lib/types.ts` + `Companies.tsx`
+curatate (fara type-cast hack). 443 pytest, tsc clean. Detalii: memory
+`project_ris_audit_dashboard_ping_registry`.
+
 ---
 
 ## AUDIT R14 — PLAN REMEDIERE (2026-04-05)

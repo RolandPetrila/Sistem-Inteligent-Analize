@@ -56,15 +56,15 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
 <body>
 
 <h1>RIS — Audit Functii (dashboard live)</h1>
-<div class="subtitle">Generat din codul real la commit <code>e25638e</code> — regenereaza cu <code>python tools/generate_audit_dashboard.py</code> dupa orice functie noua.</div>
+<div class="subtitle">Generat din codul real la commit <code>843a9ae</code> — regenereaza cu <code>python tools/generate_audit_dashboard.py</code> dupa orice functie noua.</div>
 
 <div class="stats-bar">
-  <div class="stat-card"><div class="num">56/88</div><div class="label">Endpoint-uri REST+WS testate</div></div>
+  <div class="stat-card"><div class="num">74/88</div><div class="label">Endpoint-uri REST+WS testate</div></div>
   <div class="stat-card"><div class="num">9/9</div><div class="label">Tipuri de analiza</div></div>
   <div class="stat-card"><div class="num">5/5</div><div class="label">Provideri AI</div></div>
   <div class="stat-card"><div class="num">18/18</div><div class="label">Surse externe cu test live</div></div>
   <div class="stat-card"><div class="num">8/8</div><div class="label">Formate raport</div></div>
-  <div class="stat-card"><div class="num">0/15</div><div class="label">Pagini verificate vizual</div></div>
+  <div class="stat-card"><div class="num">15/15</div><div class="label">Pagini verificate vizual</div></div>
 </div>
 
 
@@ -99,13 +99,13 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
 <h2 id="endpoints">Endpoint-uri REST + WebSocket (88 total)</h2>
 <div class="filters">
   <button class="active" data-filter="all">Toate (88)</button>
-  <button data-filter="tested">Testate (56)</button>
-  <button data-filter="untested">Netestate (32)</button>
+  <button data-filter="tested">Testate (74)</button>
+  <button data-filter="untested">Netestate (14)</button>
   <button data-filter="safe">Testabile live acum</button>
 </div>
 
 <div class="cat-block" data-catblock="Analysis">
-  <h3>Analysis <span class="cat-count">3/5 testate</span></h3>
+  <h3>Analysis <span class="cat-count">5/5 testate</span></h3>
   <table class="ep-table">
     <thead><tr><th>Metoda</th><th>Path</th><th>Status</th><th>Dovada / notă</th><th>Test</th></tr></thead>
     <tbody>
@@ -123,18 +123,18 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
   <td class="evidence">E2E 2026-07-12: batch 2 CUI, date reale ANAF+Bilant. Fix aplicat (import gresit).</td>
   <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/analysis/quick-score&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
 </tr>
-<tr data-cat="Analysis" data-tested="false">
+<tr data-cat="Analysis" data-tested="true">
   <td><span class="method method-get">GET</span></td>
   <td><code>/api/analysis/types</code></td>
-  <td><span class="badge badge-fail">NETESTAT</span></td>
-  <td class="evidence">Neverificat direct in sweep-ul E2E.</td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Verificat live 2026-07-13: HTTP 200 (cu X-RIS-Key).</td>
   <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/analysis/types">Testeaza live</button></td>
 </tr>
-<tr data-cat="Analysis" data-tested="false">
+<tr data-cat="Analysis" data-tested="true">
   <td><span class="method method-get">GET</span></td>
   <td><code>/api/analysis/types/{analysis_type}</code></td>
-  <td><span class="badge badge-fail">NETESTAT</span></td>
-  <td class="evidence">Neverificat direct.</td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Verificat live 2026-07-13: HTTP 200 pt FULL_COMPANY_PROFILE.</td>
   <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/analysis/types/{analysis_type}">Testeaza live</button></td>
 </tr>
 <tr data-cat="Analysis" data-tested="true">
@@ -191,7 +191,7 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
   </table>
 </div>
 <div class="cat-block" data-catblock="Companies">
-  <h3>Companies <span class="cat-count">14/21 testate</span></h3>
+  <h3>Companies <span class="cat-count">16/21 testate</span></h3>
   <table class="ep-table">
     <thead><tr><th>Metoda</th><th>Path</th><th>Status</th><th>Dovada / notă</th><th>Test</th></tr></thead>
     <tbody>
@@ -237,11 +237,11 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
   <td class="evidence">E2E 2026-07-12: OK.</td>
   <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/companies/stats/risk-movers">Testeaza live</button></td>
 </tr>
-<tr data-cat="Companies" data-tested="false">
+<tr data-cat="Companies" data-tested="true">
   <td><span class="method method-get">GET</span></td>
   <td><code>/api/companies/{company_id}</code></td>
-  <td><span class="badge badge-fail">NETESTAT</span></td>
-  <td class="evidence">Folosit implicit in UI, neverificat explicit izolat.</td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Verificat live 2026-07-13: HTTP 200, date reale MOSSLEIN S.R.L.</td>
   <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/companies/{company_id}">Testeaza live</button></td>
 </tr>
 <tr data-cat="Companies" data-tested="true">
@@ -328,11 +328,11 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
   <td class="evidence">E2E 2026-07-12: Altman/Piotroski/Beneish/Zmijewski OK.</td>
   <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/companies/{cui}/predictive">Testeaza live</button></td>
 </tr>
-<tr data-cat="Companies" data-tested="false">
+<tr data-cat="Companies" data-tested="true">
   <td><span class="method method-get">GET</span></td>
   <td><code>/api/companies/{cui}/timeline-report</code></td>
-  <td><span class="badge badge-fail">NETESTAT</span></td>
-  <td class="evidence">Doar varianta /pdf confirmata explicit.</td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Verificat live 2026-07-13: HTTP 200 (varianta JSON, nu doar /pdf).</td>
   <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/companies/{cui}/timeline-report">Testeaza live</button></td>
 </tr>
 <tr data-cat="Companies" data-tested="true">
@@ -346,7 +346,7 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
   </table>
 </div>
 <div class="cat-block" data-catblock="Compare">
-  <h3>Compare <span class="cat-count">6/7 testate</span></h3>
+  <h3>Compare <span class="cat-count">7/7 testate</span></h3>
   <table class="ep-table">
     <thead><tr><th>Metoda</th><th>Path</th><th>Status</th><th>Dovada / notă</th><th>Test</th></tr></thead>
     <tbody>
@@ -371,11 +371,11 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
   <td class="evidence">BUG #2 FIX verification: caen_section=36 returneaza acum date.</td>
   <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/compare/sector&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
 </tr>
-<tr data-cat="Compare" data-tested="false">
+<tr data-cat="Compare" data-tested="true">
   <td><span class="method method-get">GET</span></td>
   <td><code>/api/compare/sector/{caen_code}/dashboard</code></td>
-  <td><span class="badge badge-fail">NETESTAT</span></td>
-  <td class="evidence">Nu s-a confirmat separat de POST /compare/sector.</td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Verificat live 2026-07-13: HTTP 200 pt caen_code=3600.</td>
   <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/compare/sector/{caen_code}/dashboard">Testeaza live</button></td>
 </tr>
 <tr data-cat="Compare" data-tested="true">
@@ -403,15 +403,15 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
   </table>
 </div>
 <div class="cat-block" data-catblock="Jobs">
-  <h3>Jobs <span class="cat-count">5/9 testate</span></h3>
+  <h3>Jobs <span class="cat-count">7/9 testate</span></h3>
   <table class="ep-table">
     <thead><tr><th>Metoda</th><th>Path</th><th>Status</th><th>Dovada / notă</th><th>Test</th></tr></thead>
     <tbody>
-<tr data-cat="Jobs" data-tested="false">
+<tr data-cat="Jobs" data-tested="true">
   <td><span class="method method-get">GET</span></td>
   <td><code>/api/jobs</code></td>
-  <td><span class="badge badge-fail">NETESTAT</span></td>
-  <td class="evidence">Listare — neconfirmata explicit in sweep.</td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Verificat live 2026-07-13: HTTP 200, listare reala.</td>
   <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/jobs">Testeaza live</button></td>
 </tr>
 <tr data-cat="Jobs" data-tested="true">
@@ -421,11 +421,11 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
   <td class="evidence">Folosit extensiv in TOATE testele — creeaza job real (cost/cota).</td>
   <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/jobs&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
 </tr>
-<tr data-cat="Jobs" data-tested="false">
+<tr data-cat="Jobs" data-tested="true">
   <td><span class="method method-get">GET</span></td>
   <td><code>/api/jobs/diagnostics/latest</code></td>
-  <td><span class="badge badge-fail">NETESTAT</span></td>
-  <td class="evidence">Neverificat explicit.</td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Verificat live 2026-07-13: HTTP 200, job real DONE.</td>
   <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/jobs/diagnostics/latest">Testeaza live</button></td>
 </tr>
 <tr data-cat="Jobs" data-tested="true">
@@ -560,15 +560,15 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
   </table>
 </div>
 <div class="cat-block" data-catblock="Notifications">
-  <h3>Notifications <span class="cat-count">0/3 testate</span></h3>
+  <h3>Notifications <span class="cat-count">1/3 testate</span></h3>
   <table class="ep-table">
     <thead><tr><th>Metoda</th><th>Path</th><th>Status</th><th>Dovada / notă</th><th>Test</th></tr></thead>
     <tbody>
-<tr data-cat="Notifications" data-tested="false">
+<tr data-cat="Notifications" data-tested="true">
   <td><span class="method method-get">GET</span></td>
   <td><code>/api/notifications</code></td>
-  <td><span class="badge badge-fail">NETESTAT</span></td>
-  <td class="evidence">Neverificat direct in sweep (implementat Faza R12).</td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Verificat live 2026-07-13: HTTP 200.</td>
   <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/notifications">Testeaza live</button></td>
 </tr>
 <tr data-cat="Notifications" data-tested="false">
@@ -604,7 +604,7 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
   </table>
 </div>
 <div class="cat-block" data-catblock="Reports">
-  <h3>Reports <span class="cat-count">9/10 testate</span></h3>
+  <h3>Reports <span class="cat-count">10/10 testate</span></h3>
   <table class="ep-table">
     <thead><tr><th>Metoda</th><th>Path</th><th>Status</th><th>Dovada / notă</th><th>Test</th></tr></thead>
     <tbody>
@@ -629,11 +629,11 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
   <td class="evidence">Folosit implicit la fiecare verificare de raport.</td>
   <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/reports/{report_id}">Testeaza live</button></td>
 </tr>
-<tr data-cat="Reports" data-tested="false">
+<tr data-cat="Reports" data-tested="true">
   <td><span class="method method-get">GET</span></td>
   <td><code>/api/reports/{report_id}/data</code></td>
-  <td><span class="badge badge-fail">NETESTAT</span></td>
-  <td class="evidence">Neverificat explicit in acest sweep.</td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Verificat live 2026-07-13: HTTP 200, date reale raport LEAD_GENERATION.</td>
   <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/reports/{report_id}/data">Testeaza live</button></td>
 </tr>
 <tr data-cat="Reports" data-tested="true">
@@ -682,15 +682,15 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
   </table>
 </div>
 <div class="cat-block" data-catblock="Settings">
-  <h3>Settings <span class="cat-count">2/4 testate</span></h3>
+  <h3>Settings <span class="cat-count">3/4 testate</span></h3>
   <table class="ep-table">
     <thead><tr><th>Metoda</th><th>Path</th><th>Status</th><th>Dovada / notă</th><th>Test</th></tr></thead>
     <tbody>
-<tr data-cat="Settings" data-tested="false">
+<tr data-cat="Settings" data-tested="true">
   <td><span class="method method-get">GET</span></td>
   <td><code>/api/settings</code></td>
-  <td><span class="badge badge-fail">NETESTAT</span></td>
-  <td class="evidence">Folosit de UI Settings.tsx, neconfirmat explicit in sweep.</td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Verificat live 2026-07-13: HTTP 200, chei mascate corect.</td>
   <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/settings">Testeaza live</button></td>
 </tr>
 <tr data-cat="Settings" data-tested="false">
@@ -718,15 +718,15 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
   </table>
 </div>
 <div class="cat-block" data-catblock="System">
-  <h3>System <span class="cat-count">2/13 testate</span></h3>
+  <h3>System <span class="cat-count">10/13 testate</span></h3>
   <table class="ep-table">
     <thead><tr><th>Metoda</th><th>Path</th><th>Status</th><th>Dovada / notă</th><th>Test</th></tr></thead>
     <tbody>
-<tr data-cat="System" data-tested="false">
+<tr data-cat="System" data-tested="true">
   <td><span class="method method-get">GET</span></td>
   <td><code>/api/cache/stats</code></td>
-  <td><span class="badge badge-fail">NETESTAT</span></td>
-  <td class="evidence">Neverificat explicit.</td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Verificat live 2026-07-13: HTTP 200, 30 intrari reale in cache.</td>
   <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/cache/stats">Testeaza live</button></td>
 </tr>
 <tr data-cat="System" data-tested="false">
@@ -736,53 +736,53 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
   <td class="evidence">Folosit doar de frontend (nu API testat direct).</td>
   <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/frontend-log&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
 </tr>
-<tr data-cat="System" data-tested="false">
+<tr data-cat="System" data-tested="true">
   <td><span class="method method-get">GET</span></td>
   <td><code>/api/frontend-log/recent</code></td>
-  <td><span class="badge badge-fail">NETESTAT</span></td>
-  <td class="evidence">Neverificat.</td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Verificat live 2026-07-13: HTTP 200.</td>
   <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/frontend-log/recent">Testeaza live</button></td>
 </tr>
-<tr data-cat="System" data-tested="false">
+<tr data-cat="System" data-tested="true">
   <td><span class="method method-get">GET</span></td>
   <td><code>/api/health</code></td>
-  <td><span class="badge badge-fail">NETESTAT</span></td>
-  <td class="evidence">Neapelat explicit — s-a folosit /api/version in schimb.</td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Verificat live 2026-07-13: HTTP 200.</td>
   <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/health">Testeaza live</button></td>
 </tr>
-<tr data-cat="System" data-tested="false">
+<tr data-cat="System" data-tested="true">
   <td><span class="method method-get">GET</span></td>
   <td><code>/api/health/deep</code></td>
-  <td><span class="badge badge-fail">NETESTAT</span></td>
-  <td class="evidence">Neverificat explicit in acest sweep.</td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Verificat live 2026-07-13: HTTP 200, status healthy, 4/5 provideri AI OK.</td>
   <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/health/deep">Testeaza live</button></td>
 </tr>
 <tr data-cat="System" data-tested="false">
   <td><span class="method method-post">POST</span></td>
   <td><code>/api/restart</code></td>
   <td><span class="badge badge-fail">NETESTAT</span></td>
-  <td class="evidence">Tier 3 — mecanism verificat anterior (PID schimbat) via WinSW direct, nu via acest endpoint API.</td>
+  <td class="evidence">Tier 3 — mecanism verificat anterior (PID schimbat) via WinSW direct, nu via acest endpoint API (ar intrerupe sesiunea curenta).</td>
   <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/restart&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
 </tr>
-<tr data-cat="System" data-tested="false">
+<tr data-cat="System" data-tested="true">
   <td><span class="method method-get">GET</span></td>
   <td><code>/api/stats</code></td>
-  <td><span class="badge badge-fail">NETESTAT</span></td>
-  <td class="evidence">Folosit implicit de Dashboard, neconfirmat izolat.</td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Verificat live 2026-07-13: HTTP 200.</td>
   <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/stats">Testeaza live</button></td>
 </tr>
-<tr data-cat="System" data-tested="false">
+<tr data-cat="System" data-tested="true">
   <td><span class="method method-get">GET</span></td>
   <td><code>/api/stats/trend</code></td>
-  <td><span class="badge badge-fail">NETESTAT</span></td>
-  <td class="evidence">Folosit implicit de Dashboard, neconfirmat izolat.</td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Verificat live 2026-07-13: HTTP 200.</td>
   <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/stats/trend">Testeaza live</button></td>
 </tr>
 <tr data-cat="System" data-tested="false">
   <td><span class="method method-post">POST</span></td>
   <td><code>/api/update</code></td>
   <td><span class="badge badge-fail">NETESTAT</span></td>
-  <td class="evidence">Tier 3 — verificat prin cod+log intr-o sesiune anterioara, NU re-executat (ar intrerupe sesiunea).</td>
+  <td class="evidence">Tier 3 — verificat prin cod+log intr-o sesiune anterioara, NU re-executat (ar intrerupe sesiunea/ar declansa pull+rebuild+restart real).</td>
   <td><code class="curl-cmd">curl -X POST &quot;$BASE_URL/api/update&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d '{}'</code></td>
 </tr>
 <tr data-cat="System" data-tested="true">
@@ -792,18 +792,18 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
   <td class="evidence">Folosit repetat pt confirmare deploy commit dupa fiecare fix.</td>
   <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/version">Testeaza live</button></td>
 </tr>
-<tr data-cat="System" data-tested="false">
+<tr data-cat="System" data-tested="true">
   <td><span class="method method-get">GET</span></td>
   <td><code>/health/status</code></td>
-  <td><span class="badge badge-fail">NETESTAT</span></td>
-  <td class="evidence">Alias legacy — neverificat.</td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">Verificat live 2026-07-13: HTTP 200 (alias legacy functional).</td>
   <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/health/status">Testeaza live</button></td>
 </tr>
-<tr data-cat="System" data-tested="false">
+<tr data-cat="System" data-tested="true">
   <td><span class="method method-get">GET</span></td>
   <td><code>/metrics</code></td>
-  <td><span class="badge badge-fail">NETESTAT</span></td>
-  <td class="evidence">Prometheus endpoint — neverificat in sweep.</td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">GASIT 2026-07-13: HTTP 200 dar body {&quot;error&quot;:&quot;prometheus-client not installed&quot;} — endpoint neconectat real, pachetul lipseste.</td>
   <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/metrics">Testeaza live</button></td>
 </tr>
 <tr data-cat="System" data-tested="true">
@@ -889,23 +889,23 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
 <tr><td><strong>Share link public (HTML)</strong></td><td>✅</td><td>Tier 1: HTTP 200 fara auth, 37KB continut real.</td></tr>
 <tr><td><strong>ZIP batch</strong></td><td>✅</td><td>Tier 2: 14 fisiere (7 formate x 2 firme + CSV sumar).</td></tr></tbody></table>
 
-<h2 id="pages">Pagini frontend — 0/15 verificate vizual</h2>
-<div class="warning-box">Toata verificarea E2E a fost la nivel de API (curl / fetch), NU prin deschiderea efectiva a paginilor in browser. API-ul din spatele fiecarei pagini a fost confirmat functional, dar randarea vizuala reala NU a fost inspectata.</div>
-<table><thead><tr><th>Ruta</th><th>Componenta</th><th>Status</th></tr></thead><tbody><tr><td><code>/</code></td><td>Dashboard</td><td>❌ neverificat vizual in browser</td></tr>
-<tr><td><code>/new-analysis</code></td><td>NewAnalysis</td><td>❌ neverificat vizual in browser</td></tr>
-<tr><td><code>/analysis/:id</code></td><td>AnalysisProgress</td><td>❌ neverificat vizual in browser</td></tr>
-<tr><td><code>/reports</code></td><td>ReportsList</td><td>❌ neverificat vizual in browser</td></tr>
-<tr><td><code>/report/:id</code></td><td>ReportView</td><td>❌ neverificat vizual in browser</td></tr>
-<tr><td><code>/companies</code></td><td>Companies</td><td>❌ neverificat vizual in browser</td></tr>
-<tr><td><code>/company/:id</code></td><td>CompanyDetail</td><td>❌ neverificat vizual in browser</td></tr>
-<tr><td><code>/network/:cui</code></td><td>NetworkGraph</td><td>❌ neverificat vizual in browser</td></tr>
-<tr><td><code>/compare</code></td><td>CompareCompanies</td><td>❌ neverificat vizual in browser</td></tr>
-<tr><td><code>/monitoring</code></td><td>Monitoring</td><td>❌ neverificat vizual in browser</td></tr>
-<tr><td><code>/batch</code></td><td>BatchAnalysis</td><td>❌ neverificat vizual in browser</td></tr>
-<tr><td><code>/quick-tools</code></td><td>QuickTools</td><td>❌ neverificat vizual in browser</td></tr>
-<tr><td><code>/sector</code></td><td>SectorDashboard</td><td>❌ neverificat vizual in browser</td></tr>
-<tr><td><code>/ocr</code></td><td>OcrPage</td><td>❌ neverificat vizual in browser</td></tr>
-<tr><td><code>/settings</code></td><td>Settings</td><td>❌ neverificat vizual in browser</td></tr></tbody></table>
+<h2 id="pages">Pagini frontend — 15/15 verificate vizual</h2>
+<div class="info-box">Verificare vizuala live 2026-07-13 (Chrome, browser real, nu doar curl/fetch) — toate 15 pagini deschise, screenshot + console errors verificate. 1 bug real gasit + reparat (Companies/CompanyDetail — vezi coloana Nota).</div>
+<table><thead><tr><th>Ruta</th><th>Componenta</th><th>Status</th><th>Nota</th></tr></thead><tbody><tr><td><code>/</code></td><td>Dashboard</td><td>✅</td><td class="evidence">Verificat live 2026-07-13: render OK, date reale (54 rapoarte, integrari OK).</td></tr>
+<tr><td><code>/new-analysis</code></td><td>NewAnalysis</td><td>✅</td><td class="evidence">Verificat live 2026-07-13: render OK, wizard + template-uri.</td></tr>
+<tr><td><code>/analysis/:id</code></td><td>AnalysisProgress</td><td>✅</td><td class="evidence">Verificat live 2026-07-13: render OK (job finalizat, progres 100%).</td></tr>
+<tr><td><code>/reports</code></td><td>ReportsList</td><td>✅</td><td class="evidence">Verificat live 2026-07-13: render OK, 54 rapoarte listate.</td></tr>
+<tr><td><code>/report/:id</code></td><td>ReportView</td><td>✅</td><td class="evidence">Verificat live 2026-07-13: render OK, scor+dimensiuni+download-uri.</td></tr>
+<tr><td><code>/companies</code></td><td>Companies</td><td>✅</td><td class="evidence">GASIT+REPARAT 2026-07-13: badge scor risc arata mereu 'N/A' (citea camp inexistent `last_score` — corect: `last_risk_score_numeric`, lipsea si din SELECT-ul backend COMPANY_COLS). Reparat, verificat live cu scoruri reale (86/100 etc).</td></tr>
+<tr><td><code>/company/:id</code></td><td>CompanyDetail</td><td>✅</td><td class="evidence">GASIT+REPARAT 2026-07-13: cardurile 'Analize'/'Prima Analiza'/descriere CAEN goale — COMPANY_COLS nu includea analysis_count/first_analyzed_at/caen_description/city (existau in DB, niciodata expuse). Reparat, verificat live (28 analize, 20.03.2026).</td></tr>
+<tr><td><code>/network/:cui</code></td><td>NetworkGraph</td><td>✅</td><td class="evidence">Verificat live 2026-07-13: render OK, empty-state corect (fara date retea).</td></tr>
+<tr><td><code>/compare</code></td><td>CompareCompanies</td><td>✅</td><td class="evidence">Verificat live 2026-07-13: render OK.</td></tr>
+<tr><td><code>/monitoring</code></td><td>Monitoring</td><td>✅</td><td class="evidence">Verificat live 2026-07-13: render OK, empty-state corect.</td></tr>
+<tr><td><code>/batch</code></td><td>BatchAnalysis</td><td>✅</td><td class="evidence">Verificat live 2026-07-13: render OK.</td></tr>
+<tr><td><code>/quick-tools</code></td><td>QuickTools</td><td>✅</td><td class="evidence">Verificat live 2026-07-13: render OK.</td></tr>
+<tr><td><code>/sector</code></td><td>SectorDashboard</td><td>✅</td><td class="evidence">Verificat live 2026-07-13: render OK.</td></tr>
+<tr><td><code>/ocr</code></td><td>OcrPage</td><td>✅</td><td class="evidence">Verificat live 2026-07-13: render OK.</td></tr>
+<tr><td><code>/settings</code></td><td>Settings</td><td>✅</td><td class="evidence">Verificat live 2026-07-13: render OK, chei mascate, teste providers vizibile.</td></tr></tbody></table>
 
 <footer>
   RIS — Audit Functii — regenerat din <code>tools/generate_audit_dashboard.py</code>.
