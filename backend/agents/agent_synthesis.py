@@ -1018,6 +1018,10 @@ Reguli:
         lines.append(header)
         lines.append("")
 
+        # Fiecare candidat = UN singur rand "- " (nu numerotare markdown "N." + sub-bullet
+        # indentat): randererul HTML/PDF/DOCX pentru markdown trateaza linia dupa strip(),
+        # deci un sub-bullet indentat sub un item numerotat inchide lista <ol> si redeschide
+        # una noua per candidat (numerotare vizuala resetata la "1." pt fiecare firma).
         for i, c in enumerate(candidates, 1):
             name = c.get("name") or "[INDISPONIBIL]"
             cui = c.get("cui") or "[INDISPONIBIL]"
@@ -1031,12 +1035,12 @@ Reguli:
 
             caen_text = f"{caen}" + (f" ({caen_desc})" if caen_desc else "")
             score_text = f"{risk}" + (f" ({numeric}/100)" if numeric is not None else "")
+            reason_text = f" Motivul potrivirii: {reason}." if reason else ""
 
-            lines.append(f"{i}. **{name}** (CUI {cui}) — CAEN {caen_text}, Jud. {county}, scor risc {score_text}.")
-            if reason:
-                lines.append(f"   - Motivul potrivirii: {reason}")
-            lines.append(f"   - Ultima analiza: {last_analyzed}")
-            lines.append("")
+            lines.append(
+                f"- **{i}. {name}** (CUI {cui}) — CAEN {caen_text}, Jud. {county}, "
+                f"scor risc {score_text}.{reason_text} Ultima analiza: {last_analyzed}."
+            )
 
         lines.append("## Detalii cautare")
         lines.append("")
