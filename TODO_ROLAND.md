@@ -67,6 +67,22 @@ Ambele reparate: `COMPANY_COLS` extins, `frontend/src/lib/types.ts` + `Companies
 curatate (fara type-cast hack). 443 pytest, tsc clean. Detalii: memory
 `project_ris_audit_dashboard_ping_registry`.
 
+## SESIUNE 2026-07-13 (partea 3) — 88/88 endpoint-uri + bug CRITIC din analiza E2E reala
+
+User a cerut: executa cele 14 endpoint-uri ramase + incepe o analiza completa cu toate
+functiile, remediaza direct orice problema. **88/88 endpoint-uri REST+WS acum testate live**
+(toate 14 ramase executate cu grija, payload-uri no-op unde posibil). **2 bug-uri
+suplimentare:** chat RAG (`companies/{id}/chat`) citea o cheie inexistenta
+(`verified_data`) — contextul de scor era mereu gol, de la scriere; import CSV avea
+coloane fantoma in INSERT (HTTP 500 garantat).
+
+**BUG CRITIC:** o rulare completa reala (`FULL_COMPANY_PROFILE` nivel 3) a picat cu
+`UnboundLocalError` pe `litigation` in `scoring.py` — bug LATENT expus chiar de fix-ul
+Portal Just din aceeasi sesiune (ramura care foloseste date SOAP reale nu rulase
+NICIODATA pana azi). Reparat + verificat cu re-rulare completa: DONE 100%, toate
+formatele + randare browser OK. 443 pytest. Detalii: memory
+`project_ris_audit_dashboard_ping_registry`.
+
 ---
 
 ## AUDIT R14 — PLAN REMEDIERE (2026-04-05)
