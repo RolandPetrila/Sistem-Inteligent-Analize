@@ -442,7 +442,7 @@ class OfficialAgent(BaseAgent):
         if isinstance(onrc_s, dict):
             caen_code = onrc_s.get("caen_code", "")
         if not caen_code and isinstance(official_data.get("anaf", {}), dict):
-            caen_code = official_data["anaf"].get("cod_caen", "")
+            caen_code = official_data.get("anaf", {}).get("cod_caen", "")
         # CA1: Fallback CAEN from ANAF Bilant (daca openapi.ro + ANAF n-au furnizat)
         if not caen_code and official_data.get("financial_official"):
             bilant_data = official_data["financial_official"].get("data", {})
