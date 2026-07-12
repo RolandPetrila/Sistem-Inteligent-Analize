@@ -63,7 +63,7 @@ CURATED_ENDPOINTS = {
     "POST /api/batch/preview": {"cat": "Batch", "tested": True, "evidence": "E2E 2026-07-12: validare CSV fara side-effects.", "live_safe": True},
     "POST /api/batch": {"cat": "Batch", "tested": True, "evidence": "E2E 2026-07-12: create real (2 CUI), progress, DONE 2/2.", "live_safe": False},
     "GET /api/batch/{batch_id}": {"cat": "Batch", "tested": True, "evidence": "E2E 2026-07-12: poll progress.", "live_safe": True},
-    "POST /api/batch/{batch_id}/resume": {"cat": "Batch", "tested": False, "evidence": "Implementat Faza 9E, neretestat in acest sweep.", "live_safe": False},
+    "POST /api/batch/{batch_id}/resume": {"cat": "Batch", "tested": True, "evidence": "Verificat live 2026-07-13: raspuns corect 'No failed CUIs to retry' pt job fara esecuri.", "live_safe": False},
     "GET /api/batch/{batch_id}/download": {"cat": "Batch", "tested": True, "evidence": "E2E 2026-07-12: ZIP 14 fisiere (7 formate x 2 firme + CSV).", "live_safe": True},
 
     # ── companies.py ──
@@ -71,7 +71,7 @@ CURATED_ENDPOINTS = {
     "GET /api/companies/favorites": {"cat": "Companies", "tested": True, "evidence": "E2E 2026-07-12: OK.", "live_safe": True},
     "GET /api/companies/stats/risk-movers": {"cat": "Companies", "tested": True, "evidence": "E2E 2026-07-12: OK.", "live_safe": True},
     "GET /api/companies/search/fts": {"cat": "Companies", "tested": True, "evidence": "E2E 2026-07-12: FTS5 search OK.", "live_safe": True},
-    "POST /api/companies/import": {"cat": "Companies", "tested": False, "evidence": "Neverificat in sweep — creeaza/suprascrie companii din CSV.", "live_safe": False},
+    "POST /api/companies/import": {"cat": "Companies", "tested": True, "evidence": "BUG GASIT+REPARAT 2026-07-13: INSERT referea coloane fantoma created_at/updated_at (reale: first_analyzed_at/last_analyzed_at) — HTTP 500 garantat, niciodata prins. Verificat live 200 OK dupa fix.", "live_safe": False},
     "GET /api/companies/export/csv": {"cat": "Companies", "tested": True, "evidence": "E2E 2026-07-12: export CSV CRM-ready OK.", "live_safe": True},
     "GET /api/companies/{company_id}": {"cat": "Companies", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200, date reale MOSSLEIN S.R.L.", "live_safe": True},
     "PUT /api/companies/{company_id}/favorite": {"cat": "Companies", "tested": True, "evidence": "E2E 2026-07-12: toggle favorite OK.", "live_safe": False},
@@ -79,11 +79,11 @@ CURATED_ENDPOINTS = {
     "GET /api/companies/{company_id}/timeline": {"cat": "Companies", "tested": True, "evidence": "E2E 2026-07-12: OK (gol pt Mosslein — plauzibil, nu bug).", "live_safe": True},
     "GET /api/companies/{company_id}/score-trend": {"cat": "Companies", "tested": True, "evidence": "BUG #3 FIX: int->str UUID. Verificat live 200 OK dupa fix.", "live_safe": True},
     "GET /api/companies/{company_id}/tags": {"cat": "Companies", "tested": True, "evidence": "E2E 2026-07-12: OK.", "live_safe": True},
-    "POST /api/companies/{company_id}/tags": {"cat": "Companies", "tested": False, "evidence": "Neverificat explicit separat de GET.", "live_safe": False},
-    "DELETE /api/companies/{company_id}/tags/{tag}": {"cat": "Companies", "tested": False, "evidence": "Neverificat.", "live_safe": False},
+    "POST /api/companies/{company_id}/tags": {"cat": "Companies", "tested": True, "evidence": "Verificat live 2026-07-13: creat+sters tag test, pereche completa OK.", "live_safe": False},
+    "DELETE /api/companies/{company_id}/tags/{tag}": {"cat": "Companies", "tested": True, "evidence": "Verificat live 2026-07-13: vezi nota POST tags.", "live_safe": False},
     "GET /api/companies/{company_id}/note": {"cat": "Companies", "tested": True, "evidence": "E2E 2026-07-12: OK.", "live_safe": True},
-    "PUT /api/companies/{company_id}/note": {"cat": "Companies", "tested": False, "evidence": "Neverificat explicit separat de GET.", "live_safe": False},
-    "POST /api/companies/{company_id}/chat": {"cat": "Companies", "tested": False, "evidence": "RAG chat — neverificat in sweep.", "live_safe": False},
+    "PUT /api/companies/{company_id}/note": {"cat": "Companies", "tested": True, "evidence": "Verificat live 2026-07-13: setat+revert la gol, 200 OK.", "live_safe": False},
+    "POST /api/companies/{company_id}/chat": {"cat": "Companies", "tested": True, "evidence": "BUG GASIT+REPARAT 2026-07-13: contextul 'Date cheie verificate' citea full_data.get('verified_data') — cheie care NU EXISTA NICIODATA (campurile sunt la nivelul de sus). Chat-ul nu raspundea niciodata corect la intrebari despre scor/CA. Reparat + disambiguare firma-analizata-vs-alte-firme-mentionate. Verificat live: raspuns corect '85.5/100, Verde, CA 14.154.303 RON'.", "live_safe": False},
     "GET /api/companies/{company_id}/network": {"cat": "Companies", "tested": True, "evidence": "E2E 2026-07-12: OK (gol pt Mosslein).", "live_safe": True},
     "GET /api/companies/{cui}/predictive": {"cat": "Companies", "tested": True, "evidence": "E2E 2026-07-12: Altman/Piotroski/Beneish/Zmijewski OK.", "live_safe": True},
     "GET /api/companies/{cui}/timeline-report": {"cat": "Companies", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200 (varianta JSON, nu doar /pdf).", "live_safe": True},
@@ -108,8 +108,8 @@ CURATED_ENDPOINTS = {
     "GET /api/jobs/{job_id}": {"cat": "Jobs", "tested": True, "evidence": "Poll status folosit extensiv in toate testele.", "live_safe": True},
     "POST /api/jobs/{job_id}/start": {"cat": "Jobs", "tested": True, "evidence": "Folosit extensiv in toate testele.", "live_safe": False},
     "GET /api/jobs/{job_id}/diagnostics": {"cat": "Jobs", "tested": True, "evidence": "E2E 2026-07-12: completeness gate real (88/100, gap-uri cu motiv).", "live_safe": True},
-    "POST /api/jobs/{job_id}/retry-source/{source}": {"cat": "Jobs", "tested": False, "evidence": "Checklist item, nicio sursa cazuta reprodusa in sweep.", "live_safe": False},
-    "POST /api/jobs/{job_id}/cancel": {"cat": "Jobs", "tested": False, "evidence": "Neverificat in sweep.", "live_safe": False},
+    "POST /api/jobs/{job_id}/retry-source/{source}": {"cat": "Jobs", "tested": True, "evidence": "Verificat live 2026-07-13: source=anaf pe job real, date ANAF reale returnate.", "live_safe": False},
+    "POST /api/jobs/{job_id}/cancel": {"cat": "Jobs", "tested": True, "evidence": "Verificat live 2026-07-13: job PENDING (necreat inca) creat+anulat, cost zero.", "live_safe": False},
     "POST /api/jobs/{job_id}/section/{section_key}/regenerate": {"cat": "Jobs", "tested": True, "evidence": "TASK1 2026-06-27: smoke live PASS, regen company_profile+executive_summary.", "live_safe": False},
 
     # ── monitoring.py — toate 9 confirmate "Toate OK" ──
@@ -125,8 +125,8 @@ CURATED_ENDPOINTS = {
 
     # ── notifications.py ──
     "GET /api/notifications": {"cat": "Notifications", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200.", "live_safe": True},
-    "PUT /api/notifications/{notification_id}/read": {"cat": "Notifications", "tested": False, "evidence": "Neverificat.", "live_safe": False},
-    "PUT /api/notifications/read-all": {"cat": "Notifications", "tested": False, "evidence": "Neverificat.", "live_safe": False},
+    "PUT /api/notifications/{notification_id}/read": {"cat": "Notifications", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200 pe notificare reala existenta.", "live_safe": False},
+    "PUT /api/notifications/read-all": {"cat": "Notifications", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200.", "live_safe": False},
 
     # ── reports.py ──
     "GET /api/reports": {"cat": "Reports", "tested": True, "evidence": "E2E 2026-07-12: listare OK.", "live_safe": True},
@@ -142,17 +142,17 @@ CURATED_ENDPOINTS = {
 
     # ── settings.py ──
     "GET /api/settings": {"cat": "Settings", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200, chei mascate corect.", "live_safe": True},
-    "PUT /api/settings": {"cat": "Settings", "tested": False, "evidence": "Scrie .env — netestat live in sweep (foloseste pagina Settings reala).", "live_safe": False},
+    "PUT /api/settings": {"cat": "Settings", "tested": True, "evidence": "Verificat live 2026-07-13: fields:{} (no-op sigur) -> {\"updated\":[],\"count\":0}, fara a atinge config reala.", "live_safe": False},
     "POST /api/settings/test-telegram": {"cat": "Settings", "tested": True, "evidence": "E2E 2026-07-12: trimis cu succes (mesaj Telegram real).", "live_safe": False},
     "POST /api/settings/test/{service}": {"cat": "Settings", "tested": True, "evidence": "BUG #6 FIX: mistral+cerebras adaugate. Toate 6 servicii (groq/gemini/mistral/cerebras/tavily/telegram) HTTP 200.", "live_safe": False},
 
     # ── main.py (direct) ──
-    "POST /api/frontend-log": {"cat": "System", "tested": False, "evidence": "Folosit doar de frontend (nu API testat direct).", "live_safe": False},
+    "POST /api/frontend-log": {"cat": "System", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200 cu payload sintetic.", "live_safe": False},
     "GET /api/frontend-log/recent": {"cat": "System", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200.", "live_safe": True},
     "GET /api/health": {"cat": "System", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200.", "live_safe": True},
     "GET /api/version": {"cat": "System", "tested": True, "evidence": "Folosit repetat pt confirmare deploy commit dupa fiecare fix.", "live_safe": True},
-    "POST /api/update": {"cat": "System", "tested": False, "evidence": "Tier 3 — verificat prin cod+log intr-o sesiune anterioara, NU re-executat (ar intrerupe sesiunea/ar declansa pull+rebuild+restart real).", "live_safe": False},
-    "POST /api/restart": {"cat": "System", "tested": False, "evidence": "Tier 3 — mecanism verificat anterior (PID schimbat) via WinSW direct, nu via acest endpoint API (ar intrerupe sesiunea curenta).", "live_safe": False},
+    "POST /api/update": {"cat": "System", "tested": True, "evidence": "Verificat live 2026-07-13 prin endpoint-ul real (nu doar WinSW/git direct): tree curat -> {\"ok\":true,\"changed\":false,\"note\":\"deja la zi\"}.", "live_safe": False},
+    "POST /api/restart": {"cat": "System", "tested": True, "evidence": "Verificat live 2026-07-13 prin endpoint-ul real: serviciul a revenit corect (versiune/commit confirmat dupa restart).", "live_safe": False},
     "GET /metrics": {"cat": "System", "tested": True, "evidence": "GASIT 2026-07-13: HTTP 200 dar body {\"error\":\"prometheus-client not installed\"} — endpoint neconectat real, pachetul lipseste.", "live_safe": True},
     "GET /api/cache/stats": {"cat": "System", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200, 30 intrari reale in cache.", "live_safe": True},
     "GET /api/health/deep": {"cat": "System", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200, status healthy, 4/5 provideri AI OK.", "live_safe": True},
