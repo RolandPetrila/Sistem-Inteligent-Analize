@@ -81,6 +81,16 @@ class SynthesisAgent(BaseAgent, SynthesisProvidersMixin):
         title = section["title"]
         word_target = section.get("word_count", 300)
 
+        # Randare determinista, fara AI: CUI/CAEN/scor per firma candidata sunt fapte
+        # care nu trebuie parafrazate de un LLM. 3 incercari de prompt-tuning (route
+        # "quality", izolare context/JSON) au esuat sa opreasca modelul sa amestece
+        # CUI-ul firmei solicitante cu al candidatilor, inclusiv cu prompt dovedit
+        # curat (verificat direct: CUI-ul solicitantului absent din prompt, dar tot
+        # aparea in output). Randare Python garanteaza date corecte intotdeauna.
+        if key == "lead_candidates":
+            content = self._render_lead_candidates_content(verified_data.get("lead_candidates", {}))
+            return {"title": title, "content": content, "word_count": len(content.split())}
+
         # ER2: Skip AI generation if section has insufficient data
         if not self._has_sufficient_data(key, verified_data):
             logger.warning(f"[synthesis] Section {key}: insufficient data, using fallback")
@@ -286,13 +296,6 @@ Reguli:
         8C: Context awareness — inject structured summary instead of raw JSON dump."""
         # 10F M4.4: Prompt Injection Hardening — sanitize data before prompt construction
         verified_data = self._sanitize_data_for_prompt(verified_data)
-
-        if section["key"] == "lead_candidates":
-            # Trimite DOAR lead_candidates la AI, nu tot verified_data — altfel profilul
-            # firmei SOLICITANTE (company/financial/risk_score, complet irelevant aici)
-            # ajunge in acelasi JSON ca firmele candidate si AI-ul le amesteca (CUI
-            # reutilizat intre firme diferite — bug real, reprodus si reparat live).
-            verified_data = {"lead_candidates": verified_data.get("lead_candidates", {})}
 
         # Context awareness injection (8C) — structured summary
         context_summary = self._build_context_summary(section["key"], verified_data)
@@ -557,7 +560,7 @@ Reguli:
 
         # F10: Skip sections with computed/derived numbers (SWOT, recommendations)
         # AH-01: financial_analysis NO LONGER skipped — ratios must be validated
-        skip_sections = {"swot_analysis", "recommendations", "opportunities", "lead_candidates"}
+        skip_sections = {"swot_analysis", "recommendations", "opportunities"}
         if section_key in skip_sections:
             return True, []
 
@@ -660,10 +663,6 @@ Reguli:
             if isinstance(web, dict) and web.get("opportunities"):
                 return True
             return False
-
-        if section_key == "lead_candidates":
-            leads = verified_data.get("lead_candidates", {})
-            return isinstance(leads, dict) and bool(leads.get("candidates"))
 
         if section_key == "company_profile":
             company = verified_data.get("company", {})
@@ -839,7 +838,6 @@ Reguli:
             "swot_analysis": ["risk_score", "financial", "market"],
             "swot": ["risk_score", "financial", "market"],
             "opportunities": ["tender_opportunities", "funding_programs", "market", "benchmark"],
-            "lead_candidates": ["lead_candidates"],
             "recommendations": ["risk_score", "early_warnings"],
         }
         keys = section_data_map.get(section_key, ["company", "financial"])
@@ -937,14 +935,6 @@ Reguli:
 
     def _build_context_summary(self, section_key: str, data: dict) -> str:
         """8C: Genereaza un rezumat structurat al datelor relevante per sectiune."""
-        if section_key == "lead_candidates":
-            # NU injecta header-ul generic "Firma: X (CUI: Y)" mai jos — acela e profilul
-            # firmei SOLICITANTE (companie ce cauta clienti), complet irelevant si activ
-            # confuz pt aceasta sectiune (AI-ul amesteca CUI-ul solicitantului cu al
-            # candidatilor cand ambele apar in acelasi prompt). Verificat live: bug real,
-            # reprodus de 2 ori inainte de acest fix.
-            return self._build_lead_candidates_summary(data.get("lead_candidates", {}))
-
         lines = []
         company = data.get("company", {})
         financial = data.get("financial", {})
@@ -997,29 +987,66 @@ Reguli:
 
         return "\n".join(lines) if lines else "Fara context suplimentar disponibil."
 
-    def _build_lead_candidates_summary(self, leads: dict) -> str:
-        """Rezumat explicit per firma candidata — fiecare cu CUI-ul ei propriu, etichetat
-        clar, ca sa nu se amestece intre ele (vezi _build_context_summary)."""
-        if not isinstance(leads, dict) or not leads.get("candidates"):
-            return "Nicio firma candidata gasita in sursele disponibile."
+    def _render_lead_candidates_content(self, leads: dict) -> str:
+        """Randare determinista (fara AI) a sectiunii Firme Candidate — vezi comentariul
+        din generate_section pentru motiv. Fiecare fapt per firma (CUI/CAEN/scor) vine
+        direct din date, niciodata parafrazat de un model."""
+        candidates = leads.get("candidates") if isinstance(leads, dict) else None
+        criteria = (leads or {}).get("criteria_used", {}) or {}
+        priority = (leads or {}).get("priority") or ""
+        pool_note = (leads or {}).get("pool_note") or ""
 
-        criteria = leads.get("criteria_used", {})
-        lines = [
-            f"Criterii cautare: judet={criteria.get('judet') or 'oricare'}, "
-            f"cuvinte cheie={criteria.get('keywords') or 'niciunul'}",
-            f"Prioritate: {leads.get('priority') or 'niciuna'}",
-            f"Numar firme gasite: {leads.get('count', 0)}",
-            f"Nota sursa: {leads.get('pool_note', '')}",
-            "",
-            "Firme candidate (fiecare CUI apartine STRICT firmei mentionate pe acelasi rand):",
-        ]
-        for c in leads.get("candidates", []):
-            reason = f" — {c.get('match_reason')}" if c.get("match_reason") else ""
+        judet = criteria.get("judet") or "oricare"
+        keywords = criteria.get("keywords") or []
+        kw_text = ", ".join(keywords) if keywords else "fara cuvinte cheie specifice"
+
+        lines = ["## Firme Candidate (Leads)", ""]
+
+        if not candidates:
             lines.append(
-                f"- {c.get('name', 'N/A')} | CUI={c.get('cui', 'N/A')} | "
-                f"CAEN={c.get('caen_code', 'N/A')} ({c.get('caen_description', 'N/A')}) | "
-                f"Judet={c.get('county', 'N/A')} | Scor={c.get('risk_score', 'N/A')}{reason}"
+                f"Nu au fost gasite firme candidate care sa corespunda criteriilor "
+                f"(judet: {judet}, {kw_text}) in baza de firme deja analizate de RIS."
             )
+            if pool_note:
+                lines.append(f"\n*{pool_note}*")
+            return "\n".join(lines)
+
+        header = f"Au fost identificate **{len(candidates)} firme** care corespund profilului (judet: {judet}, {kw_text}"
+        if priority:
+            header += f", prioritate: {priority}"
+        header += ")."
+        lines.append(header)
+        lines.append("")
+
+        for i, c in enumerate(candidates, 1):
+            name = c.get("name") or "[INDISPONIBIL]"
+            cui = c.get("cui") or "[INDISPONIBIL]"
+            caen = c.get("caen_code") or "[INDISPONIBIL]"
+            caen_desc = c.get("caen_description") or ""
+            county = c.get("county") or "[INDISPONIBIL]"
+            risk = c.get("risk_score") or "[INDISPONIBIL]"
+            numeric = c.get("last_risk_score_numeric")
+            reason = c.get("match_reason")
+            last_analyzed = c.get("last_analyzed_at") or "[INDISPONIBIL]"
+
+            caen_text = f"{caen}" + (f" ({caen_desc})" if caen_desc else "")
+            score_text = f"{risk}" + (f" ({numeric}/100)" if numeric is not None else "")
+
+            lines.append(f"{i}. **{name}** (CUI {cui}) — CAEN {caen_text}, Jud. {county}, scor risc {score_text}.")
+            if reason:
+                lines.append(f"   - Motivul potrivirii: {reason}")
+            lines.append(f"   - Ultima analiza: {last_analyzed}")
+            lines.append("")
+
+        lines.append("## Detalii cautare")
+        lines.append("")
+        lines.append(f"- **Criterii de cautare**: judet = {judet}, {kw_text}.")
+        if priority:
+            lines.append(f"- **Prioritate**: {priority}.")
+        lines.append(f"- **Numar firme gasite**: {len(candidates)}.")
+        if pool_note:
+            lines.append(f"- **Nota sursa**: {pool_note}")
+
         return "\n".join(lines)
 
 
