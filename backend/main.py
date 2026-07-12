@@ -92,10 +92,12 @@ async def lifespan(app: FastAPI):
 
 # --- FastAPI app ---
 
+APP_VERSION = "3.2.0"  # versiune semantica — SURSA UNICA (build-ul git vine din updater)
+
 app = FastAPI(
     title="Roland Intelligence System API",
     description="Business Intelligence cu date publice romanesti — ANAF, ONRC, SEAP, BNR",
-    version="2.0.0",
+    version=APP_VERSION,
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -234,8 +236,6 @@ async def get_frontend_log(lines: int = 200):
 
 
 # --- Health / Stats / Metrics ---
-
-APP_VERSION = "3.2.0"  # versiune semantica — SURSA UNICA (build-ul git vine din updater)
 
 
 @app.get("/api/health")

@@ -19,6 +19,7 @@ import {
   Shield,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { useAppVersion } from "@/hooks/useAppVersion";
 import { useToast } from "@/components/Toast";
 import { logAction } from "@/lib/logger";
 import type { Job, RiskMover } from "@/lib/types";
@@ -60,6 +61,7 @@ const SkeletonDashboard = () => (
 
 export default function Dashboard() {
   const { toast: _toast } = useToast();
+  const appVer = useAppVersion();
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ["dashboard-stats"],
@@ -194,7 +196,7 @@ export default function Dashboard() {
         <div>
           <h1 className="text-2xl font-bold text-white">Dashboard</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Roland Intelligence System v1.1
+            Roland Intelligence System{appVer ? ` v${appVer.version}` : ""}
           </p>
         </div>
         <Link

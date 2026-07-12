@@ -68,7 +68,7 @@ function _sendSessionStart(): void {
     level: "SESSION",
     page: "-",
     message: `${browser} | ${resolution} | ${platform}`,
-    details: `App version: 3.1.0 | API: ${window.location.origin}`,
+    details: `App version: ${(window as unknown as { __RIS_APP_VERSION?: string }).__RIS_APP_VERSION ?? "?"} | API: ${window.location.origin}`,
   });
 }
 

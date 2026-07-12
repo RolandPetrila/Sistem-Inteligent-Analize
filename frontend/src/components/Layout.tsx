@@ -34,6 +34,7 @@ import {
 import clsx from "clsx";
 import GlobalSearch from "./GlobalSearch";
 import { api } from "@/lib/api";
+import { useAppVersion } from "@/hooks/useAppVersion";
 import type { Notification } from "@/lib/types";
 
 const ROUTE_LABELS: Record<string, string> = {
@@ -130,21 +131,7 @@ const SEVERITY_COLOR: Record<string, string> = {
 };
 
 function VersionBadge() {
-  const [info, setInfo] = useState<Awaited<
-    ReturnType<typeof api.getVersion>
-  > | null>(null);
-
-  useEffect(() => {
-    const fetchV = () =>
-      api
-        .getVersion()
-        .then(setInfo)
-        .catch(() => {});
-    fetchV();
-    const id = setInterval(fetchV, 120_000); // poll la 2 min
-    return () => clearInterval(id);
-  }, []);
-
+  const info = useAppVersion();
   if (!info) return null;
   const build = info.running?.build ?? info.version;
   return (
@@ -175,6 +162,11 @@ function VersionBadge() {
       )}
     </div>
   );
+}
+
+function SystemVersion() {
+  const info = useAppVersion();
+  return <>Roland Intelligence System{info ? ` v${info.version}` : ""}</>;
 }
 
 function NotificationBell() {
@@ -416,7 +408,7 @@ export default function Layout() {
         </button>
         <ThemeToggle />
         <p className="text-[10px] text-gray-600">
-          Roland Intelligence System v3.0
+          <SystemVersion />
         </p>
       </div>
     </>
