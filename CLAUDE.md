@@ -4,6 +4,31 @@
 
 Sistem local de Business Intelligence care ruleaza pe Windows 10. Extrage automat date din surse publice romanesti (ANAF, ONRC, SEAP, etc.), le proceseaza prin agenti AI si produce rapoarte profesionale.
 
+## 🔄 LA START SESIUNE NOUA (checkpoint 2026-07-12)
+
+**Task activ, cerut explicit de user:** implementeaza recomandarile semnalate in
+`AUDIT_FUNCTII.html` (coloana "Imbunatatire sugerata"), apoi testeaza tot sistemul.
+Detalii complete + checklist pas-cu-pas: `TODO_ROLAND.md` sectiunea "URMATOAREA SESIUNE"
+
+- snapshot `~/.claude/context-snapshots/Sistem_Inteligent_Analize-checkpoint-2026-07-12/snapshot.md`
+- memorie `project_ris_audit_dashboard` / `project_ris_next_actions`.
+
+Rezumat task: (A) adauga test conectivitate pentru 15 surse externe fara endpoint dedicat
+(ANAF/BNR/openapi.ro/SEAP/BPI/Monitorul Oficial/Sanctiuni/Eurostat/INS TEMPO/AEGRM/Just/
+Brave/Jina/Maps), (B) adauga test dedicat pentru Email+Webhook, (C) investigheaza finding
+de securitate NEVERIFICAT (`RIS_API_KEY` posibil gol → API deschis fara auth), (D) dupa
+implementare, regenereaza `AUDIT_FUNCTII.html` + testeaza LIVE (nu doar cod) + `RIS_TEST.bat`.
+
+**Context critic (evita sa repeti greseli din sesiunea anterioara):**
+
+- CSP-ul aplicatiei (`script-src 'self'`, fara `unsafe-inline`) blocheaza SILENTIOS orice
+  `<script>` inline sau `onclick="..."` — orice UI noua trebuie JS extern same-origin +
+  `addEventListener`. Testeaza mereu prin deschidere reala in browser, nu doar "fisierul e valid".
+- `autoflake` (hook PostToolUse) sterge importuri neutilizate imediat dupa Edit — adauga
+  usage-ul INAINTE de import, in edit-uri separate.
+- Repo public pe GitHub — nu presupune ca orice date reale de firme terte pot fi publicate
+  fara verificare.
+
 ## Status
 
 - **Faza 1:** Fundatie — COMPLETATA

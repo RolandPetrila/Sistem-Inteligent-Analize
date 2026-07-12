@@ -2,6 +2,50 @@
 
 Data actualizare: 2026-04-05 | Versiune plan: 7.0
 
+**Sectiunea de mai jos ("STATUS CURENT") e invechita** — pentru status real/complet, vezi
+`CLAUDE.md` (sectiunea "Status", actualizata dupa fiecare sesiune). Acest fisier ramane
+pentru istoricul planului initial pe faze.
+
+---
+
+## URMATOAREA SESIUNE (checkpoint 2026-07-12)
+
+Snapshot complet: `~/.claude/context-snapshots/Sistem_Inteligent_Analize-checkpoint-2026-07-12/snapshot.md`
+Memorie: `project_ris_audit_dashboard` + `project_ris_next_actions` (in `~/.claude/projects/.../memory/`)
+
+**Task cerut explicit de user: implementeaza recomandarile din `AUDIT_FUNCTII.html`
+(coloana "Imbunatatire sugerata"), apoi testeaza tot sistemul.**
+
+### A. Test conectivitate pentru 15 surse externe fara endpoint dedicat
+
+ANAF TVA, ANAF Bilant, BNR, openapi.ro/ONRC (+ cota ramasa), SEAP/SICAP, BPI Insolventa,
+Monitorul Oficial, Sanctiuni OFAC+UE+ONU (+ varsta cache), Eurostat, INS TEMPO,
+AEGRM (**verifica intai daca tot e DNS-dead**), Portal Just (**verifica daca `zeep` e
+instalat**), Brave Search, Jina Reader, Google Maps (+ alerta credit). Extinde
+`TESTABLE_SERVICES` din `backend/routers/settings.py`, sau proiecteaza un pattern
+generic (`async def ping()` per client) daca 15 blocuri `elif` hardcodate devin greu
+de intretinut.
+
+### B. Test dedicat notificari
+
+`/api/settings/test/email` (mesaj minimal, fara raport real) + `/api/settings/test/webhook`
+(payload sintetic la `WEBHOOK_URL`).
+
+### C. Investigheaza finding de securitate NEVERIFICAT
+
+`GET /api/analysis/types` fara `X-RIS-Key` a raspuns HTTP 200 (asteptat 401). Ipoteza:
+`RIS_API_KEY` gol in `.env` → `ApiKeyMiddleware` compara `""=="")` → trece vacuu. Verifica
+daca e setat (fara sa afisezi valoarea); daca nu, seteaza unul sau fa middleware-ul
+fail-closed.
+
+### D. Dupa A+B+C — testeaza TOT sistemul
+
+1. `python tools/generate_audit_dashboard.py` — 0 endpoint-uri "NECURATAT".
+2. Verifica LIVE fiecare test nou (nu doar cod scris), marcheaza `tested: True` real.
+3. Redeploy + retest in browser (`http://localhost:8001/audit.html`) — click efectiv.
+4. `RIS_TEST.bat` — tinta 440+ pytest PASSED, 0 regresii.
+5. Update `CLAUDE.md` + memorie + commit + push.
+
 ---
 
 ## AUDIT R14 — PLAN REMEDIERE (2026-04-05)
@@ -9,44 +53,44 @@ Data actualizare: 2026-04-05 | Versiune plan: 7.0
 **Scor curent: 82/100 | Scor tinta: 90/100**
 **Plan detaliat:** `99_Plan_vs_Audit/RECOMANDARI_IMBUNATATIRI_R4.md`
 
-| Faza | Estimat | Status | Prioritate |
-|------|---------|--------|-----------|
-| F0 — Critica (git + securitate) | 30 min | `[ ]` | MAXIMA |
-| F1 — Quick Wins | 3-4h | `[ ]` | MARE |
-| F2 — Modernizare | 4-5h | `[ ]` | MEDIE |
-| F3 — Calitate & Testare | 2-4 zile | `[ ]` | MEDIE |
-| F4 — Features Strategice | 3-5 zile | `[ ]` | MICA |
-| F5 — Audit R14 HIGH | 1-2 zile | `[ ]` | MARE |
-| F6 — Audit R14 MEDIUM | 2-4 zile | `[ ]` | MEDIE |
+| Faza                            | Estimat  | Status | Prioritate |
+| ------------------------------- | -------- | ------ | ---------- |
+| F0 — Critica (git + securitate) | 30 min   | `[ ]`  | MAXIMA     |
+| F1 — Quick Wins                 | 3-4h     | `[ ]`  | MARE       |
+| F2 — Modernizare                | 4-5h     | `[ ]`  | MEDIE      |
+| F3 — Calitate & Testare         | 2-4 zile | `[ ]`  | MEDIE      |
+| F4 — Features Strategice        | 3-5 zile | `[ ]`  | MICA       |
+| F5 — Audit R14 HIGH             | 1-2 zile | `[ ]`  | MARE       |
+| F6 — Audit R14 MEDIUM           | 2-4 zile | `[ ]`  | MEDIE      |
 
 ---
 
 ## STATUS CURENT — Ce e implementat
 
-| Faza | Status | Ce contine |
-|------|--------|-----------|
-| Faza 1 — Fundatie | COMPLET | FastAPI + SQLite + React + Vite + TypeScript |
-| Faza 2 — Agenti date | COMPLET | Agent 1 (ANAF, BNR, Tavily) + Agent 4 (Verification) + LangGraph + Cache |
-| Faza 3 — Sinteza + Rapoarte | COMPLET | Agent 5 (Claude/Groq/Gemini/Cerebras) + PDF + DOCX + HTML |
-| Faza 4 — UI + Livrare | COMPLET | 9 pagini, chatbot, settings, notificari, WebSocket |
-| Faza 4.5 — Audit + Extensii | COMPLET | ANAF Bilant, CUI validation, scoring 0-100, cross-validare, security |
-| Faza 5 — Extensii complete | COMPLET | Excel, Chart.js, Comparator, Anomalii, Delta, Agent 2+3, openapi.ro, Monitoring, PPTX |
-| Faza 6A — Performance | COMPLET | Lazy imports, httpx singleton, CORS Tailscale, cache cleanup, health deep, stats cache |
-| Faza 6B — Documentare | COMPLET | Due Diligence, Actionariat, Early Warnings, CSV Export, 1-Pager, CAEN, Benchmark, Batch |
-| Faza 6C — UX Polish | COMPLET | Toast, Error Boundaries, Trend Chart, CUI validator JS, Prompt optimization, CSP |
-| Faza 6D — Advanced | COMPLET | Scheduler, INS TEMPO, Auto-backup DB, Sector Report, Relations, Smart Routing, Pre-processing, React 19 |
-| **Faza 7A — Data Quality** | **COMPLET** | **Fix SEAP routing, httpx import, data_found logic, diagnostics, completeness check, anti-halucinare** |
-| **Faza 7A.1 — Job Logging** | **COMPLET** | **Sistem logging complet per job: logs/job_{id}.log cu fiecare pas, request, response, completeness, summary** |
-| **Faza 7B — Quick Wins** | **COMPLET** | **PATH TRAVERSAL fix, requirements.txt, .gitignore, PRAGMA optimize, sqlite3.backup, toast catches, 404 route, conditional reload, secret key warning** |
-| **Faza 7C — Securitate** | **COMPLET** | **Batch persistent DB, rate limiting, API key auth, api.ts complet, CSP hardened, SEAP cache, few-shot prompts** |
-| **Faza 7D — Testare & Refactorizare** | **COMPLET** | **28 pytest tests, 11 vitest tests, split agent_verification, React.lazy 10 pagini, retry logic ANAF+openapi.ro** |
-| **Faza 7E — Calitate Analiza** | **COMPLET** | **CAEN fallback Bilant, retry BNR+SEAP, completeness gate <50%, anti-halucinare prompts, GET diagnostics, POST retry-source** |
-| **Faza 10A-10F — R3 Module Upgrades** | **COMPLET** | **51 P1 features: scoring matrix, synthesis degradation, prompt hardening, orchestrator dedup+checkpoints, cache LRU, batch parallel, security tracing+sanitization, form validation, HTML responsive** |
-| **Faza 11 — R4 Bug Fixes & Quality** | **COMPLET** | **27 items: 6 CRIT + 13 HIGH + 8 MED — toate B1-B27 implementate (2026-03-22)** |
-| **Faza 12 — R5 Deep Research Fixes** | **COMPLET** | **25 items: 4 CRIT + 16 HIGH + 5 MED — toate C1-C25 implementate (2026-03-22)** |
-| **Infra — Git + Tests** | **COMPLET** | **Git init + push GitHub, 88 teste (77 pytest + 11 vitest), .gitignore cleanup** |
-| **Faza 13 — R6 Deep Research** | **COMPLET** | **21 items D1-D21 + 4 N-items (ratii financiare, grafice, exec summary, pagina firma) — implementate (2026-03-23)** |
-| **Faza 14 — R7 Calitate & Surse Noi** | **COMPLET** | **15 items E1-E13 + EP1-EP3 + ER1-ER2 — BPI insolventa, ANAF inactivi/risc fiscal, scoring penalizari, anti-halucination, few-shot prompts, sparkline, PDF ratii, Excel Trend, template-uri, raport comparativ PDF (2026-03-23)** |
+| Faza                                  | Status      | Ce contine                                                                                                                                                                                                                                                             |
+| ------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Faza 1 — Fundatie                     | COMPLET     | FastAPI + SQLite + React + Vite + TypeScript                                                                                                                                                                                                                           |
+| Faza 2 — Agenti date                  | COMPLET     | Agent 1 (ANAF, BNR, Tavily) + Agent 4 (Verification) + LangGraph + Cache                                                                                                                                                                                               |
+| Faza 3 — Sinteza + Rapoarte           | COMPLET     | Agent 5 (Claude/Groq/Gemini/Cerebras) + PDF + DOCX + HTML                                                                                                                                                                                                              |
+| Faza 4 — UI + Livrare                 | COMPLET     | 9 pagini, chatbot, settings, notificari, WebSocket                                                                                                                                                                                                                     |
+| Faza 4.5 — Audit + Extensii           | COMPLET     | ANAF Bilant, CUI validation, scoring 0-100, cross-validare, security                                                                                                                                                                                                   |
+| Faza 5 — Extensii complete            | COMPLET     | Excel, Chart.js, Comparator, Anomalii, Delta, Agent 2+3, openapi.ro, Monitoring, PPTX                                                                                                                                                                                  |
+| Faza 6A — Performance                 | COMPLET     | Lazy imports, httpx singleton, CORS Tailscale, cache cleanup, health deep, stats cache                                                                                                                                                                                 |
+| Faza 6B — Documentare                 | COMPLET     | Due Diligence, Actionariat, Early Warnings, CSV Export, 1-Pager, CAEN, Benchmark, Batch                                                                                                                                                                                |
+| Faza 6C — UX Polish                   | COMPLET     | Toast, Error Boundaries, Trend Chart, CUI validator JS, Prompt optimization, CSP                                                                                                                                                                                       |
+| Faza 6D — Advanced                    | COMPLET     | Scheduler, INS TEMPO, Auto-backup DB, Sector Report, Relations, Smart Routing, Pre-processing, React 19                                                                                                                                                                |
+| **Faza 7A — Data Quality**            | **COMPLET** | **Fix SEAP routing, httpx import, data_found logic, diagnostics, completeness check, anti-halucinare**                                                                                                                                                                 |
+| **Faza 7A.1 — Job Logging**           | **COMPLET** | **Sistem logging complet per job: logs/job\_{id}.log cu fiecare pas, request, response, completeness, summary**                                                                                                                                                        |
+| **Faza 7B — Quick Wins**              | **COMPLET** | **PATH TRAVERSAL fix, requirements.txt, .gitignore, PRAGMA optimize, sqlite3.backup, toast catches, 404 route, conditional reload, secret key warning**                                                                                                                |
+| **Faza 7C — Securitate**              | **COMPLET** | **Batch persistent DB, rate limiting, API key auth, api.ts complet, CSP hardened, SEAP cache, few-shot prompts**                                                                                                                                                       |
+| **Faza 7D — Testare & Refactorizare** | **COMPLET** | **28 pytest tests, 11 vitest tests, split agent_verification, React.lazy 10 pagini, retry logic ANAF+openapi.ro**                                                                                                                                                      |
+| **Faza 7E — Calitate Analiza**        | **COMPLET** | **CAEN fallback Bilant, retry BNR+SEAP, completeness gate <50%, anti-halucinare prompts, GET diagnostics, POST retry-source**                                                                                                                                          |
+| **Faza 10A-10F — R3 Module Upgrades** | **COMPLET** | **51 P1 features: scoring matrix, synthesis degradation, prompt hardening, orchestrator dedup+checkpoints, cache LRU, batch parallel, security tracing+sanitization, form validation, HTML responsive**                                                                |
+| **Faza 11 — R4 Bug Fixes & Quality**  | **COMPLET** | **27 items: 6 CRIT + 13 HIGH + 8 MED — toate B1-B27 implementate (2026-03-22)**                                                                                                                                                                                        |
+| **Faza 12 — R5 Deep Research Fixes**  | **COMPLET** | **25 items: 4 CRIT + 16 HIGH + 5 MED — toate C1-C25 implementate (2026-03-22)**                                                                                                                                                                                        |
+| **Infra — Git + Tests**               | **COMPLET** | **Git init + push GitHub, 88 teste (77 pytest + 11 vitest), .gitignore cleanup**                                                                                                                                                                                       |
+| **Faza 13 — R6 Deep Research**        | **COMPLET** | **21 items D1-D21 + 4 N-items (ratii financiare, grafice, exec summary, pagina firma) — implementate (2026-03-23)**                                                                                                                                                    |
+| **Faza 14 — R7 Calitate & Surse Noi** | **COMPLET** | **15 items E1-E13 + EP1-EP3 + ER1-ER2 — BPI insolventa, ANAF inactivi/risc fiscal, scoring penalizari, anti-halucination, few-shot prompts, sparkline, PDF ratii, Excel Trend, template-uri, raport comparativ PDF (2026-03-23)**                                      |
 | **Faza 15 — R8 Quality & Robustness** | **COMPLET** | **21 items F1-F21 — WS bug fix, HTML tables/bold/ol, version unify, PRAGMA optimize, dead deps, except→logger.debug, anti-hallucination skip, DRY providers, split verification, BPI robust, compare narrative, teste html/orchestrator/pdf, PDF tables (2026-03-23)** |
 
 ---
@@ -56,17 +100,17 @@ Data actualizare: 2026-04-05 | Versiune plan: 7.0
 **Status: IMPLEMENTAT (2026-03-21)**
 **Problema rezolvata:** Analiza MOSSLEIN S.R.L. avea date lipsa la SEAP, ONRC, CAEN, competitori, actionariat.
 
-| # | Fix | Fisier | Ce s-a facut | Status |
-|---|-----|--------|-------------|--------|
-| FIX1 | SEAP routing FULL_COMPANY_PROFILE | backend/agents/state.py:71 | Adaugat "market" in get_agents_needed pt FULL_COMPANY_PROFILE, LEAD_GENERATION la nivel 2 | DONE |
-| FIX2 | import httpx lipsa | backend/agents/tools/openapi_client.py:8 | Adaugat `import httpx` — fara el, timeout OpenAPI cauza NameError | DONE |
-| FIX3 | data_found logic bug | backend/agents/base.py:71-80 | Dict cu `found=False` sau `error` nu mai e considerat "data gasita" | DONE |
-| FIX4 | .env.example incomplet | .env.example:12 | Adaugat OPENAPI_RO_KEY in exemplul de configurare | DONE |
-| FIX5 | ONRC structurat neintegrat | backend/agents/agent_verification.py:170-215 | _verify_company_profile integreaza CAEN, asociati, administratori, capital din openapi.ro | DONE |
-| FIX6 | Diagnosticare per agent | backend/agents/agent_official.py:176-230 | Logging detaliat surse asteptate vs gasite, campuri lipsa, completeness score | DONE |
-| FIX7 | Verificare completitudine | backend/agents/agent_verification.py:_check_completeness | 17 verificari pe profil, financiar, CAEN, SEAP, litigii — cu score si gaps | DONE |
-| FIX8 | Anti-halucinare sinteza | backend/agents/agent_synthesis.py:148-160 | Campuri lipsa transmise explicit in prompt AI cu instructiune "NU INVENTA" | DONE |
-| FIX9 | Diagnostic in raport HTML | backend/reports/html_generator.py:170-200 | Sectiune "Diagnostic Completitudine" vizibila in raportul livrat | DONE |
+| #    | Fix                               | Fisier                                                   | Ce s-a facut                                                                              | Status |
+| ---- | --------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ------ |
+| FIX1 | SEAP routing FULL_COMPANY_PROFILE | backend/agents/state.py:71                               | Adaugat "market" in get_agents_needed pt FULL_COMPANY_PROFILE, LEAD_GENERATION la nivel 2 | DONE   |
+| FIX2 | import httpx lipsa                | backend/agents/tools/openapi_client.py:8                 | Adaugat `import httpx` — fara el, timeout OpenAPI cauza NameError                         | DONE   |
+| FIX3 | data_found logic bug              | backend/agents/base.py:71-80                             | Dict cu `found=False` sau `error` nu mai e considerat "data gasita"                       | DONE   |
+| FIX4 | .env.example incomplet            | .env.example:12                                          | Adaugat OPENAPI_RO_KEY in exemplul de configurare                                         | DONE   |
+| FIX5 | ONRC structurat neintegrat        | backend/agents/agent_verification.py:170-215             | _verify_company_profile integreaza CAEN, asociati, administratori, capital din openapi.ro | DONE   |
+| FIX6 | Diagnosticare per agent           | backend/agents/agent_official.py:176-230                 | Logging detaliat surse asteptate vs gasite, campuri lipsa, completeness score             | DONE   |
+| FIX7 | Verificare completitudine         | backend/agents/agent_verification.py:_check_completeness | 17 verificari pe profil, financiar, CAEN, SEAP, litigii — cu score si gaps                | DONE   |
+| FIX8 | Anti-halucinare sinteza           | backend/agents/agent_synthesis.py:148-160                | Campuri lipsa transmise explicit in prompt AI cu instructiune "NU INVENTA"                | DONE   |
+| FIX9 | Diagnostic in raport HTML         | backend/reports/html_generator.py:170-200                | Sectiune "Diagnostic Completitudine" vizibila in raportul livrat                          | DONE   |
 
 ---
 
@@ -75,25 +119,28 @@ Data actualizare: 2026-04-05 | Versiune plan: 7.0
 **Status: IMPLEMENTAT (2026-03-21)**
 
 ### Ce s-a implementat
-| # | Componenta | Fisier | Ce logheaza |
-|---|-----------|--------|-------------|
-| LOG1 | Job Logger service | backend/services/job_logger.py | Serviciu central: start/end job, source results, completeness, synthesis, report gen |
-| LOG2 | Agent Official logging | backend/agents/agent_official.py | Fiecare sursa: ANAF, openapi.ro, ANAF Bilant, BNR, BPI, Litigii, CAEN — cu fields extrasi |
-| LOG3 | Agent Web logging | backend/agents/orchestrator.py:run_web | Categorii web gasite, rezultate Tavily |
-| LOG4 | Agent Market logging | backend/agents/orchestrator.py:run_market | Contracte SEAP: licitatii + achizitii directe + valoare totala |
-| LOG5 | Agent Verification logging | backend/agents/orchestrator.py:run_verification | Risk score, completeness %, gaps |
-| LOG6 | Agent Synthesis logging | backend/agents/orchestrator.py:run_synthesis | Sectiuni generate, provideri AI |
-| LOG7 | Report Generator logging | backend/agents/orchestrator.py:run_report_generator | Formate generate |
-| LOG8 | HTTP Request middleware | backend/main.py:RequestLoggingMiddleware | FIECARE request HTTP: method, path, status, timp |
-| LOG9 | Job summary | backend/services/job_service.py | Rezumat final: sources OK/FAIL, completeness, risk, formats |
+
+| #    | Componenta                 | Fisier                                              | Ce logheaza                                                                               |
+| ---- | -------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| LOG1 | Job Logger service         | backend/services/job_logger.py                      | Serviciu central: start/end job, source results, completeness, synthesis, report gen      |
+| LOG2 | Agent Official logging     | backend/agents/agent_official.py                    | Fiecare sursa: ANAF, openapi.ro, ANAF Bilant, BNR, BPI, Litigii, CAEN — cu fields extrasi |
+| LOG3 | Agent Web logging          | backend/agents/orchestrator.py:run_web              | Categorii web gasite, rezultate Tavily                                                    |
+| LOG4 | Agent Market logging       | backend/agents/orchestrator.py:run_market           | Contracte SEAP: licitatii + achizitii directe + valoare totala                            |
+| LOG5 | Agent Verification logging | backend/agents/orchestrator.py:run_verification     | Risk score, completeness %, gaps                                                          |
+| LOG6 | Agent Synthesis logging    | backend/agents/orchestrator.py:run_synthesis        | Sectiuni generate, provideri AI                                                           |
+| LOG7 | Report Generator logging   | backend/agents/orchestrator.py:run_report_generator | Formate generate                                                                          |
+| LOG8 | HTTP Request middleware    | backend/main.py:RequestLoggingMiddleware            | FIECARE request HTTP: method, path, status, timp                                          |
+| LOG9 | Job summary                | backend/services/job_service.py                     | Rezumat final: sources OK/FAIL, completeness, risk, formats                               |
 
 ### Unde gasesti log-urile
+
 ```
 C:\Proiecte\Sistem_Inteligent_Analize\logs\
   job_a1b2c3d4-e5f6-7890-abcd-1234567890ab.log    (un fisier per analiza)
 ```
 
 ### Ce contine un log (exemplu)
+
 ```
 [2026-03-21 14:30:01] INFO     | ==== JOB START: a1b2c3d4 ====
 [2026-03-21 14:30:01] INFO     | Analysis: FULL_COMPANY_PROFILE | CUI: 26313362
@@ -110,6 +157,7 @@ C:\Proiecte\Sistem_Inteligent_Analize\logs\
 ```
 
 ### Cum diagnosticam o analiza cu probleme
+
 1. Ruleaza analiza din UI
 2. Daca lipsesc date, spune-mi: **"citeste log-ul job-ului X"** sau **"verifica log-ul ultimei analize"**
 3. Eu citesc fisierul din `logs/` si identific EXACT unde a esuat (care sursa, ce eroare, ce camp lipseste)
@@ -122,6 +170,7 @@ C:\Proiecte\Sistem_Inteligent_Analize\logs\
 **IMPORTANT: Acest test se executa DUPA implementarea completa a tuturor fazelor din acest plan.**
 
 ### Pasii de testare
+
 1. Porneste RIS (dublu-click START_RIS.vbs)
 2. Deschide http://localhost:5173/new-analysis
 3. Introdu CUI: **26313362** (MOSSLEIN S.R.L.)
@@ -131,18 +180,19 @@ C:\Proiecte\Sistem_Inteligent_Analize\logs\
 
 ### Ce trebuie verificat in raport
 
-| # | Camp | Inainte (problema) | Dupa fix (asteptat) | Cum verifici |
-|---|------|-------------------|---------------------|-------------|
-| V1 | Cod CAEN | [INDISPONIBIL] | Cod CAEN numeric + descriere | Sectiunea "Profil firma" |
-| V2 | Asociati | [INDISPONIBIL] | Lista asociati cu nume | Sectiunea "Actionariat" |
-| V3 | Administratori | [INDISPONIBIL] | Lista administratori | Sectiunea "Actionariat" |
-| V4 | Capital social | [INDISPONIBIL] | Valoare in RON | Sectiunea "Profil firma" |
-| V5 | Contracte SEAP | Absent (neinterogat) | Contracte gasite sau "0 contracte" (nu [INDISPONIBIL]) | Sectiunea "Piata" |
-| V6 | Benchmark sector | [INDISPONIBIL] | "CA firma vs media CAEN" | Sectiunea "Benchmark" |
-| V7 | Diagnostic completitudine | Absent | Sectiune noua cu scor % si gaps | La finalul raportului |
-| V8 | Surse utilizate | 5 surse | 8-10 surse (ANAF, openapi.ro, SEAP, BNR, etc.) | Lista surse in raport |
+| #   | Camp                      | Inainte (problema)   | Dupa fix (asteptat)                                    | Cum verifici             |
+| --- | ------------------------- | -------------------- | ------------------------------------------------------ | ------------------------ |
+| V1  | Cod CAEN                  | [INDISPONIBIL]       | Cod CAEN numeric + descriere                           | Sectiunea "Profil firma" |
+| V2  | Asociati                  | [INDISPONIBIL]       | Lista asociati cu nume                                 | Sectiunea "Actionariat"  |
+| V3  | Administratori            | [INDISPONIBIL]       | Lista administratori                                   | Sectiunea "Actionariat"  |
+| V4  | Capital social            | [INDISPONIBIL]       | Valoare in RON                                         | Sectiunea "Profil firma" |
+| V5  | Contracte SEAP            | Absent (neinterogat) | Contracte gasite sau "0 contracte" (nu [INDISPONIBIL]) | Sectiunea "Piata"        |
+| V6  | Benchmark sector          | [INDISPONIBIL]       | "CA firma vs media CAEN"                               | Sectiunea "Benchmark"    |
+| V7  | Diagnostic completitudine | Absent               | Sectiune noua cu scor % si gaps                        | La finalul raportului    |
+| V8  | Surse utilizate           | 5 surse              | 8-10 surse (ANAF, openapi.ro, SEAP, BNR, etc.)         | Lista surse in raport    |
 
 ### Ce trebuie verificat in log
+
 1. Deschide `logs/job_*.log` (ultimul fisier creat)
 2. Verifica:
    - Fiecare sursa apare cu status OK sau FAIL + motiv
@@ -152,6 +202,7 @@ C:\Proiecte\Sistem_Inteligent_Analize\logs\
    - JOB SUMMARY la final cu rezumat complet
 
 ### Daca ceva NU functioneaza
+
 Spune-mi: **"log-ul arata problema X la sursa Y"** si eu fixez imediat.
 
 ---
@@ -161,17 +212,17 @@ Spune-mi: **"log-ul arata problema X la sursa Y"** si eu fixez imediat.
 **Status: IMPLEMENTAT (2026-03-21)**
 **Sursa:** 99_Deep_Research/2026-03-21_deep_research/ROADMAP_IMBUNATATIRI.md
 
-| # | Actiune | Fisier | Status |
-|---|---------|--------|--------|
-| QW0 | Fix PATH TRAVERSAL: resolve() + startswith(outputs/) | reports.py, batch.py (3 endpointuri) | DONE |
-| QW1 | requirements.txt actualizat cu versiuni reale | requirements.txt | DONE |
-| QW2 | Adauga `backups/` + `logs/` in .gitignore | .gitignore | DONE |
-| QW3 | PRAGMA synchronous=NORMAL + mmap_size=256MB | backend/database.py | DONE |
-| QW4 | sqlite3.backup() in loc de shutil.copy2 | backend/services/scheduler.py | DONE |
-| QW5 | Toast pe catch-uri goale (5 locuri fixate) | NewAnalysis, Dashboard, BatchAnalysis, Settings, ChatInput | DONE |
-| QW6 | Route 404 catch-all cu pagina "Pagina nu a fost gasita" | frontend/src/App.tsx | DONE |
-| QW7 | uvicorn reload conditionat (RIS_ENV) | backend/main.py | DONE |
-| QW8 | Warning la startup daca secret key = default | backend/main.py (lifespan) | DONE |
+| #   | Actiune                                                 | Fisier                                                     | Status |
+| --- | ------------------------------------------------------- | ---------------------------------------------------------- | ------ |
+| QW0 | Fix PATH TRAVERSAL: resolve() + startswith(outputs/)    | reports.py, batch.py (3 endpointuri)                       | DONE   |
+| QW1 | requirements.txt actualizat cu versiuni reale           | requirements.txt                                           | DONE   |
+| QW2 | Adauga `backups/` + `logs/` in .gitignore               | .gitignore                                                 | DONE   |
+| QW3 | PRAGMA synchronous=NORMAL + mmap_size=256MB             | backend/database.py                                        | DONE   |
+| QW4 | sqlite3.backup() in loc de shutil.copy2                 | backend/services/scheduler.py                              | DONE   |
+| QW5 | Toast pe catch-uri goale (5 locuri fixate)              | NewAnalysis, Dashboard, BatchAnalysis, Settings, ChatInput | DONE   |
+| QW6 | Route 404 catch-all cu pagina "Pagina nu a fost gasita" | frontend/src/App.tsx                                       | DONE   |
+| QW7 | uvicorn reload conditionat (RIS_ENV)                    | backend/main.py                                            | DONE   |
+| QW8 | Warning la startup daca secret key = default            | backend/main.py (lifespan)                                 | DONE   |
 
 ---
 
@@ -179,15 +230,15 @@ Spune-mi: **"log-ul arata problema X la sursa Y"** si eu fixez imediat.
 
 **Status: IMPLEMENTAT (2026-03-21)**
 
-| # | Actiune | Ce s-a facut | Status |
-|---|---------|-------------|--------|
-| S1 | Batch progress persistent in DB | _batch_progress mutat din dict in-memory in input_data JSON (supravietuieste restart) | DONE |
-| S2 | Rate limiting pe POST endpoints | RateLimiter custom: 5 req/min jobs, 2 req/min batch, per IP | DONE |
-| S3 | API key auth (X-RIS-Key header) | ApiKeyMiddleware — daca RIS_API_KEY setat in .env, protejeaza /api/ | DONE |
-| S4 | Extinde api.ts cu endpoints lipsa | Adaugat: compare, batch, monitoring, trend, healthDeep | DONE |
-| S5 | Elimina unsafe-eval din CSP | Removed unsafe-eval + CDN ref din CSP (Chart.js doar in HTML reports) | DONE |
-| S6 | Cache SEAP client | Cache cu TTL 30 zile pe get_contracts_won (cache_service) | DONE |
-| S7 | Few-shot examples in AI prompts | Exemple output in 4 sectiuni: executive, financial, risk, recommendations | DONE |
+| #   | Actiune                           | Ce s-a facut                                                                          | Status |
+| --- | --------------------------------- | ------------------------------------------------------------------------------------- | ------ |
+| S1  | Batch progress persistent in DB   | _batch_progress mutat din dict in-memory in input_data JSON (supravietuieste restart) | DONE   |
+| S2  | Rate limiting pe POST endpoints   | RateLimiter custom: 5 req/min jobs, 2 req/min batch, per IP                           | DONE   |
+| S3  | API key auth (X-RIS-Key header)   | ApiKeyMiddleware — daca RIS_API_KEY setat in .env, protejeaza /api/                   | DONE   |
+| S4  | Extinde api.ts cu endpoints lipsa | Adaugat: compare, batch, monitoring, trend, healthDeep                                | DONE   |
+| S5  | Elimina unsafe-eval din CSP       | Removed unsafe-eval + CDN ref din CSP (Chart.js doar in HTML reports)                 | DONE   |
+| S6  | Cache SEAP client                 | Cache cu TTL 30 zile pe get_contracts_won (cache_service)                             | DONE   |
+| S7  | Few-shot examples in AI prompts   | Exemple output in 4 sectiuni: executive, financial, risk, recommendations             | DONE   |
 
 ---
 
@@ -196,13 +247,13 @@ Spune-mi: **"log-ul arata problema X la sursa Y"** si eu fixez imediat.
 **Status: IMPLEMENTAT (2026-03-21)**
 **REGULA DE AUR: Niciodata refactorizare fara teste. T1 INAINTE de A1 si A3!**
 
-| # | Actiune | Efort | Impact | ROI | Depinde de | Status |
-|---|---------|-------|--------|-----|------------|--------|
-| T1 | pytest: CUI validator, ANAF mock, scoring, completeness (28 tests) | 4-8h | HIGH | 8 | - | DONE |
-| T2 | vitest: CUI validator, api.ts (11 tests) | 2-4h | MEDIUM | 5 | - | DONE |
-| A1 | Split agent_verification.py (scoring.py + completeness.py) | 2-4h | MEDIUM | 7 | T1 | DONE |
-| A2 | React.lazy() pe 10 pagini + Suspense + 404 route | 30 min | MEDIUM | 5 | - | DONE |
-| A3 | Retry logic: with_retry() + integrat ANAF + openapi.ro | 2h | MEDIUM | 4 | T1 | DONE |
+| #   | Actiune                                                            | Efort  | Impact | ROI | Depinde de | Status |
+| --- | ------------------------------------------------------------------ | ------ | ------ | --- | ---------- | ------ |
+| T1  | pytest: CUI validator, ANAF mock, scoring, completeness (28 tests) | 4-8h   | HIGH   | 8   | -          | DONE   |
+| T2  | vitest: CUI validator, api.ts (11 tests)                           | 2-4h   | MEDIUM | 5   | -          | DONE   |
+| A1  | Split agent_verification.py (scoring.py + completeness.py)         | 2-4h   | MEDIUM | 7   | T1         | DONE   |
+| A2  | React.lazy() pe 10 pagini + Suspense + 404 route                   | 30 min | MEDIUM | 5   | -          | DONE   |
+| A3  | Retry logic: with_retry() + integrat ANAF + openapi.ro             | 2h     | MEDIUM | 4   | T1         | DONE   |
 
 ---
 
@@ -211,15 +262,15 @@ Spune-mi: **"log-ul arata problema X la sursa Y"** si eu fixez imediat.
 **Status: IMPLEMENTAT (2026-03-21)**
 **Scop:** Eliminarea completa a datelor lipsa din analize
 
-| # | Actiune | Ce s-a facut | Status |
-|---|---------|-------------|--------|
-| CA1 | Fallback CAEN din ANAF Bilant | agent_official.py: daca openapi.ro + ANAF n-au CAEN, extrage din ultimul an ANAF Bilant | DONE |
-| CA2 | SEAP cache in agent pipeline | Deja implementat in S6 (Faza 7C) — seap_client.py use_cache=True by default | DONE |
-| CA3 | Retry individual per sursa | with_retry integrat in: ANAF, openapi.ro (7D), BNR (+retry 2x), SEAP (+retry 1x) | DONE |
-| CA4 | Completeness gate inainte de sinteza | orchestrator.py: daca completeness < 50%, inject WARNING in verified_data + log | DONE |
-| CA5 | Anti-halucinare prompts | section_prompts.py: adaugat instructiuni anti-halucinare in competition, opportunities, swot | DONE |
-| CA6 | Diagnostic endpoint API | GET /api/jobs/{id}/diagnostics + GET /api/jobs/diagnostics/latest — completeness, risk, log tail | DONE |
-| CA7 | Re-run single source | POST /api/jobs/{id}/retry-source/{source} — surse: anaf, openapi, bilant, bnr, seap | DONE |
+| #   | Actiune                              | Ce s-a facut                                                                                     | Status |
+| --- | ------------------------------------ | ------------------------------------------------------------------------------------------------ | ------ |
+| CA1 | Fallback CAEN din ANAF Bilant        | agent_official.py: daca openapi.ro + ANAF n-au CAEN, extrage din ultimul an ANAF Bilant          | DONE   |
+| CA2 | SEAP cache in agent pipeline         | Deja implementat in S6 (Faza 7C) — seap_client.py use_cache=True by default                      | DONE   |
+| CA3 | Retry individual per sursa           | with_retry integrat in: ANAF, openapi.ro (7D), BNR (+retry 2x), SEAP (+retry 1x)                 | DONE   |
+| CA4 | Completeness gate inainte de sinteza | orchestrator.py: daca completeness < 50%, inject WARNING in verified_data + log                  | DONE   |
+| CA5 | Anti-halucinare prompts              | section_prompts.py: adaugat instructiuni anti-halucinare in competition, opportunities, swot     | DONE   |
+| CA6 | Diagnostic endpoint API              | GET /api/jobs/{id}/diagnostics + GET /api/jobs/diagnostics/latest — completeness, risk, log tail | DONE   |
+| CA7 | Re-run single source                 | POST /api/jobs/{id}/retry-source/{source} — surse: anaf, openapi, bilant, bnr, seap              | DONE   |
 
 ---
 
@@ -228,13 +279,13 @@ Spune-mi: **"log-ul arata problema X la sursa Y"** si eu fixez imediat.
 **Status: IMPLEMENTAT (2026-03-22)**
 **Sursa:** ROLAND_PLANIFICARI_MODULE.md — 25 imbunatatiri din 148 propuse (cele cu ROI real)
 
-| # | Sub-faza | Ce s-a implementat | Status |
-|---|---------|-------------------|--------|
-| 8A | Infrastructure | Gzip, Cache headers, Error codes, Cache stats endpoint, Scheduler cleanup | DONE |
-| 8B | Scoring | Trend scoring, Volatility index, Solvency ratio, Age-adjusted, Angajati trend | DONE |
-| 8C | Synthesis | Dynamic word count, Context injection, Provider routing, ZIP auto-pack | DONE |
-| 8D | Orchestrator | Timing metrics, Error boundaries, Cache compare, Consistent scoring, Batch retry | DONE |
-| 8E | Monitoring | Smart severity, Audit log, Score history, Expanded delta, Rich summary CSV | DONE |
+| #   | Sub-faza       | Ce s-a implementat                                                               | Status |
+| --- | -------------- | -------------------------------------------------------------------------------- | ------ |
+| 8A  | Infrastructure | Gzip, Cache headers, Error codes, Cache stats endpoint, Scheduler cleanup        | DONE   |
+| 8B  | Scoring        | Trend scoring, Volatility index, Solvency ratio, Age-adjusted, Angajati trend    | DONE   |
+| 8C  | Synthesis      | Dynamic word count, Context injection, Provider routing, ZIP auto-pack           | DONE   |
+| 8D  | Orchestrator   | Timing metrics, Error boundaries, Cache compare, Consistent scoring, Batch retry | DONE   |
+| 8E  | Monitoring     | Smart severity, Audit log, Score history, Expanded delta, Rich summary CSV       | DONE   |
 
 ---
 
@@ -243,53 +294,53 @@ Spune-mi: **"log-ul arata problema X la sursa Y"** si eu fixez imediat.
 **Status: IMPLEMENTAT (2026-03-22)**
 **Sursa:** ROLAND_PLANIFICARI_MODULE.md — 17 imbunatatiri implementate din 128 propuse
 
-| # | Sub-faza | Ce s-a implementat | Status |
-|---|---------|-------------------|--------|
-| 9A | Performance & Robustness | Parallel source fetching, Error boundaries 5/5, Request size 10MB, Cache hit/miss, Data freshness | DONE |
-| 9B | Scoring & Intelligence | Cash flow proxy, Anomaly feedback loop, Confidence scoring, Provider capacity awareness | DONE |
-| 9C | Frontend UX Polish | Pagination, API key masking, Mobile sidebar, ApiError+429, Error codes toast | DONE |
-| 9D | Reports & Export | Watermark CONFIDENTIAL PDF+HTML, TOC DOCX (Word field), TOC PDF (page numbers) | DONE |
-| 9E | Monitoring & Batch | Alert dedup 24h, Batch resume endpoint | DONE |
+| #   | Sub-faza                 | Ce s-a implementat                                                                                | Status |
+| --- | ------------------------ | ------------------------------------------------------------------------------------------------- | ------ |
+| 9A  | Performance & Robustness | Parallel source fetching, Error boundaries 5/5, Request size 10MB, Cache hit/miss, Data freshness | DONE   |
+| 9B  | Scoring & Intelligence   | Cash flow proxy, Anomaly feedback loop, Confidence scoring, Provider capacity awareness           | DONE   |
+| 9C  | Frontend UX Polish       | Pagination, API key masking, Mobile sidebar, ApiError+429, Error codes toast                      | DONE   |
+| 9D  | Reports & Export         | Watermark CONFIDENTIAL PDF+HTML, TOC DOCX (Word field), TOC PDF (page numbers)                    | DONE   |
+| 9E  | Monitoring & Batch       | Alert dedup 24h, Batch resume endpoint                                                            | DONE   |
 
 ---
 
 ## VIITOR (nice to have)
 
-| # | Actiune | Efort | Impact | ROI | Conditie |
-|---|---------|-------|--------|-----|----------|
-| V1 | Split NewAnalysis.tsx in sub-componente | MARE | LOW | 2 | Doar daca se adauga pasi |
-| V2 | Structured logging cu structlog | MARE | LOW | 2 | Doar cu monitoring extern |
-| V3 | tsconfig strict unused vars | MIC | LOW | 3 | Cosmetic |
-| V4 | CI/CD GitHub Actions | MARE | MEDIUM | 3 | Doar cu deployment automat |
-| V5 | Accessibility frontend (ARIA labels) | MARE | LOW | 2 | Nice-to-have |
-| V6 | Gunicorn multi-worker | MIC | LOW | 2 | Testeaza pe Windows |
-| V7 | git init + .gitignore complet | MIC | MEDIUM | 5 | Recomandat ASAP |
-| V8 | Dashboard real-time alerts panel | MEDIU | MEDIUM | 4 | Necesita frontend nou |
-| V9 | Sector Report UI complet | MEDIU | MEDIUM | 4 | Endpoint exista deja |
-| V10 | Email digest monitoring 1x/zi | MEDIU | MEDIUM | 3 | Gmail PENDING |
-| V11 | Dark/Light theme toggle | MIC | LOW | 2 | Nice-to-have |
-| V12 | I18n English | MARE | LOW | 2 | Single user roman |
+| #   | Actiune                                 | Efort | Impact | ROI | Conditie                   |
+| --- | --------------------------------------- | ----- | ------ | --- | -------------------------- |
+| V1  | Split NewAnalysis.tsx in sub-componente | MARE  | LOW    | 2   | Doar daca se adauga pasi   |
+| V2  | Structured logging cu structlog         | MARE  | LOW    | 2   | Doar cu monitoring extern  |
+| V3  | tsconfig strict unused vars             | MIC   | LOW    | 3   | Cosmetic                   |
+| V4  | CI/CD GitHub Actions                    | MARE  | MEDIUM | 3   | Doar cu deployment automat |
+| V5  | Accessibility frontend (ARIA labels)    | MARE  | LOW    | 2   | Nice-to-have               |
+| V6  | Gunicorn multi-worker                   | MIC   | LOW    | 2   | Testeaza pe Windows        |
+| V7  | git init + .gitignore complet           | MIC   | MEDIUM | 5   | Recomandat ASAP            |
+| V8  | Dashboard real-time alerts panel        | MEDIU | MEDIUM | 4   | Necesita frontend nou      |
+| V9  | Sector Report UI complet                | MEDIU | MEDIUM | 4   | Endpoint exista deja       |
+| V10 | Email digest monitoring 1x/zi           | MEDIU | MEDIUM | 3   | Gmail PENDING              |
+| V11 | Dark/Light theme toggle                 | MIC   | LOW    | 2   | Nice-to-have               |
+| V12 | I18n English                            | MARE  | LOW    | 2   | Single user roman          |
 
 ---
 
 ## API Keys — STATUS ACTUAL
 
-| API | Status | Testat Live |
-|-----|--------|-------------|
-| ANAF TVA v9 | ACTIV (fara cheie) | CIP INSPECTION S.R.L. — OK |
-| ANAF Bilant | ACTIV (fara cheie) | Bitdefender 1.029M CA — OK |
-| BNR Cursuri | ACTIV (fara cheie) | EUR=5.0959 — OK |
-| Gemini 2.5 Flash | ACTIV | Upgraded de la 2.0 — OK |
-| Groq (Llama 4 Scout) | ACTIV | Upgraded de la Llama 3.3 — OK |
-| Cerebras (Qwen 3 235B) | ACTIV | Genereaza text — OK |
-| Mistral (Small 3) | ACTIV | 1B tokeni/luna, romana excelenta — OK |
-| Tavily Search | ACTIV | Quota monitorizata — OK |
-| openapi.ro | ACTIV | Cheie configurata in .env — OK |
-| Claude Code CLI | ACTIV (local) | Disponibil cand Roland e prezent |
-| Playwright + Chromium | INSTALAT | Headless browser — OK |
-| python-pptx | INSTALAT | PowerPoint — OK |
-| Telegram | CONFIGURAT | Bot: ris_notif_bot — OK |
-| Gmail | PENDING | Necesita setup manual |
+| API                    | Status             | Testat Live                           |
+| ---------------------- | ------------------ | ------------------------------------- |
+| ANAF TVA v9            | ACTIV (fara cheie) | CIP INSPECTION S.R.L. — OK            |
+| ANAF Bilant            | ACTIV (fara cheie) | Bitdefender 1.029M CA — OK            |
+| BNR Cursuri            | ACTIV (fara cheie) | EUR=5.0959 — OK                       |
+| Gemini 2.5 Flash       | ACTIV              | Upgraded de la 2.0 — OK               |
+| Groq (Llama 4 Scout)   | ACTIV              | Upgraded de la Llama 3.3 — OK         |
+| Cerebras (Qwen 3 235B) | ACTIV              | Genereaza text — OK                   |
+| Mistral (Small 3)      | ACTIV              | 1B tokeni/luna, romana excelenta — OK |
+| Tavily Search          | ACTIV              | Quota monitorizata — OK               |
+| openapi.ro             | ACTIV              | Cheie configurata in .env — OK        |
+| Claude Code CLI        | ACTIV (local)      | Disponibil cand Roland e prezent      |
+| Playwright + Chromium  | INSTALAT           | Headless browser — OK                 |
+| python-pptx            | INSTALAT           | PowerPoint — OK                       |
+| Telegram               | CONFIGURAT         | Bot: ris_notif_bot — OK               |
+| Gmail                  | PENDING            | Necesita setup manual                 |
 
 **Fallback chain AI (5 nivele):** Claude CLI -> Groq (Llama 4 Scout) -> Mistral (Small 3) -> Gemini (2.5 Flash) -> Cerebras (Qwen 3 235B)
 
@@ -316,7 +367,9 @@ VIITOR (V1-V7) — nice to have, fara urgenta
 ## DE FACUT MANUAL DE ROLAND (OPTIONAL)
 
 ### 1. TELEGRAM BOT — Notificari pe telefon
+
 Deblocheaza: modulul Monitorizare automata (ADV1) + notificari la finalizare analiza.
+
 - **Timp:** 5 minute | **Cost:** Gratuit
 - Pas 1: Deschide Telegram pe telefon, cauta **@BotFather**
 - Pas 2: Trimite mesajul: `/newbot`
@@ -334,6 +387,7 @@ Deblocheaza: modulul Monitorizare automata (ADV1) + notificari la finalizare ana
   - Ar trebui sa primesti mesaj pe Telegram: "RIS - Test notificare Telegram OK"
 
 ### 2. GMAIL APP PASSWORD — Trimitere rapoarte pe email
+
 - **Timp:** 3 minute | **Cost:** Gratuit
 - Pas 1: Deschide https://myaccount.google.com/security
 - Pas 2: Activeaza **2-Step Verification** daca nu e activa
@@ -347,6 +401,7 @@ Deblocheaza: modulul Monitorizare automata (ADV1) + notificari la finalizare ana
   ```
 
 ### 3. CSV CU CUI-URI DE TEST (pentru Batch Analysis)
+
 - **Timp:** 2 minute
 - Pas 1: Deschide Notepad
 - Pas 2: Scrie cate un CUI per linie:
@@ -358,6 +413,7 @@ Deblocheaza: modulul Monitorizare automata (ADV1) + notificari la finalizare ana
 - Pas 3: Salveaza ca `test_cui.csv` pe Desktop
 
 ### 4. TEST ANALIZA MOSSLEIN (verificare fix-uri)
+
 - **Timp:** 10 minute
 - Pas 1: Porneste RIS (dublu-click START_RIS.vbs)
 - Pas 2: Deschide http://localhost:5173/new-analysis
