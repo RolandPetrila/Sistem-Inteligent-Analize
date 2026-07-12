@@ -111,7 +111,7 @@ class VerificationAgent(BaseAgent):
         verified["eurostat_sector"] = await self._fetch_eurostat_sector(caen_ctx, official)
 
         # --- Oportunitati de contracte: licitatii deschise pe sector (SICAP, Angle A) ---
-        verified["tender_opportunities"] = await self._fetch_tender_opportunities(caen_ctx, official)
+        verified["tender_opportunities"] = await self._fetch_tender_opportunities(caen_ctx, official, verified)
 
         # --- Matricea Relatii (ADV5) ---
         verified["relations"] = self._detect_relations(official)
@@ -815,18 +815,27 @@ class VerificationAgent(BaseAgent):
             logger.warning(f"[verification] Eurostat esuat: {e}")
             return {"available": False, "source": "Eurostat", "error": str(e)}
 
-    async def _fetch_tender_opportunities(self, caen_ctx: dict, official: dict) -> dict:
-        """Angle A: licitatii deschise pe sectorul firmei (mapare CAEN->CPV orientativa). Rezilient + timeout."""
+    async def _fetch_tender_opportunities(self, caen_ctx: dict, official: dict, verified: dict) -> dict:
+        """Angle A: licitatii deschise pe sectorul firmei. v2: matching pe CPV-uri REALE castigate
+        (din istoricul SEAP) + fallback mapare CAEN->CPV. Rezilient + timeout."""
         import asyncio
 
         try:
             caen_code = str(caen_ctx.get("caen_code") or "") if isinstance(caen_ctx, dict) else ""
             if not caen_code:
                 caen_code = str((official.get("anaf") or {}).get("cod_caen") or "")
-            if not caen_code:
-                return {"available": False, "reason": "CAEN necunoscut"}
+            # v2: CPV-uri reale castigate din istoricul SEAP deja colectat (verified["market"]["seap"])
+            won_cpv: list[str] = []
+            try:
+                seap = (verified.get("market") or {}).get("seap") or {}
+                seap_val = seap.get("value", seap) if isinstance(seap, dict) else {}
+                won_cpv = seap_val.get("won_cpv_codes") or []
+            except Exception:
+                won_cpv = []
+            if not caen_code and not won_cpv:
+                return {"available": False, "reason": "CAEN necunoscut si fara istoric CPV"}
             from backend.agents.tools.seap_client import search_open_tenders
-            return await asyncio.wait_for(search_open_tenders(caen_code), timeout=25)
+            return await asyncio.wait_for(search_open_tenders(caen_code, won_cpv_codes=won_cpv), timeout=25)
         except TimeoutError:
             logger.warning("[verification] Oportunitati SICAP: timeout")
             return {"available": False, "error": "timeout"}

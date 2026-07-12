@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 
 from backend.agents.tools.caen_cpv_map import caen_to_cpv_prefixes
-from backend.agents.tools.seap_client import search_open_tenders
+from backend.agents.tools.seap_client import _cpv_code8, get_contracts_won, search_open_tenders
 
 
 class TestCaenCpvMap:
@@ -31,6 +31,14 @@ def _mock_resp(items):
     return r
 
 
+class TestCpvCode8:
+    def test_extract(self):
+        assert _cpv_code8("09123000-7 - Gaze naturale (Rev.2)") == "09123000"
+        assert _cpv_code8("45210000-2") == "45210000"
+        assert _cpv_code8("") == ""
+        assert _cpv_code8("abc") == ""
+
+
 class TestSearchOpenTenders:
     async def test_filters_by_cpv_prefix(self):
         items = [
@@ -50,30 +58,55 @@ class TestSearchOpenTenders:
         assert r["available"] is True
         assert r["count"] == 1  # doar CPV 45 se potriveste; 72 (IT) e exclus pt sectorul constructii
         assert r["opportunities"][0]["cpv"] == "45210000-2"
-        assert r["opportunities"][0]["title"] == "Scoala noua"
+        assert r["basis"] == "caen_orientativ"
 
-    async def test_unknown_caen_no_call(self):
+    async def test_unknown_caen_no_history_no_call(self):
         with patch("backend.agents.tools.seap_client.get_client") as mc:
             r = await search_open_tenders("9999", use_cache=False)
         assert r["available"] is False
         mc.return_value.post.assert_not_called()
 
-    async def test_cache_hit_skips_fetch(self):
-        cached = {"available": True, "count": 5, "opportunities": []}
-        with patch("backend.services.cache_service.get", new_callable=AsyncMock, return_value=cached), \
+    async def test_raw_cache_skips_fetch(self):
+        raw = {"notices": [{"cpv": "45210000-2", "title": "Scoala", "authority": "X", "notice_no": "CN1"}]}
+        with patch("backend.services.cache_service.get", new_callable=AsyncMock, return_value=raw), \
                 patch("backend.agents.tools.seap_client.get_client") as mc:
-            r = await search_open_tenders("4120")
-        assert r == cached
-        mc.return_value.post.assert_not_called()
+            r = await search_open_tenders("4120")  # CAEN 4120 -> [45,71]
+        assert r["available"] is True and r["count"] == 1
+        mc.return_value.post.assert_not_called()  # fetch sarit (raw cache hit)
 
-    async def test_no_matches_returns_available_zero(self):
-        items = [{"cpvCodeAndName": "72000000-0 - IT", "contractTitle": "Soft",
-                  "contractingAuthorityNameAndFN": "X", "noticeNo": "CN9"}]
+    async def test_won_cpv_marks_precise_and_sorts_first(self):
+        raw = {"notices": [
+            {"cpv": "45450000-6", "title": "Finisaje", "authority": "Y", "notice_no": "CN2"},
+            {"cpv": "45210000-2", "title": "Cladire", "authority": "X", "notice_no": "CN1"},
+        ]}
+        with patch("backend.services.cache_service.get", new_callable=AsyncMock, return_value=raw):
+            r = await search_open_tenders("4120", won_cpv_codes=["45210000-7"])
+        assert r["basis"] == "istoric_real"
+        # clasa 4521 = competenta dovedita -> precise, afisat primul
+        assert r["opportunities"][0]["cpv"] == "45210000-2"
+        assert r["opportunities"][0]["precise"] is True
+        assert any(o["cpv"] == "45450000-6" and o["precise"] is False for o in r["opportunities"])
+
+    async def test_won_cpv_expands_beyond_caen(self):
+        # CAEN 6201 -> [72,48]; firma a castigat si CPV 79 (business) -> divizia 79 devine eligibila
+        raw = {"notices": [{"cpv": "79820000-8", "title": "Servicii", "authority": "X", "notice_no": "CN9"}]}
+        with patch("backend.services.cache_service.get", new_callable=AsyncMock, return_value=raw):
+            r_no = await search_open_tenders("6201")
+            r_yes = await search_open_tenders("6201", won_cpv_codes=["79000000-4"])
+        assert r_no["count"] == 0
+        assert r_yes["count"] == 1 and r_yes["basis"] == "istoric_real"
+
+    async def test_get_contracts_won_extracts_cpv(self):
+        ca_items = [{"contractTitle": "Gaze", "cpvCodeAndName": "09123000-7 - Gaze naturale",
+                     "ronContractValue": 1000, "contractingAuthorityName": "X"}]
+        da_items = [{"directAcquisitionName": "Birotica", "cpvCode": "30190000-7",
+                     "closingValue": 500, "contractingAuthorityName": "Y"}]
         with patch("backend.agents.tools.seap_client.get_client") as mc, \
                 patch("backend.services.cache_service.get", new_callable=AsyncMock, return_value=None), \
                 patch("backend.services.cache_service.set", new_callable=AsyncMock), \
                 patch("backend.agents.tools.seap_client.asyncio.sleep", new_callable=AsyncMock):
-            mc.return_value.post = AsyncMock(return_value=_mock_resp(items))
-            r = await search_open_tenders("4120", max_pages=1)  # CPV [45,71]; 72 nu se potriveste
-        assert r["available"] is True
-        assert r["count"] == 0
+            mc.return_value.post = AsyncMock(side_effect=[_mock_resp(ca_items), _mock_resp(da_items)])
+            r = await get_contracts_won("12345678")
+        assert "09123000" in r["won_cpv_codes"]
+        assert "30190000" in r["won_cpv_codes"]
+        assert r["contracts"][0]["cpv"] == "09123000"

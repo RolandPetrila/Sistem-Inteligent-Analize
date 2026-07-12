@@ -631,6 +631,7 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
     opp = verified_data.get("tender_opportunities", {})
     if isinstance(opp, dict) and opp.get("available") and opp.get("count"):
         items = [i for i in (opp.get("opportunities") or []) if isinstance(i, dict)][:15]
+        real_basis = opp.get("basis") == "istoric_real"
         rows = ""
         for it in items:
             title = _escape(str(it.get("title", ""))[:120]) or "(fara titlu)"
@@ -639,17 +640,22 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
             val = it.get("value")
             deadline = _escape(str(it.get("deadline", ""))[:10])
             val_s = f"{_escape(_fmt_num(val))} RON" if isinstance(val, (int, float)) else ""
-            rows += (f'<li style="color:#cbd5e1"><strong>{title}</strong>'
+            mark = '<span style="color:#22c55e" title="competenta dovedita">&#10004;</span> ' if it.get("precise") else ""
+            rows += (f'<li style="color:#cbd5e1">{mark}<strong>{title}</strong>'
                      f'{f" &mdash; {auth}" if auth else ""}'
                      f'{f" <span style=\"color:#94a3b8\">[CPV {cpv}]</span>" if cpv else ""}'
                      f'{f" &middot; {val_s}" if val_s else ""}'
                      f'{f" &middot; termen {deadline}" if deadline else ""}</li>')
+        subtitle = "pe baza contractelor castigate + sector" if real_basis else "pe sectorul firmei (orientativ)"
+        footer = ("Pe baza CPV-urilor reale castigate de firma + sector. &#10004; = competenta dovedita. Sursa: SICAP."
+                  if real_basis else
+                  "Orientativ — mapare CAEN&rarr;CPV la nivel de diviziune. Sursa: SICAP (e-licitatie.ro).")
         out.append(f'''
     <section id="oportunitati" class="report-section">
         <h2>Oportunitati de Contracte (SICAP)</h2>
-        <p style="color:#94a3b8;font-size:.9em">{opp.get("count", 0)} licitatii deschise pe sectorul firmei (ultimele {opp.get("days_back", 30)} zile)</p>
+        <p style="color:#94a3b8;font-size:.9em">{opp.get("count", 0)} licitatii deschise {subtitle} (ultimele {opp.get("days_back", 30)} zile)</p>
         <ul class="list-disc ml-6">{rows}</ul>
-        <p style="color:#64748b;font-size:.8em;margin-top:6px">Orientativ — filtrare pe mapare CAEN&rarr;CPV la nivel de diviziune. Sursa: SICAP (e-licitatie.ro).</p>
+        <p style="color:#64748b;font-size:.8em;margin-top:6px">{footer}</p>
     </section>''')
         nav += '<a href="#oportunitati" class="nav-link">Oportunitati</a>\n'
 

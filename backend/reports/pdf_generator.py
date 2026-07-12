@@ -434,7 +434,9 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
 
         if opp_ok:
             _add_section_header(pdf, "Oportunitati de Contracte (SICAP)")
-            pdf.multi_cell(0, 6, _sanitize(f"{opp.get('count', 0)} licitatii deschise pe sector (ultimele {opp.get('days_back', 30)} zile)"), new_x="LMARGIN", new_y="NEXT")
+            opp_real = opp.get("basis") == "istoric_real"
+            _basis_txt = "pe baza contractelor castigate + sector" if opp_real else "pe sector (orientativ)"
+            pdf.multi_cell(0, 6, _sanitize(f"{opp.get('count', 0)} licitatii deschise {_basis_txt} (ultimele {opp.get('days_back', 30)} zile)"), new_x="LMARGIN", new_y="NEXT")
             for it in [i for i in (opp.get("opportunities") or []) if isinstance(i, dict)][:15]:
                 title = str(it.get("title", "") or "(fara titlu)")[:90]
                 auth = str(it.get("authority", ""))
@@ -444,10 +446,13 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
                 val_s = f" {_fmt_pdf_num(val)} RON" if isinstance(val, (int, float)) else ""
                 extra = f" [CPV {cpv}]" if cpv else ""
                 extra += f" (termen {deadline})" if deadline else ""
-                pdf.multi_cell(0, 5.5, _sanitize(f"  * {title} - {auth}{extra}{val_s}"[:200]), new_x="LMARGIN", new_y="NEXT")
+                bullet = "  [+] " if it.get("precise") else "  * "
+                pdf.multi_cell(0, 5.5, _sanitize(f"{bullet}{title} - {auth}{extra}{val_s}"[:200]), new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("Helvetica", "", 8)
             pdf.set_text_color(120, 120, 120)
-            pdf.multi_cell(0, 5, _sanitize("Orientativ - mapare CAEN->CPV la nivel de diviziune. Sursa: SICAP."), new_x="LMARGIN", new_y="NEXT")
+            _note = ("Pe baza CPV reale castigate + sector. [+] = competenta dovedita. Sursa: SICAP."
+                     if opp_real else "Orientativ - mapare CAEN->CPV la nivel de diviziune. Sursa: SICAP.")
+            pdf.multi_cell(0, 5, _sanitize(_note), new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("Helvetica", "", 10)
             pdf.set_text_color(40, 40, 40)
             pdf.ln(3)

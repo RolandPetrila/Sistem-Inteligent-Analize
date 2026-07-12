@@ -231,8 +231,10 @@ def _add_rich_fields_docx(doc, verified_data: dict):
     opp = verified_data.get("tender_opportunities", {})
     if isinstance(opp, dict) and opp.get("available") and opp.get("count"):
         doc.add_heading("Oportunitati de Contracte (SICAP)", level=1)
+        opp_real = opp.get("basis") == "istoric_real"
+        _basis_txt = "pe baza contractelor castigate + sector" if opp_real else "pe sector (orientativ)"
         doc.add_paragraph(
-            f"{opp.get('count', 0)} licitatii deschise pe sector "
+            f"{opp.get('count', 0)} licitatii deschise {_basis_txt} "
             f"(ultimele {opp.get('days_back', 30)} zile)"
         )
         for it in [i for i in (opp.get("opportunities") or []) if isinstance(i, dict)][:15]:
@@ -244,8 +246,12 @@ def _add_rich_fields_docx(doc, verified_data: dict):
             val_s = f" - {_fmt_docx_num(val)} RON" if isinstance(val, (int, float)) else ""
             extra = f" [CPV {cpv}]" if cpv else ""
             extra += f" (termen {deadline})" if deadline else ""
-            doc.add_paragraph(f"{title} - {auth}{extra}{val_s}", style="List Bullet")
-        doc.add_paragraph("Orientativ - mapare CAEN->CPV la nivel de diviziune. Sursa: SICAP.")
+            mark = "[+] " if it.get("precise") else ""
+            doc.add_paragraph(f"{mark}{title} - {auth}{extra}{val_s}", style="List Bullet")
+        doc.add_paragraph(
+            "Pe baza CPV reale castigate + sector. [+] = competenta dovedita. Sursa: SICAP."
+            if opp_real else "Orientativ - mapare CAEN->CPV la nivel de diviziune. Sursa: SICAP."
+        )
 
     funding = verified_data.get("funding_programs", {})
     if isinstance(funding, dict) and funding.get("eligible"):
