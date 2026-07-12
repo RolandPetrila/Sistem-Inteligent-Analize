@@ -135,6 +135,11 @@ SECTION_PROMPTS = {
             "IMPORTANT: Mentioneaza EXPLICIT limitarea sursei de date (camp pool_note) — "
             "cautarea acopera DOAR firme deja analizate in RIS, NU un registru national "
             "complet. NU INVENTA firme, CUI-uri sau date care nu apar in lead_candidates.\n"
+            "CRITIC — fiecare firma din lista are propriul CUI DISTINCT (campul \"cui\" al "
+            "OBIECTULUI ei, nu al altei firme): NU refolosi CUI-ul unei firme pentru alta, "
+            "NU refolosi CUI-ul firmei solicitante (din afara acestei liste) pentru firmele "
+            "candidate. Copiaza EXACT valorile cui/caen_code/county din fiecare obiect — "
+            "daca un camp lipseste in date, scrie [INDISPONIBIL], NU lasa gol si NU ghici.\n"
             "Daca lista e goala sau scurta, spune asta clar si sugereaza extinderea criteriilor "
             "de cautare sau analiza de firme noi pentru a creste baza de date.\n\n"
             "EXEMPLU FRAGMENT (adapteaza la datele reale):\n"
@@ -228,7 +233,10 @@ SECTION_PROVIDER_PREFERENCE = {
     "risk_assessment": "quality",
     "competition": "fast",
     "opportunities": "fast",
-    "lead_candidates": "fast",
+    # "quality" (nu "fast"): transcrierea a N firme distincte (CUI/CAEN/scor per firma) e o
+    # sarcina sensibila la halucinatie pt modele mici/rapide -- verificat live: pe "fast"
+    # (Groq initial) modelul a reutilizat CUI-ul firmei solicitante pt alte firme candidate.
+    "lead_candidates": "quality",
     "swot": "fast",
     "recommendations": "quality",
 }
