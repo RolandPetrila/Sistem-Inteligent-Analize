@@ -287,6 +287,13 @@ Reguli:
         # 10F M4.4: Prompt Injection Hardening — sanitize data before prompt construction
         verified_data = self._sanitize_data_for_prompt(verified_data)
 
+        if section["key"] == "lead_candidates":
+            # Trimite DOAR lead_candidates la AI, nu tot verified_data — altfel profilul
+            # firmei SOLICITANTE (company/financial/risk_score, complet irelevant aici)
+            # ajunge in acelasi JSON ca firmele candidate si AI-ul le amesteca (CUI
+            # reutilizat intre firme diferite — bug real, reprodus si reparat live).
+            verified_data = {"lead_candidates": verified_data.get("lead_candidates", {})}
+
         # Context awareness injection (8C) — structured summary
         context_summary = self._build_context_summary(section["key"], verified_data)
 
@@ -930,6 +937,14 @@ Reguli:
 
     def _build_context_summary(self, section_key: str, data: dict) -> str:
         """8C: Genereaza un rezumat structurat al datelor relevante per sectiune."""
+        if section_key == "lead_candidates":
+            # NU injecta header-ul generic "Firma: X (CUI: Y)" mai jos — acela e profilul
+            # firmei SOLICITANTE (companie ce cauta clienti), complet irelevant si activ
+            # confuz pt aceasta sectiune (AI-ul amesteca CUI-ul solicitantului cu al
+            # candidatilor cand ambele apar in acelasi prompt). Verificat live: bug real,
+            # reprodus de 2 ori inainte de acest fix.
+            return self._build_lead_candidates_summary(data.get("lead_candidates", {}))
+
         lines = []
         company = data.get("company", {})
         financial = data.get("financial", {})
@@ -981,6 +996,31 @@ Reguli:
                 lines.append(f"Contracte SEAP: {seap.get('total_contracts', 0)}")
 
         return "\n".join(lines) if lines else "Fara context suplimentar disponibil."
+
+    def _build_lead_candidates_summary(self, leads: dict) -> str:
+        """Rezumat explicit per firma candidata — fiecare cu CUI-ul ei propriu, etichetat
+        clar, ca sa nu se amestece intre ele (vezi _build_context_summary)."""
+        if not isinstance(leads, dict) or not leads.get("candidates"):
+            return "Nicio firma candidata gasita in sursele disponibile."
+
+        criteria = leads.get("criteria_used", {})
+        lines = [
+            f"Criterii cautare: judet={criteria.get('judet') or 'oricare'}, "
+            f"cuvinte cheie={criteria.get('keywords') or 'niciunul'}",
+            f"Prioritate: {leads.get('priority') or 'niciuna'}",
+            f"Numar firme gasite: {leads.get('count', 0)}",
+            f"Nota sursa: {leads.get('pool_note', '')}",
+            "",
+            "Firme candidate (fiecare CUI apartine STRICT firmei mentionate pe acelasi rand):",
+        ]
+        for c in leads.get("candidates", []):
+            reason = f" — {c.get('match_reason')}" if c.get("match_reason") else ""
+            lines.append(
+                f"- {c.get('name', 'N/A')} | CUI={c.get('cui', 'N/A')} | "
+                f"CAEN={c.get('caen_code', 'N/A')} ({c.get('caen_description', 'N/A')}) | "
+                f"Judet={c.get('county', 'N/A')} | Scor={c.get('risk_score', 'N/A')}{reason}"
+            )
+        return "\n".join(lines)
 
 
 synthesis_agent = SynthesisAgent()
