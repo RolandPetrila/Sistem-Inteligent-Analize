@@ -258,6 +258,13 @@ async def trigger_update():
     return await updater.perform_update(reason="manual")
 
 
+@app.post("/api/restart")
+async def trigger_restart():
+    """Restart serviciu (self-exit -> WinSW onfailure). Admin / testare mecanism restart."""
+    from backend.services import updater
+    return updater.restart_service()
+
+
 @app.get("/metrics", include_in_schema=False)
 async def prometheus_metrics():
     """G7: Prometheus-compatible metrics endpoint. Util pentru Grafana Cloud / local monitoring."""

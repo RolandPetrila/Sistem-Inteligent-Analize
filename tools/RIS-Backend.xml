@@ -22,8 +22,8 @@
   <outfile>C:\Proiecte\Sistem_Inteligent_Analize\logs\ris_service_stdout.log</outfile>
   <errfile>C:\Proiecte\Sistem_Inteligent_Analize\logs\ris_service_stderr.log</errfile>
 
-  <onfailure action="restart" delay="3 sec"/>
-  <onfailure action="restart" delay="10 sec"/>
-  <onfailure action="none"/>
-  <resetfailure>1 hour</resetfailure>
+  <!-- Auto-restart MEREU la iesire cu cod != 0 (updater.py face self-exit pt restart post-update).
+       O singura actiune 'restart' => WinSW o repeta la fiecare failure; resetfailure scurt. -->
+  <onfailure action="restart" delay="5 sec"/>
+  <resetfailure>2 min</resetfailure>
 </service>

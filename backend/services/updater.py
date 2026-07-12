@@ -145,26 +145,32 @@ def _perform_update_sync(reason: str) -> dict:
                        capture_output=True, text=True, timeout=600)  # restaureaza dist vechi
         return {"ok": False, "error": "build esuat - rollback aplicat, versiunea veche pastrata"}
 
-    logger.info(f"[updater] build OK. Restart serviciu (detasat) pentru {post_sha[:8]}")
-    _spawn_detached_restart()
+    logger.info(f"[updater] build OK. Self-exit pentru restart {pre_sha[:8]} -> {post_sha[:8]}")
+    _trigger_restart()
     return {"ok": True, "changed": True, "from": pre_sha[:8], "to": post_sha[:8], "note": "restart in curs"}
 
 
-def _spawn_detached_restart() -> None:
-    """Proces DETASAT care repornaste serviciul dupa o scurta pauza (supravietuieste stop-ului WinSW)."""
+def _trigger_restart() -> None:
+    """Method B: procesul se AUTO-INCHIDE (cod != 0) dupa o scurta pauza -> WinSW (onfailure=restart)
+    il reporneste. Un proces se poate opri singur (fara permisiuni externe); WinSW e crash-recovery-ul
+    deja configurat + verificat. Mai fiabil ca un proces detasat care poate fi ucis la stop-ul serviciului."""
     if sys.platform != "win32":
-        logger.warning("[updater] restart automat suportat doar pe Windows")
+        logger.warning("[updater] restart automat suportat doar pe Windows (self-exit)")
         return
-    if not WINSW_EXE.exists():
-        logger.error(f"[updater] WinSW lipsa: {WINSW_EXE} — restart manual necesar")
-        return
-    breakaway = getattr(subprocess, "CREATE_BREAKAWAY_FROM_JOB", 0x01000000)
-    flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP | breakaway
-    cmd = f'timeout /t 4 /nobreak >nul & "{WINSW_EXE}" restart'
-    try:
-        subprocess.Popen(
-            ["cmd", "/c", cmd], creationflags=flags, close_fds=True,
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
-    except Exception as e:
-        logger.error(f"[updater] spawn restart esuat: {e}")
+
+    import os
+    import threading
+
+    def _exit_soon():
+        time.sleep(3)  # lasa raspunsul HTTP curent sa se trimita inainte de exit
+        logger.info("[updater] self-exit(1) pentru restart — WinSW onfailure preia")
+        os._exit(1)
+
+    threading.Thread(target=_exit_soon, daemon=True).start()
+
+
+def restart_service() -> dict:
+    """Restart manual/admin al serviciului (self-exit -> WinSW). Util pt buton admin + testare."""
+    logger.info("[updater] restart_service cerut")
+    _trigger_restart()
+    return {"ok": True, "note": "restart in curs (self-exit -> WinSW onfailure)"}
