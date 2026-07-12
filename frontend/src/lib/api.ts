@@ -756,6 +756,19 @@ export const api = {
       }),
     }),
 
+  // Versiune care ruleaza + stare auto-update ('Vercel local')
+  getVersion: () =>
+    request<{
+      version: string;
+      running: { sha: string; date: string; branch: string; build: string };
+      local?: string | null;
+      remote?: string | null;
+      update_available?: boolean;
+      behind?: number;
+      last_check?: string | null;
+      updating?: boolean;
+    }>("/version"),
+
   // Monitoring audit-log for an alert
   getMonitoringAuditLog: (alertId: string) =>
     request<{

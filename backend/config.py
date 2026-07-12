@@ -118,6 +118,10 @@ class Settings(BaseSettings):
     pdf_watermark: str = "CONFIDENTIAL"  # PDF_WATERMARK in .env
     pdf_watermark_enabled: bool = True   # PDF_WATERMARK_ENABLED in .env (false = fara watermark)
 
+    # Auto-update local (updater.py) — verifica git remote periodic + pull/build/restart automat
+    auto_update_enabled: bool = True     # AUTO_UPDATE_ENABLED in .env (false = dezactiveaza)
+    auto_update_interval_min: int = 10   # AUTO_UPDATE_INTERVAL_MIN in .env
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

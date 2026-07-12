@@ -15,6 +15,9 @@ data/.secret_key
 # Sanctions lists local cache (auto-refetched 24h, ~8MB — never commit)
 data/sanctions_cache.json
 
+# Claude Code local settings (local overrides per-user — nu se partajeaza)
+.claude/settings.local.json
+
 # Generated reports
 outputs/
 

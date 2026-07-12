@@ -235,10 +235,27 @@ async def get_frontend_log(lines: int = 200):
 
 # --- Health / Stats / Metrics ---
 
+APP_VERSION = "3.2.0"  # versiune semantica — SURSA UNICA (build-ul git vine din updater)
+
+
 @app.get("/api/health")
 async def health_check():
     """Health check simplu — raspuns rapid."""
-    return {"status": "ok", "service": "RIS", "version": "3.2.0"}
+    return {"status": "ok", "service": "RIS", "version": APP_VERSION}
+
+
+@app.get("/api/version")
+async def get_version():
+    """Versiunea care ruleaza (git build) + daca exista update disponibil ('Vercel local')."""
+    from backend.services import updater
+    return {"version": APP_VERSION, "running": updater.get_running_version(), **updater.get_state()}
+
+
+@app.post("/api/update")
+async def trigger_update():
+    """Declanseaza MANUAL update (pull+build+restart). Auto ruleaza si prin scheduler."""
+    from backend.services import updater
+    return await updater.perform_update(reason="manual")
 
 
 @app.get("/metrics", include_in_schema=False)
@@ -255,7 +272,7 @@ async def prometheus_metrics():
 
         registry = CollectorRegistry()
         info = Gauge("ris_info", "RIS application info", ["version"], registry=registry)
-        info.labels(version="3.2.0").set(1)
+        info.labels(version=APP_VERSION).set(1)
 
         try:
             stats_row = await db.fetch_one("SELECT COUNT(*) as c FROM jobs")
@@ -287,7 +304,7 @@ async def get_cache_stats():
 async def health_check_deep():
     """Health check avansat — verifica DB, APIs, quota, disk."""
     import shutil
-    checks: dict = {"service": "RIS", "version": "3.1.0"}
+    checks: dict = {"service": "RIS", "version": APP_VERSION}
 
     try:
         await db.execute("SELECT 1")

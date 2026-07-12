@@ -18,6 +18,7 @@ CACHE_CLEANUP_INTERVAL = 12 * 3600  # 12 ore
 AUTO_REANALYZE_INTERVAL = 6 * 3600  # 6 ore (verifica ce firme trebuie re-analizate)
 LOG_CLEANUP_INTERVAL = 24 * 3600    # 24 ore (curata log-uri rotite > 7 zile)
 SANCTIONS_REFRESH_INTERVAL = 24 * 3600  # 24 ore (pre-incarca listele OFAC/UE/ONU)
+AUTO_UPDATE_INTERVAL = max(300, settings.auto_update_interval_min * 60)  # git remote check + pull/build/restart
 
 _running = True
 
@@ -69,7 +70,11 @@ async def start_scheduler() -> asyncio.Task:
     global _running, _task
     _running = True
     _task = asyncio.create_task(_scheduler_loop())
-    logger.info("[scheduler] Started — monitoring 6h, backup 24h, cache cleanup 12h, auto-reanalyze 6h, log cleanup 24h, sanctions refresh 24h")
+    logger.info(
+        f"[scheduler] Started — monitoring 6h, backup 24h, cache cleanup 12h, auto-reanalyze 6h, "
+        f"log cleanup 24h, sanctions refresh 24h, auto-update {'ON' if settings.auto_update_enabled else 'OFF'} "
+        f"({AUTO_UPDATE_INTERVAL // 60}min)"
+    )
     return _task
 
 
@@ -94,6 +99,7 @@ async def _scheduler_loop():
     last_auto_reanalyze = await _get_checkpoint("auto_reanalyze")
     last_log_cleanup = await _get_checkpoint("log_cleanup")
     last_sanctions = await _get_checkpoint("sanctions_refresh")
+    last_auto_update = await _get_checkpoint("auto_update")
 
     # Asteapta 30s dupa startup (sa fie totul initializat)
     await asyncio.sleep(30)
@@ -136,6 +142,12 @@ async def _scheduler_loop():
             await _run_sanctions_refresh_safe()
             last_sanctions = now
             await _save_checkpoint("sanctions_refresh")
+
+        # Auto-update ('Vercel local'): verifica git remote + pull/build/restart daca e activat
+        if settings.auto_update_enabled and now - last_auto_update >= AUTO_UPDATE_INTERVAL:
+            await _run_auto_update_safe()
+            last_auto_update = now
+            await _save_checkpoint("auto_update")
 
         # Sleep 60s intre verificari
         await asyncio.sleep(60)
@@ -181,6 +193,21 @@ async def _run_sanctions_refresh_safe():
         logger.info(f"[scheduler] Sanctions refresh: {meta.get('total', 0)} intrari din {meta.get('sources', [])}")
     except Exception as e:
         logger.error(f"[scheduler] Sanctions refresh error: {e}")
+
+
+async def _run_auto_update_safe():
+    """Auto-update local ('Vercel local'): git remote check; daca sunt commit-uri noi -> pull+build+restart."""
+    try:
+        from backend.services import updater
+        state = await updater.check_remote()
+        if state.get("update_available"):
+            logger.info(f"[scheduler] Auto-update: {state.get('behind')} commit-uri noi -> pull+build+restart")
+            res = await updater.perform_update(reason="scheduler")
+            logger.info(f"[scheduler] Auto-update rezultat: {res}")
+        else:
+            logger.debug("[scheduler] Auto-update: la zi")
+    except Exception as e:
+        logger.error(f"[scheduler] Auto-update error: {e}")
 
 
 async def _auto_reanalyze_job():

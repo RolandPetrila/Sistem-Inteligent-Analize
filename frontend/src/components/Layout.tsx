@@ -29,6 +29,7 @@ import {
   Zap,
   PieChart,
   ScanLine,
+  RefreshCw,
 } from "lucide-react";
 import clsx from "clsx";
 import GlobalSearch from "./GlobalSearch";
@@ -127,6 +128,54 @@ const SEVERITY_COLOR: Record<string, string> = {
   success: "text-green-400",
   info: "text-blue-400",
 };
+
+function VersionBadge() {
+  const [info, setInfo] = useState<Awaited<
+    ReturnType<typeof api.getVersion>
+  > | null>(null);
+
+  useEffect(() => {
+    const fetchV = () =>
+      api
+        .getVersion()
+        .then(setInfo)
+        .catch(() => {});
+    fetchV();
+    const id = setInterval(fetchV, 120_000); // poll la 2 min
+    return () => clearInterval(id);
+  }, []);
+
+  if (!info) return null;
+  const build = info.running?.build ?? info.version;
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span
+        className="text-gray-500 font-mono"
+        title={`RIS v${info.version} · build ${build}${info.running?.branch ? ` (${info.running.branch})` : ""}`}
+      >
+        v{info.version}
+      </span>
+      {info.updating ? (
+        <span className="px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/25 flex items-center gap-1">
+          <RefreshCw className="w-3 h-3 animate-spin" /> Se actualizeaza…
+        </span>
+      ) : info.update_available ? (
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          title="Actualizare disponibila — updater-ul o aplica automat; da refresh dupa"
+          className="px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 hover:bg-yellow-500/30 transition-colors flex items-center gap-1"
+        >
+          <RefreshCw className="w-3 h-3" /> Actualizare disponibila
+        </button>
+      ) : (
+        <span className="px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/25">
+          la zi
+        </span>
+      )}
+    </div>
+  );
+}
 
 function NotificationBell() {
   const navigate = useNavigate();
@@ -431,7 +480,8 @@ export default function Layout() {
           <NotificationBell />
         </div>
         {/* Desktop Top Bar */}
-        <div className="hidden md:flex sticky top-0 z-30 bg-dark-surface/80 backdrop-blur-sm border-b border-dark-border px-6 py-2 items-center justify-end">
+        <div className="hidden md:flex sticky top-0 z-30 bg-dark-surface/80 backdrop-blur-sm border-b border-dark-border px-6 py-2 items-center justify-between">
+          <VersionBadge />
           <NotificationBell />
         </div>
         <div className="p-6 max-w-7xl mx-auto">
