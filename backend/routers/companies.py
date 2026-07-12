@@ -143,7 +143,7 @@ async def import_companies_csv(file: UploadFile = File(...)):
             skipped += 1
             continue
         await db.execute(
-            "INSERT OR IGNORE INTO companies(id, cui, name, created_at, updated_at) "
+            "INSERT OR IGNORE INTO companies(id, cui, name, first_analyzed_at, last_analyzed_at) "
             "VALUES (?,?,?,datetime('now'),datetime('now'))",
             (_uuid.uuid4().hex, cui, name or f"Firma {cui}")
         )
@@ -704,37 +704,49 @@ async def chat_with_company(company_id: str, req: ChatRequest):
     company_name = company["name"]
     context_parts = []
 
-    # Sectiunile narative din raport
-    for section_key, section_data in (full_data.get("report_sections") or {}).items():
-        if isinstance(section_data, dict) and section_data.get("content"):
-            title = section_data.get("title", section_key)
-            content = section_data["content"][:800]
-            context_parts.append(f"## {title}\n{content}")
-
-    # Date cheie verificate
-    verified = full_data.get("verified_data") or {}
-    risk_score = verified.get("risk_score", {})
+    # Date cheie verificate — DESPRE {company_name} insasi. Puse PRIMELE si distinct
+    # marcate, ca sa nu se amestece cu alte firme mentionate in sectiunile narative
+    # de mai jos (ex: candidati/concurenti la LEAD_GENERATION/COMPETITION_ANALYSIS,
+    # care au propriile scoruri — gasit ca bug real: chat-ul confunda scorul FIRMEI
+    # analizate cu scorul unui candidat mentionat in raport).
+    #
+    # BUG REAL gasit + reparat 2026-07-13: campurile astea sunt la nivelul de sus al
+    # full_data (risk_score/financial/early_warnings), NU sub o cheie "verified_data"
+    # (care nu exista niciodata in structura reala — vezi agent_verification.py, care
+    # scrie direct in `verified` si asta devine full_data). Acest bloc a fost deci
+    # complet mort de la scriere — intotdeauna gol, in orice conversatie de chat.
+    risk_score = full_data.get("risk_score") or {}
     if risk_score:
         context_parts.append(
-            f"## Scor Risc\n"
-            f"Scor: {risk_score.get('score', 'N/A')}/100 | "
-            f"Culoare: {risk_score.get('color', 'N/A')} | "
-            f"Factori: {', '.join(str(f[0]) for f in (risk_score.get('risk_factors') or [])[:3])}"
+            f"## Scorul de risc AL FIRMEI {company_name} (subiectul acestei conversatii)\n"
+            f"Scor: {risk_score.get('numeric_score', 'N/A')}/100 | "
+            f"Nivel: {risk_score.get('score', 'N/A')} | "
+            f"Recomandare: {risk_score.get('recommendation', '')} | "
+            f"Factori: {', '.join(str(f[0]) for f in (risk_score.get('factors') or [])[:3])}"
         )
 
-    early_warnings = verified.get("early_warnings") or []
+    early_warnings = full_data.get("early_warnings") or []
     if early_warnings:
         warnings_text = "; ".join(
             w.get("signal", "") for w in early_warnings[:3] if isinstance(w, dict)
         )
         if warnings_text:
-            context_parts.append(f"## Early Warnings\n{warnings_text}")
+            context_parts.append(f"## Early Warnings ({company_name})\n{warnings_text}")
 
-    financial = verified.get("financial") or {}
+    financial = full_data.get("financial") or {}
     ca = financial.get("cifra_afaceri", {})
     ca_val = ca.get("value") if isinstance(ca, dict) else None
     if ca_val:
-        context_parts.append(f"## Date Financiare Cheie\nCA: {ca_val:,.0f} RON")
+        context_parts.append(f"## Date Financiare Cheie ({company_name})\nCA: {ca_val:,.0f} RON")
+
+    # Sectiunile narative din raport — pot mentiona ALTE firme (candidati, concurenti)
+    # cu propriile lor scoruri/date. Marcate explicit ca fiind DESPRE raportul firmei
+    # {company_name}, nu neaparat CU date proprii ale ei in fiecare sectiune.
+    for section_key, section_data in (full_data.get("report_sections") or {}).items():
+        if isinstance(section_data, dict) and section_data.get("content"):
+            title = section_data.get("title", section_key)
+            content = section_data["content"][:800]
+            context_parts.append(f"## {title} (din raportul firmei {company_name})\n{content}")
 
     context_text = "\n\n".join(context_parts) or (
         f"Compania {company_name} (CUI: {company['cui']}) — date insuficiente in cache."
@@ -744,6 +756,10 @@ async def chat_with_company(company_id: str, req: ChatRequest):
 
     prompt = (
         f"Esti un analist de business intelligence care a analizat compania {company_name}.\n"
+        f"Firma analizata (subiectul intrebarii) este STRICT {company_name} — orice ALTA firma "
+        f"mentionata in sectiunile de mai jos (ex: candidati, concurenti, parteneri) este o firma "
+        f"DIFERITA, mentionata doar ca referinta in raport, NU firma analizata. Nu confunda "
+        f"scorurile/datele altor firme mentionate cu cele ale {company_name}.\n\n"
         f"Ai acces la urmatoarele date extrase din raportul generat:\n\n"
         f"{context_text}\n\n"
         f"---\n"

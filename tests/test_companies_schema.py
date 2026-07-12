@@ -51,5 +51,14 @@ async def test_companies_router_queries_resolve_against_real_schema(tmp_path):
             await db.fetch_all(
                 "SELECT id FROM companies WHERE risk_score = ?", (color,)
             )
+
+        # F: import_companies_csv's INSERT — found live 2026-07-13 referencing
+        # phantom columns created_at/updated_at (real ones: first_analyzed_at/
+        # last_analyzed_at), same schema-drift class as this file guards against.
+        await db.execute(
+            "INSERT OR IGNORE INTO companies(id, cui, name, first_analyzed_at, last_analyzed_at) "
+            "VALUES (?,?,?,datetime('now'),datetime('now'))",
+            ("t2", "999", "Import Test SRL"),
+        )
     finally:
         await db._db.close()
