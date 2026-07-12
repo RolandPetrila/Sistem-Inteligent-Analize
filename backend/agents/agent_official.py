@@ -5,6 +5,7 @@ Output: JSON structurat cu toate campurile + sursa + timestamp
 """
 
 import asyncio
+import re
 from datetime import UTC, date, datetime
 
 from loguru import logger
@@ -53,6 +54,16 @@ class OfficialAgent(BaseAgent):
     async def execute(self, state: AnalysisState) -> dict:
         params = state.get("input_params", {})
         cui = params.get("cui", "")
+        # MARKET_ENTRY_ANALYSIS + LEAD_GENERATION nu au camp dedicat "cui" in wizard —
+        # intrebarea lor e "company" (text liber, eticheta "CUI daca exista"). Fara acest
+        # fallback, "cui" era mereu gol pt aceste 2 tipuri -> 0 date oficiale colectate
+        # NICIODATA, indiferent ce scria userul (chiar daca includea un CUI real in text).
+        # Descoperit prin verificare E2E.
+        if not cui:
+            company_field = str(params.get("company", ""))
+            cui_match = re.search(r"\b(?:cui\s*)?(\d{6,10})\b", company_field, re.IGNORECASE)
+            if cui_match:
+                cui = cui_match.group(1)
         company_name = params.get("company_name", "")
         job_id = state.get("job_id", "")
 
