@@ -126,7 +126,9 @@ SECTION_PROMPTS = {
     "lead_candidates": {
         "title": "Firme Candidate (Leads)",
         "prompt": (
-            "Prezinta firmele candidate identificate in datele furnizate (camp lead_candidates).\n"
+            "Prezinta TOATE firmele candidate din camp lead_candidates.candidates ca lista "
+            "numerotata — nu doar 1-2 exemple, cate una pentru FIECARE firma din lista "
+            "(daca sunt multe, scurteaza detaliile per firma ca sa incapa toate in buget).\n"
             "Per firma: denumire, CUI, CAEN/descriere activitate, judet, scor risc, motivul "
             "potrivirii (match_reason, daca exista).\n"
             "Grupeaza dupa relevanta pentru profilul cautat (camp criteria_used).\n"
