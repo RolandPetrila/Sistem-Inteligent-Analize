@@ -106,10 +106,16 @@ async def run_official(state: AnalysisState) -> dict:
     """Ruleaza Agent 1 — Date Oficiale (with timing + 9A error boundary)."""
     t0 = time.time()
     await _ws_broadcast(state, {"type": "agent_start", "agent": "official"})
+    # HIGH #10 (audit 2026-07-13): agent_complete nu trimitea niciodata `status` ->
+    # frontend arata "finalizat (undefined)" (AnalysisProgress.tsx:103). Urmarim
+    # succesul explicit — broadcast-ul de mai jos ruleaza NECONDITIONAT (si pe error
+    # boundary), deci statusul trebuie sa reflecte ce s-a intamplat de fapt.
+    _status = "success"
     try:
         result = await official_agent.run(state)
     except Exception as e:
         # 9A: Error boundary — Agent 1 fail returns minimal data, pipeline continues
+        _status = "error"
         elapsed = time.time() - t0
         logger.error(f"[orchestrator] Agent 1 (Official) CRITICAL error boundary: {e} ({elapsed:.1f}s)")
         result = {
@@ -121,7 +127,7 @@ async def run_official(state: AnalysisState) -> dict:
     # Store timing — return only THIS agent's metric (reducer merges all)
     result["_agent_metrics"] = {"official": round(elapsed, 1)}
     logger.info(f"[orchestrator] Agent 1 (Official) completed in {elapsed:.1f}s")
-    await _ws_broadcast(state, {"type": "agent_complete", "agent": "official", "duration_ms": int(elapsed * 1000)})
+    await _ws_broadcast(state, {"type": "agent_complete", "agent": "official", "status": _status, "duration_ms": int(elapsed * 1000)})
     await _save_checkpoint(state.get("job_id", ""), "official", result)  # 10F M5.4
     return result
 
@@ -132,9 +138,13 @@ async def run_verification(state: AnalysisState) -> dict:
     job_id = state.get("job_id", "")
     log_agent_start(job_id, "verification")
     await _ws_broadcast(state, {"type": "agent_start", "agent": "verification"})
+    # HIGH #10: vezi nota din run_official — broadcast-ul de mai jos ruleaza
+    # neconditionat, statusul trebuie sa reflecte daca error boundary-ul a prins ceva.
+    _status = "success"
     try:
         result = await verification_agent.run(state)
     except Exception as e:
+        _status = "error"
         elapsed = time.time() - t0
         logger.error(f"[orchestrator] Agent 4 (Verification) error boundary: {e} ({elapsed:.1f}s)")
         log_agent_end(job_id, "verification", f"ERROR (boundary): {e}")
@@ -150,7 +160,7 @@ async def run_verification(state: AnalysisState) -> dict:
     log_agent_end(job_id, "verification",
         f"risk={risk.get('score', '?')}/100 | completeness={completeness.get('score', '?')}% | "
         f"gaps={completeness.get('gaps_count', '?')} | {elapsed:.1f}s")
-    await _ws_broadcast(state, {"type": "agent_complete", "agent": "verification", "duration_ms": int(elapsed * 1000)})
+    await _ws_broadcast(state, {"type": "agent_complete", "agent": "verification", "status": _status, "duration_ms": int(elapsed * 1000)})
     await _save_checkpoint(job_id, "verification", result)  # 10F M5.4
     return result
 
@@ -185,9 +195,13 @@ async def run_synthesis(state: AnalysisState) -> dict:
         state["verified_data"] = verified
 
     await _ws_broadcast(state, {"type": "agent_start", "agent": "synthesis"})
+    # HIGH #10: vezi nota din run_official — broadcast-ul de mai jos ruleaza
+    # neconditionat, statusul trebuie sa reflecte daca error boundary-ul a prins ceva.
+    _status = "success"
     try:
         result = await synthesis_agent.run(state)
     except Exception as e:
+        _status = "error"
         elapsed = time.time() - t0
         logger.error(f"[orchestrator] Agent 5 (Synthesis) error boundary: {e} ({elapsed:.1f}s)")
         log_agent_end(job_id, "synthesis", f"ERROR (boundary): {e}")
@@ -199,7 +213,7 @@ async def run_synthesis(state: AnalysisState) -> dict:
     elapsed = time.time() - t0
     result["_agent_metrics"] = {"synthesis": round(elapsed, 1)}
     log_agent_end(job_id, "synthesis", f"{len(sections)} sections | {elapsed:.1f}s")
-    await _ws_broadcast(state, {"type": "agent_complete", "agent": "synthesis", "duration_ms": int(elapsed * 1000)})
+    await _ws_broadcast(state, {"type": "agent_complete", "agent": "synthesis", "status": _status, "duration_ms": int(elapsed * 1000)})
     await _save_checkpoint(job_id, "synthesis", result)  # 10F M5.4
     return result
 
@@ -312,7 +326,15 @@ async def run_web(state: AnalysisState) -> dict:
             "current_step": f"Agent 2: {len(web_data)} categorii web gasite",
             "progress": 0.40,
         }
-        await _ws_broadcast(state, {"type": "agent_complete", "agent": "web", "duration_ms": int(elapsed * 1000)})
+        # HIGH #10: aceasta ramura ruleaza DOAR pe succes (broadcast-ul e in try,
+        # nu dupa try/except ca la official/verification/synthesis) — status e
+        # mereu "success" aici. NOTA (gasit adiacent, NU reparat acum — in afara
+        # scope-ului HIGH #10, care cerea doar adaugarea campului status):
+        # ramura except de mai jos NU trimite deloc agent_complete pe eroare —
+        # frontend-ul nu primeste niciun semnal de finalizare pt Agent 2 daca
+        # acesta pica (spre deosebire de official/verification/synthesis, care
+        # trimit agent_complete si pe eroare).
+        await _ws_broadcast(state, {"type": "agent_complete", "agent": "web", "status": "success", "duration_ms": int(elapsed * 1000)})
         await _save_checkpoint(job_id, "web", web_result)  # 10F M5.4
         return web_result
 
@@ -360,7 +382,9 @@ async def run_market(state: AnalysisState) -> dict:
             "current_step": f"Agent 3: {total} contracte SEAP gasite",
             "progress": 0.40,
         }
-        await _ws_broadcast(state, {"type": "agent_complete", "agent": "market", "duration_ms": int(elapsed * 1000)})
+        # HIGH #10: idem run_web — status mereu "success" aici (ramura except de
+        # mai jos nu trimite agent_complete deloc, nota separata, nu reparat acum).
+        await _ws_broadcast(state, {"type": "agent_complete", "agent": "market", "status": "success", "duration_ms": int(elapsed * 1000)})
         await _save_checkpoint(job_id, "market", market_result)  # 10F M5.4
         return market_result
     except Exception as e:
