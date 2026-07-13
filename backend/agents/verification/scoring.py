@@ -7,6 +7,7 @@ FIX #10: Sector-normalized volatility baseline.
 F9-2: Predictive models extracted to predictive_models.py (backwards compat re-export below).
 """
 import math
+from dataclasses import dataclass
 from datetime import date
 
 from loguru import logger
@@ -19,6 +20,33 @@ from backend.agents.verification.predictive_models import (
     calculate_piotroski_f,
     calculate_zmijewski_x,
 )
+
+
+@dataclass
+class JuridicFacts:
+    """Fapte expuse de _score_juridic, folosite mai jos in bucla de confidence."""
+    insolvency: dict
+    litigation: dict
+
+
+@dataclass
+class FiscalFacts:
+    """Fapte expuse de _score_fiscal, folosite mai jos in bucla de confidence."""
+    anaf_inactive: dict
+
+
+@dataclass
+class ReputationalFacts:
+    """Fapte expuse de _score_reputational, folosite mai jos in bucla de confidence."""
+    web: dict
+
+
+@dataclass
+class PiataFacts:
+    """Fapte expuse de _score_piata: `market` (bucla de confidence) si
+    `sector_position` (parte din contractul de retur al calculate_risk_score)."""
+    market: dict
+    sector_position: dict
 
 __all__ = [
     "calculate_risk_score",
@@ -155,6 +183,254 @@ def _calculate_financial_ratios(financial: dict) -> list[dict]:
         ratios.append({"name": "CA per Angajat", "value": prod, "unit": "RON", "interpretation": ""})
 
     return ratios
+
+
+def _score_juridic(risk_data: dict) -> tuple[dict, list[tuple[str, str]], JuridicFacts]:
+    """JURIDIC (20%): insolventa, litigii, dosare Portal Just, AEGRM, Monitorul Oficial."""
+    jur_score = 85
+    jur_reasons = []
+    risk_factors: list[tuple[str, str]] = []
+    insolvency = risk_data.get("insolvency", {})
+    litigation = risk_data.get("litigation", {})
+    if isinstance(insolvency, dict):
+        val = insolvency.get("value", {})
+        if isinstance(val, dict) and val.get("found"):
+            jur_score -= 60
+            jur_reasons.append({"text": "Mentiune insolventa gasita", "impact": -60})
+            risk_factors.append(("Mentiune insolventa gasita", "HIGH"))
+
+    # R7 E12: Penalizare insolventa BPI (buletinul.ro)
+    bpi_field = risk_data.get("bpi_insolventa", {})
+    bpi_val = bpi_field.get("value", bpi_field) if isinstance(bpi_field, dict) else {}
+    if isinstance(bpi_val, dict) and bpi_val.get("found"):
+        jur_score -= 40
+        bpi_status = bpi_val.get("status", "insolventa")
+        jur_reasons.append({"text": f"Procedura insolventa BPI activa ({bpi_status})", "impact": -40})
+        risk_factors.append((f"Firma in procedura insolventa BPI ({bpi_status})", "CRITICAL"))
+
+    # F1-1: Prioritate Portal Just SOAP (date reale) peste Tavily estimation
+    dosare_just = risk_data.get("dosare_just", {})
+    if isinstance(dosare_just, dict) and dosare_just.get("value"):
+        dval = dosare_just["value"] if isinstance(dosare_just.get("value"), dict) else {}
+        total_dosare = dval.get("total", 0)
+        parat = dval.get("parat", 0)
+        reclamant = dval.get("reclamant", 0)
+        if total_dosare > 10:
+            jur_score -= 25
+            jur_reasons.append({"text": f"Dosare judecatoresti: {total_dosare} (Portal Just SOAP)", "impact": -25})
+            risk_factors.append((f"Volum ridicat dosare judecatoresti ({total_dosare})", "MEDIUM"))
+        elif total_dosare > 5:
+            jur_score -= 15
+            jur_reasons.append({"text": f"Dosare judecatoresti: {total_dosare} (Portal Just)", "impact": -15})
+            risk_factors.append(("Dosare judecatoresti multiple", "LOW"))
+        elif total_dosare > 0:
+            # Predominant parat = mai rau
+            if parat > reclamant:
+                jur_score -= 10
+                jur_reasons.append({"text": f"Dosare judecatoresti: {total_dosare} (predominant parat)", "impact": -10})
+                risk_factors.append(("Firma predominant parata in dosare", "LOW"))
+            else:
+                jur_score -= 5
+                jur_reasons.append({"text": f"Dosare judecatoresti: {total_dosare}", "impact": -5})
+        else:
+            jur_score = min(100, jur_score + 5)
+            jur_reasons.append({"text": "Niciun dosar judecatoresc (Portal Just SOAP)", "impact": 5})
+    else:
+        # Fallback la Tavily estimation daca Portal Just nu e disponibil
+        if isinstance(litigation, dict):
+            val = litigation.get("value", {})
+            if isinstance(val, dict):
+                lit_count = val.get("count", 0)
+                if lit_count > 5:
+                    jur_score -= 30
+                    jur_reasons.append({"text": f"Numar ridicat de litigii ({lit_count})", "impact": -30})
+                    risk_factors.append(("Numar ridicat de litigii (5+)", "MEDIUM"))
+                elif lit_count > 3:
+                    jur_score -= 15
+                    jur_reasons.append({"text": f"Litigii multiple ({lit_count})", "impact": -15})
+                    risk_factors.append(("Litigii multiple gasite", "LOW"))
+                elif val.get("found"):
+                    jur_score -= 5
+                    jur_reasons.append({"text": "Litigii gasite (estimat Tavily)", "impact": -5})
+                    risk_factors.append(("Litigii gasite", "LOW"))
+                else:
+                    jur_reasons.append({"text": "Fara litigii identificate", "impact": 0})
+        else:
+            jur_reasons.append({"text": "Date juridice indisponibile", "impact": 0})
+
+    # A5: AEGRM garantii reale mobiliare — penalizare daca exista
+    aegrm = risk_data.get("aegrm_guarantees", {})
+    if isinstance(aegrm, dict) and aegrm.get("value", {}).get("has_guarantees"):
+        count = aegrm.get("value", {}).get("count", 0)
+        jur_score -= 5
+        jur_reasons.append({"text": f"Garantii reale mobiliare inregistrate ({count})", "impact": -5})
+        risk_factors.append((f"Garantii reale mobiliare ({count})", "LOW"))
+
+    # G2: Monitorul Oficial penalty (cesiuni, dizolvari, radieri)
+    mo_events = risk_data.get("monitorul_oficial")
+    if mo_events and isinstance(mo_events, dict):
+        mo_val = mo_events.get("value", [])
+        if isinstance(mo_val, list) and mo_val:
+            from backend.agents.tools.monitorul_oficial_client import score_penalty as _mo_penalty
+            mo_result = _mo_penalty(mo_val)
+            if mo_result["penalty"] > 0:
+                jur_score -= mo_result["penalty"]
+                for flag in mo_result["flags"]:
+                    jur_reasons.append({"text": flag, "impact": -mo_result["penalty"]})
+                    risk_factors.append((flag, "HIGH" if mo_result["penalty"] >= 15 else "MEDIUM"))
+
+    dim = {"score": max(0, min(100, jur_score)), "weight": 20, "reasons": jur_reasons}
+    return dim, risk_factors, JuridicFacts(insolvency=insolvency, litigation=litigation)
+
+
+def _score_fiscal(risk_data: dict, financial: dict) -> tuple[dict, list[tuple[str, str]], FiscalFacts]:
+    """FISCAL (15%): stare ANAF, TVA, split TVA, risc fiscal derivat."""
+    fisc_score = 90
+    fisc_reasons = []
+    risk_factors: list[tuple[str, str]] = []
+    anaf_inactive = risk_data.get("anaf_inactive", {})
+    if isinstance(anaf_inactive, dict) and anaf_inactive.get("value"):
+        fisc_score -= 50
+        fisc_reasons.append({"text": "Firma inactiva la ANAF", "impact": -50})
+        risk_factors.append(("Firma inactiva la ANAF", "HIGH"))
+
+    platitor = financial.get("platitor_tva", {})
+    if isinstance(platitor, dict):
+        if platitor.get("value") is False:
+            fisc_score -= 10
+            fisc_reasons.append({"text": "Neplatitor TVA", "impact": -10})
+            risk_factors.append(("Neplatitor TVA", "LOW"))
+        elif platitor.get("value") is True:
+            fisc_reasons.append({"text": "Platitor TVA activ", "impact": 0})
+
+    split_tva = financial.get("split_tva", {})
+    if isinstance(split_tva, dict) and split_tva.get("value"):
+        fisc_score -= 15
+        fisc_reasons.append({"text": "Split TVA activ", "impact": -15})
+        risk_factors.append(("Split TVA activ", "LOW"))
+
+    # R7 E12: Penalizare risc fiscal derivat
+    risc_fisc_field = risk_data.get("risc_fiscal", {})
+    risc_fisc_val = risc_fisc_field.get("value", risc_fisc_field) if isinstance(risc_fisc_field, dict) else {}
+    if isinstance(risc_fisc_val, dict) and risc_fisc_val.get("risc_fiscal"):
+        tip = risc_fisc_val.get("tip_risc", "nespecificat")
+        # Avoid double-counting inactiv (already penalized above)
+        if "inactiv" not in tip.lower():
+            fisc_score -= 15
+            fisc_reasons.append({"text": f"Risc fiscal: {tip}", "impact": -15})
+            risk_factors.append((f"Risc fiscal: {tip}", "HIGH"))
+
+    dim = {"score": max(0, min(100, fisc_score)), "weight": 15, "reasons": fisc_reasons}
+    return dim, risk_factors, FiscalFacts(anaf_inactive=anaf_inactive)
+
+
+def _score_reputational(web_presence: dict, maps_rating: dict) -> tuple[dict, ReputationalFacts]:
+    """REPUTATIONAL (10%): prezenta online (nuantat) + Google Maps rating."""
+    rep_score = 50
+    rep_reasons = []
+    web = web_presence
+    if isinstance(web, dict):
+        categories = len(web)
+        if categories >= 3:
+            rep_score = 80
+            rep_reasons.append({"text": f"Prezenta online extinsa ({categories} categorii)", "impact": 30})
+        elif categories >= 2:
+            rep_score = 70
+            rep_reasons.append({"text": f"Prezenta online buna ({categories} categorii)", "impact": 20})
+        elif categories >= 1:
+            rep_score = 60
+            rep_reasons.append({"text": "Prezenta online limitata (1 categorie)", "impact": 10})
+        else:
+            rep_reasons.append({"text": "Fara prezenta online detectata", "impact": 0})
+    elif web:
+        rep_score = 65
+        rep_reasons.append({"text": "Prezenta online detectata", "impact": 15})
+    else:
+        rep_reasons.append({"text": "Prezenta online indisponibila", "impact": 0})
+
+    # F5-2: Google Maps rating bonus/malus
+    maps_data = maps_rating
+    if maps_data.get("found"):
+        try:
+            from backend.agents.tools.maps_client import score_from_rating
+            maps_bonus = score_from_rating(maps_data)
+            if maps_bonus > 0:
+                rep_score = min(100, rep_score + maps_bonus)
+                rep_reasons.append({
+                    "text": f"Google Maps: {maps_data.get('rating')}/5 ({maps_data.get('reviews_count')} recenzii)",
+                    "impact": maps_bonus,
+                })
+            elif maps_bonus < 0:
+                rep_score = max(0, rep_score + maps_bonus)
+                rep_reasons.append({
+                    "text": f"Rating Google Maps slab: {maps_data.get('rating')}/5",
+                    "impact": maps_bonus,
+                })
+        except Exception as e:
+            logger.debug(f"[scoring] maps bonus calculation error: {e}")
+
+    dim = {"score": max(0, min(100, rep_score)), "weight": 10, "reasons": rep_reasons}
+    return dim, ReputationalFacts(web=web)
+
+
+def _score_piata(market: dict, benchmark: dict) -> tuple[dict, list[tuple[str, str]], PiataFacts]:
+    """PIATA (10%): date SEAP/contracte + benchmark sectorial (pozitionare percentila)."""
+    mkt_score = 50
+    mkt_reasons = []
+    risk_factors: list[tuple[str, str]] = []
+    if isinstance(market, dict) and market:
+        mkt_score = 70
+        mkt_reasons.append({"text": "Date de piata disponibile", "impact": 20})
+        # C4 fix: Unwrap _make_field wrapper to access actual SEAP data
+        seap = market.get("seap", {})
+        seap_val = seap.get("value", seap) if isinstance(seap, dict) else {}
+        if isinstance(seap_val, dict) and (seap_val.get("total_contracts", 0) or 0) > 0:
+            contracts = seap_val.get("total_contracts", 0)
+            mkt_score += 10
+            mkt_reasons.append({"text": f"Contracte SEAP active ({contracts})", "impact": 10})
+    else:
+        mkt_reasons.append({"text": "Date de piata indisponibile", "impact": 0})
+
+    # Benchmark comparison bonus (8B)
+    sector_position: dict = {}
+    if isinstance(benchmark, dict) and benchmark.get("available"):
+        comparisons = benchmark.get("comparisons", [])
+        above_avg = sum(1 for c in comparisons if isinstance(c, dict) and c.get("ratio", 0) > 1)
+        if above_avg >= 2:
+            mkt_score += 10
+            mkt_reasons.append({"text": f"Peste media sectorului pe {above_avg} indicatori", "impact": 10})
+        elif above_avg >= 1:
+            mkt_score += 5
+            mkt_reasons.append({"text": "Peste media sectorului pe 1 indicator", "impact": 5})
+        else:
+            mkt_reasons.append({"text": "Sub media sectorului pe toti indicatorii", "impact": 0})
+
+        # 10B M3.4: Sector Decile Positioning — estimate percentile from ratio vs sector avg
+        for comp in comparisons:
+            if isinstance(comp, dict) and comp.get("ratio"):
+                ratio = comp["ratio"]
+                metric = comp.get("metric", "unknown")
+                if ratio >= 2.0:
+                    percentile = "P90+"
+                elif ratio >= 1.5:
+                    percentile = "P75-P90"
+                elif ratio >= 0.8:
+                    percentile = "P50-P75"
+                elif ratio >= 0.5:
+                    percentile = "P25-P50"
+                else:
+                    percentile = "sub P25"
+                sector_position[metric] = {
+                    "ratio_vs_avg": round(ratio, 2),
+                    "estimated_percentile": percentile,
+                }
+        if sector_position:
+            _pos_text = ", ".join(f"{k}={v['estimated_percentile']}" for k, v in sector_position.items())
+            mkt_reasons.append({"text": f"Pozitie sector: {_pos_text}", "impact": 0})
+            risk_factors.append((f"Pozitie sector: {_pos_text}", "INFO"))
+
+    dim = {"score": max(0, min(100, mkt_score)), "weight": 10, "reasons": mkt_reasons}
+    return dim, risk_factors, PiataFacts(market=market, sector_position=sector_position)
 
 
 def calculate_risk_score(verified: dict, dynamic_thresholds: dict | None = None) -> dict:
@@ -457,141 +733,25 @@ def calculate_risk_score(verified: dict, dynamic_thresholds: dict | None = None)
     dimensions["financiar"] = {"score": max(0, min(100, fin_score)), "weight": 30, "reasons": fin_reasons}
 
     # --- JURIDIC (20%) ---
-    jur_score = 85
-    jur_reasons = []
-    insolvency = risk_data.get("insolvency", {})
     # BUG REAL gasit+reparat 2026-07-13: `litigation` era asignat DOAR in ramura
-    # "else" (Portal Just SOAP indisponibil) de mai jos, dar folosit neconditionat
-    # mai tarziu (calcul confidence). Cat timp Portal Just a fost mereu picat (pana
-    # azi), ramura "if" nu rula niciodata si bug-ul era latent — odata Portal Just
-    # reparat (vezi just_client.py), ramura noua a inceput sa ruleze si a scos la
-    # iveala UnboundLocalError ("cannot access local variable 'litigation'").
-    litigation = risk_data.get("litigation", {})
-    if isinstance(insolvency, dict):
-        val = insolvency.get("value", {})
-        if isinstance(val, dict) and val.get("found"):
-            jur_score -= 60
-            jur_reasons.append({"text": "Mentiune insolventa gasita", "impact": -60})
-            risk_factors.append(("Mentiune insolventa gasita", "HIGH"))
-
-    # R7 E12: Penalizare insolventa BPI (buletinul.ro)
-    bpi_field = risk_data.get("bpi_insolventa", {})
-    bpi_val = bpi_field.get("value", bpi_field) if isinstance(bpi_field, dict) else {}
-    if isinstance(bpi_val, dict) and bpi_val.get("found"):
-        jur_score -= 40
-        bpi_status = bpi_val.get("status", "insolventa")
-        jur_reasons.append({"text": f"Procedura insolventa BPI activa ({bpi_status})", "impact": -40})
-        risk_factors.append((f"Firma in procedura insolventa BPI ({bpi_status})", "CRITICAL"))
-
-    # F1-1: Prioritate Portal Just SOAP (date reale) peste Tavily estimation
-    dosare_just = risk_data.get("dosare_just", {})
-    if isinstance(dosare_just, dict) and dosare_just.get("value"):
-        dval = dosare_just["value"] if isinstance(dosare_just.get("value"), dict) else {}
-        total_dosare = dval.get("total", 0)
-        parat = dval.get("parat", 0)
-        reclamant = dval.get("reclamant", 0)
-        if total_dosare > 10:
-            jur_score -= 25
-            jur_reasons.append({"text": f"Dosare judecatoresti: {total_dosare} (Portal Just SOAP)", "impact": -25})
-            risk_factors.append((f"Volum ridicat dosare judecatoresti ({total_dosare})", "MEDIUM"))
-        elif total_dosare > 5:
-            jur_score -= 15
-            jur_reasons.append({"text": f"Dosare judecatoresti: {total_dosare} (Portal Just)", "impact": -15})
-            risk_factors.append(("Dosare judecatoresti multiple", "LOW"))
-        elif total_dosare > 0:
-            # Predominant parat = mai rau
-            if parat > reclamant:
-                jur_score -= 10
-                jur_reasons.append({"text": f"Dosare judecatoresti: {total_dosare} (predominant parat)", "impact": -10})
-                risk_factors.append(("Firma predominant parata in dosare", "LOW"))
-            else:
-                jur_score -= 5
-                jur_reasons.append({"text": f"Dosare judecatoresti: {total_dosare}", "impact": -5})
-        else:
-            jur_score = min(100, jur_score + 5)
-            jur_reasons.append({"text": "Niciun dosar judecatoresc (Portal Just SOAP)", "impact": 5})
-    else:
-        # Fallback la Tavily estimation daca Portal Just nu e disponibil
-        if isinstance(litigation, dict):
-            val = litigation.get("value", {})
-            if isinstance(val, dict):
-                lit_count = val.get("count", 0)
-                if lit_count > 5:
-                    jur_score -= 30
-                    jur_reasons.append({"text": f"Numar ridicat de litigii ({lit_count})", "impact": -30})
-                    risk_factors.append(("Numar ridicat de litigii (5+)", "MEDIUM"))
-                elif lit_count > 3:
-                    jur_score -= 15
-                    jur_reasons.append({"text": f"Litigii multiple ({lit_count})", "impact": -15})
-                    risk_factors.append(("Litigii multiple gasite", "LOW"))
-                elif val.get("found"):
-                    jur_score -= 5
-                    jur_reasons.append({"text": "Litigii gasite (estimat Tavily)", "impact": -5})
-                    risk_factors.append(("Litigii gasite", "LOW"))
-                else:
-                    jur_reasons.append({"text": "Fara litigii identificate", "impact": 0})
-        else:
-            jur_reasons.append({"text": "Date juridice indisponibile", "impact": 0})
-
-    # A5: AEGRM garantii reale mobiliare — penalizare daca exista
-    aegrm = risk_data.get("aegrm_guarantees", {})
-    if isinstance(aegrm, dict) and aegrm.get("value", {}).get("has_guarantees"):
-        count = aegrm.get("value", {}).get("count", 0)
-        jur_score -= 5
-        jur_reasons.append({"text": f"Garantii reale mobiliare inregistrate ({count})", "impact": -5})
-        risk_factors.append((f"Garantii reale mobiliare ({count})", "LOW"))
-
-    # G2: Monitorul Oficial penalty (cesiuni, dizolvari, radieri)
-    mo_events = risk_data.get("monitorul_oficial")
-    if mo_events and isinstance(mo_events, dict):
-        mo_val = mo_events.get("value", [])
-        if isinstance(mo_val, list) and mo_val:
-            from backend.agents.tools.monitorul_oficial_client import score_penalty as _mo_penalty
-            mo_result = _mo_penalty(mo_val)
-            if mo_result["penalty"] > 0:
-                jur_score -= mo_result["penalty"]
-                for flag in mo_result["flags"]:
-                    jur_reasons.append({"text": flag, "impact": -mo_result["penalty"]})
-                    risk_factors.append((flag, "HIGH" if mo_result["penalty"] >= 15 else "MEDIUM"))
-
-    dimensions["juridic"] = {"score": max(0, min(100, jur_score)), "weight": 20, "reasons": jur_reasons}
+    # "else" (Portal Just SOAP indisponibil) a lui _score_juridic, dar folosit
+    # neconditionat mai tarziu (calcul confidence). Cat timp Portal Just a fost
+    # mereu picat (pana azi), ramura "if" nu rula niciodata si bug-ul era latent —
+    # odata Portal Just reparat (vezi just_client.py), ramura noua a inceput sa
+    # ruleze si a scos la iveala UnboundLocalError ("cannot access local variable
+    # 'litigation'"). Contractul explicit JuridicFacts (in loc de variabile libere
+    # partajate) previne recidiva acestei clase de bug la extragerile viitoare.
+    jur_dim, jur_risk_factors, juridic_facts = _score_juridic(risk_data)
+    dimensions["juridic"] = jur_dim
+    risk_factors.extend(jur_risk_factors)
+    insolvency = juridic_facts.insolvency
+    litigation = juridic_facts.litigation
 
     # --- FISCAL (15%) ---
-    fisc_score = 90
-    fisc_reasons = []
-    anaf_inactive = risk_data.get("anaf_inactive", {})
-    if isinstance(anaf_inactive, dict) and anaf_inactive.get("value"):
-        fisc_score -= 50
-        fisc_reasons.append({"text": "Firma inactiva la ANAF", "impact": -50})
-        risk_factors.append(("Firma inactiva la ANAF", "HIGH"))
-
-    platitor = financial.get("platitor_tva", {})
-    if isinstance(platitor, dict):
-        if platitor.get("value") is False:
-            fisc_score -= 10
-            fisc_reasons.append({"text": "Neplatitor TVA", "impact": -10})
-            risk_factors.append(("Neplatitor TVA", "LOW"))
-        elif platitor.get("value") is True:
-            fisc_reasons.append({"text": "Platitor TVA activ", "impact": 0})
-
-    split_tva = financial.get("split_tva", {})
-    if isinstance(split_tva, dict) and split_tva.get("value"):
-        fisc_score -= 15
-        fisc_reasons.append({"text": "Split TVA activ", "impact": -15})
-        risk_factors.append(("Split TVA activ", "LOW"))
-
-    # R7 E12: Penalizare risc fiscal derivat
-    risc_fisc_field = risk_data.get("risc_fiscal", {})
-    risc_fisc_val = risc_fisc_field.get("value", risc_fisc_field) if isinstance(risc_fisc_field, dict) else {}
-    if isinstance(risc_fisc_val, dict) and risc_fisc_val.get("risc_fiscal"):
-        tip = risc_fisc_val.get("tip_risc", "nespecificat")
-        # Avoid double-counting inactiv (already penalized above)
-        if "inactiv" not in tip.lower():
-            fisc_score -= 15
-            fisc_reasons.append({"text": f"Risc fiscal: {tip}", "impact": -15})
-            risk_factors.append((f"Risc fiscal: {tip}", "HIGH"))
-
-    dimensions["fiscal"] = {"score": max(0, min(100, fisc_score)), "weight": 15, "reasons": fisc_reasons}
+    fisc_dim, fisc_risk_factors, fiscal_facts = _score_fiscal(risk_data, financial)
+    dimensions["fiscal"] = fisc_dim
+    risk_factors.extend(fisc_risk_factors)
+    anaf_inactive = fiscal_facts.anaf_inactive
 
     # --- OPERATIONAL (15%) --- with age adjustment (8B)
     op_score = 70
@@ -667,108 +827,20 @@ def calculate_risk_score(verified: dict, dynamic_thresholds: dict | None = None)
     dimensions["operational"] = {"score": max(0, min(100, op_score)), "weight": 15, "reasons": op_reasons}
 
     # --- REPUTATIONAL (10%) --- nuantat (8B)
-    rep_score = 50
-    rep_reasons = []
-    web = verified.get("web_presence", {})
-    if isinstance(web, dict):
-        categories = len(web)
-        if categories >= 3:
-            rep_score = 80
-            rep_reasons.append({"text": f"Prezenta online extinsa ({categories} categorii)", "impact": 30})
-        elif categories >= 2:
-            rep_score = 70
-            rep_reasons.append({"text": f"Prezenta online buna ({categories} categorii)", "impact": 20})
-        elif categories >= 1:
-            rep_score = 60
-            rep_reasons.append({"text": "Prezenta online limitata (1 categorie)", "impact": 10})
-        else:
-            rep_reasons.append({"text": "Fara prezenta online detectata", "impact": 0})
-    elif web:
-        rep_score = 65
-        rep_reasons.append({"text": "Prezenta online detectata", "impact": 15})
-    else:
-        rep_reasons.append({"text": "Prezenta online indisponibila", "impact": 0})
-
-    # F5-2: Google Maps rating bonus/malus
-    maps_data = verified.get("maps_rating", {})
-    if maps_data.get("found"):
-        try:
-            from backend.agents.tools.maps_client import score_from_rating
-            maps_bonus = score_from_rating(maps_data)
-            if maps_bonus > 0:
-                rep_score = min(100, rep_score + maps_bonus)
-                rep_reasons.append({
-                    "text": f"Google Maps: {maps_data.get('rating')}/5 ({maps_data.get('reviews_count')} recenzii)",
-                    "impact": maps_bonus,
-                })
-            elif maps_bonus < 0:
-                rep_score = max(0, rep_score + maps_bonus)
-                rep_reasons.append({
-                    "text": f"Rating Google Maps slab: {maps_data.get('rating')}/5",
-                    "impact": maps_bonus,
-                })
-        except Exception as e:
-            logger.debug(f"[scoring] maps bonus calculation error: {e}")
-
-    dimensions["reputational"] = {"score": max(0, min(100, rep_score)), "weight": 10, "reasons": rep_reasons}
+    rep_dim, reputational_facts = _score_reputational(
+        verified.get("web_presence", {}), verified.get("maps_rating", {})
+    )
+    dimensions["reputational"] = rep_dim
+    web = reputational_facts.web
 
     # --- PIATA (10%) ---
-    mkt_score = 50
-    mkt_reasons = []
-    market = verified.get("market", {})
-    if isinstance(market, dict) and market:
-        mkt_score = 70
-        mkt_reasons.append({"text": "Date de piata disponibile", "impact": 20})
-        # C4 fix: Unwrap _make_field wrapper to access actual SEAP data
-        seap = market.get("seap", {})
-        seap_val = seap.get("value", seap) if isinstance(seap, dict) else {}
-        if isinstance(seap_val, dict) and (seap_val.get("total_contracts", 0) or 0) > 0:
-            contracts = seap_val.get("total_contracts", 0)
-            mkt_score += 10
-            mkt_reasons.append({"text": f"Contracte SEAP active ({contracts})", "impact": 10})
-    else:
-        mkt_reasons.append({"text": "Date de piata indisponibile", "impact": 0})
-
-    # Benchmark comparison bonus (8B)
-    benchmark = verified.get("benchmark", {})
-    sector_position = {}
-    if isinstance(benchmark, dict) and benchmark.get("available"):
-        comparisons = benchmark.get("comparisons", [])
-        above_avg = sum(1 for c in comparisons if isinstance(c, dict) and c.get("ratio", 0) > 1)
-        if above_avg >= 2:
-            mkt_score += 10
-            mkt_reasons.append({"text": f"Peste media sectorului pe {above_avg} indicatori", "impact": 10})
-        elif above_avg >= 1:
-            mkt_score += 5
-            mkt_reasons.append({"text": "Peste media sectorului pe 1 indicator", "impact": 5})
-        else:
-            mkt_reasons.append({"text": "Sub media sectorului pe toti indicatorii", "impact": 0})
-
-        # 10B M3.4: Sector Decile Positioning — estimate percentile from ratio vs sector avg
-        for comp in comparisons:
-            if isinstance(comp, dict) and comp.get("ratio"):
-                ratio = comp["ratio"]
-                metric = comp.get("metric", "unknown")
-                if ratio >= 2.0:
-                    percentile = "P90+"
-                elif ratio >= 1.5:
-                    percentile = "P75-P90"
-                elif ratio >= 0.8:
-                    percentile = "P50-P75"
-                elif ratio >= 0.5:
-                    percentile = "P25-P50"
-                else:
-                    percentile = "sub P25"
-                sector_position[metric] = {
-                    "ratio_vs_avg": round(ratio, 2),
-                    "estimated_percentile": percentile,
-                }
-        if sector_position:
-            _pos_text = ", ".join(f"{k}={v['estimated_percentile']}" for k, v in sector_position.items())
-            mkt_reasons.append({"text": f"Pozitie sector: {_pos_text}", "impact": 0})
-            risk_factors.append((f"Pozitie sector: {_pos_text}", "INFO"))
-
-    dimensions["piata"] = {"score": max(0, min(100, mkt_score)), "weight": 10, "reasons": mkt_reasons}
+    piata_dim, piata_risk_factors, piata_facts = _score_piata(
+        verified.get("market", {}), verified.get("benchmark", {})
+    )
+    dimensions["piata"] = piata_dim
+    risk_factors.extend(piata_risk_factors)
+    market = piata_facts.market
+    sector_position = piata_facts.sector_position
 
     # 9B: Confidence scoring per dimension (moved before total for B7)
     confidence = {}
