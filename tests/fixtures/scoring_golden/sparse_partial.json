@@ -1,0 +1,114 @@
+{
+  "anomalies": [],
+  "company_age_years": null,
+  "confidence": {
+    "financiar": 0.25,
+    "fiscal": 1.0,
+    "juridic": 0.2,
+    "operational": 0.4,
+    "piata": 0.3,
+    "reputational": 0.3
+  },
+  "dimensions": {
+    "financiar": {
+      "confidence": 0.25,
+      "data_available": false,
+      "insufficient_data": false,
+      "raw_score": 65,
+      "reasons": [
+        {
+          "impact": 5,
+          "text": "CA moderata (350K RON)"
+        },
+        {
+          "impact": -5,
+          "text": "Profit net indisponibil"
+        },
+        {
+          "impact": -5,
+          "text": "Capitaluri proprii indisponibile"
+        }
+      ],
+      "score": 57.5,
+      "weight": 30
+    },
+    "fiscal": {
+      "confidence": 1.0,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 90,
+      "reasons": [],
+      "score": 90.0,
+      "weight": 15
+    },
+    "juridic": {
+      "confidence": 0.2,
+      "data_available": false,
+      "insufficient_data": false,
+      "raw_score": 85,
+      "reasons": [
+        {
+          "impact": 0,
+          "text": "Fara litigii identificate"
+        }
+      ],
+      "score": 65.7,
+      "weight": 20
+    },
+    "operational": {
+      "confidence": 0.4,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 70,
+      "reasons": [],
+      "score": 62.6,
+      "weight": 15
+    },
+    "piata": {
+      "confidence": 0.3,
+      "data_available": false,
+      "insufficient_data": false,
+      "raw_score": 50,
+      "reasons": [
+        {
+          "impact": 0,
+          "text": "Date de piata indisponibile"
+        }
+      ],
+      "score": 50.0,
+      "weight": 10
+    },
+    "reputational": {
+      "confidence": 0.3,
+      "data_available": false,
+      "insufficient_data": false,
+      "raw_score": 50,
+      "reasons": [
+        {
+          "impact": 0,
+          "text": "Fara prezenta online detectata"
+        }
+      ],
+      "score": 50.0,
+      "weight": 10
+    }
+  },
+  "early_warning_confidence": [],
+  "factor_count": 2,
+  "factors": [
+    [
+      "Profit net indisponibil — solvabilitate inestimabila",
+      "MEDIUM"
+    ],
+    [
+      "Capitaluri proprii indisponibile — subcapitalizare neverificabila",
+      "MEDIUM"
+    ]
+  ],
+  "financial_ratios": [],
+  "numeric_score": 63.3,
+  "recommendation": "Risc mediu - se recomanda verificare suplimentara inainte de angajament",
+  "score": "Galben",
+  "sector_position": {},
+  "solvency_matrix": null
+}

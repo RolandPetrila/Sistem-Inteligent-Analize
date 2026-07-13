@@ -1,0 +1,128 @@
+{
+  "anomalies": [],
+  "company_age_years": null,
+  "confidence": {
+    "financiar": 0.5,
+    "fiscal": 0.3,
+    "juridic": 0.5,
+    "operational": 0.4,
+    "piata": 0.8,
+    "reputational": 0.7
+  },
+  "dimensions": {
+    "financiar": {
+      "confidence": 0.5,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 80,
+      "reasons": [
+        {
+          "impact": 5,
+          "text": "CA moderata (800K RON)"
+        },
+        {
+          "impact": 10,
+          "text": "Profit pozitiv (40K RON)"
+        },
+        {
+          "impact": -5,
+          "text": "Capitaluri proprii indisponibile"
+        }
+      ],
+      "score": 71.2,
+      "weight": 30
+    },
+    "fiscal": {
+      "confidence": 0.3,
+      "data_available": false,
+      "insufficient_data": false,
+      "raw_score": 90,
+      "reasons": [],
+      "score": 71.9,
+      "weight": 15
+    },
+    "juridic": {
+      "confidence": 0.5,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 85,
+      "reasons": [
+        {
+          "impact": 0,
+          "text": "Fara litigii identificate"
+        }
+      ],
+      "score": 74.7,
+      "weight": 20
+    },
+    "operational": {
+      "confidence": 0.4,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 80,
+      "reasons": [
+        {
+          "impact": 10,
+          "text": "Echipa medie (12 angajati)"
+        }
+      ],
+      "score": 69.0,
+      "weight": 15
+    },
+    "piata": {
+      "confidence": 0.8,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 70,
+      "reasons": [
+        {
+          "impact": 20,
+          "text": "Date de piata disponibile"
+        }
+      ],
+      "score": 67.9,
+      "weight": 10
+    },
+    "reputational": {
+      "confidence": 0.7,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 60,
+      "reasons": [
+        {
+          "impact": 10,
+          "text": "Prezenta online limitata (1 categorie)"
+        }
+      ],
+      "score": 58.4,
+      "weight": 10
+    }
+  },
+  "early_warning_confidence": [],
+  "factor_count": 1,
+  "factors": [
+    [
+      "Capitaluri proprii indisponibile — subcapitalizare neverificabila",
+      "MEDIUM"
+    ]
+  ],
+  "financial_ratios": [
+    {
+      "interpretation": "Fragil",
+      "name": "Marja Profit Net",
+      "unit": "%",
+      "value": 5.0
+    },
+    {
+      "interpretation": "",
+      "name": "CA per Angajat",
+      "unit": "RON",
+      "value": 66667
+    }
+  ],
+  "numeric_score": 70.1,
+  "recommendation": "Risc scazut - parteneriat recomandat cu verificare standard",
+  "score": "Verde",
+  "sector_position": {},
+  "solvency_matrix": null
+}

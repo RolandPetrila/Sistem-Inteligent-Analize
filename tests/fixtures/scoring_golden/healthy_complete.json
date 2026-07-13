@@ -1,0 +1,187 @@
+{
+  "anomalies": [],
+  "company_age_years": 11,
+  "confidence": {
+    "financiar": 1.0,
+    "fiscal": 1.0,
+    "juridic": 1.0,
+    "operational": 0.8,
+    "piata": 0.8,
+    "reputational": 0.7
+  },
+  "dimensions": {
+    "financiar": {
+      "confidence": 1.0,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 100,
+      "reasons": [
+        {
+          "impact": 15,
+          "text": "CA excelenta (>12.0M RON)"
+        },
+        {
+          "impact": 10,
+          "text": "Profit pozitiv (1500K RON)"
+        },
+        {
+          "impact": 10,
+          "text": "Crestere CA semnificativa +22%"
+        },
+        {
+          "impact": 0,
+          "text": "Trend structural pozitiv: +14.3%/an"
+        },
+        {
+          "impact": 5,
+          "text": "Capitalizare solida (33.3% din CA)"
+        }
+      ],
+      "score": 100.0,
+      "weight": 30
+    },
+    "fiscal": {
+      "confidence": 1.0,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 90,
+      "reasons": [
+        {
+          "impact": 0,
+          "text": "Platitor TVA activ"
+        }
+      ],
+      "score": 90.0,
+      "weight": 15
+    },
+    "juridic": {
+      "confidence": 1.0,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 85,
+      "reasons": [
+        {
+          "impact": 0,
+          "text": "Fara litigii identificate"
+        }
+      ],
+      "score": 85.0,
+      "weight": 20
+    },
+    "operational": {
+      "confidence": 0.8,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 95,
+      "reasons": [
+        {
+          "impact": 15,
+          "text": "Forta de munca semnificativa (60 angajati)"
+        },
+        {
+          "impact": 10,
+          "text": "Firma stabila (11 ani vechime)"
+        }
+      ],
+      "score": 90.2,
+      "weight": 15
+    },
+    "piata": {
+      "confidence": 0.8,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 90,
+      "reasons": [
+        {
+          "impact": 20,
+          "text": "Date de piata disponibile"
+        },
+        {
+          "impact": 10,
+          "text": "Contracte SEAP active (3)"
+        },
+        {
+          "impact": 10,
+          "text": "Peste media sectorului pe 2 indicatori"
+        },
+        {
+          "impact": 0,
+          "text": "Pozitie sector: Cifra de afaceri=P90+, Angajati=P75-P90"
+        }
+      ],
+      "score": 85.8,
+      "weight": 10
+    },
+    "reputational": {
+      "confidence": 0.7,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 95,
+      "reasons": [
+        {
+          "impact": 30,
+          "text": "Prezenta online extinsa (3 categorii)"
+        },
+        {
+          "impact": 15,
+          "text": "Google Maps: 4.6/5 (120 recenzii)"
+        }
+      ],
+      "score": 87.6,
+      "weight": 10
+    }
+  },
+  "early_warning_confidence": [],
+  "factor_count": 2,
+  "factors": [
+    [
+      "Trend structural pozitiv: +14.3%/an",
+      "POSITIVE"
+    ],
+    [
+      "Pozitie sector: Cifra de afaceri=P90+, Angajati=P75-P90",
+      "INFO"
+    ]
+  ],
+  "financial_ratios": [
+    {
+      "interpretation": "Bun",
+      "name": "Marja Profit Net",
+      "unit": "%",
+      "value": 12.5
+    },
+    {
+      "interpretation": "Excelent",
+      "name": "ROE",
+      "unit": "%",
+      "value": 37.5
+    },
+    {
+      "interpretation": "",
+      "name": "CA per Angajat",
+      "unit": "RON",
+      "value": 200000
+    }
+  ],
+  "numeric_score": 91.4,
+  "recommendation": "Risc scazut - parteneriat recomandat cu verificare standard",
+  "score": "Verde",
+  "sector_position": {
+    "Angajati": {
+      "estimated_percentile": "P75-P90",
+      "ratio_vs_avg": 1.8
+    },
+    "Cifra de afaceri": {
+      "estimated_percentile": "P90+",
+      "ratio_vs_avg": 2.4
+    }
+  },
+  "solvency_matrix": {
+    "equity_ratio_pct": 33.33,
+    "equity_zone": "Solid",
+    "profit_margin_pct": 12.5,
+    "profit_zone": "Sanatos",
+    "risk_level": 9,
+    "risk_zone": "RISC MINIM"
+  }
+}

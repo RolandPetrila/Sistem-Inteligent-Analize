@@ -1,0 +1,228 @@
+{
+  "anomalies": [
+    "ANOMALIE: Firma zombie — CA=0, angajati=0, status activ. Nu opereaza efectiv."
+  ],
+  "company_age_years": 16,
+  "confidence": {
+    "financiar": 0.75,
+    "fiscal": 1.0,
+    "juridic": 0.5,
+    "operational": 0.8,
+    "piata": 0.3,
+    "reputational": 0.3
+  },
+  "dimensions": {
+    "financiar": {
+      "confidence": 0.75,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 35,
+      "reasons": [
+        {
+          "impact": -20,
+          "text": "CA zero sau negativa"
+        },
+        {
+          "impact": -15,
+          "text": "Pierdere neta (-50K RON)"
+        }
+      ],
+      "score": 37.0,
+      "weight": 30
+    },
+    "fiscal": {
+      "confidence": 1.0,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 0,
+      "reasons": [
+        {
+          "impact": -50,
+          "text": "Firma inactiva la ANAF"
+        },
+        {
+          "impact": -10,
+          "text": "Neplatitor TVA"
+        },
+        {
+          "impact": -15,
+          "text": "Split TVA activ"
+        },
+        {
+          "impact": -15,
+          "text": "Risc fiscal: risc ridicat nedeclarare"
+        }
+      ],
+      "score": 0.0,
+      "weight": 15
+    },
+    "juridic": {
+      "confidence": 0.5,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 0,
+      "reasons": [
+        {
+          "impact": -60,
+          "text": "Mentiune insolventa gasita"
+        },
+        {
+          "impact": -40,
+          "text": "Procedura insolventa BPI activa (in insolventa)"
+        },
+        {
+          "impact": -25,
+          "text": "Dosare judecatoresti: 15 (Portal Just SOAP)"
+        },
+        {
+          "impact": -5,
+          "text": "Garantii reale mobiliare inregistrate (3)"
+        },
+        {
+          "impact": -20,
+          "text": "Dizolvare in curs detectata in MO"
+        }
+      ],
+      "score": 14.6,
+      "weight": 20
+    },
+    "operational": {
+      "confidence": 0.8,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 60,
+      "reasons": [
+        {
+          "impact": -10,
+          "text": "0 angajati declarati"
+        },
+        {
+          "impact": 10,
+          "text": "Firma stabila (16 ani vechime)"
+        },
+        {
+          "impact": -10,
+          "text": "Firma matura cu pierderi (regres operational)"
+        }
+      ],
+      "score": 10,
+      "weight": 15
+    },
+    "piata": {
+      "confidence": 0.3,
+      "data_available": false,
+      "insufficient_data": false,
+      "raw_score": 50,
+      "reasons": [
+        {
+          "impact": 0,
+          "text": "Date de piata indisponibile"
+        }
+      ],
+      "score": 50.0,
+      "weight": 10
+    },
+    "reputational": {
+      "confidence": 0.3,
+      "data_available": false,
+      "insufficient_data": false,
+      "raw_score": 50,
+      "reasons": [
+        {
+          "impact": 0,
+          "text": "Fara prezenta online detectata"
+        }
+      ],
+      "score": 50.0,
+      "weight": 10
+    }
+  },
+  "early_warning_confidence": [
+    {
+      "confidence": 70,
+      "severity": "MEDIUM",
+      "warning": "ANOMALIE: Firma zombie — CA=0, angajati=0, status activ. Nu opereaza efectiv."
+    },
+    {
+      "confidence": 60,
+      "severity": "HIGH",
+      "warning": "Mentiune insolventa gasita"
+    },
+    {
+      "confidence": 60,
+      "severity": "HIGH",
+      "warning": "Dizolvare in curs detectata in MO"
+    },
+    {
+      "confidence": 60,
+      "severity": "HIGH",
+      "warning": "Firma inactiva la ANAF"
+    },
+    {
+      "confidence": 70,
+      "severity": "HIGH",
+      "warning": "Risc fiscal: risc ridicat nedeclarare"
+    }
+  ],
+  "factor_count": 13,
+  "factors": [
+    [
+      "CA zero sau negativa",
+      "MEDIUM"
+    ],
+    [
+      "Pierdere neta",
+      "MEDIUM"
+    ],
+    [
+      "Mentiune insolventa gasita",
+      "HIGH"
+    ],
+    [
+      "Firma in procedura insolventa BPI (in insolventa)",
+      "CRITICAL"
+    ],
+    [
+      "Volum ridicat dosare judecatoresti (15)",
+      "MEDIUM"
+    ],
+    [
+      "Garantii reale mobiliare (3)",
+      "LOW"
+    ],
+    [
+      "Dizolvare in curs detectata in MO",
+      "HIGH"
+    ],
+    [
+      "Firma inactiva la ANAF",
+      "HIGH"
+    ],
+    [
+      "Neplatitor TVA",
+      "LOW"
+    ],
+    [
+      "Split TVA activ",
+      "LOW"
+    ],
+    [
+      "Risc fiscal: risc ridicat nedeclarare",
+      "HIGH"
+    ],
+    [
+      "Firma >10 ani cu pierderi = regres",
+      "MEDIUM"
+    ],
+    [
+      "ZOMBIE: CA=0 + angajati=0 + status activ — firma nu opereaza",
+      "CRITICAL"
+    ]
+  ],
+  "financial_ratios": [],
+  "numeric_score": 32.9,
+  "recommendation": "Risc ridicat - se recomanda prudenta maxima si verificare detaliata",
+  "score": "Rosu",
+  "sector_position": {},
+  "solvency_matrix": null
+}

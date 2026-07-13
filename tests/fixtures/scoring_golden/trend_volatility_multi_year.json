@@ -1,0 +1,165 @@
+{
+  "anomalies": [],
+  "company_age_years": 7,
+  "confidence": {
+    "financiar": 1.0,
+    "fiscal": 1.0,
+    "juridic": 0.2,
+    "operational": 0.8,
+    "piata": 0.3,
+    "reputational": 0.3
+  },
+  "dimensions": {
+    "financiar": {
+      "confidence": 1.0,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 85,
+      "reasons": [
+        {
+          "impact": 10,
+          "text": "CA buna (4000K RON)"
+        },
+        {
+          "impact": 10,
+          "text": "Profit pozitiv (80K RON)"
+        },
+        {
+          "impact": 5,
+          "text": "Crestere CA moderata +12%"
+        },
+        {
+          "impact": 0,
+          "text": "Trend structural pozitiv: +49.9%/an"
+        },
+        {
+          "impact": -5,
+          "text": "Volatilitate CA moderata vs sector (CV=69.7%, 2.0x)"
+        },
+        {
+          "impact": -5,
+          "text": "Scadere profit neta -35%"
+        }
+      ],
+      "score": 85.0,
+      "weight": 30
+    },
+    "fiscal": {
+      "confidence": 1.0,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 90,
+      "reasons": [],
+      "score": 90.0,
+      "weight": 15
+    },
+    "juridic": {
+      "confidence": 0.2,
+      "data_available": false,
+      "insufficient_data": false,
+      "raw_score": 85,
+      "reasons": [
+        {
+          "impact": 0,
+          "text": "Fara litigii identificate"
+        }
+      ],
+      "score": 65.7,
+      "weight": 20
+    },
+    "operational": {
+      "confidence": 0.8,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 85,
+      "reasons": [
+        {
+          "impact": 10,
+          "text": "Echipa medie (25 angajati)"
+        },
+        {
+          "impact": 5,
+          "text": "Firma consolidata (7 ani)"
+        }
+      ],
+      "score": 81.3,
+      "weight": 15
+    },
+    "piata": {
+      "confidence": 0.3,
+      "data_available": false,
+      "insufficient_data": false,
+      "raw_score": 50,
+      "reasons": [
+        {
+          "impact": 0,
+          "text": "Date de piata indisponibile"
+        }
+      ],
+      "score": 50.0,
+      "weight": 10
+    },
+    "reputational": {
+      "confidence": 0.3,
+      "data_available": false,
+      "insufficient_data": false,
+      "raw_score": 50,
+      "reasons": [
+        {
+          "impact": 0,
+          "text": "Fara prezenta online detectata"
+        }
+      ],
+      "score": 50.0,
+      "weight": 10
+    }
+  },
+  "early_warning_confidence": [],
+  "factor_count": 3,
+  "factors": [
+    [
+      "Trend structural pozitiv: +49.9%/an",
+      "POSITIVE"
+    ],
+    [
+      "Volatilitate CA moderata vs sector (CV=69.7%, ratio=2.0x)",
+      "LOW"
+    ],
+    [
+      "Scadere profit neta -35%",
+      "MEDIUM"
+    ]
+  ],
+  "financial_ratios": [
+    {
+      "interpretation": "Fragil",
+      "name": "Marja Profit Net",
+      "unit": "%",
+      "value": 2.0
+    },
+    {
+      "interpretation": "Bun",
+      "name": "ROE",
+      "unit": "%",
+      "value": 16.0
+    },
+    {
+      "interpretation": "",
+      "name": "CA per Angajat",
+      "unit": "RON",
+      "value": 160000
+    }
+  ],
+  "numeric_score": 74.3,
+  "recommendation": "Risc scazut - parteneriat recomandat cu verificare standard",
+  "score": "Verde",
+  "sector_position": {},
+  "solvency_matrix": {
+    "equity_ratio_pct": 12.5,
+    "equity_zone": "Moderat",
+    "profit_margin_pct": 2.0,
+    "profit_zone": "Fragil",
+    "risk_level": 5,
+    "risk_zone": "RISC MEDIU"
+  }
+}
