@@ -147,13 +147,20 @@ class OfficialAgent(BaseAgent):
                 official_data["anaf"] = anaf_source["data"]
                 if not company_name:
                     company_name = anaf_source["data"].get("denumire", "")
-                official_data["company_name"] = company_name
-                official_data["cui"] = cui_clean
                 log_source_result(job_id, "ANAF", True, anaf_source.get("response_time_ms", 0),
                     ["denumire", "TVA", "stare", "adresa"])
             else:
                 log_source_result(job_id, "ANAF", False, anaf_source.get("response_time_ms", 0),
                     error=anaf_source.get("data", {}).get("error", "no data"))
+
+            # CRITICA #1 (audit 2026-07-13): cui + company_name se leaga NECONDITIONAT de
+            # rezultatul ANAF. Inainte erau setate DOAR in ramura `if anaf_source["data_found"]`,
+            # deci un job cu ANAF picat (dar alte surse OK) se finaliza fara `cui`/`company_name`
+            # in official_data -> firma nu se lega niciodata de tabela `companies`. company_name
+            # e deja finalizat aici (ONRC local + ANAF l-au putut popula mai sus; openapi.ro nu-l
+            # modifica). cui_clean e garantat truthy in acest bloc (`if cui_clean:`).
+            official_data["cui"] = cui_clean
+            official_data["company_name"] = company_name
 
             # Process openapi.ro result
             sources.append(openapi_source)
