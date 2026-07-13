@@ -5,6 +5,8 @@ HTML Generator — Single-file HTML report cu dark theme + Chart.js grafice.
 import html as html_lib
 import json as json_lib
 
+from backend.reports.rich_fields import build_rich_fields_model
+
 DISCLAIMER = (
     "Acest raport a fost generat automat folosind exclusiv date disponibile public "
     "din surse verificabile. Acuratetea datelor depinde de corectitudinea informatiilor "
@@ -502,10 +504,11 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
     historical_flags, funding_programs. Returns (sections_html, nav_links_html)."""
     out: list[str] = []
     nav = ""
+    model = build_rich_fields_model(verified_data)
 
     # ---- Scoruri predictive faliment ----
-    pred = verified_data.get("predictive_scores", {})
-    if isinstance(pred, dict) and pred.get("summary"):
+    pred = model["predictive_scores"]["data"]
+    if model["predictive_scores"]["shown"]:
         def _badge(label, value, tone):
             colors = {"ok": "#22c55e", "warn": "#eab308", "bad": "#ef4444", "na": "#64748b"}
             c = colors.get(tone, "#64748b")
@@ -541,8 +544,8 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
         nav += '<a href="#predictive" class="nav-link">Scoruri Predictive</a>\n'
 
     # ---- Benchmark sector CAEN ----
-    bench = verified_data.get("benchmark", {})
-    if isinstance(bench, dict) and bench.get("available") and bench.get("comparisons"):
+    bench = model["benchmark"]["data"]
+    if model["benchmark"]["shown"]:
         rows = ""
         for c in bench["comparisons"]:
             rows += (f'<tr><td style="padding:8px 12px;color:#e2e8f0">{_escape(str(c.get("metric", "")))}</td>'
@@ -560,8 +563,8 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
         nav += '<a href="#benchmark" class="nav-link">Benchmark</a>\n'
 
     # ---- Benchmark sector UE (Eurostat) ----
-    eust = verified_data.get("eurostat_sector", {})
-    if isinstance(eust, dict) and eust.get("available") and isinstance(eust.get("indicators"), dict):
+    eust = model["eurostat_sector"]["data"]
+    if model["eurostat_sector"]["shown"]:
         rows = ""
         for ind in eust["indicators"].values():
             if not isinstance(ind, dict):
@@ -585,10 +588,8 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
         nav += '<a href="#eurostat" class="nav-link">Benchmark UE</a>\n'
 
     # ---- Istoric Achizitii Publice (SICAP/SEAP) ----
-    market = verified_data.get("market", {})
-    seap_field = market.get("seap", {}) if isinstance(market, dict) else {}
-    seap = seap_field.get("value", seap_field) if isinstance(seap_field, dict) else {}
-    if isinstance(seap, dict) and (seap.get("total_contracts", 0) or 0) > 0:
+    seap = model["seap"]["data"]
+    if model["seap"]["shown"]:
         tot = seap.get("total_contracts", 0)
         cc = seap.get("contracts_count", 0) or len(seap.get("contracts", []) or [])
         dc = seap.get("direct_count", 0) or len(seap.get("direct_acquisitions", []) or [])
@@ -628,8 +629,8 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
         nav += '<a href="#achizitii" class="nav-link">Achizitii Publice</a>\n'
 
     # ---- Oportunitati de contracte: licitatii deschise (SICAP, Angle A) ----
-    opp = verified_data.get("tender_opportunities", {})
-    if isinstance(opp, dict) and opp.get("available") and opp.get("count"):
+    opp = model["tender_opportunities"]["data"]
+    if model["tender_opportunities"]["shown"]:
         items = [i for i in (opp.get("opportunities") or []) if isinstance(i, dict)][:15]
         real_basis = opp.get("basis") == "istoric_real"
         rows = ""
@@ -660,11 +661,10 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
         nav += '<a href="#oportunitati" class="nav-link">Oportunitati</a>\n'
 
     # ---- Actionariat + relatii ----
-    act = verified_data.get("actionariat", {})
-    rel = verified_data.get("relations", {})
-    act_ok = isinstance(act, dict) and act.get("available")
-    rel_flags = rel.get("flags", []) if isinstance(rel, dict) else []
-    if act_ok or rel_flags:
+    act = model["actionariat"]["act"]
+    act_ok = model["actionariat"]["act_ok"]
+    rel_flags = model["actionariat"]["rel_flags"]
+    if model["actionariat"]["shown"]:
         body = ""
 
         def _names(items):
@@ -701,8 +701,8 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
             nav += '<a href="#actionariat" class="nav-link">Actionariat</a>\n'
 
     # ---- Screening sanctiuni (OFAC + UE FSF + ONU) ----
-    sanc = verified_data.get("sanctions", {})
-    if isinstance(sanc, dict) and sanc.get("status") in ("clean", "hit", "unavailable"):
+    sanc = model["sanctions"]["data"]
+    if model["sanctions"]["shown"]:
         status = sanc.get("status")
         lists = ", ".join(sanc.get("lists_checked", []) or []) or "—"
         n_checked = len(sanc.get("checked", []) or [])
@@ -740,12 +740,9 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
         nav += '<a href="#sanctions" class="nav-link">Sanctiuni</a>\n'
 
     # ---- AEGRM garantii + semnale istorice OSINT ----
-    risk = verified_data.get("risk", {})
-    aegrm_field = risk.get("aegrm_guarantees", {}) if isinstance(risk, dict) else {}
-    aegrm = aegrm_field.get("value") if isinstance(aegrm_field, dict) else None
-    hist = verified_data.get("historical_flags", [])
-    aegrm_ok = isinstance(aegrm, dict) and aegrm.get("has_data")
-    if aegrm_ok or hist:
+    aegrm = model["garantii"]["aegrm"]
+    aegrm_ok = model["garantii"]["aegrm_ok"]
+    if model["garantii"]["shown"]:
         body = ""
         if aegrm_ok:
             cnt = aegrm.get("count", 0)
@@ -758,23 +755,21 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
                     txt = (g.get("descriere") or g.get("creditor") or g.get("title") or str(g)) if isinstance(g, dict) else str(g)
                     body += f'<li style="color:#cbd5e1">{_escape(str(txt)[:200])}</li>'
                 body += "</ul>"
-        if hist and isinstance(hist, list):
+        if model["garantii"]["hist_ok"]:
             body += '<h3 style="color:#818cf8;margin:14px 0 6px;font-size:1em">Semnale istorice (Monitorul Oficial)</h3>'
-            for fl in hist:
-                if isinstance(fl, dict):
-                    sev = str(fl.get("severity", "INFO")).upper()
+            for flx in model["garantii"]["historical_flags"]:
+                if flx["is_dict"]:
+                    sev = flx["severity"]
                     c = {"RED": "#ef4444", "YELLOW": "#eab308", "HIGH": "#ef4444", "MEDIUM": "#eab308"}.get(sev, "#6366f1")
-                    # osint_client emits {type(slug), label(human), severity, snippet};
-                    # prefer the human label + snippet, fall back to other shapes.
-                    label = _escape(str(fl.get("label") or fl.get("type") or fl.get("title") or fl.get("category") or "Semnal"))
-                    detail = _escape(str(fl.get("snippet") or fl.get("detail") or fl.get("description") or fl.get("text") or "")[:240])
-                    date_raw = fl.get("date") or fl.get("data") or ""
+                    label = _escape(flx["label"])
+                    detail = _escape(flx["detail"][:240])
+                    date_raw = flx["date"]
                     date_html = f'<span style="color:#64748b;font-size:0.8em">{_escape(str(date_raw))}</span> ' if date_raw else ""
                     body += (f'<div style="padding:8px 12px;margin-bottom:6px;background:#16213e;border-radius:6px;border-left:3px solid {c}">'
                              f'<span style="color:{c};font-weight:600">{label}</span> {date_html}'
                              f'<span style="color:#cbd5e1">— {detail}</span></div>')
                 else:
-                    body += f'<div style="color:#cbd5e1">{_escape(str(fl))}</div>'
+                    body += f'<div style="color:#cbd5e1">{_escape(flx["detail"])}</div>'
         if body:
             out.append(f'''
     <section id="garantii" class="report-section">
@@ -784,8 +779,8 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
             nav += '<a href="#garantii" class="nav-link">Garantii &amp; Istoric</a>\n'
 
     # ---- Programe de finantare ----
-    funding = verified_data.get("funding_programs", {})
-    if isinstance(funding, dict) and funding.get("eligible"):
+    funding = model["funding_programs"]["data"]
+    if model["funding_programs"]["shown"]:
         rows = ""
         for p in funding["eligible"]:
             suma = p.get("suma_max_eur", 0)

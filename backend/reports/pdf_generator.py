@@ -11,6 +11,7 @@ from fpdf import FPDF
 from loguru import logger
 
 from backend.config import settings
+from backend.reports.rich_fields import build_rich_fields_model
 
 DISCLAIMER = (
     "Acest raport a fost generat automat folosind exclusiv date disponibile public "
@@ -230,10 +231,11 @@ def _pdf_names(items) -> list[str]:
 def _add_rich_fields_pdf(pdf, verified_data: dict):
     """Render previously-dropped rich fields into the PDF: predictive scores,
     benchmark, actionariat/relations, AEGRM guarantees, historical OSINT, funding."""
-    pred = verified_data.get("predictive_scores", {})
-    bench = verified_data.get("benchmark", {})
-    has_pred = isinstance(pred, dict) and pred.get("summary")
-    has_bench = isinstance(bench, dict) and bench.get("available") and bench.get("comparisons")
+    model = build_rich_fields_model(verified_data)
+    pred = model["predictive_scores"]["data"]
+    bench = model["benchmark"]["data"]
+    has_pred = model["predictive_scores"]["shown"]
+    has_bench = model["benchmark"]["shown"]
 
     # ---- Page 1: Predictive + Benchmark ----
     if has_pred or has_bench:
@@ -281,29 +283,24 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
             _render_pdf_table(pdf, rows, has_header=True)
 
     # ---- Page 2: Actionariat + Garantii/Istoric + Finantare ----
-    act = verified_data.get("actionariat", {})
-    rel = verified_data.get("relations", {})
-    risk = verified_data.get("risk", {})
-    aegrm_field = risk.get("aegrm_guarantees", {}) if isinstance(risk, dict) else {}
-    aegrm = aegrm_field.get("value") if isinstance(aegrm_field, dict) else None
-    hist = verified_data.get("historical_flags", [])
-    funding = verified_data.get("funding_programs", {})
+    act = model["actionariat"]["act"]
+    aegrm = model["garantii"]["aegrm"]
+    hist = model["garantii"]["historical_flags"]
+    funding = model["funding_programs"]["data"]
 
-    act_ok = isinstance(act, dict) and act.get("available")
-    rel_flags = rel.get("flags", []) if isinstance(rel, dict) else []
-    aegrm_ok = isinstance(aegrm, dict) and aegrm.get("has_data")
-    hist_ok = isinstance(hist, list) and bool(hist)
-    fund_ok = isinstance(funding, dict) and funding.get("eligible")
-    sanc = verified_data.get("sanctions", {})
-    sanc_ok = isinstance(sanc, dict) and sanc.get("status") in ("clean", "hit", "unavailable")
-    eust = verified_data.get("eurostat_sector", {})
-    eust_ok = isinstance(eust, dict) and eust.get("available") and isinstance(eust.get("indicators"), dict)
-    _market = verified_data.get("market", {})
-    _seap_field = _market.get("seap", {}) if isinstance(_market, dict) else {}
-    seap = _seap_field.get("value", _seap_field) if isinstance(_seap_field, dict) else {}
-    seap_ok = isinstance(seap, dict) and (seap.get("total_contracts", 0) or 0) > 0
-    opp = verified_data.get("tender_opportunities", {})
-    opp_ok = isinstance(opp, dict) and opp.get("available") and opp.get("count")
+    act_ok = model["actionariat"]["act_ok"]
+    rel_flags = model["actionariat"]["rel_flags"]
+    aegrm_ok = model["garantii"]["aegrm_ok"]
+    hist_ok = model["garantii"]["hist_ok"]
+    fund_ok = model["funding_programs"]["shown"]
+    sanc = model["sanctions"]["data"]
+    sanc_ok = model["sanctions"]["shown"]
+    eust = model["eurostat_sector"]["data"]
+    eust_ok = model["eurostat_sector"]["shown"]
+    seap = model["seap"]["data"]
+    seap_ok = model["seap"]["shown"]
+    opp = model["tender_opportunities"]["data"]
+    opp_ok = model["tender_opportunities"]["shown"]
 
     if act_ok or rel_flags or aegrm_ok or hist_ok or fund_ok or sanc_ok or eust_ok or seap_ok or opp_ok:
         pdf.add_page()
@@ -347,16 +344,14 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
                         txt = (g.get("descriere") or g.get("creditor") or g.get("title") or str(g)) if isinstance(g, dict) else str(g)
                         pdf.multi_cell(0, 5.5, _sanitize(f"  * {str(txt)[:200]}"), new_x="LMARGIN", new_y="NEXT")
             if hist_ok:
-                for fl in hist:
-                    if isinstance(fl, dict):
-                        # osint_client emits {type(slug), label(human), severity, snippet};
-                        # prefer the human label + snippet, fall back to other shapes.
-                        label = fl.get("label") or fl.get("type") or fl.get("title") or "Semnal"
-                        detail = fl.get("snippet") or fl.get("detail") or fl.get("description") or ""
-                        date_raw = fl.get("date") or fl.get("data") or ""
+                for flx in hist:
+                    if flx["is_dict"]:
+                        label = flx["label"]
+                        detail = flx["detail"]
+                        date_raw = flx["date"]
                         pdf.multi_cell(0, 5.5, _sanitize(f"- {label} {date_raw}: {detail}"[:200]), new_x="LMARGIN", new_y="NEXT")
                     else:
-                        pdf.multi_cell(0, 5.5, _sanitize(f"- {fl}"), new_x="LMARGIN", new_y="NEXT")
+                        pdf.multi_cell(0, 5.5, _sanitize(f"- {flx['detail']}"), new_x="LMARGIN", new_y="NEXT")
             pdf.ln(3)
 
         if sanc_ok:

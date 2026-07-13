@@ -170,6 +170,68 @@ class TestGenerateDocx:
             if os.path.exists(path):
                 os.remove(path)
 
+    def test_docx_content_all_rich_sections_rendered(self):
+        """DRY #3 (2026-07-14): verifica CONTINUTUL randat (nu doar 'nu arunca'),
+        pe fixture-ul populat -- companion la TestRichFields (html) + TestRichFieldsPdf."""
+        from docx import Document
+
+        from backend.reports.docx_generator import generate_docx
+
+        verified_data = {
+            "predictive_scores": {
+                "altman_z": {"z_score": 2.9, "zone": "SAFE"},
+                "piotroski_f": {"f_score": 7, "max_possible": 9, "grade": "STRONG"},
+                "beneish_m": {"m_score": -2.5, "risk": "OK"},
+                "zmijewski_x": {"x_score": -1.2, "distress": False, "available": True},
+                "distress_signals": 0,
+                "summary": "Indicatori in zona normala",
+            },
+            "benchmark": {
+                "available": True, "caen_code": "6201", "caen_section_name": "IT",
+                "nr_firme_sector": 1200,
+                "comparisons": [{"metric": "Cifra de afaceri", "firma": 500000,
+                                 "media_sector": 450000, "ratio": 1.1, "pozitie": "Peste medie"}],
+            },
+            "actionariat": {"available": True, "asociati": [{"nume": "Ion Popescu"}],
+                            "administratori": ["Maria Ionescu"], "capital_social": 200, "stare": "activa"},
+            "relations": {"flags": [{"type": "ONE_PERSON", "detail": "Admin = asociat", "severity": "INFO"}]},
+            "risk": {"aegrm_guarantees": {"value": {"has_data": True, "count": 2,
+                     "has_guarantees": True, "guarantees": [{"descriere": "Gaj auto"}]}}},
+            "historical_flags": [{"type": "cesiune_parti_sociale",
+                                  "label": "Cesiune parti sociale detectata", "severity": "HIGH",
+                                  "snippet": "cesiune 60% parti sociale catre o terta persoana"}],
+            "funding_programs": {"eligible": [{"nume": "Start-Up Nation", "suma_max_eur": 200000,
+                                "termen": "2026-12-31", "link": "https://example.ro"}],
+                                "count": 1, "summary": "1 program eligibil"},
+        }
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as f:
+            path = f.name
+        try:
+            generate_docx(_make_sections(), _make_meta(), path, verified_data)
+            doc = Document(path)
+            text_parts = [p.text for p in doc.paragraphs]
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        text_parts.append(cell.text)
+            full_text = "\n".join(text_parts)
+
+            assert "Scoruri Predictive Faliment" in full_text
+            assert "Altman" in full_text
+            assert "Benchmark Sector CAEN" in full_text
+            assert "Actionariat si Relatii" in full_text
+            assert "Ion Popescu" in full_text
+            assert "Gaj auto" in full_text
+            # osint_client shape {type, label, severity, snippet}: human label + snippet
+            # must be rendered, not the raw slug (regression guard, bug fixat 2026-06-27).
+            assert "Cesiune parti sociale detectata" in full_text
+            assert "cesiune 60% parti sociale catre o terta persoana" in full_text
+            assert "cesiune_parti_sociale" not in full_text
+            assert "Start-Up Nation" in full_text
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
     def test_functioneaza_cu_rich_fields_aegrm_historical(self):
         """TASK 2: populated AEGRM + historical OSINT flags (cu diacritice) prin DOCX.
         Sectiunea 'Garantii si Istoric (OSINT)' nu e atinsa de firme curate (fara

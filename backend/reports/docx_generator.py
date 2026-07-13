@@ -9,6 +9,8 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor
 
+from backend.reports.rich_fields import build_rich_fields_model
+
 DISCLAIMER = (
     "Acest raport a fost generat automat folosind exclusiv date disponibile public "
     "din surse verificabile. Acuratetea datelor depinde de corectitudinea informatiilor "
@@ -60,8 +62,9 @@ def _docx_names(items) -> list[str]:
 def _add_rich_fields_docx(doc, verified_data: dict):
     """Render previously-dropped rich fields into the DOCX: predictive scores,
     benchmark, actionariat/relations, AEGRM guarantees, historical OSINT, funding."""
-    pred = verified_data.get("predictive_scores", {})
-    if isinstance(pred, dict) and pred.get("summary"):
+    model = build_rich_fields_model(verified_data)
+    pred = model["predictive_scores"]["data"]
+    if model["predictive_scores"]["shown"]:
         doc.add_page_break()
         doc.add_heading("Scoruri Predictive Faliment", level=1)
         altman = pred.get("altman_z", {}) or {}
@@ -79,8 +82,8 @@ def _add_rich_fields_docx(doc, verified_data: dict):
         cp = doc.add_paragraph()
         cp.add_run(f"Concluzie: {pred.get('summary', '')} ({pred.get('distress_signals', 0)} semnale)").bold = True
 
-    bench = verified_data.get("benchmark", {})
-    if isinstance(bench, dict) and bench.get("available") and bench.get("comparisons"):
+    bench = model["benchmark"]["data"]
+    if model["benchmark"]["shown"]:
         doc.add_page_break()
         doc.add_heading(f"Benchmark Sector CAEN {bench.get('caen_code', '')}", level=1)
         section_name = bench.get("caen_section_name", "")
@@ -101,11 +104,10 @@ def _add_rich_fields_docx(doc, verified_data: dict):
             for c in bench["comparisons"]:
                 doc.add_paragraph(str(c.get("text", "")), style="List Bullet")
 
-    act = verified_data.get("actionariat", {})
-    rel = verified_data.get("relations", {})
-    act_ok = isinstance(act, dict) and act.get("available")
-    rel_flags = rel.get("flags", []) if isinstance(rel, dict) else []
-    if act_ok or rel_flags:
+    act = model["actionariat"]["act"]
+    act_ok = model["actionariat"]["act_ok"]
+    rel_flags = model["actionariat"]["rel_flags"]
+    if model["actionariat"]["shown"]:
         doc.add_page_break()
         doc.add_heading("Actionariat si Relatii", level=1)
         if act_ok:
@@ -123,12 +125,10 @@ def _add_rich_fields_docx(doc, verified_data: dict):
         for fl in rel_flags:
             doc.add_paragraph(f"[{fl.get('severity', 'INFO')}] {fl.get('type', '')}: {fl.get('detail', '')}", style="List Bullet")
 
-    risk = verified_data.get("risk", {})
-    aegrm_field = risk.get("aegrm_guarantees", {}) if isinstance(risk, dict) else {}
-    aegrm = aegrm_field.get("value") if isinstance(aegrm_field, dict) else None
-    hist = verified_data.get("historical_flags", [])
-    aegrm_ok = isinstance(aegrm, dict) and aegrm.get("has_data")
-    hist_ok = isinstance(hist, list) and bool(hist)
+    aegrm = model["garantii"]["aegrm"]
+    hist = model["garantii"]["historical_flags"]
+    aegrm_ok = model["garantii"]["aegrm_ok"]
+    hist_ok = model["garantii"]["hist_ok"]
     if aegrm_ok or hist_ok:
         doc.add_page_break()
         doc.add_heading("Garantii si Istoric (OSINT)", level=1)
@@ -140,19 +140,17 @@ def _add_rich_fields_docx(doc, verified_data: dict):
                     txt = (g.get("descriere") or g.get("creditor") or g.get("title") or str(g)) if isinstance(g, dict) else str(g)
                     doc.add_paragraph(str(txt)[:200], style="List Bullet")
         if hist_ok:
-            for fl in hist:
-                if isinstance(fl, dict):
-                    # osint_client emits {type(slug), label(human), severity, snippet};
-                    # prefer the human label + snippet, fall back to other shapes.
-                    label = fl.get("label") or fl.get("type") or fl.get("title") or "Semnal"
-                    detail = fl.get("snippet") or fl.get("detail") or fl.get("description") or ""
-                    date_raw = fl.get("date") or fl.get("data") or ""
+            for flx in hist:
+                if flx["is_dict"]:
+                    label = flx["label"]
+                    detail = flx["detail"]
+                    date_raw = flx["date"]
                     doc.add_paragraph(f"{label} {date_raw}: {detail}"[:240], style="List Bullet")
                 else:
-                    doc.add_paragraph(str(fl), style="List Bullet")
+                    doc.add_paragraph(flx["detail"], style="List Bullet")
 
-    sanc = verified_data.get("sanctions", {})
-    if isinstance(sanc, dict) and sanc.get("status") in ("clean", "hit", "unavailable"):
+    sanc = model["sanctions"]["data"]
+    if model["sanctions"]["shown"]:
         doc.add_heading("Screening Sanctiuni", level=1)
         lists = ", ".join(sanc.get("lists_checked", []) or []) or "-"
         n_checked = len(sanc.get("checked", []) or [])
@@ -184,8 +182,8 @@ def _add_rich_fields_docx(doc, verified_data: dict):
             "Nu include PEP (persoane expuse politic)."
         )
 
-    eust = verified_data.get("eurostat_sector", {})
-    if isinstance(eust, dict) and eust.get("available") and isinstance(eust.get("indicators"), dict):
+    eust = model["eurostat_sector"]["data"]
+    if model["eurostat_sector"]["shown"]:
         doc.add_heading("Benchmark Sector UE (Eurostat)", level=1)
         doc.add_paragraph(
             f"Sector NACE {eust.get('nace_used', '')} - {eust.get('nace_label', '')} "
@@ -201,10 +199,8 @@ def _add_rich_fields_docx(doc, verified_data: dict):
             doc.add_paragraph(f"{ind.get('label', '')}: RO {ro_s} | UE27 {eu_s}", style="List Bullet")
         doc.add_paragraph("Sursa: Eurostat (Structural Business Statistics).")
 
-    _market = verified_data.get("market", {})
-    _seap_field = _market.get("seap", {}) if isinstance(_market, dict) else {}
-    seap = _seap_field.get("value", _seap_field) if isinstance(_seap_field, dict) else {}
-    if isinstance(seap, dict) and (seap.get("total_contracts", 0) or 0) > 0:
+    seap = model["seap"]["data"]
+    if model["seap"]["shown"]:
         doc.add_heading("Istoric Achizitii Publice (SICAP)", level=1)
         tot = seap.get("total_contracts", 0)
         cc = seap.get("contracts_count", 0) or len(seap.get("contracts", []) or [])
@@ -228,8 +224,8 @@ def _add_rich_fields_docx(doc, verified_data: dict):
                 auth_s = f" - {auth}" if auth else ""
                 doc.add_paragraph(f"{title}{auth_s}{val_s}", style="List Bullet")
 
-    opp = verified_data.get("tender_opportunities", {})
-    if isinstance(opp, dict) and opp.get("available") and opp.get("count"):
+    opp = model["tender_opportunities"]["data"]
+    if model["tender_opportunities"]["shown"]:
         doc.add_heading("Oportunitati de Contracte (SICAP)", level=1)
         opp_real = opp.get("basis") == "istoric_real"
         _basis_txt = "pe baza contractelor castigate + sector" if opp_real else "pe sector (orientativ)"
@@ -253,8 +249,8 @@ def _add_rich_fields_docx(doc, verified_data: dict):
             if opp_real else "Orientativ - mapare CAEN->CPV la nivel de diviziune. Sursa: SICAP."
         )
 
-    funding = verified_data.get("funding_programs", {})
-    if isinstance(funding, dict) and funding.get("eligible"):
+    funding = model["funding_programs"]["data"]
+    if model["funding_programs"]["shown"]:
         doc.add_page_break()
         doc.add_heading("Programe de Finantare Eligibile", level=1)
         if funding.get("summary"):
