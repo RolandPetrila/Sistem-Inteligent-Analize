@@ -142,16 +142,7 @@ class OfficialAgent(BaseAgent):
             )
 
             # Process ANAF result
-            sources.append(anaf_source)
-            if anaf_source["data_found"]:
-                official_data["anaf"] = anaf_source["data"]
-                if not company_name:
-                    company_name = anaf_source["data"].get("denumire", "")
-                log_source_result(job_id, "ANAF", True, anaf_source.get("response_time_ms", 0),
-                    ["denumire", "TVA", "stare", "adresa"])
-            else:
-                log_source_result(job_id, "ANAF", False, anaf_source.get("response_time_ms", 0),
-                    error=anaf_source.get("data", {}).get("error", "no data"))
+            company_name = self._process_anaf_result(anaf_source, official_data, sources, company_name, job_id)
 
             # CRITICA #1 (audit 2026-07-13): cui + company_name se leaga NECONDITIONAT de
             # rezultatul ANAF. Inainte erau setate DOAR in ramura `if anaf_source["data_found"]`,
@@ -163,55 +154,19 @@ class OfficialAgent(BaseAgent):
             official_data["company_name"] = company_name
 
             # Process openapi.ro result
-            sources.append(openapi_source)
-            if openapi_source["data_found"]:
-                official_data["onrc_structured"] = openapi_source["data"]
-                odata = openapi_source["data"]
-                fields = [k for k in ["caen_code", "asociati", "administratori", "capital_social", "judet"] if odata.get(k)]
-                log_source_result(job_id, "openapi.ro", True, openapi_source.get("response_time_ms", 0), fields)
-            else:
-                log_source_result(job_id, "openapi.ro", False, openapi_source.get("response_time_ms", 0),
-                    error=openapi_source.get("data", {}).get("error", "no data"))
+            self._process_openapi_result(openapi_source, official_data, sources, job_id)
 
             # Process ANAF Bilant result
-            sources.append(bilant_source)
-            if bilant_source["data_found"]:
-                official_data["financial_official"] = bilant_source["data"]
-                years = list(bilant_source["data"].get("data", {}).keys()) if isinstance(bilant_source["data"].get("data"), dict) else []
-                log_source_result(job_id, "ANAF Bilant", True, bilant_source.get("response_time_ms", 0),
-                    [f"years={','.join(str(y) for y in years[:5])}"])
-            else:
-                log_source_result(job_id, "ANAF Bilant", False, bilant_source.get("response_time_ms", 0),
-                    error="no financial data")
+            self._process_bilant_result(bilant_source, official_data, sources, job_id)
 
             # Process BNR result
-            sources.append(bnr_source)
-            if bnr_source["data_found"]:
-                official_data["bnr_rates"] = bnr_source["data"]
-                log_source_result(job_id, "BNR", True, bnr_source.get("response_time_ms", 0), ["exchange_rates"])
-            else:
-                log_source_result(job_id, "BNR", False, bnr_source.get("response_time_ms", 0), error="no rates")
+            self._process_bnr_result(bnr_source, official_data, sources, job_id)
 
             # EP1: Process BPI insolvency result
-            sources.append(bpi_source)
-            if bpi_source["data_found"]:
-                official_data["bpi_insolventa"] = bpi_source["data"]
-                bpi_found = bpi_source["data"].get("found", False)
-                log_source_result(job_id, "BPI", True, bpi_source.get("response_time_ms", 0),
-                    [f"insolventa={'DA' if bpi_found else 'NU'}"])
-            else:
-                log_source_result(job_id, "BPI", False, bpi_source.get("response_time_ms", 0),
-                    error="BPI check failed")
+            self._process_bpi_result(bpi_source, official_data, sources, job_id)
 
             # A5: Process AEGRM Garantii Reale Mobiliare result
-            if aegrm_source.get("has_data"):
-                official_data["aegrm_guarantees"] = aegrm_source
-                count = aegrm_source.get("count", 0)
-                logger.info(f"[official] AEGRM: {count} garantii pentru CUI {cui_clean}")
-                log_source_result(job_id, "AEGRM", True, 0, [f"garantii={count}"])
-            else:
-                logger.debug("[official] AEGRM: fara date sau eroare")
-                log_source_result(job_id, "AEGRM", False, 0, error=aegrm_source.get("error", "no data"))
+            self._process_aegrm_result(aegrm_source, official_data, cui_clean, job_id)
 
             # F1-2: Store administrators in DB for network queries
             if openapi_source["data_found"]:
@@ -318,30 +273,7 @@ class OfficialAgent(BaseAgent):
                     logger.debug(f"[official] MO error: {_e}")
 
             # EP2+EP3: Extract ANAF inactivi + risc fiscal (already in ANAF v9 response)
-            if anaf_source["data_found"]:
-                anaf_data = anaf_source["data"]
-                official_data["anaf_inactiv"] = {
-                    "inactiv": anaf_data.get("inactiv", False),
-                    "data_inactivare": anaf_data.get("data_inactivare", ""),
-                    "data_reactivare": anaf_data.get("data_reactivare", ""),
-                    "source": "ANAF",
-                }
-                # EP3: Derive risc fiscal from ANAF fields
-                is_risc = (
-                    anaf_data.get("inactiv", False)
-                    or anaf_data.get("split_tva", False)
-                    or (anaf_data.get("stare_inregistrare", "").upper() not in ("", "INREGISTRAT"))
-                )
-                official_data["risc_fiscal"] = {
-                    "risc_fiscal": is_risc,
-                    "tip_risc": (
-                        "Contribuabil inactiv" if anaf_data.get("inactiv") else
-                        "Split TVA activ" if anaf_data.get("split_tva") else
-                        f"Stare: {anaf_data.get('stare_inregistrare')}" if is_risc else
-                        None
-                    ),
-                    "source": "ANAF",
-                }
+            self._derive_anaf_fiscal_risk(anaf_source, official_data)
         else:
             # Fara CUI — incercam sa gasim prin Tavily
             official_data["company_name"] = cui  # presupunem ca e numele firmei
@@ -621,6 +553,108 @@ class OfficialAgent(BaseAgent):
             "current_step": f"Agent 1 finalizat: {ok_count}/{total_count} surse ({official_data['diagnostics']['completeness_score']}% complet)",
             "progress": 0.20,
         }
+
+    # --- Faza A (refactor #1, 2026-07-14): procesare pura per-sursa, extrasa din
+    # execute() fara nicio schimbare de comportament (vezi test de caracterizare
+    # `tests/test_agent_official_characterization.py`). Fiecare functie muteaza
+    # DOAR official_data/sources primite ca parametri si logheaza -- nu citesc alta
+    # stare partajata (spre deosebire de blocurile Faza B: store_administrators,
+    # Portal Just, Google Maps, Monitorul Oficial Partea IV, care raman inline aici).
+
+    def _process_anaf_result(self, anaf_source: dict, official_data: dict, sources: list,
+                              company_name: str, job_id: str) -> str:
+        """Proceseaza rezultatul ANAF. Returneaza company_name (poate fi actualizat)."""
+        sources.append(anaf_source)
+        if anaf_source["data_found"]:
+            official_data["anaf"] = anaf_source["data"]
+            if not company_name:
+                company_name = anaf_source["data"].get("denumire", "")
+            log_source_result(job_id, "ANAF", True, anaf_source.get("response_time_ms", 0),
+                ["denumire", "TVA", "stare", "adresa"])
+        else:
+            log_source_result(job_id, "ANAF", False, anaf_source.get("response_time_ms", 0),
+                error=anaf_source.get("data", {}).get("error", "no data"))
+        return company_name
+
+    def _process_openapi_result(self, openapi_source: dict, official_data: dict, sources: list, job_id: str) -> None:
+        sources.append(openapi_source)
+        if openapi_source["data_found"]:
+            official_data["onrc_structured"] = openapi_source["data"]
+            odata = openapi_source["data"]
+            fields = [k for k in ["caen_code", "asociati", "administratori", "capital_social", "judet"] if odata.get(k)]
+            log_source_result(job_id, "openapi.ro", True, openapi_source.get("response_time_ms", 0), fields)
+        else:
+            log_source_result(job_id, "openapi.ro", False, openapi_source.get("response_time_ms", 0),
+                error=openapi_source.get("data", {}).get("error", "no data"))
+
+    def _process_bilant_result(self, bilant_source: dict, official_data: dict, sources: list, job_id: str) -> None:
+        sources.append(bilant_source)
+        if bilant_source["data_found"]:
+            official_data["financial_official"] = bilant_source["data"]
+            years = list(bilant_source["data"].get("data", {}).keys()) if isinstance(bilant_source["data"].get("data"), dict) else []
+            log_source_result(job_id, "ANAF Bilant", True, bilant_source.get("response_time_ms", 0),
+                [f"years={','.join(str(y) for y in years[:5])}"])
+        else:
+            log_source_result(job_id, "ANAF Bilant", False, bilant_source.get("response_time_ms", 0),
+                error="no financial data")
+
+    def _process_bnr_result(self, bnr_source: dict, official_data: dict, sources: list, job_id: str) -> None:
+        sources.append(bnr_source)
+        if bnr_source["data_found"]:
+            official_data["bnr_rates"] = bnr_source["data"]
+            log_source_result(job_id, "BNR", True, bnr_source.get("response_time_ms", 0), ["exchange_rates"])
+        else:
+            log_source_result(job_id, "BNR", False, bnr_source.get("response_time_ms", 0), error="no rates")
+
+    def _process_bpi_result(self, bpi_source: dict, official_data: dict, sources: list, job_id: str) -> None:
+        sources.append(bpi_source)
+        if bpi_source["data_found"]:
+            official_data["bpi_insolventa"] = bpi_source["data"]
+            bpi_found = bpi_source["data"].get("found", False)
+            log_source_result(job_id, "BPI", True, bpi_source.get("response_time_ms", 0),
+                [f"insolventa={'DA' if bpi_found else 'NU'}"])
+        else:
+            log_source_result(job_id, "BPI", False, bpi_source.get("response_time_ms", 0),
+                error="BPI check failed")
+
+    def _process_aegrm_result(self, aegrm_source: dict, official_data: dict, cui_clean: str, job_id: str) -> None:
+        """AEGRM NU trece prin fetch_with_retry (apelat direct, linia gather) si NU se
+        adauga in `sources` -- quirk pastrat identic (verificat de testul de caracterizare)."""
+        if aegrm_source.get("has_data"):
+            official_data["aegrm_guarantees"] = aegrm_source
+            count = aegrm_source.get("count", 0)
+            logger.info(f"[official] AEGRM: {count} garantii pentru CUI {cui_clean}")
+            log_source_result(job_id, "AEGRM", True, 0, [f"garantii={count}"])
+        else:
+            logger.debug("[official] AEGRM: fara date sau eroare")
+            log_source_result(job_id, "AEGRM", False, 0, error=aegrm_source.get("error", "no data"))
+
+    def _derive_anaf_fiscal_risk(self, anaf_source: dict, official_data: dict) -> None:
+        """EP2+EP3: deriva anaf_inactiv + risc_fiscal DOAR din anaf_source["data"] deja
+        fetch-uit (fara I/O nou)."""
+        if anaf_source["data_found"]:
+            anaf_data = anaf_source["data"]
+            official_data["anaf_inactiv"] = {
+                "inactiv": anaf_data.get("inactiv", False),
+                "data_inactivare": anaf_data.get("data_inactivare", ""),
+                "data_reactivare": anaf_data.get("data_reactivare", ""),
+                "source": "ANAF",
+            }
+            is_risc = (
+                anaf_data.get("inactiv", False)
+                or anaf_data.get("split_tva", False)
+                or (anaf_data.get("stare_inregistrare", "").upper() not in ("", "INREGISTRAT"))
+            )
+            official_data["risc_fiscal"] = {
+                "risc_fiscal": is_risc,
+                "tip_risc": (
+                    "Contribuabil inactiv" if anaf_data.get("inactiv") else
+                    "Split TVA activ" if anaf_data.get("split_tva") else
+                    f"Stare: {anaf_data.get('stare_inregistrare')}" if is_risc else
+                    None
+                ),
+                "source": "ANAF",
+            }
 
     def _extract_cui(self, value: str) -> str:
         """Extrage CUI numeric din input."""
