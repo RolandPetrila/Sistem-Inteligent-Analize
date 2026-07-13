@@ -15,6 +15,7 @@ from loguru import logger
 from backend.agents.base import BaseAgent
 from backend.agents.state import AnalysisState
 from backend.agents.synthesis_providers import SynthesisProvidersMixin
+from backend.agents.verification.scoring import risk_bucket
 from backend.prompts.section_prompts import get_sections_for_analysis
 from backend.prompts.system_prompt import SYSTEM_PROMPT
 
@@ -225,7 +226,7 @@ Reguli:
         if not isinstance(numeric_score, (int, float)):
             return text
 
-        risk_color = "Verde" if numeric_score >= 70 else "Galben" if numeric_score >= 40 else "Rosu"
+        risk_color = risk_bucket(numeric_score)
         text_lower = text.lower()
 
         # Detectie contradictie: pozitiv in text + scor Rosu, sau negativ in text + scor Verde

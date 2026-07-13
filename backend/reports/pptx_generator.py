@@ -8,6 +8,8 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
 from pptx.util import Inches, Pt
 
+from backend.agents.verification.scoring import risk_bucket
+
 ACCENT = RGBColor(99, 102, 241)
 DARK_BG = RGBColor(26, 26, 46)
 LIGHT_TEXT = RGBColor(226, 232, 240)
@@ -22,9 +24,7 @@ def _risk_color(score):
     if isinstance(score, str):
         return {"Verde": GREEN, "Galben": YELLOW, "Rosu": RED}.get(score, GRAY_TEXT)
     if isinstance(score, (int, float)):
-        if score >= 70: return GREEN
-        if score >= 40: return YELLOW
-        return RED
+        return {"Verde": GREEN, "Galben": YELLOW, "Rosu": RED}[risk_bucket(score)]
     return GRAY_TEXT
 
 

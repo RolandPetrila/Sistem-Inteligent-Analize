@@ -35,12 +35,13 @@ vi.mock("@/hooks/useDebounce", () => ({
 // Mock types
 vi.mock("@/lib/types", () => ({}));
 
-// --- riskBadge helper — copiata din Companies.tsx pentru test izolat ---
+import { getRiskBucket } from "@/lib/risk";
+
+// --- riskBadge helper — replica logicii din Companies.tsx, peste sursa unica
+// getRiskBucket (DRY #2, 2026-07-14) — nu mai re-copiaza pragurile aici. ---
 function riskBadge(score: number | null | undefined): string {
   if (score == null) return "N/A";
-  if (score >= 70) return "Verde";
-  if (score >= 40) return "Galben";
-  return "Rosu";
+  return getRiskBucket(score);
 }
 
 // --- Tests ---

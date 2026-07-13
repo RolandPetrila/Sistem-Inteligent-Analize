@@ -2,11 +2,43 @@
 import pytest
 
 from backend.agents.agent_verification import VerificationAgent
+from backend.agents.verification.scoring import COLOR_MAP, risk_bucket
 
 
 @pytest.fixture
 def agent():
     return VerificationAgent()
+
+
+class TestRiskBucketBoundaries:
+    """DRY #2 (2026-07-14): risk_bucket() e sursa unica a pragului scor->eticheta,
+    folosita de engine (scoring.py:1130) si de toti cei 25 de consumatori identificati
+    in audit. Blocheaza granitele exacte (70/69.99/40/39.99) — daca cineva muta un prag
+    aici, testul de mai jos trebuie actualizat explicit, nu poate trece din greseala."""
+
+    def test_verde_at_exactly_70(self):
+        assert risk_bucket(70) == "Verde"
+
+    def test_galben_just_below_70(self):
+        assert risk_bucket(69.99) == "Galben"
+
+    def test_galben_at_exactly_40(self):
+        assert risk_bucket(40) == "Galben"
+
+    def test_rosu_just_below_40(self):
+        assert risk_bucket(39.99) == "Rosu"
+
+    def test_rosu_at_zero(self):
+        assert risk_bucket(0) == "Rosu"
+
+    def test_verde_at_100(self):
+        assert risk_bucket(100) == "Verde"
+
+    def test_backed_by_color_map_not_hardcoded_twice(self):
+        """risk_bucket() trebuie sa citeasca din COLOR_MAP, nu sa re-hardcodeze
+        pragurile — altfel ramanem cu 2 surse (exact ce DRY #2 a vrut sa elimine)."""
+        assert risk_bucket(COLOR_MAP["Verde"]) == "Verde"
+        assert risk_bucket(COLOR_MAP["Galben"]) == "Galben"
 
 
 class TestRiskScore:

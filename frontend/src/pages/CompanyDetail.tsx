@@ -23,6 +23,7 @@ import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { logAction } from "@/lib/logger";
 import { ANALYSIS_TYPE_LABELS } from "@/lib/constants";
+import { getRiskBucket } from "@/lib/risk";
 import type {
   TimelineEvent,
   ScoringDimension,
@@ -83,7 +84,13 @@ function ScoreSparkline({
     })
     .join(" ");
   const last = scores[scores.length - 1];
-  const color = last >= 70 ? "#22c55e" : last >= 40 ? "#eab308" : "#ef4444";
+  const lastBucket = getRiskBucket(last);
+  const color =
+    lastBucket === "Verde"
+      ? "#22c55e"
+      : lastBucket === "Galben"
+        ? "#eab308"
+        : "#ef4444";
   return (
     <svg width={W} height={H} className="overflow-visible">
       <polyline points={points} fill="none" stroke={color} strokeWidth="2" />
@@ -568,10 +575,11 @@ export default function CompanyDetail() {
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {Object.entries(dimensions).map(([key, dim]) => {
+              const dimBucket = getRiskBucket(dim.score);
               const barColor =
-                dim.score >= 70
+                dimBucket === "Verde"
                   ? "bg-green-400"
-                  : dim.score >= 40
+                  : dimBucket === "Galben"
                     ? "bg-yellow-400"
                     : "bg-red-400";
               const hasReasons = dim.reasons && dim.reasons.length > 0;
@@ -684,10 +692,11 @@ export default function CompanyDetail() {
           <div className="flex items-end gap-1 h-24">
             {[...scoreHistory].reverse().map((entry, i) => {
               const score = entry.numeric_score ?? 0;
+              const scoreBucket = getRiskBucket(score);
               const barColor =
-                score >= 70
+                scoreBucket === "Verde"
                   ? "bg-green-400"
-                  : score >= 40
+                  : scoreBucket === "Galben"
                     ? "bg-yellow-400"
                     : "bg-red-400";
               return (

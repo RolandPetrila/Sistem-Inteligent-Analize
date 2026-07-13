@@ -14,6 +14,7 @@ import {
 import { validateCUI } from "@/lib/cui-validator";
 import { logAction } from "@/lib/logger";
 import { api } from "@/lib/api";
+import { getRiskBucket } from "@/lib/risk";
 import { useToast } from "@/components/Toast";
 import clsx from "clsx";
 
@@ -48,8 +49,9 @@ function formatNumber(val: number | undefined | null): string {
 function riskColor(score: number | undefined | null): string {
   // C25 fix: score 0 is valid (red), only undefined/null is gray
   if (score === undefined || score === null) return "text-gray-500";
-  if (score >= 70) return "text-green-400";
-  if (score >= 40) return "text-yellow-400";
+  const bucket = getRiskBucket(score);
+  if (bucket === "Verde") return "text-green-400";
+  if (bucket === "Galben") return "text-yellow-400";
   return "text-red-400";
 }
 
@@ -498,11 +500,7 @@ export default function CompareCompanies() {
                         {display}
                         {isRisk && typeof val === "number" && (
                           <span className="ml-1 text-[10px]">
-                            {val >= 70
-                              ? "Verde"
-                              : val >= 40
-                                ? "Galben"
-                                : "Rosu"}
+                            {getRiskBucket(val)}
                           </span>
                         )}
                       </td>

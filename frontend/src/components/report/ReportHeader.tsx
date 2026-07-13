@@ -14,6 +14,7 @@ import {
 import clsx from "clsx";
 import { logAction } from "@/lib/logger";
 import { ANALYSIS_TYPE_LABELS } from "@/lib/constants";
+import { getRiskBucket } from "@/lib/risk";
 
 interface ReportSource {
   source_name: string;
@@ -193,10 +194,11 @@ export function ReportHeader({
             <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2">
               {Object.entries(riskScore.dimensions).map(([key, dim]) => {
                 const d = dim as { score: number; weight: number };
+                const dBucket = getRiskBucket(d.score);
                 const barColor =
-                  d.score >= 70
+                  dBucket === "Verde"
                     ? "bg-green-400"
-                    : d.score >= 40
+                    : dBucket === "Galben"
                       ? "bg-yellow-400"
                       : "bg-red-400";
                 return (

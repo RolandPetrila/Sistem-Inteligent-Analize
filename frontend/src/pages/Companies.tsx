@@ -22,6 +22,7 @@ import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { logAction } from "@/lib/logger";
 import { useDebounce } from "@/hooks/useDebounce";
+import { getRiskBucket } from "@/lib/risk";
 import type { Company } from "@/lib/types";
 
 const SORT_OPTIONS = [
@@ -87,7 +88,8 @@ const riskBadge = (score: number | null | undefined) => {
         N/A
       </span>
     );
-  if (score >= 70)
+  const bucket = getRiskBucket(score);
+  if (bucket === "Verde")
     return (
       <span
         className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full border bg-green-500/20 text-green-400 border-green-500/30"
@@ -96,7 +98,7 @@ const riskBadge = (score: number | null | undefined) => {
         {score}/100
       </span>
     );
-  if (score >= 40)
+  if (bucket === "Galben")
     return (
       <span
         className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full border bg-yellow-500/20 text-yellow-400 border-yellow-500/30"

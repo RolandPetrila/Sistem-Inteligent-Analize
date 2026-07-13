@@ -12,6 +12,7 @@ import { api } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { logAction, logValidation, validateReportData } from "@/lib/logger";
 import { ANALYSIS_TYPE_LABELS } from "@/lib/constants";
+import { getRiskBucket } from "@/lib/risk";
 import type { AnalysisType } from "@/lib/types";
 import { ReportHeader } from "@/components/report/ReportHeader";
 import { ReportTabs } from "@/components/report/ReportTabs";
@@ -466,16 +467,17 @@ export default function ReportView() {
                   {Object.entries(DIMENSION_INFO).map(([key, info]) => {
                     const dim = scoringDimensions[key];
                     const score = dim?.score ?? 0;
+                    const bucket = getRiskBucket(score);
                     const barColor =
-                      score >= 70
+                      bucket === "Verde"
                         ? "bg-green-400"
-                        : score >= 40
+                        : bucket === "Galben"
                           ? "bg-yellow-400"
                           : "bg-red-400";
                     const scoreColor =
-                      score >= 70
+                      bucket === "Verde"
                         ? "text-green-400"
-                        : score >= 40
+                        : bucket === "Galben"
                           ? "text-yellow-400"
                           : "text-red-400";
                     return (

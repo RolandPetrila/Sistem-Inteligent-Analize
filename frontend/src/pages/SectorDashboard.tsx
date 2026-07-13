@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Search, Building2, AlertTriangle, Layers } from "lucide-react";
 import clsx from "clsx";
 import { api } from "@/lib/api";
+import { getRiskBucket } from "@/lib/risk";
 import { useToast } from "@/components/Toast";
 
 // Etichete prietenoase (RO) pentru cheile de statistici returnate de backend.
@@ -27,13 +28,15 @@ const STAT_VALUE_COLOR: Record<string, string> = {
 const humanize = (key: string): string =>
   key.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 
-// Mapare scor -> culoare (identic cu pragurile backend: >=70 verde, >=40 galben, restul rosu).
-const scoreColor = (score: number): string =>
-  score >= 70
+// Mapare scor -> culoare, via sursa unica de praguri (getRiskBucket, DRY #2 2026-07-14).
+const scoreColor = (score: number): string => {
+  const bucket = getRiskBucket(score);
+  return bucket === "Verde"
     ? "text-risk-verde"
-    : score >= 40
+    : bucket === "Galben"
       ? "text-risk-galben"
       : "text-risk-rosu";
+};
 
 export default function SectorDashboard() {
   const { toast } = useToast();

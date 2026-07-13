@@ -323,6 +323,9 @@ async def sector_dashboard(caen_code: str):
         from backend.errors import ErrorCode, RISError
         raise RISError(ErrorCode.VALIDATION_ERROR, "Cod CAEN invalid (4 cifre)")
 
+    # DRY #2 (2026-07-14): pragurile de mai jos (70/40) trebuie sa ramana IDENTICE cu
+    # backend/agents/verification/scoring.py::risk_bucket() (SQL nu poate importa
+    # helper-ul Python) — schimba-le AICI SI acolo daca se schimba vreodata.
     stats = await db.fetch_one(
         """
         SELECT

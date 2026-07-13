@@ -96,6 +96,7 @@ __all__ = [
     "DIMENSION_WEIGHTS",
     "SCORING_THRESHOLDS",
     "COLOR_MAP",
+    "risk_bucket",
     "SECTOR_VOLATILITY_BASELINE",
 ]
 
@@ -147,6 +148,17 @@ COLOR_MAP = {
     "Galben": 40,  # score >= 40
     "Rosu": 0,     # score < 40
 }
+
+
+def risk_bucket(score: float) -> str:
+    """Sursa unica a pragului scor->eticheta (Verde/Galben/Rosu), backed de COLOR_MAP.
+    DRY #2 (audit 2026-07-13): pragul era reimplementat independent in 25 situri
+    (11 backend + 14 frontend) — inventar confirmat ZERO divergenta de prag/operator,
+    dar duplicare pura. Schimba pragurile AICI (COLOR_MAP), nu la fiecare consumator."""
+    for label, threshold in COLOR_MAP.items():
+        if score >= threshold:
+            return label
+    return "Rosu"
 
 
 def apply_dynamic_thresholds(base: dict, dynamic: dict | None) -> dict:
@@ -1127,12 +1139,7 @@ def calculate_risk_score(verified: dict, dynamic_thresholds: dict | None = None)
     total_score = sum(d["score"] * d["weight"] / 100 for d in dimensions.values())
     total_score = round(total_score, 1)
 
-    if total_score >= 70:
-        color = "Verde"
-    elif total_score >= 40:
-        color = "Galben"
-    else:
-        color = "Rosu"
+    color = risk_bucket(total_score)
 
     recommendations = {
         "Verde": "Risc scazut - parteneriat recomandat cu verificare standard",

@@ -8,6 +8,8 @@ from openpyxl.chart import BarChart, LineChart, Reference
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
+from backend.agents.verification.scoring import risk_bucket
+
 # Palette
 ACCENT = "6366F1"
 WHITE = "FFFFFF"
@@ -47,9 +49,10 @@ def _style_data_cell(cell, number_format=None):
 
 
 def _risk_fill(score):
-    if score >= 70:
+    bucket = risk_bucket(score)
+    if bucket == "Verde":
         return PatternFill(start_color=GREEN, end_color=GREEN, fill_type="solid")
-    elif score >= 40:
+    elif bucket == "Galben":
         return PatternFill(start_color=YELLOW, end_color=YELLOW, fill_type="solid")
     else:
         return PatternFill(start_color=RED, end_color=RED, fill_type="solid")
@@ -400,9 +403,10 @@ def generate_excel(report_sections: dict, meta: dict, verified_data: dict, outpu
         score_val = dim_data.get("score", 0)
         score_cell = ws5.cell(row=kpi_row, column=2, value=round(score_val, 1))
         _style_data_cell(score_cell, "0.0")
-        if score_val >= 70:
+        dim_bucket = risk_bucket(score_val)
+        if dim_bucket == "Verde":
             score_cell.font = Font(bold=True, color="22c55e")
-        elif score_val >= 40:
+        elif dim_bucket == "Galben":
             score_cell.font = Font(bold=True, color="eab308")
         else:
             score_cell.font = Font(bold=True, color="ef4444")
