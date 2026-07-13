@@ -1,0 +1,145 @@
+{
+  "current_step": "Agent 1 finalizat: 2/4 surse (100% complet)",
+  "historical_flags": [],
+  "official_data": {
+    "bnr_rates": {
+      "EUR": 5.05,
+      "USD": 4.6
+    },
+    "company_name": "Firma Fara CUI Exemplu SRL",
+    "cui_input": "Firma Fara CUI Exemplu SRL",
+    "data_freshness": {
+      "bnr": {
+        "data_age_years": 0,
+        "fresh": true,
+        "note": "daily rates"
+      }
+    },
+    "diagnostics": {
+      "completeness_score": 100,
+      "expected_sources": [
+        "BNR"
+      ],
+      "missing_fields": [
+        "ANAF fiscal status",
+        "Date financiare oficiale (ANAF Bilant)",
+        "ONRC structurat (openapi.ro) — CAEN, asociati, administratori",
+        "Cod CAEN (necesar pentru benchmark si context sector)",
+        "Context CAEN (sector, numar firme, benchmark)"
+      ],
+      "missing_sources": [],
+      "per_source": {
+        "BNR": {
+          "data_found": true,
+          "error": null,
+          "response_time_ms": 0,
+          "status": "OK"
+        },
+        "Date financiare (listafirme.ro)": {
+          "data_found": false,
+          "error": "no data",
+          "response_time_ms": 0,
+          "status": "NO_DATA"
+        },
+        "Legal (BPI+Litigii)": {
+          "data_found": false,
+          "error": "no data",
+          "response_time_ms": 0,
+          "status": "NO_DATA"
+        },
+        "ONRC (Tavily)": {
+          "data_found": true,
+          "error": null,
+          "response_time_ms": 0,
+          "status": "OK"
+        }
+      }
+    },
+    "onrc": {
+      "results": [
+        {
+          "content": "date firma",
+          "title": "MOSSLEIN pe recom.onrc.ro",
+          "url": "https://recom.onrc.ro/x"
+        }
+      ]
+    },
+    "sources_summary": {
+      "failed": 2,
+      "ok": 2,
+      "total": 4
+    },
+    "timestamp": "2026-07-14T12:00:00+00:00",
+    "web_intelligence": {
+      "categories": {
+        "financiar": [],
+        "juridic": [],
+        "oficial": [
+          {
+            "sentiment": "neutral",
+            "title": "MOSSLEIN pe recom.onrc.ro",
+            "url": "https://recom.onrc.ro/x"
+          }
+        ],
+        "recenzii": [],
+        "stiri": []
+      },
+      "sentiment_summary": {
+        "negative": 0,
+        "neutral": 1,
+        "positive": 0
+      },
+      "total_results": 1
+    }
+  },
+  "progress": 0.2,
+  "sources": [
+    {
+      "data": {
+        "EUR": 5.05,
+        "USD": 4.6
+      },
+      "data_found": true,
+      "response_time_ms": 0,
+      "source_name": "BNR",
+      "source_url": "https://www.bnr.ro/nbrfxrates.xml",
+      "status": "OK"
+    },
+    {
+      "data": {
+        "results": [
+          {
+            "content": "date firma",
+            "title": "MOSSLEIN pe recom.onrc.ro",
+            "url": "https://recom.onrc.ro/x"
+          }
+        ]
+      },
+      "data_found": true,
+      "response_time_ms": 0,
+      "source_name": "ONRC (Tavily)",
+      "source_url": "https://recom.onrc.ro",
+      "status": "OK"
+    },
+    {
+      "data": {
+        "error": "no data"
+      },
+      "data_found": false,
+      "response_time_ms": 0,
+      "source_name": "Date financiare (listafirme.ro)",
+      "source_url": "https://listafirme.ro",
+      "status": "NO_DATA"
+    },
+    {
+      "data": {
+        "error": "no data"
+      },
+      "data_found": false,
+      "response_time_ms": 0,
+      "source_name": "Legal (BPI+Litigii)",
+      "source_url": "https://bpi.ro + portal.just.ro",
+      "status": "NO_DATA"
+    }
+  ]
+}

@@ -1,0 +1,194 @@
+{
+  "current_step": "Agent 1 finalizat: 0/9 surse (0% complet)",
+  "historical_flags": [],
+  "official_data": {
+    "company_name": "MOSSLEIN TEST SRL",
+    "cui": "26313362",
+    "cui_input": "26313362",
+    "cui_validation": {
+      "cui_clean": "26313362",
+      "error": null,
+      "valid": true
+    },
+    "data_freshness": {},
+    "diagnostics": {
+      "completeness_score": 0,
+      "expected_sources": [
+        "ANAF",
+        "ANAF Bilant",
+        "BNR",
+        "openapi.ro",
+        "BPI (buletinul.ro)"
+      ],
+      "missing_fields": [
+        "ANAF fiscal status",
+        "Date financiare oficiale (ANAF Bilant)",
+        "ONRC structurat (openapi.ro) — CAEN, asociati, administratori",
+        "Cod CAEN (necesar pentru benchmark si context sector)",
+        "Context CAEN (sector, numar firme, benchmark)"
+      ],
+      "missing_sources": [
+        "ANAF",
+        "ANAF Bilant",
+        "BNR",
+        "openapi.ro",
+        "BPI (buletinul.ro)"
+      ],
+      "per_source": {
+        "ANAF": {
+          "data_found": false,
+          "error": "timeout",
+          "response_time_ms": 0,
+          "status": "NO_DATA"
+        },
+        "ANAF Bilant": {
+          "data_found": false,
+          "error": "no financial data",
+          "response_time_ms": 0,
+          "status": "NO_DATA"
+        },
+        "BNR": {
+          "data_found": false,
+          "error": "unavailable",
+          "response_time_ms": 0,
+          "status": "NO_DATA"
+        },
+        "BPI (buletinul.ro)": {
+          "data_found": false,
+          "error": "check failed",
+          "response_time_ms": 0,
+          "status": "NO_DATA"
+        },
+        "Date financiare (listafirme.ro)": {
+          "data_found": false,
+          "error": "no data",
+          "response_time_ms": 0,
+          "status": "NO_DATA"
+        },
+        "Legal (BPI+Litigii)": {
+          "data_found": false,
+          "error": "no data",
+          "response_time_ms": 0,
+          "status": "NO_DATA"
+        },
+        "ONRC (Tavily)": {
+          "data_found": false,
+          "error": "no data",
+          "response_time_ms": 0,
+          "status": "NO_DATA"
+        },
+        "openapi.ro": {
+          "data_found": false,
+          "error": "timeout",
+          "response_time_ms": 0,
+          "status": "NO_DATA"
+        },
+        "portal.just.ro": {
+          "data_found": false,
+          "error": null,
+          "response_time_ms": 0,
+          "status": "FAIL"
+        }
+      }
+    },
+    "osint_historical": {
+      "historical_flags": []
+    },
+    "sources_summary": {
+      "failed": 9,
+      "ok": 0,
+      "total": 9
+    },
+    "timestamp": "2026-07-14T12:00:00+00:00"
+  },
+  "progress": 0.2,
+  "sources": [
+    {
+      "data": {
+        "error": "timeout"
+      },
+      "data_found": false,
+      "response_time_ms": 0,
+      "source_name": "ANAF",
+      "source_url": "https://webservicesp.anaf.ro",
+      "status": "NO_DATA"
+    },
+    {
+      "data": {
+        "error": "timeout"
+      },
+      "data_found": false,
+      "response_time_ms": 0,
+      "source_name": "openapi.ro",
+      "source_url": "https://openapi.ro",
+      "status": "NO_DATA"
+    },
+    {
+      "data": {
+        "error": "no financial data"
+      },
+      "data_found": false,
+      "response_time_ms": 0,
+      "source_name": "ANAF Bilant",
+      "source_url": "https://webservicesp.anaf.ro/bilant",
+      "status": "NO_DATA"
+    },
+    {
+      "data": {
+        "error": "unavailable"
+      },
+      "data_found": false,
+      "response_time_ms": 0,
+      "source_name": "BNR",
+      "source_url": "https://www.bnr.ro/nbrfxrates.xml",
+      "status": "NO_DATA"
+    },
+    {
+      "data": {
+        "error": "check failed"
+      },
+      "data_found": false,
+      "response_time_ms": 0,
+      "source_name": "BPI (buletinul.ro)",
+      "source_url": "https://www.buletinul.ro",
+      "status": "NO_DATA"
+    },
+    {
+      "data_found": false,
+      "response_time_ms": 0,
+      "source_name": "portal.just.ro",
+      "source_url": "http://portalquery.just.ro",
+      "status": "FAIL"
+    },
+    {
+      "data": {
+        "error": "no data"
+      },
+      "data_found": false,
+      "response_time_ms": 0,
+      "source_name": "ONRC (Tavily)",
+      "source_url": "https://recom.onrc.ro",
+      "status": "NO_DATA"
+    },
+    {
+      "data": {
+        "error": "no data"
+      },
+      "data_found": false,
+      "response_time_ms": 0,
+      "source_name": "Date financiare (listafirme.ro)",
+      "source_url": "https://listafirme.ro",
+      "status": "NO_DATA"
+    },
+    {
+      "data": {
+        "error": "no data"
+      },
+      "data_found": false,
+      "response_time_ms": 0,
+      "source_name": "Legal (BPI+Litigii)",
+      "source_url": "https://bpi.ro + portal.just.ro",
+      "status": "NO_DATA"
+    }
+  ]
+}

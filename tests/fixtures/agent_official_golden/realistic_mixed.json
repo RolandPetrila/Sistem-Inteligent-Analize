@@ -1,0 +1,276 @@
+{
+  "current_step": "Agent 1 finalizat: 5/8 surse (64% complet)",
+  "historical_flags": [],
+  "official_data": {
+    "anaf": {
+      "cod_caen": "3600",
+      "cui": "26313362",
+      "data_inactivare": "",
+      "data_reactivare": "",
+      "denumire": "MOSSLEIN TEST SRL",
+      "found": true,
+      "inactiv": false,
+      "platitor_tva": true,
+      "split_tva": false,
+      "stare": "INREGISTRAT",
+      "stare_inregistrare": "INREGISTRAT"
+    },
+    "anaf_inactiv": {
+      "data_inactivare": "",
+      "data_reactivare": "",
+      "inactiv": false,
+      "source": "ANAF"
+    },
+    "bnr_rates": {
+      "EUR": 5.05,
+      "USD": 4.6
+    },
+    "caen_context": {
+      "available": true,
+      "caen_description": "Captarea, tratarea si distributia apei",
+      "caen_section_name": "Utilitati"
+    },
+    "company_name": "MOSSLEIN TEST SRL",
+    "cui": "26313362",
+    "cui_input": "26313362",
+    "cui_validation": {
+      "cui_clean": "26313362",
+      "error": null,
+      "valid": true
+    },
+    "data_freshness": {
+      "anaf_fiscal": {
+        "data_age_years": 0,
+        "fresh": true,
+        "note": "real-time API"
+      },
+      "bnr": {
+        "data_age_years": 0,
+        "fresh": true,
+        "note": "daily rates"
+      },
+      "onrc": {
+        "data_age_years": 0,
+        "fresh": true,
+        "note": "registry data"
+      }
+    },
+    "diagnostics": {
+      "completeness_score": 64,
+      "expected_sources": [
+        "ANAF",
+        "ANAF Bilant",
+        "BNR",
+        "openapi.ro",
+        "BPI (buletinul.ro)"
+      ],
+      "missing_fields": [
+        "Date financiare oficiale (ANAF Bilant)"
+      ],
+      "missing_sources": [
+        "ANAF Bilant",
+        "BPI (buletinul.ro)"
+      ],
+      "per_source": {
+        "ANAF": {
+          "data_found": true,
+          "error": null,
+          "response_time_ms": 0,
+          "status": "OK"
+        },
+        "ANAF Bilant": {
+          "data_found": false,
+          "error": "no financial data",
+          "response_time_ms": 0,
+          "status": "NO_DATA"
+        },
+        "BNR": {
+          "data_found": true,
+          "error": null,
+          "response_time_ms": 0,
+          "status": "OK"
+        },
+        "BPI (buletinul.ro)": {
+          "data_found": false,
+          "error": "check failed",
+          "response_time_ms": 0,
+          "status": "NO_DATA"
+        },
+        "Date financiare (listafirme.ro)": {
+          "data_found": false,
+          "error": "no data",
+          "response_time_ms": 0,
+          "status": "NO_DATA"
+        },
+        "google_maps": {
+          "data_found": true,
+          "error": null,
+          "response_time_ms": 0,
+          "status": "OK"
+        },
+        "openapi.ro": {
+          "data_found": true,
+          "error": null,
+          "response_time_ms": 0,
+          "status": "OK"
+        },
+        "portal.just.ro": {
+          "data_found": true,
+          "error": null,
+          "response_time_ms": 0,
+          "status": "OK"
+        }
+      }
+    },
+    "dosare_just": {
+      "dosare": [
+        {
+          "instanta": "Tribunalul Arad",
+          "numar": "123/2026"
+        }
+      ],
+      "found": true,
+      "total_dosare": 1
+    },
+    "maps_rating": {
+      "found": true,
+      "name": "MOSSLEIN TEST SRL",
+      "rating": 4.2
+    },
+    "onrc_structured": {
+      "administratori": [
+        {
+          "nume": "Ion Popescu"
+        }
+      ],
+      "asociati": [
+        {
+          "nume": "Ion Popescu",
+          "procent": 100
+        }
+      ],
+      "caen_code": "3600",
+      "capital_social": 200,
+      "found": true,
+      "judet": "Arad"
+    },
+    "risc_fiscal": {
+      "risc_fiscal": false,
+      "source": "ANAF",
+      "tip_risc": null
+    },
+    "sources_summary": {
+      "failed": 3,
+      "ok": 5,
+      "total": 8
+    },
+    "tavily_quota_exhausted": true,
+    "tavily_usage": {
+      "limit": 1000,
+      "used": 0
+    },
+    "timestamp": "2026-07-14T12:00:00+00:00"
+  },
+  "progress": 0.2,
+  "sources": [
+    {
+      "data": {
+        "cod_caen": "3600",
+        "cui": "26313362",
+        "data_inactivare": "",
+        "data_reactivare": "",
+        "denumire": "MOSSLEIN TEST SRL",
+        "found": true,
+        "inactiv": false,
+        "platitor_tva": true,
+        "split_tva": false,
+        "stare": "INREGISTRAT",
+        "stare_inregistrare": "INREGISTRAT"
+      },
+      "data_found": true,
+      "response_time_ms": 0,
+      "source_name": "ANAF",
+      "source_url": "https://webservicesp.anaf.ro",
+      "status": "OK"
+    },
+    {
+      "data": {
+        "administratori": [
+          {
+            "nume": "Ion Popescu"
+          }
+        ],
+        "asociati": [
+          {
+            "nume": "Ion Popescu",
+            "procent": 100
+          }
+        ],
+        "caen_code": "3600",
+        "capital_social": 200,
+        "found": true,
+        "judet": "Arad"
+      },
+      "data_found": true,
+      "response_time_ms": 0,
+      "source_name": "openapi.ro",
+      "source_url": "https://openapi.ro",
+      "status": "OK"
+    },
+    {
+      "data": {
+        "error": "no financial data"
+      },
+      "data_found": false,
+      "response_time_ms": 0,
+      "source_name": "ANAF Bilant",
+      "source_url": "https://webservicesp.anaf.ro/bilant",
+      "status": "NO_DATA"
+    },
+    {
+      "data": {
+        "EUR": 5.05,
+        "USD": 4.6
+      },
+      "data_found": true,
+      "response_time_ms": 0,
+      "source_name": "BNR",
+      "source_url": "https://www.bnr.ro/nbrfxrates.xml",
+      "status": "OK"
+    },
+    {
+      "data": {
+        "error": "check failed"
+      },
+      "data_found": false,
+      "response_time_ms": 0,
+      "source_name": "BPI (buletinul.ro)",
+      "source_url": "https://www.buletinul.ro",
+      "status": "NO_DATA"
+    },
+    {
+      "data_found": true,
+      "response_time_ms": 0,
+      "source_name": "portal.just.ro",
+      "source_url": "http://portalquery.just.ro",
+      "status": "OK"
+    },
+    {
+      "data_found": true,
+      "response_time_ms": 0,
+      "source_name": "google_maps",
+      "source_url": "https://maps.google.com",
+      "status": "OK"
+    },
+    {
+      "data": {
+        "error": "no data"
+      },
+      "data_found": false,
+      "response_time_ms": 0,
+      "source_name": "Date financiare (listafirme.ro)",
+      "source_url": "https://listafirme.ro",
+      "status": "NO_DATA"
+    }
+  ]
+}

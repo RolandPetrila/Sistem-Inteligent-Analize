@@ -1,0 +1,338 @@
+{
+  "current_step": "Agent 1 finalizat: 7/7 surse (100% complet)",
+  "historical_flags": [],
+  "official_data": {
+    "aegrm_guarantees": {
+      "count": 0,
+      "guarantees": [],
+      "has_data": true,
+      "has_guarantees": false
+    },
+    "anaf": {
+      "cod_caen": "3600",
+      "cui": "26313362",
+      "data_inactivare": "",
+      "data_reactivare": "",
+      "denumire": "MOSSLEIN TEST SRL",
+      "found": true,
+      "inactiv": false,
+      "platitor_tva": true,
+      "split_tva": false,
+      "stare": "INREGISTRAT",
+      "stare_inregistrare": "INREGISTRAT"
+    },
+    "anaf_inactiv": {
+      "data_inactivare": "",
+      "data_reactivare": "",
+      "inactiv": false,
+      "source": "ANAF"
+    },
+    "bnr_rates": {
+      "EUR": 5.05,
+      "USD": 4.6
+    },
+    "bpi_insolventa": {
+      "found": false
+    },
+    "caen_context": {
+      "available": true,
+      "caen_description": "Captarea, tratarea si distributia apei",
+      "caen_section_name": "Utilitati"
+    },
+    "company_name": "MOSSLEIN TEST SRL",
+    "cui": "26313362",
+    "cui_input": "26313362",
+    "cui_validation": {
+      "cui_clean": "26313362",
+      "error": null,
+      "valid": true
+    },
+    "data_freshness": {
+      "anaf_bilant": {
+        "data_age_years": 2,
+        "fresh": false,
+        "latest_year": 2024
+      },
+      "anaf_fiscal": {
+        "data_age_years": 0,
+        "fresh": true,
+        "note": "real-time API"
+      },
+      "bnr": {
+        "data_age_years": 0,
+        "fresh": true,
+        "note": "daily rates"
+      },
+      "onrc": {
+        "data_age_years": 0,
+        "fresh": true,
+        "note": "registry data"
+      }
+    },
+    "diagnostics": {
+      "completeness_score": 100,
+      "expected_sources": [
+        "ANAF",
+        "ANAF Bilant",
+        "BNR",
+        "openapi.ro",
+        "BPI (buletinul.ro)"
+      ],
+      "missing_fields": [],
+      "missing_sources": [],
+      "per_source": {
+        "ANAF": {
+          "data_found": true,
+          "error": null,
+          "response_time_ms": 0,
+          "status": "OK"
+        },
+        "ANAF Bilant": {
+          "data_found": true,
+          "error": null,
+          "response_time_ms": 0,
+          "status": "OK"
+        },
+        "BNR": {
+          "data_found": true,
+          "error": null,
+          "response_time_ms": 0,
+          "status": "OK"
+        },
+        "BPI (buletinul.ro)": {
+          "data_found": true,
+          "error": null,
+          "response_time_ms": 0,
+          "status": "OK"
+        },
+        "Legal (BPI+Litigii)": {
+          "data_found": true,
+          "error": null,
+          "response_time_ms": 0,
+          "status": "OK"
+        },
+        "openapi.ro": {
+          "data_found": true,
+          "error": null,
+          "response_time_ms": 0,
+          "status": "OK"
+        },
+        "portal.just.ro": {
+          "data_found": true,
+          "error": null,
+          "response_time_ms": 0,
+          "status": "OK"
+        }
+      }
+    },
+    "dosare_just": {
+      "dosare": [
+        {
+          "instanta": "Tribunalul Arad",
+          "numar": "123/2026"
+        }
+      ],
+      "found": true,
+      "total_dosare": 1
+    },
+    "financial_official": {
+      "data": {
+        "2024": {
+          "caen_code": "3600",
+          "cifra_afaceri": 1000000,
+          "numar_mediu_salariati": 10,
+          "profit_net": 100000
+        }
+      }
+    },
+    "insolvency": {
+      "answer": "Nicio mentiune gasita.",
+      "query": "test",
+      "results": [
+        {
+          "content": "curat",
+          "title": "fara insolventa/litigii",
+          "url": "https://bpi.ro/x"
+        }
+      ]
+    },
+    "litigation": {
+      "answer": "Nicio mentiune gasita.",
+      "query": "test",
+      "results": [
+        {
+          "content": "curat",
+          "title": "fara insolventa/litigii",
+          "url": "https://bpi.ro/x"
+        }
+      ]
+    },
+    "onrc_structured": {
+      "administratori": [
+        {
+          "nume": "Ion Popescu"
+        }
+      ],
+      "asociati": [
+        {
+          "nume": "Ion Popescu",
+          "procent": 100
+        }
+      ],
+      "caen_code": "3600",
+      "capital_social": 200,
+      "found": true,
+      "judet": "Arad"
+    },
+    "osint_historical": {
+      "historical_flags": []
+    },
+    "risc_fiscal": {
+      "risc_fiscal": false,
+      "source": "ANAF",
+      "tip_risc": null
+    },
+    "sources_summary": {
+      "failed": 0,
+      "ok": 7,
+      "total": 7
+    },
+    "timestamp": "2026-07-14T12:00:00+00:00",
+    "web_intelligence": {
+      "categories": {
+        "financiar": [],
+        "juridic": [
+          {
+            "sentiment": "negative",
+            "title": "fara insolventa/litigii",
+            "url": "https://bpi.ro/x"
+          },
+          {
+            "sentiment": "negative",
+            "title": "fara insolventa/litigii",
+            "url": "https://bpi.ro/x"
+          }
+        ],
+        "oficial": [],
+        "recenzii": [],
+        "stiri": []
+      },
+      "sentiment_summary": {
+        "negative": 2,
+        "neutral": 0,
+        "positive": 0
+      },
+      "total_results": 2
+    }
+  },
+  "progress": 0.2,
+  "sources": [
+    {
+      "data": {
+        "cod_caen": "3600",
+        "cui": "26313362",
+        "data_inactivare": "",
+        "data_reactivare": "",
+        "denumire": "MOSSLEIN TEST SRL",
+        "found": true,
+        "inactiv": false,
+        "platitor_tva": true,
+        "split_tva": false,
+        "stare": "INREGISTRAT",
+        "stare_inregistrare": "INREGISTRAT"
+      },
+      "data_found": true,
+      "response_time_ms": 0,
+      "source_name": "ANAF",
+      "source_url": "https://webservicesp.anaf.ro",
+      "status": "OK"
+    },
+    {
+      "data": {
+        "administratori": [
+          {
+            "nume": "Ion Popescu"
+          }
+        ],
+        "asociati": [
+          {
+            "nume": "Ion Popescu",
+            "procent": 100
+          }
+        ],
+        "caen_code": "3600",
+        "capital_social": 200,
+        "found": true,
+        "judet": "Arad"
+      },
+      "data_found": true,
+      "response_time_ms": 0,
+      "source_name": "openapi.ro",
+      "source_url": "https://openapi.ro",
+      "status": "OK"
+    },
+    {
+      "data": {
+        "data": {
+          "2024": {
+            "caen_code": "3600",
+            "cifra_afaceri": 1000000,
+            "numar_mediu_salariati": 10,
+            "profit_net": 100000
+          }
+        }
+      },
+      "data_found": true,
+      "response_time_ms": 0,
+      "source_name": "ANAF Bilant",
+      "source_url": "https://webservicesp.anaf.ro/bilant",
+      "status": "OK"
+    },
+    {
+      "data": {
+        "EUR": 5.05,
+        "USD": 4.6
+      },
+      "data_found": true,
+      "response_time_ms": 0,
+      "source_name": "BNR",
+      "source_url": "https://www.bnr.ro/nbrfxrates.xml",
+      "status": "OK"
+    },
+    {
+      "data": {
+        "found": false
+      },
+      "data_found": true,
+      "response_time_ms": 0,
+      "source_name": "BPI (buletinul.ro)",
+      "source_url": "https://www.buletinul.ro",
+      "status": "OK"
+    },
+    {
+      "data_found": true,
+      "response_time_ms": 0,
+      "source_name": "portal.just.ro",
+      "source_url": "http://portalquery.just.ro",
+      "status": "OK"
+    },
+    {
+      "data": {
+        "answer": "Nicio mentiune gasita.",
+        "query": "test",
+        "results": [
+          {
+            "content": "curat",
+            "title": "fara insolventa/litigii",
+            "url": "https://bpi.ro/x"
+          }
+        ]
+      },
+      "data_found": true,
+      "response_time_ms": 0,
+      "source_name": "Legal (BPI+Litigii)",
+      "source_url": "https://bpi.ro + portal.just.ro",
+      "status": "OK"
+    }
+  ]
+}

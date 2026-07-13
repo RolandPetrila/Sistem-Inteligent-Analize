@@ -1,0 +1,24 @@
+{
+  "current_step": "Agent 1: CUI 12345678 invalid — analiza oprita",
+  "errors": [
+    {
+      "agent": "official",
+      "error": "CUI invalid: Cifra de control invalida (expected 4, got 8)",
+      "recoverable": false
+    }
+  ],
+  "official_data": {
+    "cui_input": "12345678",
+    "cui_validation": {
+      "cui_clean": "12345678",
+      "error": "Cifra de control invalida (expected 4, got 8)",
+      "valid": false
+    },
+    "cui_warning": "Cifra de control invalida (expected 4, got 8)",
+    "early_return": true,
+    "early_return_reason": "CUI 12345678 nu trece validarea MOD 11: Cifra de control invalida (expected 4, got 8)",
+    "timestamp": "2026-07-14T12:00:00+00:00"
+  },
+  "progress": 0.2,
+  "sources": []
+}
