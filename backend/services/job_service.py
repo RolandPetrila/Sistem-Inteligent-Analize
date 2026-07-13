@@ -388,10 +388,21 @@ async def _finalize_job(
     company_name = ""
     cui = ""
     if verified_data:
-        # Extragem company_name/cui din verified_data daca exista (fost salvat de _save_job_results)
+        # HIGH #8 (audit 2026-07-13): company_name/cui NU sunt niciodata chei
+        # top-level pe verified_data — confirmat direct in agent_verification.py
+        # (nicio asignare verified["company_name"]/verified["cui"] in tot
+        # fisierul). Calea reala: verified["company"]["denumire"/"cui"]["value"]
+        # (camp wrapped _make_field) — acelasi pattern deja folosit in
+        # agent_verification.py:231/243. Bug-ul facea ca notificarile/webhook-ul
+        # sa arate mereu "Firma: N/A" (company_name era intotdeauna "").
         rs_data = verified_data.get("risk_score", {})
-        company_name = verified_data.get("company_name", "")
-        cui = verified_data.get("cui", "")
+        company_field = verified_data.get("company", {})
+
+        def _uw(field):
+            return field.get("value") if isinstance(field, dict) else field
+
+        company_name = _uw(company_field.get("denumire", "")) or ""
+        cui = _uw(company_field.get("cui", "")) or ""
         risk_score = rs_data.get("score")
 
     formats_available = list(report_paths.keys())
@@ -451,22 +462,28 @@ async def _finalize_job(
             "numeric_score": _numeric_score,
         })
     except Exception as _wh_err:
-        logger.debug(f"[webhook] Non-critical: {_wh_err}")
+        logger.warning(f"[webhook] Non-critical, dar nu ascunde: {_wh_err}")
 
     # R2 Fix #1: Create in-app notification on job complete
     try:
         from backend.routers.notifications import create_notification
-        _score = risk_score
-        _sev = "success" if _score and _score >= 70 else "warning" if _score and _score >= 40 else "error"
+        # BUG REAL gasit 2026-07-13 (in timpul HIGH #8, empiric cu logger.exception
+        # temporar): `risk_score` e STRING-ul de culoare ("Verde"/"Galben"/"Rosu"),
+        # NU scorul numeric — `_score >= 70` arunca `TypeError: '>=' not supported
+        # between instances of 'str' and 'int'`, INGHITITA silentios de except-ul
+        # de mai jos (era logger.debug). De aceea NICIO notificare in-app job_complete
+        # nu a fost creata vreodata (confirmat: 0 randuri reale type='job_complete'
+        # in toata istoria DB). Severitatea se determina din culoare direct.
+        _sev = "success" if risk_score == "Verde" else "warning" if risk_score == "Galben" else "error"
         await create_notification(
             type="job_complete",
             title=f"Analiza finalizata: {company_name or cui or 'N/A'}",
-            message=f"Scor risc: {_score or 'N/A'}. {len(formats_available)} formate disponibile.",
+            message=f"Scor risc: {risk_score or 'N/A'}. {len(formats_available)} formate disponibile.",
             link=f"/report/{report_id}" if report_id else f"/analysis/{job_id}",
             severity=_sev,
         )
     except Exception as notif_err:
-        logger.debug(f"Notification create failed (non-critical): {notif_err}")
+        logger.warning(f"Notification create failed: {notif_err}")
 
 
 async def run_analysis_job(job_id: str, ws_manager=None):
