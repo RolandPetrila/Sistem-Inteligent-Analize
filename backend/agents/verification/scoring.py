@@ -48,6 +48,44 @@ class PiataFacts:
     market: dict
     sector_position: dict
 
+
+@dataclass
+class FinancialFacts:
+    """Fapte expuse de _score_financiar — citite de: bucla de confidence
+    (ca_val/profit_val/cap_val/trend_val), zombie+anomalies (ca_val/profit_val/
+    cap_val), _score_operational (ca_val/profit_val/trend_val — cuplare REALA
+    financiar->operational, facuta explicita aici), si contractul de retur
+    (solvency_matrix)."""
+    ca_val: float | None
+    profit_val: float | None
+    cap_val: float | None
+    trend_val: dict | None
+    solvency_matrix: dict | None
+
+
+@dataclass
+class OperationalFacts:
+    """Fapte expuse de _score_operational, folosite mai jos in bucla de
+    confidence si in zombie/anomalies detection."""
+    angajati_val: float | None
+    company_age_years: int | None
+
+
+@dataclass
+class AllFacts:
+    """Bundle-uieste toate cele 6 Facts pt consumatorii agregati (bucla de
+    confidence, zombie/anomalies, early_warnings) — extrasi ULTIMII, dupa ce
+    toate 6 dimensiunile au produs deja Facts-urile lor. Aici a trait bug-ul
+    `litigation`: un consumator care presupune ca o dimensiune anume a rulat
+    deja si a populat o variabila libera. Cu AllFacts, dependenta e explicita
+    in semnatura functiei (facts: AllFacts), nu implicita intr-un closure."""
+    financiar: FinancialFacts
+    juridic: JuridicFacts
+    fiscal: FiscalFacts
+    operational: OperationalFacts
+    reputational: ReputationalFacts
+    piata: PiataFacts
+
 __all__ = [
     "calculate_risk_score",
     "calculate_altman_z_ems",
@@ -433,38 +471,24 @@ def _score_piata(market: dict, benchmark: dict) -> tuple[dict, list[tuple[str, s
     return dim, risk_factors, PiataFacts(market=market, sector_position=sector_position)
 
 
-def calculate_risk_score(verified: dict, dynamic_thresholds: dict | None = None) -> dict:
-    """
-    Calculeaza scor de risc numeric 0-100 pe 6 dimensiuni:
-    - Financiar (30%), Juridic (20%), Fiscal (15%)
-    - Operational (15%), Reputational (10%), Piata (10%)
-    Scorul 0 = risc maxim, 100 = risc minim.
+def _fval(field):
+    """Helper: extract numeric value from field dict."""
+    if isinstance(field, dict):
+        v = field.get("value")
+        if isinstance(v, (int, float)):
+            return v
+    return None
 
-    dynamic_thresholds: praguri calculate din percentilele DB proprii
-    (ex: ca_excellent = percentile_90 al firmelor cu CAEN similar din acelasi judet).
-    Daca None, se folosesc SCORING_THRESHOLDS hardcodate.
-    """
-    # Aplica thresholds dinamice daca sunt disponibile
-    thresholds = apply_dynamic_thresholds(SCORING_THRESHOLDS, dynamic_thresholds)
 
-    dimensions = {}
-    risk_factors = []
-
-    financial = verified.get("financial", {})
-    risk_data = verified.get("risk", {})
-    company = verified.get("company", {})
-
-    # Helper: extract numeric value from field dict
-    def _fval(field):
-        if isinstance(field, dict):
-            v = field.get("value")
-            if isinstance(v, (int, float)):
-                return v
-        return None
-
-    # --- FINANCIAR (30%) --- with trend scoring (8B)
+def _score_financiar(
+    financial: dict, company: dict, caen_code_toplevel, thresholds: dict
+) -> tuple[dict, list[tuple[str, str]], FinancialFacts]:
+    """FINANCIAR (30%): CA, profit, trend multi-an (base growth + volatilitate
+    CV normalizata sectorial + detectie anomalie), solvabilitate, cash-flow proxy,
+    solvency stress matrix 3x3."""
     fin_score = 70
     fin_reasons = []
+    risk_factors: list[tuple[str, str]] = []
     ca_val = _fval(financial.get("cifra_afaceri", {}))
     if ca_val is not None:
         # Dynamic thresholds: daca avem percentile din DB, folosim valorile locale
@@ -570,8 +594,8 @@ def calculate_risk_score(verified: dict, dynamic_thresholds: dict | None = None)
                 # FIX #10: Volatility scoring — sector-normalized (relative to industry baseline)
                 # Determine CAEN section for sector-aware baseline
                 caen_code = (
-                    verified.get("caen_code", "")
-                    or verified.get("company", {}).get("caen_code", {})
+                    caen_code_toplevel
+                    or company.get("caen_code", {})
                     or ""
                 )
                 if isinstance(caen_code, dict):
@@ -730,32 +754,24 @@ def calculate_risk_score(verified: dict, dynamic_thresholds: dict | None = None)
             fin_reasons.append({"text": "Marja profit sub 1% la CA > 1M RON", "impact": -5})
             risk_factors.append(("Marja profit sub 1% la CA > 1M — posibil cash flow strain", "MEDIUM"))
 
-    dimensions["financiar"] = {"score": max(0, min(100, fin_score)), "weight": 30, "reasons": fin_reasons}
+    dim = {"score": max(0, min(100, fin_score)), "weight": 30, "reasons": fin_reasons}
+    return dim, risk_factors, FinancialFacts(
+        ca_val=ca_val, profit_val=profit_val, cap_val=cap_val,
+        trend_val=trend_val, solvency_matrix=solvency_matrix,
+    )
 
-    # --- JURIDIC (20%) ---
-    # BUG REAL gasit+reparat 2026-07-13: `litigation` era asignat DOAR in ramura
-    # "else" (Portal Just SOAP indisponibil) a lui _score_juridic, dar folosit
-    # neconditionat mai tarziu (calcul confidence). Cat timp Portal Just a fost
-    # mereu picat (pana azi), ramura "if" nu rula niciodata si bug-ul era latent —
-    # odata Portal Just reparat (vezi just_client.py), ramura noua a inceput sa
-    # ruleze si a scos la iveala UnboundLocalError ("cannot access local variable
-    # 'litigation'"). Contractul explicit JuridicFacts (in loc de variabile libere
-    # partajate) previne recidiva acestei clase de bug la extragerile viitoare.
-    jur_dim, jur_risk_factors, juridic_facts = _score_juridic(risk_data)
-    dimensions["juridic"] = jur_dim
-    risk_factors.extend(jur_risk_factors)
-    insolvency = juridic_facts.insolvency
-    litigation = juridic_facts.litigation
 
-    # --- FISCAL (15%) ---
-    fisc_dim, fisc_risk_factors, fiscal_facts = _score_fiscal(risk_data, financial)
-    dimensions["fiscal"] = fisc_dim
-    risk_factors.extend(fisc_risk_factors)
-    anaf_inactive = fiscal_facts.anaf_inactive
-
-    # --- OPERATIONAL (15%) --- with age adjustment (8B)
+def _score_operational(
+    financial: dict, company: dict, ca_val, profit_val, trend_val
+) -> tuple[dict, list[tuple[str, str]], OperationalFacts]:
+    """OPERATIONAL (15%): angajati, age-adjusted scoring (toleranta startup),
+    angajati trend. `ca_val`/`profit_val`/`trend_val` sunt cuplare REALA cu
+    FINANCIAR (age-adjusted scoring + suspect 0-angajati foloseste valori
+    calculate acolo) — primite explicit ca parametri, nu citite dintr-un
+    closure comun (asta e clasa de bug `litigation` care nu trebuie repetata)."""
     op_score = 70
     op_reasons = []
+    risk_factors: list[tuple[str, str]] = []
     angajati_val = _fval(financial.get("numar_angajati", {}))
     if angajati_val is not None:
         if angajati_val >= 50:
@@ -776,6 +792,9 @@ def calculate_risk_score(verified: dict, dynamic_thresholds: dict | None = None)
                 op_reasons.append({"text": "0 angajati cu CA > 1M RON (suspect)", "impact": -20})
 
     # Age-adjusted scoring (8B) — firma < 2 ani cu pierderi = toleranta startup
+    # company_age_years traieste AICI (nu intr-un modul separat) — date.today()
+    # e patch-uit in teste ca `backend.agents.verification.scoring.date`, deci
+    # calculul varstei firmei trebuie sa ramana in scoring.py.
     data_inreg = company.get("data_inregistrare", {})
     data_val = data_inreg.get("value") if isinstance(data_inreg, dict) else data_inreg
     company_age_years = None
@@ -824,42 +843,37 @@ def calculate_risk_score(verified: dict, dynamic_thresholds: dict | None = None)
         elif ang_growth is not None and ang_growth > 20:
             op_reasons.append({"text": f"Crestere forta de munca +{ang_growth:.0f}%", "impact": 0})
 
-    dimensions["operational"] = {"score": max(0, min(100, op_score)), "weight": 15, "reasons": op_reasons}
+    dim = {"score": max(0, min(100, op_score)), "weight": 15, "reasons": op_reasons}
+    return dim, risk_factors, OperationalFacts(angajati_val=angajati_val, company_age_years=company_age_years)
 
-    # --- REPUTATIONAL (10%) --- nuantat (8B)
-    rep_dim, reputational_facts = _score_reputational(
-        verified.get("web_presence", {}), verified.get("maps_rating", {})
-    )
-    dimensions["reputational"] = rep_dim
-    web = reputational_facts.web
 
-    # --- PIATA (10%) ---
-    piata_dim, piata_risk_factors, piata_facts = _score_piata(
-        verified.get("market", {}), verified.get("benchmark", {})
-    )
-    dimensions["piata"] = piata_dim
-    risk_factors.extend(piata_risk_factors)
-    market = piata_facts.market
-    sector_position = piata_facts.sector_position
-
-    # 9B: Confidence scoring per dimension (moved before total for B7)
+def _compute_confidence(dimensions: dict, facts: AllFacts) -> dict:
+    """9B: Confidence scoring per dimensiune + B7 power-law weighting (muteaza
+    `dimensions` IN-PLACE cu score/confidence/raw_score/insufficient_data/
+    data_available — exact ca in codul original, unde `dim_data` e o referinta
+    catre acelasi dict stocat in `dimensions[dim_name]`). D6 fix: confidence<0.2
+    = date insuficiente, scor neutru (raw defaults sunt artificiale)."""
     confidence = {}
-    for dim_name, dim_data in dimensions.items():
+    for dim_name, _dim_data in dimensions.items():
         if dim_name == "financiar":
-            data_points = sum(1 for v in [ca_val, profit_val, cap_val, trend_val] if v is not None)
+            data_points = sum(
+                1 for v in [facts.financiar.ca_val, facts.financiar.profit_val,
+                            facts.financiar.cap_val, facts.financiar.trend_val]
+                if v is not None
+            )
             confidence[dim_name] = round(min(1.0, data_points / 4), 2)
         elif dim_name == "juridic":
-            has_insolvency = isinstance(insolvency, dict) and insolvency.get("value") is not None
-            has_litigation = isinstance(litigation, dict) and litigation.get("value") is not None
+            has_insolvency = isinstance(facts.juridic.insolvency, dict) and facts.juridic.insolvency.get("value") is not None
+            has_litigation = isinstance(facts.juridic.litigation, dict) and facts.juridic.litigation.get("value") is not None
             confidence[dim_name] = 1.0 if (has_insolvency and has_litigation) else 0.5 if (has_insolvency or has_litigation) else 0.2
         elif dim_name == "fiscal":
-            confidence[dim_name] = 1.0 if isinstance(anaf_inactive, dict) and anaf_inactive.get("value") is not None else 0.3
+            confidence[dim_name] = 1.0 if isinstance(facts.fiscal.anaf_inactive, dict) and facts.fiscal.anaf_inactive.get("value") is not None else 0.3
         elif dim_name == "operational":
-            confidence[dim_name] = 0.8 if angajati_val is not None and company_age_years is not None else 0.4
+            confidence[dim_name] = 0.8 if facts.operational.angajati_val is not None and facts.operational.company_age_years is not None else 0.4
         elif dim_name == "reputational":
-            confidence[dim_name] = 0.7 if isinstance(web, dict) and web else 0.3
+            confidence[dim_name] = 0.7 if isinstance(facts.reputational.web, dict) and facts.reputational.web else 0.3
         elif dim_name == "piata":
-            confidence[dim_name] = 0.8 if isinstance(market, dict) and market else 0.3
+            confidence[dim_name] = 0.8 if isinstance(facts.piata.market, dict) and facts.piata.market else 0.3
 
     # B7 fix: Apply confidence weighting — power-law preserves score direction
     # D6 fix: Flag dimensions with confidence < 0.2 as insufficient data
@@ -882,25 +896,22 @@ def calculate_risk_score(verified: dict, dynamic_thresholds: dict | None = None)
         dim_data["raw_score"] = raw
         dim_data["data_available"] = dim_conf >= 0.4
 
-    # --- SCOR TOTAL ---
-    total_score = sum(d["score"] * d["weight"] / 100 for d in dimensions.values())
-    total_score = round(total_score, 1)
+    return confidence
 
-    if total_score >= 70:
-        color = "Verde"
-    elif total_score >= 40:
-        color = "Galben"
-    else:
-        color = "Rosu"
 
-    recommendations = {
-        "Verde": "Risc scazut - parteneriat recomandat cu verificare standard",
-        "Galben": "Risc mediu - se recomanda verificare suplimentara inainte de angajament",
-        "Rosu": "Risc ridicat - se recomanda prudenta maxima si verificare detaliata",
-    }
+def _detect_zombie_and_anomalies(
+    facts: AllFacts, dimensions: dict, company: dict
+) -> tuple[bool, list[str], list[tuple[str, str]]]:
+    """T12: Zombie detection (CA=0 + angajati=0 + status activ = firma nu
+    opereaza; exclude statusuri explicit inactive) + 9B anomaly flags pt
+    feedback loop synthesis. Muteaza dimensions["operational"]["score"]=10
+    daca e zombie (override — exact ca in codul original)."""
+    ca_val = facts.financiar.ca_val
+    profit_val = facts.financiar.profit_val
+    cap_val = facts.financiar.cap_val
+    angajati_val = facts.operational.angajati_val
 
-    # T12: Zombie company detection — CA=0 + angajati=0 + status ACTIV = zombie
-    # Exclude explicitly inactive statuses (INACTIV, DIZOLVATA, RADIATA, STINS, RADIAT)
+    risk_factors: list[tuple[str, str]] = []
     is_zombie = False
     if ca_val is not None and ca_val == 0 and angajati_val is not None and angajati_val == 0:
         stare = company.get("stare_firma", {})
@@ -915,7 +926,6 @@ def calculate_risk_score(verified: dict, dynamic_thresholds: dict | None = None)
             dimensions["operational"]["score"] = 10
             risk_factors.append(("ZOMBIE: CA=0 + angajati=0 + status activ — firma nu opereaza", "CRITICAL"))
 
-    # 9B: Anomaly flags for synthesis feedback loop
     anomalies = []
     if is_zombie:
         anomalies.append("ANOMALIE: Firma zombie — CA=0, angajati=0, status activ. Nu opereaza efectiv.")
@@ -926,14 +936,21 @@ def calculate_risk_score(verified: dict, dynamic_thresholds: dict | None = None)
     if cap_val is not None and cap_val < 0 and ca_val and ca_val > 5_000_000:
         anomalies.append("ANOMALIE: capitaluri negative la CA > 5M → risc insolventa tehnica")
 
-    # --- 10F M3.2: Early Warning Confidence (0-100) ---
-    # Each early warning signal gets a confidence score based on:
-    #   - data freshness (multi-year trend available)
-    #   - cross-source confirmation (dimension confidence > 0.7)
-    #   - CAEN outlier detection (extreme values vs expected)
+    return is_zombie, anomalies, risk_factors
+
+
+def _build_early_warnings(
+    anomalies: list[str], risk_factors: list[tuple[str, str]], facts: AllFacts, confidence: dict
+) -> list[dict]:
+    """10F M3.2: Early Warning Confidence (0-100) per semnal — freshness (trend
+    multi-an disponibil) + cross-source (confidence dimensiune >0.7) + valori
+    extreme (CA=0, capital negativ la CA mare). Apelat cu `risk_factors`
+    INAINTE de dedup (B8) — exact ca in codul original."""
+    ca_val = facts.financiar.ca_val
+    trend_val = facts.financiar.trend_val
+
     early_warnings_with_confidence = []
 
-    # Helper: determine relevant dimension confidence for a warning text
     def _dim_conf_for_warning(warning_text: str) -> float:
         """Return the highest relevant dimension confidence for a warning."""
         keyword_map = {
@@ -1006,6 +1023,130 @@ def calculate_risk_score(verified: dict, dynamic_thresholds: dict | None = None)
                 "confidence": ew_confidence,
                 "severity": "HIGH",
             })
+
+    return early_warnings_with_confidence
+
+
+def calculate_risk_score(verified: dict, dynamic_thresholds: dict | None = None) -> dict:
+    """
+    Calculeaza scor de risc numeric 0-100 pe 6 dimensiuni:
+    - Financiar (30%), Juridic (20%), Fiscal (15%)
+    - Operational (15%), Reputational (10%), Piata (10%)
+    Scorul 0 = risc maxim, 100 = risc minim.
+
+    dynamic_thresholds: praguri calculate din percentilele DB proprii
+    (ex: ca_excellent = percentile_90 al firmelor cu CAEN similar din acelasi judet).
+    Daca None, se folosesc SCORING_THRESHOLDS hardcodate.
+    """
+    # Aplica thresholds dinamice daca sunt disponibile
+    thresholds = apply_dynamic_thresholds(SCORING_THRESHOLDS, dynamic_thresholds)
+
+    dimensions = {}
+    risk_factors = []
+
+    financial = verified.get("financial", {})
+    risk_data = verified.get("risk", {})
+    company = verified.get("company", {})
+
+    # --- FINANCIAR (30%) --- with trend scoring (8B)
+    fin_dim, fin_risk_factors, financial_facts = _score_financiar(
+        financial, company, verified.get("caen_code", ""), thresholds
+    )
+    dimensions["financiar"] = fin_dim
+    risk_factors.extend(fin_risk_factors)
+    # ca_val/profit_val/trend_val raman locale — cerute explicit de
+    # _score_operational (cuplare REALA financiar->operational). cap_val nu
+    # mai e citit direct in orchestrator (doar in facts.financiar.cap_val, prin
+    # consumatorii agregati de mai jos).
+    ca_val = financial_facts.ca_val
+    profit_val = financial_facts.profit_val
+    trend_val = financial_facts.trend_val
+    solvency_matrix = financial_facts.solvency_matrix
+
+    # --- JURIDIC (20%) ---
+    # BUG REAL gasit+reparat 2026-07-13: `litigation` era asignat DOAR in ramura
+    # "else" (Portal Just SOAP indisponibil) a lui _score_juridic, dar folosit
+    # neconditionat mai tarziu (calcul confidence). Cat timp Portal Just a fost
+    # mereu picat (pana azi), ramura "if" nu rula niciodata si bug-ul era latent —
+    # odata Portal Just reparat (vezi just_client.py), ramura noua a inceput sa
+    # ruleze si a scos la iveala UnboundLocalError ("cannot access local variable
+    # 'litigation'"). Contractul explicit JuridicFacts (in loc de variabile libere
+    # partajate) previne recidiva acestei clase de bug la extragerile viitoare —
+    # insolvency/litigation nu mai sunt legate ca variabile locale aici, doar
+    # citite din facts.juridic de consumatorii agregati (Facts e sursa unica).
+    jur_dim, jur_risk_factors, juridic_facts = _score_juridic(risk_data)
+    dimensions["juridic"] = jur_dim
+    risk_factors.extend(jur_risk_factors)
+
+    # --- FISCAL (15%) ---
+    fisc_dim, fisc_risk_factors, fiscal_facts = _score_fiscal(risk_data, financial)
+    dimensions["fiscal"] = fisc_dim
+    risk_factors.extend(fisc_risk_factors)
+
+    # --- OPERATIONAL (15%) --- with age adjustment (8B)
+    op_dim, op_risk_factors, operational_facts = _score_operational(
+        financial, company, ca_val, profit_val, trend_val
+    )
+    dimensions["operational"] = op_dim
+    risk_factors.extend(op_risk_factors)
+    # company_age_years ramane local — apare direct in contractul de retur.
+    company_age_years = operational_facts.company_age_years
+
+    # --- REPUTATIONAL (10%) --- nuantat (8B)
+    rep_dim, reputational_facts = _score_reputational(
+        verified.get("web_presence", {}), verified.get("maps_rating", {})
+    )
+    dimensions["reputational"] = rep_dim
+
+    # --- PIATA (10%) ---
+    piata_dim, piata_risk_factors, piata_facts = _score_piata(
+        verified.get("market", {}), verified.get("benchmark", {})
+    )
+    dimensions["piata"] = piata_dim
+    risk_factors.extend(piata_risk_factors)
+    # sector_position ramane local — apare direct in contractul de retur.
+    sector_position = piata_facts.sector_position
+
+    # Bundle-uieste toate cele 6 Facts pt consumatorii agregati de mai jos —
+    # extrasi ULTIMII (dupa ce toate dimensiunile au produs deja Facts-urile
+    # lor), exact cum a fost aprobat: aici a trait bug-ul `litigation`.
+    facts = AllFacts(
+        financiar=financial_facts, juridic=juridic_facts, fiscal=fiscal_facts,
+        operational=operational_facts, reputational=reputational_facts, piata=piata_facts,
+    )
+
+    # 9B: Confidence scoring per dimension (moved before total for B7)
+    confidence = _compute_confidence(dimensions, facts)
+
+    # --- SCOR TOTAL ---
+    # NOTA (pre-existent, neatins): total_score se calculeaza AICI, INAINTE de
+    # zombie detection de mai jos — daca firma e zombie, override-ul scorului
+    # operational la 10 NU se reflecta in total_score (suma a fost deja facuta).
+    # Comportament identic cu codul dinaintea refactorului (verificat cu golden
+    # snapshot) — nu l-am "reparat", ca sa nu schimb scorul fata de baseline.
+    total_score = sum(d["score"] * d["weight"] / 100 for d in dimensions.values())
+    total_score = round(total_score, 1)
+
+    if total_score >= 70:
+        color = "Verde"
+    elif total_score >= 40:
+        color = "Galben"
+    else:
+        color = "Rosu"
+
+    recommendations = {
+        "Verde": "Risc scazut - parteneriat recomandat cu verificare standard",
+        "Galben": "Risc mediu - se recomanda verificare suplimentara inainte de angajament",
+        "Rosu": "Risc ridicat - se recomanda prudenta maxima si verificare detaliata",
+    }
+
+    # T12: Zombie detection + 9B anomaly flags for synthesis feedback loop
+    is_zombie, anomalies, zombie_risk_factors = _detect_zombie_and_anomalies(facts, dimensions, company)
+    risk_factors.extend(zombie_risk_factors)
+
+    # --- 10F M3.2: Early Warning Confidence (0-100) ---
+    # Apelat cu risk_factors INAINTE de dedup (B8, mai jos) — exact ca in original.
+    early_warnings_with_confidence = _build_early_warnings(anomalies, risk_factors, facts, confidence)
 
     # B8 fix: Dedup risk factors — keep first occurrence per text
     seen_factors = set()
