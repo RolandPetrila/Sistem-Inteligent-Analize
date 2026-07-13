@@ -145,6 +145,25 @@ class Settings(BaseSettings):
                     f"{_SECRET_KEY_FILE}. Pentru productie, seteaza APP_SECRET_KEY in .env."
                 )
 
+        # HIGH #4 (audit 2026-07-13): RIS_API_KEY fail-open fara garda — daca e
+        # goala, ApiKeyMiddleware lasa TOATE /api/* neautentificate silentios.
+        # Acelasi pattern ca APP_SECRET_KEY: hard-fail DOAR in RIS_ENV=production.
+        # Spre deosebire de APP_SECRET_KEY, aceasta cheie NU se auto-genereaza
+        # (clientii — frontend/.env — trebuie sa cunoasca valoarea ca sa o trimita),
+        # deci WARNING-ul e neconditionat (nu doar la "created" prima data).
+        if not self.ris_api_key:
+            if os.environ.get("RIS_ENV", "").lower() == "production":
+                raise RuntimeError(
+                    "SECURITATE: RIS_API_KEY lipseste in .env. Toate endpoint-urile "
+                    "/api/* ar ramane neautentificate. Seteaza RIS_API_KEY inainte de "
+                    "pornire in RIS_ENV=production."
+                )
+            logger.warning(
+                "SECURITATE: RIS_API_KEY nu e setat in .env — TOATE endpoint-urile "
+                "/api/* sunt NEAUTENTIFICATE (oricine acceseaza serviciul poate apela "
+                "orice API). Seteaza RIS_API_KEY in .env pentru a activa autentificarea."
+            )
+
     @model_validator(mode="after")
     def validate_critical_keys(self) -> "Settings":
         if not self.tavily_api_key:

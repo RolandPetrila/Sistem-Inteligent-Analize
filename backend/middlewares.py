@@ -129,6 +129,19 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
     _EXEMPT_PATHS = ("/api/health", "/api/health/deep", "/api/frontend-log")
     _EXEMPT_PREFIXES = ("/api/reports/public/",)
 
+    def __init__(self, app):
+        super().__init__(app)
+        # HIGH #4 (audit 2026-07-13): fail-open-ul din dispatch() de mai jos lasa
+        # TOATE /api/* neautentificate daca RIS_API_KEY e goala. Logheaza O SINGURA
+        # DATA aici (constructor, apelat o data la construirea stack-ului de
+        # middleware — nu in dispatch, care ruleaza per-request si ar fi spam).
+        if not settings.ris_api_key:
+            logger.warning(
+                "SECURITATE: RIS_API_KEY nu e setat — autentificarea /api/* este "
+                "DEZACTIVATA (fail-open). Toate endpoint-urile /api/* sunt accesibile "
+                "FARA header X-RIS-Key. Seteaza RIS_API_KEY in .env pentru a activa."
+            )
+
     async def dispatch(self, request: Request, call_next):
         if not settings.ris_api_key:
             return await call_next(request)
