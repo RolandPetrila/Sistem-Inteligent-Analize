@@ -69,6 +69,21 @@ http://100.64.X.X:8001
 
 ---
 
+## `/audit.html` — dashboard-ul de audit e LOCALHOST-ONLY (HIGH #5, 2026-07-13)
+
+Dashboard-ul live de audit (`/audit.html` + `/audit.js`) se deschide **DOAR** cu
+`http://localhost:8001/audit.html` sau `http://127.0.0.1:8001/audit.html`, direct
+pe laptop. **NU se deschide** cu IP-ul Tailscale (`http://100.x.x.x:8001/audit.html`)
+sau cu IP-ul LAN — orice acces non-loopback primeste `404` (nu `403`, ca sa nu
+confirme existenta paginii catre un client neautorizat).
+
+Restul aplicatiei (PWA, toate `/api/*`) **ramane** accesibil normal prin Tailscale
+de pe telefon — restrictia se aplica STRICT la `/audit.html`/`/audit.js`, care expun
+detalii interne de implementare (endpoint-uri, surse externe, scheduler) nepotrivite
+pentru acces de pe alt dispozitiv din retea.
+
+---
+
 ## Rebuild frontend (necesar după modificări UI)
 
 ```bat

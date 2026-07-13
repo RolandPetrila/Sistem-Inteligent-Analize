@@ -251,10 +251,22 @@ async def get_version():
     return {"version": APP_VERSION, "running": updater.get_running_version(), **updater.get_state()}
 
 
+def _is_loopback_client(request: Request) -> bool:
+    """HIGH #5 (audit 2026-07-13): /audit.html + /audit.js sunt LOCALHOST-ONLY
+    (decizia userului) — raman accesibile la http://localhost:8001/audit.html
+    pe PC, dar blocate pt orice alt host din retea/Tailscale (nu-s sub /api/,
+    deci ApiKeyMiddleware nu le atinge). 404 (nu 403) — nu confirma existenta
+    endpoint-ului catre un client neautorizat."""
+    client = request.client
+    return bool(client and client.host in ("127.0.0.1", "::1"))
+
+
 @app.get("/audit.html", include_in_schema=False)
-async def audit_dashboard():
+async def audit_dashboard(request: Request):
     """Dashboard live de audit al functiilor RIS — generat de tools/generate_audit_dashboard.py.
     Servit same-origin (evita CORS) ca butoanele 'Testeaza live' din pagina sa functioneze."""
+    if not _is_loopback_client(request):
+        return JSONResponse(status_code=404, content={"detail": "Not Found"})
     path = _Path(__file__).parent.parent / "AUDIT_FUNCTII.html"
     if not path.exists():
         return JSONResponse(status_code=404, content={"detail": "AUDIT_FUNCTII.html nu exista — ruleaza: python tools/generate_audit_dashboard.py"})
@@ -262,9 +274,11 @@ async def audit_dashboard():
 
 
 @app.get("/audit.js", include_in_schema=False)
-async def audit_dashboard_js():
+async def audit_dashboard_js(request: Request):
     """JS extern pentru /audit.html — fisier separat (nu inline) ca sa respecte CSP-ul
     existent al aplicatiei (script-src 'self', fara 'unsafe-inline')."""
+    if not _is_loopback_client(request):
+        return JSONResponse(status_code=404, content={"detail": "Not Found"})
     path = _Path(__file__).parent.parent / "AUDIT_FUNCTII.js"
     if not path.exists():
         return JSONResponse(status_code=404, content={"detail": "AUDIT_FUNCTII.js nu exista — ruleaza: python tools/generate_audit_dashboard.py"})

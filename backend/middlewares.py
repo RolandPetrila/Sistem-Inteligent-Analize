@@ -154,7 +154,10 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         ):
             return await call_next(request)
 
-        if path.startswith("/api/"):
+        # HIGH #5 (audit 2026-07-13): /metrics e machine-facing (Prometheus/Grafana)
+        # dar NU e sub /api/, deci scapa de verificarea de mai jos daca o limitam
+        # doar la path.startswith("/api/"). Il tratam explicit, aceeasi cheie.
+        if path.startswith("/api/") or path == "/metrics":
             if request.headers.get("X-RIS-Key", "") != settings.ris_api_key:
                 return JSONResponse(
                     status_code=401,

@@ -89,6 +89,9 @@ Testari_Analize_Sistem/
 ROLAND_R7_EXECUTOR.md
 ROLAND_UPDATE_FULL.md
 
+# Canal coordonare Opus 4.8 <-> Sonnet 5 (local-only, repo public)
+Roland_Opus_Sonnet.md
+
 # Test runner output (generated, not tracked)
 TEST_RESULTS.log
 *.tsbuildinfo
