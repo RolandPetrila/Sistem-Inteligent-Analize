@@ -99,7 +99,10 @@ def _render_pdf_table(pdf, rows: list[list[str]], has_header: bool):
             sanitized = _sanitize(cell)
             if len(sanitized) > max_chars:
                 logger.debug(f"PDF table header cell truncated: '{sanitized[:30]}...' ({len(sanitized)} > {max_chars})")
-                sanitized = sanitized[:max_chars - 1] + "\u2026"
+                # D (KNOWN ISSUES): trunchiaza DUPA sanitizare si foloseste "..." ASCII
+                # (nu "\u2026" brut, care ar scapa nesanitizat si ar rupe fpdf2 latin-1).
+                # Lungimea finala e calculata DUPA trunchiere, nu inainte.
+                sanitized = sanitized[:max_chars - 3] + "..."
             pdf.cell(col_width, 7, sanitized, border=1, fill=True,
                      align="C" if j > 0 else "L")
         pdf.ln()
@@ -112,7 +115,8 @@ def _render_pdf_table(pdf, rows: list[list[str]], has_header: bool):
             sanitized = _sanitize(cell)
             if len(sanitized) > max_chars:
                 logger.debug(f"PDF table cell truncated: '{sanitized[:30]}...' ({len(sanitized)} > {max_chars})")
-                sanitized = sanitized[:max_chars - 1] + "\u2026"
+                # D (KNOWN ISSUES): acelasi fix ca la header \u2014 vezi comentariul de mai sus.
+                sanitized = sanitized[:max_chars - 3] + "..."
             pdf.cell(col_width, 6, sanitized, border=1,
                      align="C" if j > 0 else "L")
         pdf.ln()

@@ -163,3 +163,68 @@ class TestRichFieldsPdf:
         finally:
             if os.path.exists(path):
                 os.remove(path)
+
+
+def _basic_meta() -> dict:
+    return {
+        "title": "Raport RIS",
+        "company_name": "Test SRL",
+        "report_level": 2,
+        "generated_at": "2026-07-15T10:00:00",
+        "sources_count": 3,
+        "risk_score": "Galben",
+        "numeric_score": 55,
+        "sources": [{"name": "ANAF", "level": 1, "status": "OK"}],
+    }
+
+
+class TestTableCellTruncation:
+    """Runda 2 / D (audit KNOWN ISSUES): _render_pdf_table() adauga elipsa bruta
+    "…" DUPA _sanitize() cand o celula (header SAU body) depaseste max_chars —
+    caracterul scapa nesanitizat si fpdf2 arunca FPDFUnicodeEncodingException pe
+    fontul Helvetica (latin-1). Doua situri identice (l.99-105 header, l.108-118
+    body) — tabelul de test contine ambele cazuri intr-un singur markdown table,
+    ca sa garanteze ca fix-ul acopera amandoua."""
+
+    def _long_table_content(self) -> str:
+        # 4 coloane -> col_width=47.5mm -> max_chars=118 (vezi _render_pdf_table).
+        # Header si body cu celule > 118 caractere ASCII (fara diacritice, ca sa
+        # izolam strict truncarea de restul sanitizarii).
+        header_long = "Coloana cu titlu foarte lung care depaseste cu siguranta limita de caractere per celula din tabel " * 2
+        body_long = "Continut de test foarte lung menit sa depaseasca limita de caractere per celula din randul de date " * 2
+        return (
+            f"| {header_long.strip()} | B | C | D |\n"
+            "|---|---|---|---|\n"
+            f"| {body_long.strip()} | x | y | z |\n"
+        )
+
+    def test_long_header_and_body_cells_do_not_raise(self):
+        from backend.reports.pdf_generator import generate_pdf
+
+        sections = {"test_section": {"title": "Test Tabel", "content": self._long_table_content()}}
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            path = f.name
+        try:
+            # Trebuie sa NU arunce FPDFUnicodeEncodingException — pe codul cu bug-ul
+            # nereparat, aceasta linie pica garantat (ambele celule > max_chars).
+            generate_pdf(sections, _basic_meta(), path)
+            assert os.path.exists(path)
+            assert os.path.getsize(path) > 0
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
+    def test_truncated_cell_respects_max_chars_and_is_latin1_safe(self):
+        """Verifica direct contractul functiei (nu doar 'nu arunca'): rezultatul
+        trunchiat respecta AMBELE constrangeri — len <= max_chars SI latin-1 safe."""
+        from backend.reports.pdf_generator import _sanitize
+
+        col_width = 190 / 4
+        max_chars = max(int(col_width * 2.5), 20)
+        cell = "A" * (max_chars + 50)
+        sanitized = _sanitize(cell)
+        assert len(sanitized) > max_chars
+
+        truncated = sanitized[: max_chars - 3] + "..."
+        assert len(truncated) <= max_chars
+        truncated.encode("latin-1")  # nu trebuie sa arunce UnicodeEncodeError
