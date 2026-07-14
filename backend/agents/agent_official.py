@@ -197,67 +197,16 @@ class OfficialAgent(BaseAgent):
 
         # --- 2B. ONRC (via Tavily — fallback) ---
         search_term = company_name or cui
-        if search_term and not official_data.get("onrc_structured"):
-            onrc_source = await self.fetch_with_retry(
-                lambda: self._fetch_onrc_via_tavily(search_term, cui_clean),
-                source_name="ONRC (Tavily)",
-                source_url="https://recom.onrc.ro",
-            )
-            sources.append(onrc_source)
-            if onrc_source["data_found"]:
-                official_data["onrc"] = onrc_source["data"]
+        await self._fetch_onrc_fallback(official_data, sources, search_term, cui_clean)
 
         # --- 3B. Date financiare (listafirme.ro via Tavily - fallback) ---
-        if search_term and not official_data.get("financial_official"):
-            fin_source = await self.fetch_with_retry(
-                lambda: self._fetch_financial_data(search_term, cui_clean),
-                source_name="Date financiare (listafirme.ro)",
-                source_url="https://listafirme.ro",
-            )
-            sources.append(fin_source)
-            if fin_source["data_found"]:
-                official_data["financial"] = fin_source["data"]
+        await self._fetch_financial_fallback(official_data, sources, search_term, cui_clean)
 
         # --- 10A M2.2: Tavily Quota Pre-check before BPI + Litigation ---
-        tavily_quota_ok = True
-        if search_term:
-            try:
-                quota_ok, quota_usage = await tavily_client._check_quota()
-                if not quota_ok:
-                    tavily_quota_ok = False
-                    logger.warning(f"[official] Tavily quota exhausted ({quota_usage}), skipping BPI+Litigation")
-                    official_data["tavily_quota_exhausted"] = True
-                    official_data["tavily_usage"] = quota_usage
-            except Exception as e:
-                logger.debug(f"[official] Tavily quota check failed: {e}")
+        tavily_quota_ok = await self._check_tavily_quota(official_data, search_term)
 
         # --- 10B M2.4: Merged BPI+Litigation into single Tavily call (saves quota) ---
-        if search_term and tavily_quota_ok:
-            merged_source = await self.fetch_with_retry(
-                lambda st=search_term, cc=cui_clean: self._fetch_legal_merged(st, cc),
-                source_name="Legal (BPI+Litigii)",
-                source_url="https://bpi.ro + portal.just.ro",
-            )
-            sources.append(merged_source)
-            if merged_source["data_found"]:
-                merged_data = merged_source["data"]
-                # Split merged results into insolvency and litigation
-                official_data["insolvency"] = {
-                    "results": merged_data.get("results", []),
-                    "answer": merged_data.get("answer", ""),
-                    "query": merged_data.get("query", ""),
-                }
-                # B3 fix: Deep copy, not pointer — avoid shared mutation
-                official_data["litigation"] = {
-                    "results": merged_data.get("results", []),
-                    "answer": merged_data.get("answer", ""),
-                    "query": merged_data.get("query", ""),
-                }
-                log_source_result(job_id, "Legal (merged)", True,
-                    merged_source.get("response_time_ms", 0), ["insolvency+litigation"])
-            else:
-                log_source_result(job_id, "Legal (merged)", False,
-                    merged_source.get("response_time_ms", 0), error="no data")
+        await self._fetch_legal_merged_and_split(official_data, sources, search_term, cui_clean, tavily_quota_ok, job_id)
 
         # --- 7. AI Pre-processing: clasificare + sentiment Tavily (ADV7) ---
         tavily_results = []
@@ -683,6 +632,80 @@ class OfficialAgent(BaseAgent):
                     logger.info(f"[official] MO: {len(mo_events)} events for {company_name}")
             except Exception as _e:
                 logger.debug(f"[official] MO error: {_e}")
+
+    # --- Faza C (refactor #1, 2026-07-14): surse fallback guardate de starea deja
+    # scrisa in official_data (rulate doar daca sursa primara a picat).
+
+    async def _fetch_onrc_fallback(self, official_data: dict, sources: list, search_term: str, cui_clean: str) -> None:
+        """2B: fallback via Tavily, ruleaza DOAR daca openapi.ro nu a populat onrc_structured."""
+        if search_term and not official_data.get("onrc_structured"):
+            onrc_source = await self.fetch_with_retry(
+                lambda: self._fetch_onrc_via_tavily(search_term, cui_clean),
+                source_name="ONRC (Tavily)",
+                source_url="https://recom.onrc.ro",
+            )
+            sources.append(onrc_source)
+            if onrc_source["data_found"]:
+                official_data["onrc"] = onrc_source["data"]
+
+    async def _fetch_financial_fallback(self, official_data: dict, sources: list, search_term: str, cui_clean: str) -> None:
+        """3B: fallback via Tavily, ruleaza DOAR daca ANAF Bilant nu a populat financial_official."""
+        if search_term and not official_data.get("financial_official"):
+            fin_source = await self.fetch_with_retry(
+                lambda: self._fetch_financial_data(search_term, cui_clean),
+                source_name="Date financiare (listafirme.ro)",
+                source_url="https://listafirme.ro",
+            )
+            sources.append(fin_source)
+            if fin_source["data_found"]:
+                official_data["financial"] = fin_source["data"]
+
+    async def _check_tavily_quota(self, official_data: dict, search_term: str) -> bool:
+        """10A M2.2: PASTREAZA cuplarea descoperita in Pas 0 -- flag-ul returnat aici
+        gateaza SI legal-merged (mai jos) SI OSINT historical-flags (Faza D, ramas inline
+        deocamdata) -- NU decupla, e comportament curent verificat cu golden."""
+        tavily_quota_ok = True
+        if search_term:
+            try:
+                quota_ok, quota_usage = await tavily_client._check_quota()
+                if not quota_ok:
+                    tavily_quota_ok = False
+                    logger.warning(f"[official] Tavily quota exhausted ({quota_usage}), skipping BPI+Litigation")
+                    official_data["tavily_quota_exhausted"] = True
+                    official_data["tavily_usage"] = quota_usage
+            except Exception as e:
+                logger.debug(f"[official] Tavily quota check failed: {e}")
+        return tavily_quota_ok
+
+    async def _fetch_legal_merged_and_split(self, official_data: dict, sources: list, search_term: str,
+                                             cui_clean: str, tavily_quota_ok: bool, job_id: str) -> None:
+        """10B M2.4: un singur query Tavily, rezultatul e SPLIT in doua chei separate
+        (insolvency + litigation) -- pastreaza exact (zona sursa a bug-ului `litigation`
+        UnboundLocalError din scoring.py, reparat 2026-07-13; aici setarea era deja corecta)."""
+        if search_term and tavily_quota_ok:
+            merged_source = await self.fetch_with_retry(
+                lambda st=search_term, cc=cui_clean: self._fetch_legal_merged(st, cc),
+                source_name="Legal (BPI+Litigii)",
+                source_url="https://bpi.ro + portal.just.ro",
+            )
+            sources.append(merged_source)
+            if merged_source["data_found"]:
+                merged_data = merged_source["data"]
+                official_data["insolvency"] = {
+                    "results": merged_data.get("results", []),
+                    "answer": merged_data.get("answer", ""),
+                    "query": merged_data.get("query", ""),
+                }
+                official_data["litigation"] = {
+                    "results": merged_data.get("results", []),
+                    "answer": merged_data.get("answer", ""),
+                    "query": merged_data.get("query", ""),
+                }
+                log_source_result(job_id, "Legal (merged)", True,
+                    merged_source.get("response_time_ms", 0), ["insolvency+litigation"])
+            else:
+                log_source_result(job_id, "Legal (merged)", False,
+                    merged_source.get("response_time_ms", 0), error="no data")
 
     def _extract_cui(self, value: str) -> str:
         """Extrage CUI numeric din input."""
