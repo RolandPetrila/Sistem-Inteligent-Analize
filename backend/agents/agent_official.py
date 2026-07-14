@@ -169,108 +169,16 @@ class OfficialAgent(BaseAgent):
             self._process_aegrm_result(aegrm_source, official_data, cui_clean, job_id)
 
             # F1-2: Store administrators in DB for network queries
-            if openapi_source["data_found"]:
-                from backend.agents.tools.network_client import store_administrators
-                odata = openapi_source["data"]
-                all_persons = []
-                for assoc in (odata.get("asociati") or []):
-                    name = assoc.get("name") or assoc.get("nume") or assoc.get("denumire", "")
-                    if name:
-                        all_persons.append({
-                            "name": name,
-                            "role": "asociat",
-                            "ownership_pct": assoc.get("procent") or assoc.get("ownership_pct"),
-                        })
-                for admin in (odata.get("administratori") or []):
-                    name = admin.get("name") or admin.get("nume") or admin.get("denumire", "")
-                    if name:
-                        all_persons.append({
-                            "name": name,
-                            "role": "administrator",
-                            "ownership_pct": None,
-                        })
-                if all_persons and cui_clean:
-                    try:
-                        await store_administrators(cui_clean, company_name or "", all_persons)
-                    except Exception as _e:
-                        logger.debug(f"[official] store_administrators error: {_e}")
+            await self._store_administrators_sideeffect(openapi_source, cui_clean, company_name)
 
             # F1-1: Portal Just — dosare judecatoresti oficiale
-            if company_name:
-                _judet = (
-                    (official_data.get("onrc_structured") or {}).get("judet")
-                    or (official_data.get("onrc_local") or {}).get("judet")
-                    or ""
-                )
-                just_result = await self._fetch_with_timeout(
-                    search_dosare(company_name, cui_clean, _judet),
-                    "portal.just.ro",
-                    65,  # pana la 2 instante cautate secvential (Tribunal + Curte de Apel)
-                )
-                if just_result and just_result.get("found") is not False:
-                    official_data["dosare_just"] = just_result
-                    sources.append({
-                        "source_name": "portal.just.ro",
-                        "source_url": "http://portalquery.just.ro",
-                        "status": "OK",
-                        "data_found": True,
-                        "response_time_ms": 0,
-                    })
-                    log_source_result(job_id, "portal.just.ro", True, 0,
-                        [f"dosare={just_result.get('total_dosare', 0)}"])
-                else:
-                    sources.append({
-                        "source_name": "portal.just.ro",
-                        "source_url": "http://portalquery.just.ro",
-                        "status": "FAIL",
-                        "data_found": False,
-                        "response_time_ms": 0,
-                    })
+            await self._fetch_portal_just(official_data, sources, company_name, cui_clean, job_id)
 
             # F5-2: Google Maps rating (daca e configurata cheia)
-            if company_name and settings.google_cloud_api_key:
-                try:
-                    from backend.agents.tools.maps_client import get_maps_rating
-                    address = official_data.get("address", {}).get("adresa", "") if isinstance(official_data.get("address"), dict) else ""
-                    maps_result = await asyncio.wait_for(
-                        get_maps_rating(company_name, address), timeout=8.0
-                    )
-                    official_data["maps_rating"] = maps_result
-                    if maps_result.get("found"):
-                        sources.append({
-                            "source_name": "google_maps",
-                            "source_url": "https://maps.google.com",
-                            "status": "OK",
-                            "data_found": True,
-                            "response_time_ms": 0,
-                        })
-                        logger.info(f"[official] Google Maps: {maps_result.get('name')} rating={maps_result.get('rating')}")
-                except Exception as _e:
-                    logger.debug(f"[official] maps error: {_e}")
+            await self._fetch_google_maps(official_data, sources, company_name)
 
             # G2: Monitorul Oficial Partea IV (cesiuni, dizolvari, radieri)
-            if company_name:
-                try:
-                    from backend.agents.tools.monitorul_oficial_client import search_company_publications
-                    mo_events = await self._fetch_with_timeout(
-                        search_company_publications(cui_clean, company_name, max_results=5),
-                        "Monitorul Oficial",
-                        15,
-                    )
-                    if mo_events and isinstance(mo_events, list) and len(mo_events) > 0:
-                        official_data["monitorul_oficial"] = mo_events
-                        sources.append({
-                            "source_name": "Monitorul Oficial",
-                            "source_url": "https://www.monitoruloficial.ro",
-                            "status": "OK",
-                            "data_found": True,
-                            "response_time_ms": 0,
-                        })
-                        log_source_result(job_id, "Monitorul Oficial", True, 0,
-                            [f"events={len(mo_events)}"])
-                        logger.info(f"[official] MO: {len(mo_events)} events for {company_name}")
-                except Exception as _e:
-                    logger.debug(f"[official] MO error: {_e}")
+            await self._fetch_monitorul_oficial_partea_iv(official_data, sources, company_name, cui_clean, job_id)
 
             # EP2+EP3: Extract ANAF inactivi + risc fiscal (already in ANAF v9 response)
             self._derive_anaf_fiscal_risk(anaf_source, official_data)
@@ -655,6 +563,126 @@ class OfficialAgent(BaseAgent):
                 ),
                 "source": "ANAF",
             }
+
+    # --- Faza B (refactor #1, 2026-07-14): blocuri cu dependinte REALE de ordine sau
+    # side-effects, extrase FARA nicio reordonare (apelate in aceeasi pozitie textuala
+    # din execute() ca inainte). Verificate cu testul de caracterizare dupa extractie.
+
+    async def _store_administrators_sideeffect(self, openapi_source: dict, cui_clean: str, company_name: str) -> None:
+        """F1-2: side-effect DB (nu muteaza official_data/sources). Citeste `openapi_source`
+        BRUT (rezultatul din gather), NU `official_data["onrc_structured"]` -- pastreaza
+        exact aceeasi sursa de date ca inainte, fara sa introduca o dependinta noua."""
+        if openapi_source["data_found"]:
+            from backend.agents.tools.network_client import store_administrators
+            odata = openapi_source["data"]
+            all_persons = []
+            for assoc in (odata.get("asociati") or []):
+                name = assoc.get("name") or assoc.get("nume") or assoc.get("denumire", "")
+                if name:
+                    all_persons.append({
+                        "name": name,
+                        "role": "asociat",
+                        "ownership_pct": assoc.get("procent") or assoc.get("ownership_pct"),
+                    })
+            for admin in (odata.get("administratori") or []):
+                name = admin.get("name") or admin.get("nume") or admin.get("denumire", "")
+                if name:
+                    all_persons.append({
+                        "name": name,
+                        "role": "administrator",
+                        "ownership_pct": None,
+                    })
+            if all_persons and cui_clean:
+                try:
+                    await store_administrators(cui_clean, company_name or "", all_persons)
+                except Exception as _e:
+                    logger.debug(f"[official] store_administrators error: {_e}")
+
+    async def _fetch_portal_just(self, official_data: dict, sources: list, company_name: str,
+                                  cui_clean: str, job_id: str) -> None:
+        """F1-1: depinde de official_data["onrc_structured"]/["onrc_local"] (judet) --
+        trebuie apelata DUPA ce acele chei sunt deja setate (pastreaza pozitia din execute())."""
+        if company_name:
+            _judet = (
+                (official_data.get("onrc_structured") or {}).get("judet")
+                or (official_data.get("onrc_local") or {}).get("judet")
+                or ""
+            )
+            just_result = await self._fetch_with_timeout(
+                search_dosare(company_name, cui_clean, _judet),
+                "portal.just.ro",
+                65,  # pana la 2 instante cautate secvential (Tribunal + Curte de Apel)
+            )
+            if just_result and just_result.get("found") is not False:
+                official_data["dosare_just"] = just_result
+                sources.append({
+                    "source_name": "portal.just.ro",
+                    "source_url": "http://portalquery.just.ro",
+                    "status": "OK",
+                    "data_found": True,
+                    "response_time_ms": 0,
+                })
+                log_source_result(job_id, "portal.just.ro", True, 0,
+                    [f"dosare={just_result.get('total_dosare', 0)}"])
+            else:
+                sources.append({
+                    "source_name": "portal.just.ro",
+                    "source_url": "http://portalquery.just.ro",
+                    "status": "FAIL",
+                    "data_found": False,
+                    "response_time_ms": 0,
+                })
+
+    async def _fetch_google_maps(self, official_data: dict, sources: list, company_name: str) -> None:
+        """F5-2: PASTREAZA bug-ul preexistent `address` mort (official_data.get("address")
+        nu e setat nicaieri in execute(), deci parametrul e mereu gol) -- NU reparat aici,
+        semnalat separat in raport."""
+        if company_name and settings.google_cloud_api_key:
+            try:
+                from backend.agents.tools.maps_client import get_maps_rating
+                address = official_data.get("address", {}).get("adresa", "") if isinstance(official_data.get("address"), dict) else ""
+                maps_result = await asyncio.wait_for(
+                    get_maps_rating(company_name, address), timeout=8.0
+                )
+                official_data["maps_rating"] = maps_result
+                if maps_result.get("found"):
+                    sources.append({
+                        "source_name": "google_maps",
+                        "source_url": "https://maps.google.com",
+                        "status": "OK",
+                        "data_found": True,
+                        "response_time_ms": 0,
+                    })
+                    logger.info(f"[official] Google Maps: {maps_result.get('name')} rating={maps_result.get('rating')}")
+            except Exception as _e:
+                logger.debug(f"[official] maps error: {_e}")
+
+    async def _fetch_monitorul_oficial_partea_iv(self, official_data: dict, sources: list,
+                                                  company_name: str, cui_clean: str, job_id: str) -> None:
+        """G2: separat de OSINT (osint_client, mai jos in execute()) -- alt client, alta
+        cheie (`monitorul_oficial` vs `osint_historical`)."""
+        if company_name:
+            try:
+                from backend.agents.tools.monitorul_oficial_client import search_company_publications
+                mo_events = await self._fetch_with_timeout(
+                    search_company_publications(cui_clean, company_name, max_results=5),
+                    "Monitorul Oficial",
+                    15,
+                )
+                if mo_events and isinstance(mo_events, list) and len(mo_events) > 0:
+                    official_data["monitorul_oficial"] = mo_events
+                    sources.append({
+                        "source_name": "Monitorul Oficial",
+                        "source_url": "https://www.monitoruloficial.ro",
+                        "status": "OK",
+                        "data_found": True,
+                        "response_time_ms": 0,
+                    })
+                    log_source_result(job_id, "Monitorul Oficial", True, 0,
+                        [f"events={len(mo_events)}"])
+                    logger.info(f"[official] MO: {len(mo_events)} events for {company_name}")
+            except Exception as _e:
+                logger.debug(f"[official] MO error: {_e}")
 
     def _extract_cui(self, value: str) -> str:
         """Extrage CUI numeric din input."""
