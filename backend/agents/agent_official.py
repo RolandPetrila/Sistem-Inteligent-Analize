@@ -209,196 +209,23 @@ class OfficialAgent(BaseAgent):
         await self._fetch_legal_merged_and_split(official_data, sources, search_term, cui_clean, tavily_quota_ok, job_id)
 
         # --- 7. AI Pre-processing: clasificare + sentiment Tavily (ADV7) ---
-        tavily_results = []
-        for key in ["insolvency", "litigation", "financial", "onrc"]:
-            data = official_data.get(key, {})
-            if isinstance(data, dict):
-                results = data.get("results", [])
-                if isinstance(results, list):
-                    tavily_results.extend(results[:3])
-
-        # F7.4: Brave Search — reputation search with independent index (complement to Tavily)
-        if brave_available() and (company_name or cui_clean):
-            try:
-                brave = await brave_search(company_name or "", cui_clean or cui)
-                if brave:
-                    official_data["brave_reputation"] = brave
-                    log_source_result(job_id, "Brave Search", True, 0,
-                        [f"results={len(brave.get('results', []))}"])
-            except Exception as e:
-                logger.debug(f"[official] Brave search failed: {e}")
-
-        # F7.1: Enrich top Tavily results with clean Markdown via Jina Reader
-        if tavily_results:
-            try:
-                tavily_results = await enrich_tavily_results(tavily_results, max_urls=3)
-                jina_enriched = sum(1 for r in tavily_results if r.get("content_source") == "jina_reader")
-                if jina_enriched:
-                    logger.debug(f"[official] Jina Reader enriched {jina_enriched} results")
-            except Exception as e:
-                logger.debug(f"[official] Jina enrichment skipped: {e}")
-
-        if tavily_results:
-            classified = self._classify_tavily_results(tavily_results, company_name or cui)
-            official_data["web_intelligence"] = classified
+        await self._build_web_intelligence(official_data, company_name, cui_clean, cui, job_id)
 
         # --- 8. Context CAEN (DF4) ---
-        caen_code = ""
-        onrc_s = official_data.get("onrc_structured", {})
-        if isinstance(onrc_s, dict):
-            caen_code = onrc_s.get("caen_code", "")
-        if not caen_code and isinstance(official_data.get("anaf", {}), dict):
-            caen_code = official_data.get("anaf", {}).get("cod_caen", "")
-        # CA1: Fallback CAEN from ANAF Bilant (daca openapi.ro + ANAF n-au furnizat)
-        if not caen_code and official_data.get("financial_official"):
-            bilant_data = official_data["financial_official"].get("data", {})
-            if isinstance(bilant_data, dict):
-                for year in sorted(bilant_data.keys(), reverse=True):
-                    yr = bilant_data[year]
-                    if isinstance(yr, dict) and yr.get("caen_code"):
-                        caen_code = str(yr["caen_code"])
-                        logger.info(f"[official] CAEN fallback from ANAF Bilant {year}: {caen_code}")
-                        break
-        if caen_code:
-            try:
-                caen_ctx = await get_caen_context(caen_code)
-                if caen_ctx.get("available"):
-                    official_data["caen_context"] = caen_ctx
-                    logger.info(f"[official] CAEN context: {caen_code} - {caen_ctx.get('caen_description', '')[:50]}")
-                    log_source_result(job_id, "CAEN Context", True, 0,
-                        [f"code={caen_code}", f"sector={caen_ctx.get('caen_section_name', '')[:30]}"])
-                else:
-                    log_source_result(job_id, "CAEN Context", False, 0, error="CAEN code not in database")
-            except Exception as e:
-                logger.debug(f"[official] CAEN context failed: {e}")
-                log_source_result(job_id, "CAEN Context", False, 0, error=str(e))
-        else:
-            log_source_result(job_id, "CAEN Context", False, 0, error="no CAEN code available (openapi.ro or ANAF)")
+        caen_code = await self._resolve_caen_context(official_data, job_id)
 
         # --- 9A: Data freshness tracking per source ---
-        data_freshness = {}
-        if official_data.get("financial_official"):
-            bilant_years = list(official_data["financial_official"].get("data", {}).keys()) if isinstance(official_data["financial_official"].get("data"), dict) else []
-            if bilant_years:
-                latest_year = max(int(y) for y in bilant_years if str(y).isdigit())
-                age_years = datetime.now(UTC).year - latest_year
-                data_freshness["anaf_bilant"] = {"latest_year": latest_year, "data_age_years": age_years, "fresh": age_years <= 1}
-        if official_data.get("anaf", {}).get("found"):
-            data_freshness["anaf_fiscal"] = {"data_age_years": 0, "fresh": True, "note": "real-time API"}
-        if official_data.get("bnr_rates"):
-            data_freshness["bnr"] = {"data_age_years": 0, "fresh": True, "note": "daily rates"}
-        if official_data.get("onrc_structured", {}).get("found"):
-            data_freshness["onrc"] = {"data_age_years": 0, "fresh": True, "note": "registry data"}
-        official_data["data_freshness"] = data_freshness
+        self._compute_data_freshness(official_data)
 
         # --- Diagnostic complet per sursa ---
-        diagnostics = {}
-        for s in sources:
-            sname = s.get("source_name", "unknown")
-            diagnostics[sname] = {
-                "status": s.get("status", "UNKNOWN"),
-                "data_found": s.get("data_found", False),
-                "response_time_ms": s.get("response_time_ms", 0),
-                "error": s.get("data", {}).get("error") if not s.get("data_found") else None,
-            }
-
-        # Verifica surse ASTEPTATE dar lipsa — dinamic per tip analiza
-        analysis_type = state.get("analysis_type", "FULL_COMPANY_PROFILE")
-        REQUIRED_SOURCES_BY_TYPE = {
-            "FULL_COMPANY_PROFILE": ["ANAF", "ANAF Bilant", "BNR", "openapi.ro", "BPI (buletinul.ro)"],
-            "COMPETITION_ANALYSIS": ["ANAF", "ANAF Bilant", "SEAP"],
-            "PARTNER_RISK_ASSESSMENT": ["ANAF", "ANAF Bilant", "BNR", "BPI (buletinul.ro)", "openapi.ro"],
-            "TENDER_OPPORTUNITIES": ["ANAF", "SEAP"],
-            "MARKET_ENTRY_ANALYSIS": ["ANAF", "ANAF Bilant"],
-            "LEAD_GENERATION": ["ANAF"],
-            "MONITORING_SETUP": ["ANAF"],
-        }
-        expected_sources = REQUIRED_SOURCES_BY_TYPE.get(analysis_type, ["ANAF", "ANAF Bilant", "BNR"])
-        if not cui_clean:
-            expected_sources = ["BNR"]  # fara CUI, doar BNR e asteptat
-
-        found_source_names = {s.get("source_name") for s in sources if s.get("data_found")}
-        missing_sources = [es for es in expected_sources if es not in found_source_names]
-
-        # Verifica campuri critice lipsa
-        missing_fields = []
-        if not official_data.get("anaf", {}).get("found"):
-            missing_fields.append("ANAF fiscal status")
-        if not official_data.get("financial_official"):
-            missing_fields.append("Date financiare oficiale (ANAF Bilant)")
-        onrc_s = official_data.get("onrc_structured", {})
-        if not (isinstance(onrc_s, dict) and onrc_s.get("found")):
-            missing_fields.append("ONRC structurat (openapi.ro) — CAEN, asociati, administratori")
-        if not caen_code:
-            missing_fields.append("Cod CAEN (necesar pentru benchmark si context sector)")
-        if not official_data.get("caen_context", {}).get("available"):
-            missing_fields.append("Context CAEN (sector, numar firme, benchmark)")
-
-        # Completeness: dinamic pe baza surselor required + bonus pentru surse extra
-        required_found = len(found_source_names & set(expected_sources))
-        required_total = max(len(expected_sources), 1)
-        base_score = round(required_found / required_total * 100)
-        # Bonus +2 per sursa extra (max +10)
-        extra_sources = found_source_names - set(expected_sources)
-        bonus = min(len(extra_sources) * 2, 10)
-        completeness_score = min(base_score + bonus, 100)
-
-        official_data["diagnostics"] = {
-            "per_source": diagnostics,
-            "missing_sources": missing_sources,
-            "missing_fields": missing_fields,
-            "expected_sources": expected_sources,
-            "completeness_score": completeness_score,
-        }
-
-        # Sumarul surselor
-        ok_count = sum(1 for s in sources if s["data_found"])
-        total_count = len(sources)
-        official_data["sources_summary"] = {
-            "total": total_count,
-            "ok": ok_count,
-            "failed": total_count - ok_count,
-        }
-
-        if missing_fields:
-            logger.warning(
-                f"[official] CAMPURI LIPSA: {', '.join(missing_fields)}"
-            )
-        if missing_sources:
-            logger.warning(
-                f"[official] SURSE ESUATE: {', '.join(missing_sources)}"
-            )
-
-        logger.info(
-            f"[official] Done: {ok_count}/{total_count} surse | "
-            f"Completitudine: {official_data['diagnostics']['completeness_score']}% | "
-            f"Lipsa: {len(missing_fields)} campuri"
+        ok_count, total_count = self._compute_diagnostics(
+            official_data, sources, state, cui_clean, caen_code
         )
 
         # OSINT: Monitorul Oficial — date istorice (cesiuni, schimbari asociati, etc.)
-        historical_flags: list = []
-        if (company_name or cui_clean) and tavily_quota_ok:
-            try:
-                from backend.agents.tools.osint_client import search_monitorul_oficial
-                osint_result = await asyncio.wait_for(
-                    search_monitorul_oficial(company_name or "", cui_clean or None),
-                    timeout=15.0,
-                )
-                official_data["osint_historical"] = osint_result
-                historical_flags = osint_result.get("historical_flags", [])
-                if historical_flags:
-                    logger.info(
-                        f"[official] OSINT: {len(historical_flags)} semnale istorice detectate"
-                    )
-                    sources.append({
-                        "source_name": "Monitorul Oficial (OSINT)",
-                        "source_url": "https://www.monitoruloficial.ro",
-                        "status": "OK",
-                        "data_found": True,
-                        "response_time_ms": 0,
-                    })
-            except Exception as _oe:
-                logger.debug(f"[official] OSINT Monitorul Oficial error: {_oe}")
+        historical_flags = await self._fetch_osint_historical(
+            official_data, sources, company_name, cui_clean, tavily_quota_ok
+        )
 
         log_agent_end(job_id, "official",
             f"{ok_count}/{total_count} surse OK | completeness={official_data['diagnostics']['completeness_score']}%")
@@ -706,6 +533,226 @@ class OfficialAgent(BaseAgent):
             else:
                 log_source_result(job_id, "Legal (merged)", False,
                     merged_source.get("response_time_ms", 0), error="no data")
+
+    # --- Faza D (refactor #1, 2026-07-14): consumatori agregati, extrasi ULTIMII --
+    # citesc official_data/sources deja populate de Faza A/B/C. ZERO reordonare (apelate
+    # in aceeasi pozitie textuala din execute() ca inainte).
+
+    async def _build_web_intelligence(self, official_data: dict, company_name: str,
+                                       cui_clean: str, cui: str, job_id: str) -> None:
+        """7. AI Pre-processing: agrega tavily_results din insolvency/litigation/financial/onrc
+        (MUTEAZA tavily_results in loc, cum era inainte -- variabila locala nu se returneaza),
+        Brave Search, enrichire Jina, apoi clasificare -> official_data["web_intelligence"]."""
+        tavily_results = []
+        for key in ["insolvency", "litigation", "financial", "onrc"]:
+            data = official_data.get(key, {})
+            if isinstance(data, dict):
+                results = data.get("results", [])
+                if isinstance(results, list):
+                    tavily_results.extend(results[:3])
+
+        # F7.4: Brave Search — reputation search with independent index (complement to Tavily)
+        if brave_available() and (company_name or cui_clean):
+            try:
+                brave = await brave_search(company_name or "", cui_clean or cui)
+                if brave:
+                    official_data["brave_reputation"] = brave
+                    log_source_result(job_id, "Brave Search", True, 0,
+                        [f"results={len(brave.get('results', []))}"])
+            except Exception as e:
+                logger.debug(f"[official] Brave search failed: {e}")
+
+        # F7.1: Enrich top Tavily results with clean Markdown via Jina Reader
+        if tavily_results:
+            try:
+                tavily_results = await enrich_tavily_results(tavily_results, max_urls=3)
+                jina_enriched = sum(1 for r in tavily_results if r.get("content_source") == "jina_reader")
+                if jina_enriched:
+                    logger.debug(f"[official] Jina Reader enriched {jina_enriched} results")
+            except Exception as e:
+                logger.debug(f"[official] Jina enrichment skipped: {e}")
+
+        if tavily_results:
+            classified = self._classify_tavily_results(tavily_results, company_name or cui)
+            official_data["web_intelligence"] = classified
+
+    async def _resolve_caen_context(self, official_data: dict, job_id: str) -> str:
+        """8. Cod CAEN, fallback in 3 trepte: onrc_structured -> anaf -> financial_official
+        (cel mai recent an) -- apoi fetch caen_context. Returneaza caen_code (poate fi gol),
+        folosit ulterior in _compute_diagnostics (missing_fields)."""
+        caen_code = ""
+        onrc_s = official_data.get("onrc_structured", {})
+        if isinstance(onrc_s, dict):
+            caen_code = onrc_s.get("caen_code", "")
+        if not caen_code and isinstance(official_data.get("anaf", {}), dict):
+            caen_code = official_data.get("anaf", {}).get("cod_caen", "")
+        # CA1: Fallback CAEN from ANAF Bilant (daca openapi.ro + ANAF n-au furnizat)
+        if not caen_code and official_data.get("financial_official"):
+            bilant_data = official_data["financial_official"].get("data", {})
+            if isinstance(bilant_data, dict):
+                for year in sorted(bilant_data.keys(), reverse=True):
+                    yr = bilant_data[year]
+                    if isinstance(yr, dict) and yr.get("caen_code"):
+                        caen_code = str(yr["caen_code"])
+                        logger.info(f"[official] CAEN fallback from ANAF Bilant {year}: {caen_code}")
+                        break
+        if caen_code:
+            try:
+                caen_ctx = await get_caen_context(caen_code)
+                if caen_ctx.get("available"):
+                    official_data["caen_context"] = caen_ctx
+                    logger.info(f"[official] CAEN context: {caen_code} - {caen_ctx.get('caen_description', '')[:50]}")
+                    log_source_result(job_id, "CAEN Context", True, 0,
+                        [f"code={caen_code}", f"sector={caen_ctx.get('caen_section_name', '')[:30]}"])
+                else:
+                    log_source_result(job_id, "CAEN Context", False, 0, error="CAEN code not in database")
+            except Exception as e:
+                logger.debug(f"[official] CAEN context failed: {e}")
+                log_source_result(job_id, "CAEN Context", False, 0, error=str(e))
+        else:
+            log_source_result(job_id, "CAEN Context", False, 0, error="no CAEN code available (openapi.ro or ANAF)")
+        return caen_code
+
+    def _compute_data_freshness(self, official_data: dict) -> None:
+        """9A: Data freshness tracking per source -- pura, citeste official_data deja populat."""
+        data_freshness = {}
+        if official_data.get("financial_official"):
+            bilant_years = list(official_data["financial_official"].get("data", {}).keys()) if isinstance(official_data["financial_official"].get("data"), dict) else []
+            if bilant_years:
+                latest_year = max(int(y) for y in bilant_years if str(y).isdigit())
+                age_years = datetime.now(UTC).year - latest_year
+                data_freshness["anaf_bilant"] = {"latest_year": latest_year, "data_age_years": age_years, "fresh": age_years <= 1}
+        if official_data.get("anaf", {}).get("found"):
+            data_freshness["anaf_fiscal"] = {"data_age_years": 0, "fresh": True, "note": "real-time API"}
+        if official_data.get("bnr_rates"):
+            data_freshness["bnr"] = {"data_age_years": 0, "fresh": True, "note": "daily rates"}
+        if official_data.get("onrc_structured", {}).get("found"):
+            data_freshness["onrc"] = {"data_age_years": 0, "fresh": True, "note": "registry data"}
+        official_data["data_freshness"] = data_freshness
+
+    def _compute_diagnostics(self, official_data: dict, sources: list, state: AnalysisState,
+                              cui_clean: str, caen_code: str) -> tuple[int, int]:
+        """Diagnostic complet per sursa + missing_sources/missing_fields + completeness_score
+        + sources_summary. Ruleaza INAINTE de OSINT (_fetch_osint_historical, mai jos) -- quirk
+        pastrat exact: semnalul OSINT nu apare in completeness/diagnostics, desi apare in
+        `sources`. Returneaza (ok_count, total_count) calculate AICI (nu recalculate dupa
+        OSINT), pt ca return dict-ul final din execute() foloseste aceste valori inghetate
+        la acest moment."""
+        diagnostics = {}
+        for s in sources:
+            sname = s.get("source_name", "unknown")
+            diagnostics[sname] = {
+                "status": s.get("status", "UNKNOWN"),
+                "data_found": s.get("data_found", False),
+                "response_time_ms": s.get("response_time_ms", 0),
+                "error": s.get("data", {}).get("error") if not s.get("data_found") else None,
+            }
+
+        # Verifica surse ASTEPTATE dar lipsa — dinamic per tip analiza
+        analysis_type = state.get("analysis_type", "FULL_COMPANY_PROFILE")
+        REQUIRED_SOURCES_BY_TYPE = {
+            "FULL_COMPANY_PROFILE": ["ANAF", "ANAF Bilant", "BNR", "openapi.ro", "BPI (buletinul.ro)"],
+            "COMPETITION_ANALYSIS": ["ANAF", "ANAF Bilant", "SEAP"],
+            "PARTNER_RISK_ASSESSMENT": ["ANAF", "ANAF Bilant", "BNR", "BPI (buletinul.ro)", "openapi.ro"],
+            "TENDER_OPPORTUNITIES": ["ANAF", "SEAP"],
+            "MARKET_ENTRY_ANALYSIS": ["ANAF", "ANAF Bilant"],
+            "LEAD_GENERATION": ["ANAF"],
+            "MONITORING_SETUP": ["ANAF"],
+        }
+        expected_sources = REQUIRED_SOURCES_BY_TYPE.get(analysis_type, ["ANAF", "ANAF Bilant", "BNR"])
+        if not cui_clean:
+            expected_sources = ["BNR"]  # fara CUI, doar BNR e asteptat
+
+        found_source_names = {s.get("source_name") for s in sources if s.get("data_found")}
+        missing_sources = [es for es in expected_sources if es not in found_source_names]
+
+        # Verifica campuri critice lipsa
+        missing_fields = []
+        if not official_data.get("anaf", {}).get("found"):
+            missing_fields.append("ANAF fiscal status")
+        if not official_data.get("financial_official"):
+            missing_fields.append("Date financiare oficiale (ANAF Bilant)")
+        onrc_s = official_data.get("onrc_structured", {})
+        if not (isinstance(onrc_s, dict) and onrc_s.get("found")):
+            missing_fields.append("ONRC structurat (openapi.ro) — CAEN, asociati, administratori")
+        if not caen_code:
+            missing_fields.append("Cod CAEN (necesar pentru benchmark si context sector)")
+        if not official_data.get("caen_context", {}).get("available"):
+            missing_fields.append("Context CAEN (sector, numar firme, benchmark)")
+
+        # Completeness: dinamic pe baza surselor required + bonus pentru surse extra
+        required_found = len(found_source_names & set(expected_sources))
+        required_total = max(len(expected_sources), 1)
+        base_score = round(required_found / required_total * 100)
+        # Bonus +2 per sursa extra (max +10)
+        extra_sources = found_source_names - set(expected_sources)
+        bonus = min(len(extra_sources) * 2, 10)
+        completeness_score = min(base_score + bonus, 100)
+
+        official_data["diagnostics"] = {
+            "per_source": diagnostics,
+            "missing_sources": missing_sources,
+            "missing_fields": missing_fields,
+            "expected_sources": expected_sources,
+            "completeness_score": completeness_score,
+        }
+
+        # Sumarul surselor
+        ok_count = sum(1 for s in sources if s["data_found"])
+        total_count = len(sources)
+        official_data["sources_summary"] = {
+            "total": total_count,
+            "ok": ok_count,
+            "failed": total_count - ok_count,
+        }
+
+        if missing_fields:
+            logger.warning(
+                f"[official] CAMPURI LIPSA: {', '.join(missing_fields)}"
+            )
+        if missing_sources:
+            logger.warning(
+                f"[official] SURSE ESUATE: {', '.join(missing_sources)}"
+            )
+
+        logger.info(
+            f"[official] Done: {ok_count}/{total_count} surse | "
+            f"Completitudine: {official_data['diagnostics']['completeness_score']}% | "
+            f"Lipsa: {len(missing_fields)} campuri"
+        )
+        return ok_count, total_count
+
+    async def _fetch_osint_historical(self, official_data: dict, sources: list, company_name: str,
+                                       cui_clean: str, tavily_quota_ok: bool) -> list:
+        """OSINT Monitorul Oficial -- date istorice (cesiuni, schimbari asociati, etc.).
+        ULTIMUL, DUPA _compute_diagnostics -- quirk pastrat exact: daca gaseste semnale,
+        adauga sursa in `sources` DUPA ce diagnostics/sources_summary au fost deja calculate,
+        deci acel semnal nu apare niciodata in completeness/diagnostics desi apare in `sources`.
+        Primeste tavily_quota_ok ca param (_check_tavily_quota, Faza C, il returneaza)."""
+        historical_flags: list = []
+        if (company_name or cui_clean) and tavily_quota_ok:
+            try:
+                from backend.agents.tools.osint_client import search_monitorul_oficial
+                osint_result = await asyncio.wait_for(
+                    search_monitorul_oficial(company_name or "", cui_clean or None),
+                    timeout=15.0,
+                )
+                official_data["osint_historical"] = osint_result
+                historical_flags = osint_result.get("historical_flags", [])
+                if historical_flags:
+                    logger.info(
+                        f"[official] OSINT: {len(historical_flags)} semnale istorice detectate"
+                    )
+                    sources.append({
+                        "source_name": "Monitorul Oficial (OSINT)",
+                        "source_url": "https://www.monitoruloficial.ro",
+                        "status": "OK",
+                        "data_found": True,
+                        "response_time_ms": 0,
+                    })
+            except Exception as _oe:
+                logger.debug(f"[official] OSINT Monitorul Oficial error: {_oe}")
+        return historical_flags
 
     def _extract_cui(self, value: str) -> str:
         """Extrage CUI numeric din input."""
