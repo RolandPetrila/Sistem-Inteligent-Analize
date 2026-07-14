@@ -89,3 +89,13 @@ class TestGateBooleans:
         model = build_rich_fields_model(data)
         assert model["actionariat"]["shown"] is True
         assert model["actionariat"]["act_ok"] is False
+
+    def test_credit_exposure_hidden_when_absent(self):
+        model = build_rich_fields_model({})
+        assert model["credit_exposure"]["shown"] is False
+
+    def test_credit_exposure_shown_when_computed(self):
+        data = {"credit_exposure": {"expunere_ron": 5000, "metode_folosite": 1, "formula": "x", "kill_switch": False, "disclaimer": "y"}}
+        model = build_rich_fields_model(data)
+        assert model["credit_exposure"]["shown"] is True
+        assert model["credit_exposure"]["data"]["expunere_ron"] == 5000

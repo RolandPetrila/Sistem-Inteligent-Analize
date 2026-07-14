@@ -468,6 +468,18 @@ export const api = {
   getPredictive: (cui: string) =>
     request<Record<string, unknown>>(`/companies/${cui}/predictive`),
 
+  // P1-4: Bonitate & Expunere comerciala recomandata (RON)
+  getCreditExposure: (cui: string) =>
+    request<{
+      expunere_ron: number;
+      metode_folosite: number;
+      formula: string;
+      kill_switch: boolean;
+      disclaimer: string;
+      cui: string;
+      computed_at: string;
+    }>(`/companies/${cui}/credit-exposure`),
+
   // Report email
   sendReportEmail: (
     reportId: string,

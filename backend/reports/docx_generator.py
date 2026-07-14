@@ -271,6 +271,19 @@ def _add_rich_fields_docx(doc, verified_data: dict):
             for p in funding["eligible"]:
                 doc.add_paragraph(f"{p.get('nume', '')} — {p.get('suma_max_eur', 0)} EUR", style="List Bullet")
 
+    cred = model["credit_exposure"]["data"]
+    if model["credit_exposure"]["shown"]:
+        doc.add_page_break()
+        doc.add_heading("Bonitate si Expunere Comerciala", level=1)
+        p = doc.add_paragraph()
+        r = p.add_run(f"{cred.get('expunere_ron', 0):,.0f} RON")
+        r.font.size = Pt(16)
+        r.bold = True
+        r.font.color.rgb = RGBColor(220, 50, 50) if cred.get("kill_switch") else RGBColor(34, 197, 94)
+        doc.add_paragraph(f"{cred.get('formula', '')} — {cred.get('metode_folosite', 0)} metode folosite")
+        note = doc.add_paragraph()
+        note.add_run(str(cred.get("disclaimer", ""))).italic = True
+
 
 def generate_docx(report_sections: dict, meta: dict, output_path: str, verified_data: dict = None):
     """Genereaza DOCX din report_sections. B15: due_diligence + early_warnings."""

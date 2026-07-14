@@ -86,6 +86,7 @@ CURATED_ENDPOINTS = {
     "POST /api/companies/{company_id}/chat": {"cat": "Companies", "tested": True, "evidence": "BUG GASIT+REPARAT 2026-07-13: contextul 'Date cheie verificate' citea full_data.get('verified_data') — cheie care NU EXISTA NICIODATA (campurile sunt la nivelul de sus). Chat-ul nu raspundea niciodata corect la intrebari despre scor/CA. Reparat + disambiguare firma-analizata-vs-alte-firme-mentionate. Verificat live: raspuns corect '85.5/100, Verde, CA 14.154.303 RON'.", "live_safe": False},
     "GET /api/companies/{company_id}/network": {"cat": "Companies", "tested": True, "evidence": "E2E 2026-07-12: OK (gol pt Mosslein).", "live_safe": True},
     "GET /api/companies/{cui}/predictive": {"cat": "Companies", "tested": True, "evidence": "E2E 2026-07-12: Altman/Piotroski/Beneish/Zmijewski OK.", "live_safe": True},
+    "GET /api/companies/{cui}/credit-exposure": {"cat": "Companies", "tested": True, "evidence": "P1-4 (2026-07-14): Bonitate & Expunere comerciala (RON), recalculata din ultimul raport. Verificat live CUI 26313362: 432.000 RON, 3 metode, Verde x1.0. Randat si in HTML/PDF/DOCX + card CompanyDetail.", "live_safe": True},
     "GET /api/companies/{cui}/timeline-report": {"cat": "Companies", "tested": True, "evidence": "Verificat live 2026-07-13: HTTP 200 (varianta JSON, nu doar /pdf).", "live_safe": True},
     "GET /api/companies/{cui}/timeline-report/pdf": {"cat": "Companies", "tested": True, "evidence": "BUG #4 FIX: crash Unicode em-dash. Verificat live 200 OK dupa fix.", "live_safe": True},
 

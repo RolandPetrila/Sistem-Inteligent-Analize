@@ -133,6 +133,14 @@ export default function CompanyDetail() {
   const [tags, setTags] = useState<string[]>([]);
   const [note, setNote] = useState("");
   const [newTag, setNewTag] = useState("");
+  // P1-4: Bonitate & Expunere comerciala recomandata (RON)
+  const [creditExposure, setCreditExposure] = useState<{
+    expunere_ron: number;
+    metode_folosite: number;
+    formula: string;
+    kill_switch: boolean;
+    disclaimer: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -146,6 +154,15 @@ export default function CompanyDetail() {
         if (maybeFav !== undefined && maybeFav !== null)
           setIsFavorite(Boolean(maybeFav));
         logAction("CompanyDetail", "open", { companyId: id, name: full.name });
+        // P1-4: recalculat din cel mai recent raport disponibil pt acest CUI
+        if (full.cui) {
+          api
+            .getCreditExposure(full.cui)
+            .then((res) => setCreditExposure(res))
+            .catch(() => {
+              /* optional — firma poate sa nu aiba inca niciun raport */
+            });
+        }
       })
       .catch(() => toast("Eroare la incarcarea companiei", "error"))
       .finally(() => setLoading(false));
@@ -664,6 +681,30 @@ export default function CompanyDetail() {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* P1-4: Bonitate & Expunere comerciala recomandata */}
+      {creditExposure && (
+        <div className="card">
+          <h3 className="text-sm font-semibold text-gray-400 uppercase mb-3">
+            Bonitate &amp; Expunere Comerciala Recomandata
+          </h3>
+          <p
+            className={clsx(
+              "text-2xl font-bold",
+              creditExposure.kill_switch ? "text-red-400" : "text-green-400",
+            )}
+          >
+            {creditExposure.expunere_ron.toLocaleString("ro-RO")} RON
+          </p>
+          <p className="text-xs text-gray-500 mt-1">
+            {creditExposure.formula} &middot; {creditExposure.metode_folosite}{" "}
+            metode folosite
+          </p>
+          <p className="text-[10px] text-gray-600 mt-2 italic">
+            {creditExposure.disclaimer}
+          </p>
         </div>
       )}
 

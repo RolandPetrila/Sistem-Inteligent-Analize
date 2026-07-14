@@ -2,7 +2,8 @@
 build_rich_fields_model(verified_data) -- normalizeaza campurile bogate
 (predictive_scores, benchmark, eurostat_sector, achizitii SEAP,
 tender_opportunities, actionariat+relations, sanctiuni,
-aegrm_guarantees+historical_flags, funding_programs) intr-o forma stabila,
+aegrm_guarantees+historical_flags, funding_programs, credit_exposure)
+intr-o forma stabila,
 consumata identic de html_generator / pdf_generator / docx_generator.
 
 Randarea (culori, markup HTML/PDF/DOCX, trunchiere per format, tabele) ramane
@@ -74,6 +75,9 @@ def build_rich_fields_model(verified_data: dict) -> dict:
     funding = verified_data.get("funding_programs", {})
     has_funding = bool(isinstance(funding, dict) and funding.get("eligible"))
 
+    cred = verified_data.get("credit_exposure", {})
+    has_cred = bool(isinstance(cred, dict) and "expunere_ron" in cred)
+
     return {
         "predictive_scores": {"shown": has_pred, "data": pred},
         "benchmark": {"shown": has_bench, "data": bench},
@@ -89,4 +93,5 @@ def build_rich_fields_model(verified_data: dict) -> dict:
             "hist_ok": hist_ok, "historical_flags": historical_flags_normalized,
         },
         "funding_programs": {"shown": has_funding, "data": funding},
+        "credit_exposure": {"shown": has_cred, "data": cred},
     }

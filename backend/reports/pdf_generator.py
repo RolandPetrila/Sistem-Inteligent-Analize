@@ -301,8 +301,9 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
     seap_ok = model["seap"]["shown"]
     opp = model["tender_opportunities"]["data"]
     opp_ok = model["tender_opportunities"]["shown"]
+    cred_ok = model["credit_exposure"]["shown"]
 
-    if act_ok or rel_flags or aegrm_ok or hist_ok or fund_ok or sanc_ok or eust_ok or seap_ok or opp_ok:
+    if act_ok or rel_flags or aegrm_ok or hist_ok or fund_ok or sanc_ok or eust_ok or seap_ok or opp_ok or cred_ok:
         pdf.add_page()
         pdf.start_section("Actionariat, Garantii si Finantare", level=0)
         pdf.set_font("Helvetica", "B", 16)
@@ -463,6 +464,25 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
                 suma_str = f"{suma:,.0f}" if isinstance(suma, int | float) and suma else "-"
                 rows.append([str(p.get("nume", "")), suma_str, str(p.get("termen", "") or "-")])
             _render_pdf_table(pdf, rows, has_header=True)
+
+        cred = model["credit_exposure"]["data"]
+        if model["credit_exposure"]["shown"]:
+            _add_section_header(pdf, "Bonitate si Expunere Comerciala")
+            pdf.set_font("Helvetica", "B", 14)
+            if cred.get("kill_switch"):
+                pdf.set_text_color(220, 50, 50)
+            else:
+                pdf.set_text_color(34, 150, 90)
+            pdf.multi_cell(0, 8, _sanitize(f"{cred.get('expunere_ron', 0):,.0f} RON"), new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Helvetica", "", 10)
+            pdf.set_text_color(40, 40, 40)
+            pdf.multi_cell(0, 6, _sanitize(f"{cred.get('formula', '')} - {cred.get('metode_folosite', 0)} metode folosite"), new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Helvetica", "", 8)
+            pdf.set_text_color(120, 120, 120)
+            pdf.multi_cell(0, 5, _sanitize(str(cred.get("disclaimer", ""))), new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Helvetica", "", 10)
+            pdf.set_text_color(40, 40, 40)
+            pdf.ln(3)
 
 
 def generate_pdf(report_sections: dict, meta: dict, output_path: str, verified_data: dict = None, lang: str = "ro"):

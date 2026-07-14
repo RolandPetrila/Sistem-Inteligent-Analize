@@ -800,6 +800,19 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
     </section>''')
         nav += '<a href="#funding" class="nav-link">Finantare</a>\n'
 
+    # ---- Bonitate & Expunere comerciala recomandata (P1-4) ----
+    cred = model["credit_exposure"]["data"]
+    if model["credit_exposure"]["shown"]:
+        cred_color = "#ef4444" if cred.get("kill_switch") else "#22c55e"
+        out.append(f'''
+    <section id="bonitate" class="report-section">
+        <h2>Bonitate &amp; Expunere Comerciala</h2>
+        <p style="font-size:1.4em;font-weight:700;color:{cred_color}">{cred.get("expunere_ron", 0):,.0f} RON</p>
+        <p style="color:#94a3b8;font-size:.85em">{_escape(str(cred.get("formula", "")))} &middot; {cred.get("metode_folosite", 0)} metode folosite</p>
+        <p style="color:#64748b;font-size:.78em;margin-top:6px;font-style:italic">{_escape(cred.get("disclaimer", ""))}</p>
+    </section>''')
+        nav += '<a href="#bonitate" class="nav-link">Bonitate</a>\n'
+
     return "\n".join(out), nav
 
 

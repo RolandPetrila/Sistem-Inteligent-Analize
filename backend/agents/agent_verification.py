@@ -209,6 +209,16 @@ class VerificationAgent(BaseAgent):
         except Exception as _pe:
             logger.debug(f"[verification] predictive scores error: {_pe}")
 
+        # P1-4: Bonitate & Expunere comerciala recomandata (RON) — metrica NOUA
+        # aditiva, determinista (ZERO apel AI), NU atinge scoring-ul 0-100 existent.
+        try:
+            from backend.agents.verification.credit_exposure import (
+                commercial_exposure_ron,
+            )
+            verified["credit_exposure"] = commercial_exposure_ron(verified)
+        except Exception as _ce:
+            logger.debug(f"[verification] credit exposure error: {_ce}")
+
         # --- Diagnostic completitudine raport ---
         verified["completeness"] = self._check_completeness(verified, official, market)
 

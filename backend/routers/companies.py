@@ -480,6 +480,41 @@ async def get_predictive_scores(cui: str):
     return scores
 
 
+@router.get("/{cui}/credit-exposure")
+async def get_credit_exposure(cui: str):
+    """P1-4: Bonitate & Expunere comerciala recomandata (RON) — recalculata din
+    cel mai recent raport disponibil pentru CUI (acelasi pattern ca /predictive,
+    astfel functioneaza si pt rapoarte mai vechi generate inainte de acest camp)."""
+    from datetime import UTC, datetime
+
+    from backend.agents.verification.credit_exposure import commercial_exposure_ron
+
+    report = await db.fetch_one(
+        """
+        SELECT r.full_data FROM reports r
+        JOIN companies c ON c.id = r.company_id
+        WHERE c.cui = ?
+        ORDER BY r.created_at DESC
+        LIMIT 1
+        """,
+        (cui,),
+    )
+
+    if not report or not report["full_data"]:
+        raise HTTPException(status_code=404, detail=f"Nu exista raport pentru CUI {cui}")
+
+    try:
+        verified_data = json.loads(report["full_data"])
+    except (json.JSONDecodeError, TypeError, ValueError):
+        raise HTTPException(status_code=500, detail="Date raport invalide") from None
+
+    result = commercial_exposure_ron(verified_data)
+    result["cui"] = cui
+    result["computed_at"] = datetime.now(UTC).isoformat()
+
+    return result
+
+
 # ---------------------------------------------------------------------------
 # F6-7: Raport Evolutie Multi-An (aceeasi firma, mai multe rapoarte)
 # ---------------------------------------------------------------------------
