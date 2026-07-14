@@ -182,6 +182,19 @@ class VerificationAgent(BaseAgent):
 
         dynamic_thresholds = await self._get_dynamic_thresholds(caen_for_dyn, county_for_dyn)
 
+        # P0-1: cablare campuri orfane official_data -> verified, cu consumator real in
+        # scoring.py. Contract impus de scoring, NU decis aici: maps_rating RAW top-level
+        # (_score_reputational face maps_data.get("found")/score_from_rating direct pe
+        # dict), monitorul_oficial WRAPPED cu _make_field in verified["risk"] (_score_juridic
+        # face risk_data.get("monitorul_oficial") apoi isinstance(..., dict) + .get("value", [])
+        # — official["monitorul_oficial"] e o LISTA bruta, un atribuit direct ar pica gate-ul).
+        if "maps_rating" in official:
+            verified["maps_rating"] = official["maps_rating"]
+        if "monitorul_oficial" in official:
+            verified.setdefault("risk", {})["monitorul_oficial"] = self._make_field(
+                official["monitorul_oficial"], "Monitorul Oficial"
+            )
+
         # --- Scor risc general ---
         verified["risk_score"] = self._calculate_risk_score(verified, dynamic_thresholds=dynamic_thresholds)
         if dynamic_thresholds:
@@ -264,6 +277,18 @@ class VerificationAgent(BaseAgent):
                             logger.info(f"[verification] Network risk flag: {flag['detail']}")
             except Exception as _ne:
                 logger.debug(f"[verification] network query error: {_ne}")
+
+        # P0-1: cablare campuri orfane fara consumator azi in scoring (staging in
+        # full_data — randare in rapoarte e P0-2/P2-14, alta runda). Adaugate ULTIMELE,
+        # dupa toate celelalte chei, ca prefixul JSON folosit la truncarea prompt-urilor
+        # de sinteza (agent_synthesis.py, data_json[:json_limit]) sa ramana byte-identic
+        # pt campurile deja existente.
+        if "web_intelligence" in official:
+            verified["web_intelligence"] = official["web_intelligence"]
+        if "brave_reputation" in official:
+            verified["brave_reputation"] = official["brave_reputation"]
+        if "data_freshness" in official:
+            verified["data_freshness"] = official["data_freshness"]
 
         return {
             "verified_data": verified,
