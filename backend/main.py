@@ -286,15 +286,24 @@ async def audit_dashboard_js(request: Request):
 
 
 @app.post("/api/update")
-async def trigger_update():
-    """Declanseaza MANUAL update (pull+build+restart). Auto ruleaza si prin scheduler."""
+async def trigger_update(request: Request):
+    """Declanseaza MANUAL update (pull+build+restart). Auto ruleaza si prin scheduler
+    (direct in proces, nu prin HTTP -- neafectat de gate-ul de mai jos).
+    HIGH quick-win (audit 2026-07-13): LOCALHOST-ONLY, acelasi pattern ca /audit.html --
+    defense-in-depth (restrange declansarea manuala a unui pull+build+restart ca SYSTEM
+    la masina locala), NU inchiderea unui RCE deschis (endpoint-ul e deja sub ApiKeyMiddleware)."""
+    if not _is_loopback_client(request):
+        return JSONResponse(status_code=404, content={"detail": "Not Found"})
     from backend.services import updater
     return await updater.perform_update(reason="manual")
 
 
 @app.post("/api/restart")
-async def trigger_restart():
-    """Restart serviciu (self-exit -> WinSW onfailure). Admin / testare mecanism restart."""
+async def trigger_restart(request: Request):
+    """Restart serviciu (self-exit -> WinSW onfailure). Admin / testare mecanism restart.
+    HIGH quick-win (audit 2026-07-13): LOCALHOST-ONLY, vezi nota de la /api/update."""
+    if not _is_loopback_client(request):
+        return JSONResponse(status_code=404, content={"detail": "Not Found"})
     from backend.services import updater
     return updater.restart_service()
 
