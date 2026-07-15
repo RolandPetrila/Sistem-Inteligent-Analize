@@ -142,8 +142,12 @@ class TestCacheServiceGet:
         import json
         data = {"info": "date test", "cui": "12345678"}
         with patch("backend.services.cache_service.db") as mock_db:
-            # Simuleaza row din DB (cu versiune schema corecta)
-            mock_row = {"data": json.dumps(data), "schema_version": 1}
+            # Simuleaza row din DB (cu versiune schema corecta).
+            # Referim CACHE_SCHEMA_VERSION in loc sa hardcodam versiunea: altfel
+            # fiecare bump de schema (ex. v1->v2 la 2026-07-15) sparge testul
+            # pentru un motiv care n-are legatura cu ce testeaza el de fapt.
+            from backend.services.cache_service import CACHE_SCHEMA_VERSION
+            mock_row = {"data": json.dumps(data), "schema_version": CACHE_SCHEMA_VERSION}
             mock_db.fetch_one = AsyncMock(return_value=mock_row)
             from backend.services.cache_service import _l1, get
             _l1.invalidate("test_l2_key")  # asigura ca nu e in L1
@@ -156,8 +160,9 @@ class TestCacheServiceGet:
         import json
         data = {"info": "stale data"}
         with patch("backend.services.cache_service.db") as mock_db:
-            # Versiune 0 < CACHE_SCHEMA_VERSION (1) — stale
-            mock_row = {"data": json.dumps(data), "schema_version": 0}
+            # Orice versiune sub cea curenta = stale (relativ, nu hardcodat)
+            from backend.services.cache_service import CACHE_SCHEMA_VERSION
+            mock_row = {"data": json.dumps(data), "schema_version": CACHE_SCHEMA_VERSION - 1}
             mock_db.fetch_one = AsyncMock(return_value=mock_row)
             mock_db.execute = AsyncMock()
             from backend.services.cache_service import _l1, get
@@ -170,7 +175,8 @@ class TestCacheServiceGet:
     @pytest.mark.asyncio
     async def test_get_json_invalid_returneaza_none(self):
         with patch("backend.services.cache_service.db") as mock_db:
-            mock_row = {"data": "not_valid_json{{{", "schema_version": 1}
+            from backend.services.cache_service import CACHE_SCHEMA_VERSION
+            mock_row = {"data": "not_valid_json{{{", "schema_version": CACHE_SCHEMA_VERSION}
             mock_db.fetch_one = AsyncMock(return_value=mock_row)
             from backend.services.cache_service import _l1, get
             _l1.invalidate("invalid_json_key")

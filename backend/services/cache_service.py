@@ -13,7 +13,12 @@ from loguru import logger
 from backend.database import db
 
 # 10A M10.2: Cache schema version — increment to auto-invalidate stale entries
-CACHE_SCHEMA_VERSION = 1
+# v2 (2026-07-15): `active_totale` adaugat la parsarea ANAF Bilant
+# (anaf_bilant_client). Intrarile v1 contin `active_imobilizate`/`active_circulante`
+# dar NU campul derivat `active_totale`, cu TTL de zile — fara acest bump, fix-ul
+# modelelor predictive (Altman/Zmijewski/Beneish au nevoie de active totale) ar fi
+# ramas TACIT inactiv pana la expirarea cache-ului. Prins doar la rularea live.
+CACHE_SCHEMA_VERSION = 2
 
 # 10F M10.1: LRU eviction — maximum cache size in MB
 MAX_CACHE_SIZE_MB = 100
