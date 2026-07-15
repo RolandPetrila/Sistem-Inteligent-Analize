@@ -283,6 +283,25 @@ def _add_rich_fields_docx(doc, verified_data: dict):
         note = doc.add_paragraph()
         note.add_run(str(cred.get("disclaimer", ""))).italic = True
 
+    wi = model["web_intelligence"]
+    if wi["shown"]:
+        doc.add_page_break()
+        doc.add_heading("Prezenta Online (OSINT)", level=1)
+        wi_sent = {"positive": "POZITIV", "negative": "NEGATIV", "neutral": "NEUTRU"}
+        for cat in wi["categories"]:
+            doc.add_heading(cat["label"], level=2)
+            for it in cat["items"][:8]:
+                label = wi_sent.get(it["sentiment"], (it["sentiment"] or "neutru").upper())
+                txt = f"[{label}] {it['title']}"
+                if it["url"]:
+                    txt += f" ({it['url']})"
+                doc.add_paragraph(txt, style="List Bullet")
+        note = doc.add_paragraph()
+        note.add_run(
+            "Rezultate cautare (Brave Search) + enrichment continut (Jina). "
+            "Sentimentul e metadata estimata automat de la sursa — nu un verdict RIS."
+        ).italic = True
+
 
 def generate_docx(report_sections: dict, meta: dict, output_path: str, verified_data: dict = None):
     """Genereaza DOCX din report_sections. B15: due_diligence + early_warnings."""

@@ -332,3 +332,62 @@ class TestGenerateDocx:
         finally:
             if os.path.exists(path):
                 os.remove(path)
+
+    def test_web_intelligence_content_rendered_with_diacritics_and_dedup(self):
+        """verified["web_intelligence"] (Brave Search + Jina enrichment, real quota
+        spent on EVERY analysis) was rendered NOWHERE in DOCX before this fix (grep
+        in backend/reports/ = 0 hits). Assert actual CONTENT (not just 'does not
+        raise'), on a fixture matching the real DB shape confirmed in
+        data/ris.db reports.full_data (a duplicate title+url entry observed live)."""
+        from docx import Document
+
+        from backend.reports.docx_generator import generate_docx
+
+        verified_data = {"web_intelligence": {"categories": {
+            "stiri": [
+                {"title": "Compania își extinde activitatea în Târgoviște",
+                 "url": "https://exemplu-stiri.ro/articol", "sentiment": "positive"},
+                {"title": "Compania își extinde activitatea în Târgoviște",
+                 "url": "https://exemplu-stiri.ro/articol", "sentiment": "positive"},
+            ],
+            "juridic": [
+                {"title": "Litigiu comercial înregistrat pentru societate",
+                 "url": "https://exemplu-just.ro/dosar", "sentiment": "negative"},
+            ],
+            "recenzii": [],
+        }}}
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as f:
+            path = f.name
+        try:
+            generate_docx(_make_sections(), _make_meta(), path, verified_data)
+            doc = Document(path)
+            full_text = "\n".join(p.text for p in doc.paragraphs)
+
+            assert "Prezenta Online (OSINT)" in full_text
+            assert "Compania își extinde activitatea în Târgoviște" in full_text
+            assert "[POZITIV]" in full_text
+            assert "Litigiu comercial înregistrat pentru societate" in full_text
+            assert "[NEGATIV]" in full_text
+            # Dedup: identical stiri entry appears exactly once.
+            assert full_text.count("Compania își extinde activitatea în Târgoviște") == 1
+            # Categoria goala ("recenzii") nu apare deloc.
+            assert "Recenzii" not in full_text
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
+    def test_web_intelligence_absent_omits_section(self):
+        from docx import Document
+
+        from backend.reports.docx_generator import generate_docx
+
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as f:
+            path = f.name
+        try:
+            generate_docx(_make_sections(), _make_meta(), path, {})
+            doc = Document(path)
+            full_text = "\n".join(p.text for p in doc.paragraphs)
+            assert "Prezenta Online" not in full_text
+        finally:
+            if os.path.exists(path):
+                os.remove(path)

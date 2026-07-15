@@ -834,6 +834,28 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
     </section>''')
         nav += '<a href="#bonitate" class="nav-link">Bonitate</a>\n'
 
+    # ---- Prezenta Online (OSINT: Brave Search + Jina enrichment) ----
+    wi_sent = {"positive": ("Pozitiv", "#22c55e"), "negative": ("Negativ", "#ef4444"), "neutral": ("Neutru", "#94a3b8")}
+    if model["web_intelligence"]["shown"]:
+        body = ""
+        for cat in model["web_intelligence"]["categories"]:
+            body += f'<h3 style="color:#818cf8;margin:14px 0 6px;font-size:1em">{_escape(cat["label"])}</h3><ul class="list-disc ml-6">'
+            for it in cat["items"][:8]:
+                label, color = wi_sent.get(it["sentiment"], (it["sentiment"].capitalize() or "Neutru", "#94a3b8"))
+                title_html = _escape(it["title"])
+                if it["url"].startswith(("http://", "https://")):
+                    title_html = f'<a href="{_escape(it["url"])}" style="color:#a5b4fc" target="_blank" rel="noopener">{title_html}</a>'
+                body += (f'<li style="color:#cbd5e1">{title_html} '
+                         f'<span style="color:{color};font-size:0.8em">[{_escape(label)}]</span></li>')
+            body += "</ul>"
+        out.append(f'''
+    <section id="web_intelligence" class="report-section">
+        <h2>Prezenta Online (OSINT)</h2>
+        {body}
+        <p style="color:#64748b;font-size:.78em;margin-top:6px;font-style:italic">Rezultate cautare (Brave Search) + enrichment continut (Jina). Sentimentul e metadata estimata automat de la sursa — nu un verdict RIS.</p>
+    </section>''')
+        nav += '<a href="#web_intelligence" class="nav-link">Prezenta Online</a>\n'
+
     return "\n".join(out), nav
 
 

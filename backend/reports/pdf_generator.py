@@ -306,8 +306,10 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
     opp = model["tender_opportunities"]["data"]
     opp_ok = model["tender_opportunities"]["shown"]
     cred_ok = model["credit_exposure"]["shown"]
+    wi = model["web_intelligence"]
+    wi_ok = wi["shown"]
 
-    if act_ok or rel_flags or aegrm_ok or hist_ok or fund_ok or sanc_ok or eust_ok or seap_ok or opp_ok or cred_ok:
+    if act_ok or rel_flags or aegrm_ok or hist_ok or fund_ok or sanc_ok or eust_ok or seap_ok or opp_ok or cred_ok or wi_ok:
         pdf.add_page()
         pdf.start_section("Actionariat, Garantii si Finantare", level=0)
         pdf.set_font("Helvetica", "B", 16)
@@ -483,6 +485,28 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
             pdf.set_font("Helvetica", "", 8)
             pdf.set_text_color(120, 120, 120)
             pdf.multi_cell(0, 5, _sanitize(str(cred.get("disclaimer", ""))), new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Helvetica", "", 10)
+            pdf.set_text_color(40, 40, 40)
+            pdf.ln(3)
+
+        if wi_ok:
+            _add_section_header(pdf, "Prezenta Online (OSINT)")
+            wi_sent = {"positive": "POZITIV", "negative": "NEGATIV", "neutral": "NEUTRU"}
+            for cat in wi["categories"]:
+                pdf.set_font("Helvetica", "B", 10)
+                pdf.multi_cell(0, 6, _sanitize(f"{cat['label']}:"), new_x="LMARGIN", new_y="NEXT")
+                pdf.set_font("Helvetica", "", 10)
+                for it in cat["items"][:8]:
+                    label = wi_sent.get(it["sentiment"], (it["sentiment"] or "neutru").upper())
+                    txt = f"  * [{label}] {it['title']}"
+                    if it["url"]:
+                        txt += f" ({it['url']})"
+                    pdf.multi_cell(0, 5.5, _sanitize(txt[:200]), new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Helvetica", "", 8)
+            pdf.set_text_color(120, 120, 120)
+            pdf.multi_cell(0, 5, _sanitize("Rezultate cautare (Brave Search) + enrichment continut (Jina). "
+                                            "Sentimentul e metadata estimata automat de la sursa - nu un verdict RIS."),
+                            new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("Helvetica", "", 10)
             pdf.set_text_color(40, 40, 40)
             pdf.ln(3)

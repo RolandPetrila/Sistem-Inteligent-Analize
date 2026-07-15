@@ -126,6 +126,20 @@ def _rich_verified_data() -> dict:
         "tender_opportunities": {"available": True, "count": 1, "days_back": 30,
             "opportunities": [{"title": "Construcție grădiniță în Târgoviște", "authority": "Primăria Târgoviște",
                                "cpv": "45214100-1", "value": 750000, "deadline": "2026-08-01", "notice_no": "CN5"}]},
+        # web_intelligence (Brave Search + Jina) with diacritics + a duplicate entry
+        # (real DB shape observed: identical title+url appearing twice in one category).
+        "web_intelligence": {"categories": {
+            "stiri": [
+                {"title": "Compania își extinde activitatea în Târgoviște",
+                 "url": "https://exemplu-stiri.ro/articol", "sentiment": "positive"},
+                {"title": "Compania își extinde activitatea în Târgoviște",
+                 "url": "https://exemplu-stiri.ro/articol", "sentiment": "positive"},
+            ],
+            "juridic": [
+                {"title": "Litigiu comercial înregistrat pentru societate",
+                 "url": "https://exemplu-just.ro/dosar", "sentiment": "negative"},
+            ],
+        }},
     }
 
 
@@ -164,6 +178,51 @@ class TestRichFieldsPdf:
             generate_pdf(sections, meta, path, _rich_verified_data())
             assert os.path.exists(path)
             assert os.path.getsize(path) > 0
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
+    def test_web_intelligence_content_rendered_with_diacritics_and_dedup(self):
+        """web_intelligence (Brave Search + Jina) was rendered NOWHERE in the PDF
+        before this fix (grep in backend/reports/ = 0 hits) despite real quota
+        spent on every analysis. Assert actual CONTENT via pdfplumber (not just
+        'does not raise') on the diacritic-laden fixture, and confirm the
+        duplicate entry (real DB shape) collapses to a single rendered line."""
+        from backend.reports.pdf_generator import generate_pdf
+
+        sections = {
+            "executive_summary": {"title": "Rezumat Executiv", "content": "Firma analizata."}
+        }
+        meta = {
+            "title": "Raport RIS",
+            "company_name": "Test SRL",
+            "report_level": 2,
+            "generated_at": "2026-07-16T10:00:00",
+            "sources_count": 3,
+            "risk_score": "Galben",
+            "numeric_score": 55,
+            "sources": [{"name": "ANAF", "level": 1, "status": "OK"}],
+        }
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            path = f.name
+        try:
+            generate_pdf(sections, meta, path, _rich_verified_data())
+            assert os.path.exists(path)
+
+            import pdfplumber
+
+            with pdfplumber.open(path) as pdf:
+                full_text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+
+            assert "Prezenta Online" in full_text
+            # Diacritics sanitized to ASCII on the latin-1 path, but wording survives.
+            assert "extinde activitatea" in full_text
+            assert "Targoviste" in full_text
+            assert "[POZITIV]" in full_text
+            assert "Litigiu comercial" in full_text
+            assert "[NEGATIV]" in full_text
+            # Dedup: the identical stiri entry appears exactly once.
+            assert full_text.count("extinde activitatea") == 1
         finally:
             if os.path.exists(path):
                 os.remove(path)

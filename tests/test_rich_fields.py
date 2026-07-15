@@ -159,3 +159,85 @@ class TestGateBooleans:
         model = build_rich_fields_model(data)
         assert model["credit_exposure"]["shown"] is True
         assert model["credit_exposure"]["data"]["expunere_ron"] == 5000
+
+
+class TestWebIntelligenceNormalization:
+    """verified["web_intelligence"] (agent_verification.py:274-275, propagated
+    verbatim from official["web_intelligence"]) is Brave Search + Jina enrichment
+    run on EVERY analysis (real quota spent), but was rendered NOWHERE (grep in
+    backend/reports/ = 0 hits) before this fix. Shape confirmed in
+    data/ris.db reports.full_data: {"categories": {cat: [{"title","url","sentiment"}]}}
+    -- plain dict, NOT wrapped in {"value": ...}. Real data observed 2 identical
+    entries (same title+url) in one category -- must dedup."""
+
+    def test_dedup_by_url(self):
+        data = {"web_intelligence": {"categories": {"stiri": [
+            {"title": "Stire A", "url": "http://example.ro/a", "sentiment": "neutral"},
+            {"title": "Stire A", "url": "http://example.ro/a", "sentiment": "neutral"},
+        ]}}}
+        model = build_rich_fields_model(data)
+        assert model["web_intelligence"]["shown"] is True
+        cats = model["web_intelligence"]["categories"]
+        assert len(cats) == 1
+        assert len(cats[0]["items"]) == 1
+
+    def test_dedup_falls_back_to_title_when_url_missing(self):
+        data = {"web_intelligence": {"categories": {"stiri": [
+            {"title": "Aceeasi stire", "url": "", "sentiment": "neutral"},
+            {"title": "Aceeasi stire", "url": "", "sentiment": "neutral"},
+        ]}}}
+        model = build_rich_fields_model(data)
+        assert len(model["web_intelligence"]["categories"][0]["items"]) == 1
+
+    def test_empty_categories_omitted(self):
+        data = {"web_intelligence": {"categories": {
+            "stiri": [], "recenzii": [], "oficial": [], "juridic": [],
+            "financiar": [{"title": "X", "url": "http://x.ro", "sentiment": "positive"}],
+        }}}
+        model = build_rich_fields_model(data)
+        cats = model["web_intelligence"]["categories"]
+        assert len(cats) == 1
+        assert cats[0]["key"] == "financiar"
+
+    def test_all_categories_empty_hides_section(self):
+        data = {"web_intelligence": {"categories": {"stiri": [], "recenzii": []}}}
+        model = build_rich_fields_model(data)
+        assert model["web_intelligence"]["shown"] is False
+        assert model["web_intelligence"]["categories"] == []
+
+    def test_absent_hides_section(self):
+        model = build_rich_fields_model({})
+        assert model["web_intelligence"]["shown"] is False
+
+    def test_known_category_labels_mapped_to_romanian(self):
+        data = {"web_intelligence": {"categories": {
+            "stiri": [{"title": "X", "url": "http://x.ro", "sentiment": "neutral"}],
+            "recenzii": [{"title": "Y", "url": "http://y.ro", "sentiment": "positive"}],
+            "oficial": [{"title": "Z", "url": "http://z.ro", "sentiment": "neutral"}],
+            "juridic": [{"title": "W", "url": "http://w.ro", "sentiment": "negative"}],
+            "financiar": [{"title": "V", "url": "http://v.ro", "sentiment": "positive"}],
+        }}}
+        model = build_rich_fields_model(data)
+        labels = {c["key"]: c["label"] for c in model["web_intelligence"]["categories"]}
+        assert labels == {
+            "stiri": "Stiri", "recenzii": "Recenzii", "oficial": "Surse Oficiale",
+            "juridic": "Juridic", "financiar": "Financiar",
+        }
+
+    def test_sentiment_lowercased_and_defaults_to_neutral(self):
+        data = {"web_intelligence": {"categories": {"stiri": [
+            {"title": "X", "url": "http://x.ro", "sentiment": "POSITIVE"},
+            {"title": "Y", "url": "http://y.ro"},
+        ]}}}
+        model = build_rich_fields_model(data)
+        items = model["web_intelligence"]["categories"][0]["items"]
+        assert items[0]["sentiment"] == "positive"
+        assert items[1]["sentiment"] == "neutral"
+
+    def test_non_dict_items_skipped(self):
+        data = {"web_intelligence": {"categories": {"stiri": ["raw string", None,
+            {"title": "Valid", "url": "http://ok.ro", "sentiment": "neutral"}]}}}
+        model = build_rich_fields_model(data)
+        items = model["web_intelligence"]["categories"][0]["items"]
+        assert len(items) == 1
+        assert items[0]["title"] == "Valid"

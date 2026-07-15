@@ -101,6 +101,52 @@ def build_rich_fields_model(verified_data: dict) -> dict:
     cred = verified_data.get("credit_exposure", {})
     has_cred = bool(isinstance(cred, dict) and "expunere_ron" in cred)
 
+    # verified["web_intelligence"] (backend/agents/agent_verification.py:274-275,
+    # propagated verbatim from official["web_intelligence"]) is Brave Search (2
+    # queries) + Jina enrichment (3 URLs) run on EVERY analysis -- real quota spent
+    # -- but was never rendered anywhere (grep in backend/reports/ = 0 hits before
+    # this fix). Shape confirmed in data/ris.db reports.full_data: NOT wrapped in
+    # {"value":...}, a plain dict {"categories": {cat: [{"title","url","sentiment"}]}}.
+    # Real data observed 2 identical entries (same title+url) in one category --
+    # dedup by URL (fallback title) here, once, so all 3 renderers agree.
+    wi = verified_data.get("web_intelligence", {})
+    wi_categories_raw = wi.get("categories", {}) if isinstance(wi, dict) else {}
+    wi_category_labels = {
+        "stiri": "Stiri",
+        "recenzii": "Recenzii",
+        "oficial": "Surse Oficiale",
+        "juridic": "Juridic",
+        "financiar": "Financiar",
+    }
+    wi_categories_normalized: list[dict] = []
+    if isinstance(wi_categories_raw, dict):
+        for cat_key, items in wi_categories_raw.items():
+            if not isinstance(items, list) or not items:
+                continue
+            seen: set[str] = set()
+            deduped: list[dict] = []
+            for it in items:
+                if not isinstance(it, dict):
+                    continue
+                url = str(it.get("url") or "").strip()
+                title = str(it.get("title") or "").strip()
+                dedup_key = url or title
+                if not dedup_key or dedup_key in seen:
+                    continue
+                seen.add(dedup_key)
+                deduped.append({
+                    "title": title or "(fara titlu)",
+                    "url": url,
+                    "sentiment": str(it.get("sentiment") or "neutral").strip().lower(),
+                })
+            if deduped:
+                wi_categories_normalized.append({
+                    "key": str(cat_key),
+                    "label": wi_category_labels.get(cat_key, str(cat_key).replace("_", " ").capitalize()),
+                    "items": deduped,
+                })
+    has_wi = bool(wi_categories_normalized)
+
     return {
         "predictive_scores": {"shown": has_pred, "data": pred},
         "benchmark": {"shown": has_bench, "data": bench},
@@ -118,4 +164,5 @@ def build_rich_fields_model(verified_data: dict) -> dict:
         },
         "funding_programs": {"shown": has_funding, "data": funding},
         "credit_exposure": {"shown": has_cred, "data": cred},
+        "web_intelligence": {"shown": has_wi, "categories": wi_categories_normalized},
     }

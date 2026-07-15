@@ -384,6 +384,67 @@ class TestRichFields:
         assert 'href="#garantii"' in nav
 
 
+class TestWebIntelligenceHtml:
+    """verified["web_intelligence"] (Brave Search + Jina enrichment, real quota
+    spent on every analysis) was rendered NOWHERE before this fix (grep in
+    backend/reports/ = 0 hits). Shape confirmed in data/ris.db reports.full_data.
+    Fixtures are 100% synthetic (repo public)."""
+
+    def _sample(self):
+        return {"web_intelligence": {"categories": {
+            "stiri": [
+                {"title": "Firma Exemplu SRL lanseaza un produs nou",
+                 "url": "https://example-news.ro/articol", "sentiment": "positive"},
+                {"title": "Firma Exemplu SRL lanseaza un produs nou",
+                 "url": "https://example-news.ro/articol", "sentiment": "positive"},
+            ],
+            "juridic": [
+                {"title": "Dosar juridic Firma Exemplu SRL",
+                 "url": "https://example-just.ro/dosar", "sentiment": "negative"},
+            ],
+            "recenzii": [],
+        }}}
+
+    def test_section_rendered_with_categories_and_dedup(self):
+        html, nav = _build_rich_fields_html(self._sample())
+        assert 'id="web_intelligence"' in html
+        assert "Firma Exemplu SRL lanseaza un produs nou" in html
+        # Deduplicat: 2 intrari identice -> 1 randata.
+        assert html.count("Firma Exemplu SRL lanseaza un produs nou") == 1
+        assert "Dosar juridic Firma Exemplu SRL" in html
+        assert 'href="#web_intelligence"' in nav
+        # Categoria goala ("recenzii") nu apare deloc.
+        assert "Recenzii" not in html
+
+    def test_sentiment_badges_rendered(self):
+        html, _ = _build_rich_fields_html(self._sample())
+        assert "[Pozitiv]" in html
+        assert "[Negativ]" in html
+
+    def test_url_rendered_as_link(self):
+        html, _ = _build_rich_fields_html(self._sample())
+        assert 'href="https://example-news.ro/articol"' in html
+
+    def test_empty_categories_hides_section(self):
+        data = {"web_intelligence": {"categories": {"stiri": [], "recenzii": []}}}
+        html, nav = _build_rich_fields_html(data)
+        assert 'id="web_intelligence"' not in html
+        assert 'href="#web_intelligence"' not in nav
+
+    def test_absent_hides_section(self):
+        html, nav = _build_rich_fields_html({})
+        assert 'id="web_intelligence"' not in html
+
+    def test_xss_in_title_and_url_escaped(self):
+        data = {"web_intelligence": {"categories": {"stiri": [
+            {"title": "<script>alert(1)</script>", "url": "javascript:alert(1)", "sentiment": "neutral"},
+        ]}}}
+        html, _ = _build_rich_fields_html(data)
+        assert "<script>alert(1)</script>" not in html
+        assert "&lt;script&gt;" in html
+        assert 'href="javascript:' not in html
+
+
 class TestCompanyNetworkHtml:
     """Bug real: gate-ul citea stats.total_persons/stats.total_firms, chei care nu
     exista NICIODATA pe raspunsul real al network_client.get_company_network()
