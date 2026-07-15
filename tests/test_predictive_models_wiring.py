@@ -20,6 +20,9 @@ si trece prin calea REALA de productie: `VerificationAgent._verify_financial`
 
 Date 100% fictive — repo public, nu se folosesc cifre de firme reale.
 """
+
+import copy
+
 from backend.agents.agent_verification import VerificationAgent
 from backend.agents.verification.credit_exposure import commercial_exposure_ron
 from backend.agents.verification.predictive_models import calculate_all_predictive_scores
@@ -181,13 +184,63 @@ class TestPredictiveScoresWiring:
         )
         assert piotroski["grade"] != "INSUFICIENT"
 
-    def test_beneish_disponibil_cu_doi_ani(self):
+    def test_beneish_nu_acuza_cu_intrari_fabricate(self):
+        """Beneish NU are voie sa emita verdict de manipulare cand 2 din 5 indici
+        sunt fabricati: GMI (cheltuieli_materiale inexistent -> constant 1.0) si
+        TATA (cash_flow_operational inexistent -> proxy determinist = 0.1 x ROA,
+        purtand coeficientul 7.770, cel mai greu). Banda de decizie e 0.44 lata,
+        deci oricare din cele 2 poate rasturna singura verdictul. Acelasi
+        rationament ca la Altman X1 — agravat de faptul ca aici e o ACUZATIE
+        despre o firma reala, pe un raport care poate fi partajat public."""
         result = calculate_all_predictive_scores(self._verified(), FICTIONAL_OFFICIAL)
         beneish = result["beneish_m"]
-        assert beneish["available"] is True, (
-            "Beneish tot INDISPONIBIL — bilant_t1 nu a fost cablat"
-        )
-        assert beneish["m_score"] is not None
+        assert beneish["available"] is False
+        assert beneish["m_score"] is None
+        assert beneish["risk"] == "INDISPONIBIL"
+        assert beneish["risk"] != "MANIPULATOR_PROBABIL"
+        assert "GMI" in beneish["reason"] and "TATA" in beneish["reason"]
+
+    def test_indici_cu_semnal_e_3_nu_4(self):
+        """`indici_cu_semnal` a raportat 4 intr-o versiune anterioara — el insusi
+        un numar plauzibil-dar-fals: ratase ca si TATA e fabricat, nu doar GMI."""
+        result = calculate_all_predictive_scores(self._verified(), FICTIONAL_OFFICIAL)
+        assert result["beneish_m"]["indici_cu_semnal"] == 3
+
+    def test_beneish_calculabil_daca_apar_ambele_intrari(self):
+        """Contra-proba: gate-ul e pe DATE lipsa, nu o dezactivare permanenta."""
+        from backend.agents.verification.predictive_models import calculate_beneish_m
+        an_t = {
+            "cifra_afaceri": 11_950_149, "profit_net": 724_147, "creante": 2_049_027,
+            "active_totale": 6_005_910, "active_imobilizate": 2_920_496,
+            "cheltuieli_materiale": 8_000_000, "cash_flow_operational": 900_000,
+        }
+        an_t1 = {
+            "cifra_afaceri": 8_935_629, "profit_net": 320_280, "creante": 1_837_812,
+            "active_totale": 5_946_469, "active_imobilizate": 2_883_779,
+            "cheltuieli_materiale": 6_200_000, "cash_flow_operational": 400_000,
+        }
+        result = calculate_beneish_m(an_t, an_t1)
+        assert result["available"] is True
+        assert result["m_score"] is not None
+        assert result["indici_cu_semnal"] == 5
+
+    def test_semnalul_real_dsri_nu_se_pierde(self):
+        """Verdictul de frauda dispare, dar semnalul REAL (creante/vanzari) NU —
+        e date autentice ANAF si e genuin util intr-un due-diligence. Trebuie sa
+        ajunga si in `summary`, pe care toti 3 randerii il afiseaza deja."""
+        official = copy.deepcopy(FICTIONAL_OFFICIAL)
+        # creante triplate relativ la vanzari (tiparul REAL observat pe CUI 6719278:
+        # creante/CA 0.01410 -> 0.04101 intre 2024 si 2025, verificat la sursa)
+        official["financial_official"]["data"][2024]["creante"] = 500_000
+        official["financial_official"]["data"][2023]["creante"] = 120_000
+        result = calculate_all_predictive_scores({"financial": {}}, official)
+        sig = result["beneish_m"]["screening_signals"]
+        assert any(s["cod"] == "DSRI" for s in sig), f"semnalul DSRI real s-a pierdut: {sig}"
+        assert result["screening_signals"] == sig
+        assert "verificat manual" in result["summary"].lower()
+        assert "DSRI" in result["summary"]
+        # dar tot fara acuzatie
+        assert result["beneish_m"]["risk"] == "INDISPONIBIL"
 
     def test_beneish_nu_explodeaza_fara_active_totale(self):
         """REGRESIE (gasit LIVE 2026-07-15, CUI 6719278): cu `active_totale` lipsa,
@@ -206,17 +259,20 @@ class TestPredictiveScoresWiring:
         assert result["risk"] == "INDISPONIBIL"
         assert "active totale" in result["reason"].lower()
 
-    def test_beneish_plauzibil_cu_active_totale(self):
-        """Contra-proba: cu active totale reale, M-score sta in intervalul
-        rezonabil al modelului (uzual -4..0 pt firme normale), nu 1e8."""
+    def test_beneish_plauzibil_cand_toate_intrarile_exista(self):
+        """Contra-proba de PLAUZIBILITATE: cu toate cele 5 intrari reale, M-score
+        sta in intervalul rezonabil al modelului (uzual -4..0 pt firme normale),
+        nu 1e8 ca in regresia de mai sus."""
         from backend.agents.verification.predictive_models import calculate_beneish_m
         an_t = {
             "cifra_afaceri": 11_950_149, "profit_net": 724_147, "creante": 2_049_027,
             "active_totale": 6_005_910, "active_imobilizate": 2_920_496,
+            "cheltuieli_materiale": 8_000_000, "cash_flow_operational": 900_000,
         }
         an_t1 = {
             "cifra_afaceri": 8_935_629, "profit_net": 320_280, "creante": 1_837_812,
             "active_totale": 5_946_469, "active_imobilizate": 2_883_779,
+            "cheltuieli_materiale": 6_200_000, "cash_flow_operational": 400_000,
         }
         result = calculate_beneish_m(an_t, an_t1)
         assert result["available"] is True

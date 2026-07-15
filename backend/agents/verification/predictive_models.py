@@ -232,6 +232,59 @@ def calculate_piotroski_f(bilant_t: dict, bilant_t1: dict | None = None) -> dict
     }
 
 
+def _screening_signals(dsri: float, aqi: float, sgi: float) -> list[dict]:
+    """Semnale de screening din indicii Beneish REALI (calculati din date ANAF
+    autentice: creante, cifra de afaceri, active totale, active imobilizate).
+
+    Separate deliberat de verdictul M-score: acesta din urma e o ACUZATIE si nu
+    se poate publica cand 2 din 5 intrari sunt fabricate (vezi gate-ul din
+    `calculate_beneish_m`). Semnalele de mai jos sunt insa FAPTE masurate — se
+    raporteaza ca "merita verificat manual", niciodata ca frauda.
+
+    Pragurile sunt orientative si deliberat conservatoare (crestere >= 1.5x fata
+    de anul anterior). NU pretind calibrare pe praguri din literatura, tocmai ca
+    sa nu inlocuim un numar nefondat cu altul.
+    """
+    signals: list[dict] = []
+    if dsri >= 1.5:
+        signals.append({
+            "cod": "DSRI",
+            "valoare": round(dsri, 3),
+            "eticheta": "Creante in crestere accelerata fata de vanzari",
+            "detaliu": (
+                f"Raportul creante/cifra de afaceri a crescut de {dsri:.2f}x fata de anul "
+                "anterior. Poate indica incasari intarziate, relaxarea termenelor de plata "
+                "sau venituri recunoscute mai devreme decat incasarea. Merita verificat manual "
+                "(vechimea creantelor, concentrarea pe clienti) — NU e un indiciu de frauda."
+            ),
+            "severitate": "ATENTIE" if dsri >= 2.0 else "INFO",
+        })
+    if aqi >= 1.5:
+        signals.append({
+            "cod": "AQI",
+            "valoare": round(aqi, 3),
+            "eticheta": "Ponderea activelor non-imobilizate a crescut",
+            "detaliu": (
+                f"Indicele calitatii activelor e {aqi:.2f}x fata de anul anterior. "
+                "Merita verificat ce anume a crescut in activele circulante."
+            ),
+            "severitate": "INFO",
+        })
+    if sgi >= 1.5:
+        signals.append({
+            "cod": "SGI",
+            "valoare": round(sgi, 3),
+            "eticheta": "Crestere rapida a cifrei de afaceri",
+            "detaliu": (
+                f"Cifra de afaceri a crescut de {sgi:.2f}x fata de anul anterior. "
+                "Cresterea rapida nu e negativa in sine, dar creste presiunea pe "
+                "capitalul de lucru."
+            ),
+            "severitate": "INFO",
+        })
+    return signals
+
+
 def calculate_beneish_m(bilant_t: dict, bilant_t1: dict | None = None) -> dict:
     """
     Beneish M-Score — detectie manipulare contabila.
@@ -282,12 +335,10 @@ def calculate_beneish_m(bilant_t: dict, bilant_t1: dict | None = None) -> dict:
     # DSRI: Days Sales Receivables Index
     dsri = (receivables_t / ca_t) / (receivables_t1 / ca_t1) if ca_t1 > 0 and receivables_t1 >= 0 else 1.0
 
-    # GMI: Gross Margin Index. `cheltuieli_materiale` NU exista in ANAF Bilant,
-    # iar default-ul proportional (ca*0.7) produce aceeasi marja in ambii ani ->
-    # GMI = exact 1.0 (indice neutru, "fara semnal") pentru ORICE firma. Nu e o
-    # eroare de calcul, dar inseamna ca 1 din cele 5 indici nu poarta informatie:
-    # verdictul se sprijina efectiv pe 4/5. Declaram asta (vezi `indici_cu_semnal`)
-    # in loc sa lasam eticheta de risc sa para sustinuta de modelul complet.
+    # GMI: Gross Margin Index. `cheltuieli_materiale` NU exista in ANAF Bilant
+    # (0 hituri in name_map), iar default-ul proportional (ca*0.7) produce aceeasi
+    # marja in ambii ani -> GMI = exact 1.0 pentru ORICE firma. Slot umplut cu
+    # non-informatie, dar cu pondere fixa 0.906 in formula.
     gmi_masurabil = (
         _num(bilant_t, "cheltuieli_materiale") is not None
         and _num(bilant_t1, "cheltuieli_materiale") is not None
@@ -296,20 +347,73 @@ def calculate_beneish_m(bilant_t: dict, bilant_t1: dict | None = None) -> dict:
     gm_t1 = (ca_t1 - bilant_t1.get("cheltuieli_materiale", ca_t1 * 0.7)) / ca_t1
     gmi = (gm_t1 / gm_t) if gm_t > 0 else 1.0
 
-    # AQI: Asset Quality Index
+    # AQI: Asset Quality Index — REAL (TA + active_imobilizate vin din ANAF)
     TA_t = TA_t_raw
     TA_t1 = TA_t1_raw
     imob_t = bilant_t.get("active_imobilizate", TA_t * 0.4) or 0
     imob_t1 = bilant_t1.get("active_imobilizate", TA_t1 * 0.4) or 0
     aqi = ((TA_t - imob_t) / TA_t) / ((TA_t1 - imob_t1) / TA_t1) if TA_t1 > 0 else 1.0
 
-    # SGI: Sales Growth Index
+    # SGI: Sales Growth Index — REAL
     sgi = ca_t / ca_t1
+
+    # TATA: `cash_flow_operational` NU e scris NICAIERI in tot backend-ul (verificat
+    # prin grep: doar citit, cu default). Deci cfo_t = profit_t * 0.9 MEREU, iar
+    # tata = (profit - 0.9*profit)/TA = 0.1 * ROA, DETERMINIST. Nu e un indice de
+    # angajamente contabile (diferenta profit contabil vs cash real) — e ROA
+    # rescalat si deghizat, purtand coeficientul 7.770, cel mai greu din formula.
+    tata_masurabil = _num(bilant_t, "cash_flow_operational") is not None
 
     # TATA: Total Accruals to Total Assets (proxy)
     profit_t = bilant_t.get("profit_net", 0) or 0
     cfo_t = bilant_t.get("cash_flow_operational", profit_t * 0.9) or profit_t
     tata = (profit_t - cfo_t) / TA_t if TA_t > 0 else 0
+
+    indici_cu_semnal = 3 + int(gmi_masurabil) + int(tata_masurabil)
+
+    # GATE (2026-07-15): daca GMI sau TATA nu sunt masurabile, M-score-ul NU se
+    # publica, si mai ales NU se publica eticheta acuzatoare.
+    # Aritmetica, aceeasi disciplina ca la Altman X1: banda de decizie are latimea
+    # 0.44 (-2.22 -> -1.78). GMI intra cu 0.906 FIX; o variatie reala plauzibila de
+    # +-0.2 a GMI ar misca M cu +-0.18 = 41% din banda. TATA e mai rau: coeficient
+    # 7.770 x o variatie reala plauzibila de +-0.05 a angajamentelor = +-0.39,
+    # aproape INTREAGA banda, de unul singur. Deci oricare din cele 2 intrari
+    # fabricate poate rasturna singura verdictul OK <-> MANIPULATOR: nu e o
+    # estimare degradata, e o aruncare de moneda — exact ce am refuzat la Altman.
+    # Agravant fata de Altman: Beneish emite o ACUZATIE ("manipulator probabil")
+    # despre o firma reala, cu nume si CUI, iar rapoartele pot fi partajate public
+    # (/api/reports/public/* e exceptat de la autentificare). Rata reala de
+    # fals-pozitiv a variantei reduse e NECUNOSCUTA.
+    # Semnalul REAL nu se pierde: DSRI/AQI/SGI sunt calculati din date ANAF
+    # autentice si se expun ca semnale de screening (mai jos), fara verdict.
+    if not (gmi_masurabil and tata_masurabil):
+        nemasurabili = []
+        if not gmi_masurabil:
+            nemasurabili.append("GMI (marja bruta — lipsesc cheltuielile materiale)")
+        if not tata_masurabil:
+            nemasurabili.append(
+                "TATA (angajamente contabile — lipseste cash-flow-ul operational, "
+                "proxy-ul il reduce determinist la 0.1 x ROA)"
+            )
+        return {
+            "m_score": None,
+            "risk": "INDISPONIBIL",
+            "available": False,
+            "indici_cu_semnal": indici_cu_semnal,
+            "reason": (
+                f"{5 - indici_cu_semnal} din 5 indici nu sunt masurabili din ANAF Bilant: "
+                f"{'; '.join(nemasurabili)}. Pragurile (-2.22 / -1.78, banda de doar 0.44) "
+                "sunt calibrate pentru toti 5 indici purtatori de semnal — cu intrari "
+                "fabricate, verdictul de manipulare ar fi arbitrar."
+            ),
+            "screening_signals": _screening_signals(dsri, aqi, sgi),
+            "indici_reali": {"DSRI": round(dsri, 3), "AQI": round(aqi, 3), "SGI": round(sgi, 3)},
+            "disclaimer": (
+                "M-score-ul NU se calculeaza din date ANAF gratuite. Indicii reali "
+                "(DSRI/AQI/SGI) sunt expusi ca semnale de screening, fara verdict de "
+                "manipulare contabila."
+            ),
+        }
 
     m5 = -6.065 + 0.823 * dsri + 0.906 * gmi + 0.593 * aqi + 0.717 * sgi + 7.770 * tata
     m5 = round(m5, 3)
@@ -321,24 +425,13 @@ def calculate_beneish_m(bilant_t: dict, bilant_t1: dict | None = None) -> dict:
     else:
         risk = "OK"
 
-    indici_cu_semnal = 5 if gmi_masurabil else 4
-    disclaimer = (
-        "Prag adaptat pentru IMM-uri Romania: M5 > -2.22 = investigat, > -1.78 = risc ridicat. "
-        "Semnal de SCREENING (indica ce merita verificat manual), NU o concluzie de manipulare contabila."
-    )
-    if not gmi_masurabil:
-        disclaimer += (
-            " ATENTIE: GMI (marja bruta) nu e masurabil din ANAF Bilant (lipsesc cheltuielile "
-            "materiale) si intra in formula ca indice neutru 1.0 — verdictul se sprijina efectiv "
-            f"pe {indici_cu_semnal} din 5 indici, iar pragurile sunt calibrate pentru toti 5."
-        )
-
     return {
         "m_score": m5,
         "risk": risk,
         "available": True,
-        "confidence": 1 if gmi_masurabil else 0.8,
+        "confidence": 1,
         "indici_cu_semnal": indici_cu_semnal,
+        "screening_signals": _screening_signals(dsri, aqi, sgi),
         "components": {
             "DSRI": round(dsri, 3),
             "GMI": round(gmi, 3),
@@ -346,7 +439,10 @@ def calculate_beneish_m(bilant_t: dict, bilant_t1: dict | None = None) -> dict:
             "SGI": round(sgi, 3),
             "TATA": round(tata, 3),
         },
-        "disclaimer": disclaimer,
+        "disclaimer": (
+            "Prag adaptat pentru IMM-uri Romania: M5 > -2.22 = investigat, > -1.78 = risc ridicat. "
+            "Semnal de SCREENING (indica ce merita verificat manual), NU o concluzie de manipulare contabila."
+        ),
     }
 
 
@@ -585,6 +681,15 @@ def calculate_all_predictive_scores(verified_data: dict, official_data: dict | N
     else:
         summary = "Indicatori financiari in zona normala (toate cele 4 modele calculate)"
 
+    # Semnalele de screening (indici Beneish REALI) se adauga la summary pentru ca
+    # summary e deja randat identic in HTML/PDF/DOCX — asa semnalul real ajunge in
+    # raport FARA a atinge cei 3 rendereri (si fara a pierde informatia cand
+    # M-score-ul e suprimat de gate-ul anti-acuzatie).
+    screening = beneish.get("screening_signals") or []
+    if screening:
+        etichete = "; ".join(f"{s['eticheta']} ({s['cod']} {s['valoare']:.2f}x)" for s in screening)
+        summary += f". Semnale de verificat manual: {etichete}"
+
     return {
         "altman_z": altman,
         "piotroski_f": piotroski,
@@ -593,5 +698,6 @@ def calculate_all_predictive_scores(verified_data: dict, official_data: dict | N
         "distress_signals": distress_signals,
         "models_available": n_avail,
         "models_total": n_total,
+        "screening_signals": screening,
         "summary": summary,
     }
