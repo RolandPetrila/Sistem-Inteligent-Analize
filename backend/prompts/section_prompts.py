@@ -295,8 +295,11 @@ def _adjust_word_count(key: str, base_wc: int, data: dict) -> int:
         competitors = 0
         if isinstance(web, dict):
             competitors += len(web.get("competitors", {}).get("results", []))
-        if isinstance(market, dict) and market.get("seap", {}).get("total_contracts", 0) > 5:
-            factor = 1.2
+        if isinstance(market, dict):
+            seap = market.get("seap", {})
+            seap_val = seap.get("value", seap) if isinstance(seap, dict) else {}
+            if isinstance(seap_val, dict) and (seap_val.get("total_contracts", 0) or 0) > 5:
+                factor = 1.2
         if competitors >= 3:
             factor = max(factor, 1.3)
         elif competitors == 0:

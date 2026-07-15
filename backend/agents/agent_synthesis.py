@@ -757,7 +757,8 @@ Reguli:
             market = verified_data.get("market", {})
             if isinstance(market, dict):
                 seap = market.get("seap", {})
-                if isinstance(seap, dict) and seap.get("total_contracts", 0) > 0:
+                seap_val = seap.get("value", seap) if isinstance(seap, dict) else {}
+                if isinstance(seap_val, dict) and (seap_val.get("total_contracts", 0) or 0) > 0:
                     return True
             web = verified_data.get("web_presence", {})
             if isinstance(web, dict) and web.get("opportunities"):
@@ -898,8 +899,9 @@ Reguli:
 
         if section_key == "competition":
             seap = market.get("seap", {}) if isinstance(market, dict) else {}
-            if isinstance(seap, dict) and seap.get("total_contracts"):
-                bullets.append(f"Contracte SEAP: {seap['total_contracts']}")
+            seap_val = seap.get("value", seap) if isinstance(seap, dict) else {}
+            if isinstance(seap_val, dict) and seap_val.get("total_contracts"):
+                bullets.append(f"Contracte SEAP: {seap_val['total_contracts']}")
             benchmark = data.get("benchmark", {})
             if isinstance(benchmark, dict):
                 for k, v in benchmark.items():
@@ -1082,8 +1084,9 @@ Reguli:
         if section_key == "competition":
             market = data.get("market", {})
             seap = market.get("seap", {}) if isinstance(market, dict) else {}
-            if isinstance(seap, dict):
-                lines.append(f"Contracte SEAP: {seap.get('total_contracts', 0)}")
+            seap_val = seap.get("value", seap) if isinstance(seap, dict) else {}
+            if isinstance(seap_val, dict):
+                lines.append(f"Contracte SEAP: {seap_val.get('total_contracts', 0)}")
 
         return "\n".join(lines) if lines else "Fara context suplimentar disponibil."
 
