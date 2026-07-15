@@ -67,11 +67,18 @@ async def parse_natural_query(data: ParseQueryRequest):
     params: dict = {}
     confidence = 0.6
 
-    # Extrage CUI daca exista
+    # Extrage CUI daca exista — A7: candidatul trebuie sa treaca MOD11 inainte
+    # de a fi sugerat, altfel un CUI tastat gresit ajunge pre-completat in
+    # wizard cu incredere ridicata (decizia tehnica #13: validare MOD11
+    # inainte de orice apel API).
+    from backend.agents.tools.cui_validator import validate_cui
+
     cui_match = re.search(r"\b(?:cui\s*)?(\d{6,10})\b", query)
     if cui_match:
-        params["cui"] = cui_match.group(1)
-        confidence += 0.15
+        cui_candidate = cui_match.group(1)
+        if validate_cui(cui_candidate)["valid"]:
+            params["cui"] = cui_candidate
+            confidence += 0.15
 
     # Extrage nume firma (text intre ghilimele sau dupa "firma/compania")
     name_match = re.search(r'"([^"]+)"', data.query)

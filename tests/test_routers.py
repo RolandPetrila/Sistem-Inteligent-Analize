@@ -148,6 +148,24 @@ class TestAnalysisEndpoints:
         data = resp.json()
         assert "analysis_type" in data
 
+    def test_parse_query_rejects_cui_with_bad_checksum(self, client):
+        """A7: un CUI cu cifra de control gresita nu trebuie sugerat cu incredere
+        ridicata — 12345678 are cifra de control invalida (asteptat 4, primit 8,
+        confirmat de fixture-ul golden invalid_cui_early_return). Fara cuvinte-cheie
+        de tip firma/compania/analizeaza/verifica, ca sa nu se activeze fallback-ul
+        separat de extragere a numelui (comportament neschimbat, in afara scope)."""
+        resp = client.post("/api/analysis/parse-query", json={"query": "cui 12345678"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["input_params"].get("cui") != "12345678"
+
+    def test_parse_query_accepts_valid_cui(self, client):
+        """Non-regresie: un CUI real, valid (MOD11 OK) tot trebuie extras."""
+        resp = client.post("/api/analysis/parse-query", json={"query": "cui 26313362"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["input_params"].get("cui") == "26313362"
+
 
 class TestSettingsEndpoints:
     """Test settings endpoints."""
