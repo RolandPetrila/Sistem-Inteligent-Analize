@@ -27,6 +27,32 @@ Sistem local de Business Intelligence care ruleaza pe Windows 10. Extrage automa
   datelor la producator (DB / client), nu in fixture-uri existente.** Corolar: codul mort
   aduna bug-uri latente care se activeaza exact cand il reinvii. Corolar 2: verificarea live
   prinde ce e RUPT, nu ce e plauzibil-si-fals.
+- **JOB LIVE INAINTE DE PUSH, la orice fix care poate reinvia o cale moarta** (regula scrisa
+  2026-07-15 dupa ce a fost incalcata si s-a pushat o regresie). Fix-ul `9324e0a` (orbire la
+  pierderi) avea 566 pytest verzi + golden identic + **intrarea** verificata live + diff citit
+  linie cu linie — si prima firma reala pe pierdere a **crapat jobul complet**: fix-ul reinviase
+  calea "firma pe pierdere", pe care zacea `', '.join(<lista de ANI int>)` (`early_warnings.py:58`,
+  reparat in `84fc37a`). Avertismentul "Pierdere consecutiva 2+ ani" (HIGH, listat mai jos ca
+  functie de baza) **nu rulase NICIODATA**. **Testele nu pot prinde asta prin constructie** — calea
+  n-a existat niciodata ca sa fie testata. **"Am verificat intrarea" NU inseamna "am verificat".**
+  A treia confirmare a corolarului de mai sus, prima declansata de noi insine.
+- **Firme de test cu rol** (verificat live 2026-07-15): **TAROM CUI 477647** = declansator pt calea
+  "pierdere" (5 ani consecutivi pe pierdere 2019-2023 + capitaluri proprii NEGATIVE + redresare
+  reala pe profit in 2024 — testeaza si istoricul si revenirea). **MEGA IMAGE 6719278** = date
+  bogate. **MOSSLEIN 26313362** = control profitabil. **"Identic pe firma curata" NU e succes** —
+  o cablare rupta da acelasi rezultat.
+- **`.get(cheie, default)` pe raspunsuri de la surse externe MASCHEAZA absenta** — nu poti distinge
+  "API-ul n-a trimis campul" de "entitatea n-are date". Asa a stat ascuns ani de zile faptul ca
+  openapi.ro **nu livreaza NICIODATA** `asociati`/`administratori` (clientul face `.get("asociati", [])`)
+  -> `network_client.py` intreg (Toxic PageRank, Conflict Interese, Reteaua de Firme, migrarea 008)
+  **n-a rulat niciodata cu date reale**. La orice client de sursa: verifica setul de chei REAL emis,
+  nu ce zice documentatia. Comentariul "ANAF are formate diferite pt firme mari vs mici" era, tot
+  asa, **fals** — infirmat empiric 2026-07-15 (OMV Petrom si o firma mica primesc acelasi set I1-I20).
+- **Google Maps e MORT din ~2026-07 (`REQUEST_DENIED`, legacy API)** — necesita migrare la "Places
+  API (New)" din Google Cloud Console (actiune manuala, la user). Pana atunci `maps_rating` e
+  `{"found": false}` pt orice firma, deci dimensiunea reputational ruleaza doar pe `web_presence`.
+  **`AUDIT_FUNCTII.html` inca raporteaza "Google Maps OK"** (din 07-12) — dashboard-ul minte pasiv:
+  ping-ul stie sa detecteze `request_denied` (`connectivity.py:248`), doar ca nimeni nu l-a re-rulat.
 
 ## Cum se citeste "COMPLETATA" mai jos (citeste asta INAINTE de Status)
 
