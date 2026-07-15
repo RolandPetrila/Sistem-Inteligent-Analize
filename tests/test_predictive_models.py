@@ -137,21 +137,89 @@ class TestPiotroskiF:
         # Firma in distress ar trebui sa aiba scor mic
         assert result["grade"] in ("WEAK", "AVERAGE", "INSUFICIENT")
 
-    def test_strong_grade_threshold(self):
-        """Grade-ul respecta pragurile PROPORTIONALE (7/9 si 4/9 din criteriile
-        chiar disponibile), nu praguri absolute pe 9 — numitorul real e mai mic
-        de cand F2/F3 (2026-07-16) si F5/F7 (2026-07-15) sunt gate-uite ca
-        nemasurabile din ANAF Bilant (`max_possible` variaza cu datele
-        disponibile, nu e fix la 9)."""
+    def test_strong_grade_threshold_fixtura_existenta(self):
+        """Ancora pe fixtura reala a fisierului: cu BILANT_SANATOS/BILANT_ANTERIOR,
+        F2/F3 (cash_flow_operational absent) si F7 (cheltuieli_materiale absent)
+        sunt None -> max_possible=6 (nu 9), restul (F1/F4/F5/F6/F8/F9) sunt toate
+        1 -> f_score=6/6=1.0 >= 7/9 -> STRONG. Valori confirmate prin rulare
+        directa a productiei (nu recalculate din formula in test)."""
         result = calculate_piotroski_f(BILANT_SANATOS, BILANT_ANTERIOR)
-        if result["has_prior_year"] and result["f_score"] is not None and result["max_possible"] >= 5:
-            ratio = result["f_score"] / result["max_possible"]
-            if ratio >= 7 / 9:
-                assert result["grade"] == "STRONG"
-            elif ratio >= 4 / 9:
-                assert result["grade"] == "AVERAGE"
-            else:
-                assert result["grade"] == "WEAK"
+        assert result["f_score"] == 6
+        assert result["max_possible"] == 6
+        assert result["grade"] == "STRONG"
+
+    def test_strong_grade_threshold(self):
+        """Praguri HARDCODATE (nu recalculate din formula productiei — vechea
+        varianta recalcula exact `ratio = f_score/max_possible` din
+        `calculate_piotroski_f`, deci nu putea pica decat daca `max_possible`
+        diferea de asteptare; era o tautologie, nu o verificare a pragului).
+
+        Fixturi cu toate 9 criterii disponibile (cash_flow_operational +
+        cheltuieli_materiale prezente in ambii ani, pe langa active/datorii
+        curente) pentru a putea lovi EXACT pragurile 7/9 si 4/9 din productie
+        (`predictive_models.py`, ratio >= 7/9 -> STRONG, >= 4/9 -> AVERAGE,
+        altfel WEAK). Fiecare caz e verificat manual (vezi comentariile per
+        criteriu) si confirmat prin rulare directa a productiei inainte de a fi
+        scris aici — vezi si dovada de mutatie in test_mutatie_prag_strong_detectata."""
+        t1_base = {
+            "active_totale": 1_000_000,
+            "profit_net": 50_000,       # ROA t-1 = 0.05
+            "cifra_afaceri": 500_000,   # rotatie t-1 = 0.5
+            "total_datorii": 400_000,   # leverage t-1 = 0.4
+            "active_curente": 300_000,
+            "datorii_curente": 200_000,  # lichiditate t-1 = 1.5
+            "capitaluri_proprii": 600_000,
+            "cheltuieli_materiale": 300_000,  # marja t-1 = 0.4
+        }
+
+        # 9/9 (ratio=1.0 >= 7/9): toate criteriile imbunatatite fata de t-1.
+        t_all_pass = {
+            "active_totale": 1_000_000,
+            "profit_net": 80_000,             # F1: ROA=0.08>0 ; F8: 0.08>=0.05
+            "cifra_afaceri": 600_000,         # F9: rotatie 0.6>=0.5
+            "cash_flow_operational": 100_000,  # F2: cfo>0 ; F3: cfo(100k)>profit(80k)
+            "total_datorii": 350_000,         # F4: leverage 0.35<=0.4
+            "active_curente": 400_000,
+            "datorii_curente": 200_000,       # F5: lichiditate 2.0>=1.5
+            "capitaluri_proprii": 650_000,    # F6: 650k<=600k*1.2=720k
+            "cheltuieli_materiale": 250_000,  # F7: marja (600k-250k)/600k=0.583>=0.4
+        }
+
+        # 7/9 exact (ratio == 7/9 -> STRONG): flip F2+F3 (cfo negativ).
+        t_7of9 = dict(t_all_pass, cash_flow_operational=-10_000)
+
+        # 6/9 (ratio=0.667 < 7/9 -> AVERAGE, imediat sub prag): + flip F6
+        # (capitaluri crescute prea mult: 800k > 600k*1.2=720k).
+        t_6of9 = dict(t_7of9, capitaluri_proprii=800_000)
+
+        # 4/9 exact (ratio == 4/9 -> AVERAGE): + flip F9 (cifra_afaceri scade
+        # rotatia sub t-1) si F4 (datorii cresc, leverage inrautatit).
+        # cheltuieli_materiale scazute proportional ca sa pastreze F7=1 in
+        # ciuda scaderii cifrei de afaceri (marja tot imbunatatita).
+        t_4of9 = dict(
+            t_6of9,
+            cifra_afaceri=400_000,
+            cheltuieli_materiale=200_000,
+            total_datorii=500_000,
+        )
+
+        # 3/9 (ratio=0.333 < 4/9 -> WEAK, imediat sub prag): + flip F8
+        # (profitul scade sub pragul care mentine ROA_t >= ROA_t-1), F1 ramane
+        # 1 (profitul e tot pozitiv).
+        t_3of9 = dict(t_4of9, profit_net=30_000)
+
+        cases = [
+            ("9/9 -> STRONG", t_all_pass, 9, 9, "STRONG"),
+            ("7/9 exact -> STRONG", t_7of9, 7, 9, "STRONG"),
+            ("6/9 (sub 7/9) -> AVERAGE", t_6of9, 6, 9, "AVERAGE"),
+            ("4/9 exact -> AVERAGE", t_4of9, 4, 9, "AVERAGE"),
+            ("3/9 (sub 4/9) -> WEAK", t_3of9, 3, 9, "WEAK"),
+        ]
+        for label, bilant_t, expected_f_score, expected_max, expected_grade in cases:
+            result = calculate_piotroski_f(bilant_t, t1_base)
+            assert result["f_score"] == expected_f_score, label
+            assert result["max_possible"] == expected_max, label
+            assert result["grade"] == expected_grade, label
 
     def test_criteria_lista_9_elemente(self):
         result = calculate_piotroski_f(BILANT_SANATOS, BILANT_ANTERIOR)
