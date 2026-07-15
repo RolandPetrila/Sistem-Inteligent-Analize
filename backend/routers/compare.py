@@ -172,7 +172,7 @@ def _calculate_compare_score(company: dict) -> int:
 
     try:
         result = calculate_risk_score(verified)
-        return result.get("total_score", 70)
+        return result.get("numeric_score", 70)
     except Exception as e:
         logger.warning(f"[compare] fallback scoring: {e}")
         return 70
