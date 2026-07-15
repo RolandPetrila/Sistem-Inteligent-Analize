@@ -24,6 +24,9 @@ def generate_one_pager(verified_data: dict, meta: dict, output_path: str):
     pdf.add_page()
 
     company_name = _sanitize(meta.get("company_name", "N/A"))
+    company = verified_data.get("company", {})
+    cui_field = company.get("cui", {})
+    cui = _sanitize(str(cui_field.get("value", "") if isinstance(cui_field, dict) else cui_field or ""))
     risk_score = verified_data.get("risk_score", {})
     score_color = risk_score.get("score", "N/A")
     numeric = risk_score.get("numeric_score", 0)
@@ -49,9 +52,9 @@ def generate_one_pager(verified_data: dict, meta: dict, output_path: str):
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(180, 180, 200)
     pdf.set_x(10)
-    cui = meta.get("company_name", "")
     generated = _sanitize(meta.get("generated_at", ""))
-    pdf.cell(0, 5, f"Raport Executiv | {generated} | Roland Intelligence System")
+    cui_part = f"CUI {cui} | " if cui else ""
+    pdf.cell(0, 5, f"{cui_part}Raport Executiv | {generated} | Roland Intelligence System")
 
     # --- Score box (right side of header) ---
     r, g, b = color_map.get(score_color, (150, 150, 150))

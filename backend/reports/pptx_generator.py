@@ -181,7 +181,7 @@ def generate_pptx(report_sections: dict, meta: dict, verified_data: dict, output
             level = anomaly.get("level", "INFO")
             icon = {"SUSPECT": "!!!", "ATENTIE": "!!", "INFO": "i"}.get(level, "")
             color = {"SUSPECT": RED, "ATENTIE": YELLOW, "INFO": GRAY_TEXT}.get(level, GRAY_TEXT)
-            _add_text(slide5, 0.8, y, 11, 0.35, f"[{level}] {anomaly.get('rule', '')}", 13, color, bold=True)
+            _add_text(slide5, 0.8, y, 11, 0.35, f"{icon} [{level}] {anomaly.get('rule', '')}", 13, color, bold=True)
             _add_text(slide5, 0.8, y + 0.35, 11, 0.4, anomaly.get("detail", ""), 11, LIGHT_TEXT)
             y += 0.85
 
