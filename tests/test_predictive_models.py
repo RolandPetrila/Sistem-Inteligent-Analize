@@ -138,12 +138,17 @@ class TestPiotroskiF:
         assert result["grade"] in ("WEAK", "AVERAGE", "INSUFICIENT")
 
     def test_strong_grade_threshold(self):
-        """Firma sanatoasa cu an anterior → grade STRONG (f >= 7)."""
+        """Grade-ul respecta pragurile PROPORTIONALE (7/9 si 4/9 din criteriile
+        chiar disponibile), nu praguri absolute pe 9 — numitorul real e mai mic
+        de cand F2/F3 (2026-07-16) si F5/F7 (2026-07-15) sunt gate-uite ca
+        nemasurabile din ANAF Bilant (`max_possible` variaza cu datele
+        disponibile, nu e fix la 9)."""
         result = calculate_piotroski_f(BILANT_SANATOS, BILANT_ANTERIOR)
-        if result["has_prior_year"] and result["f_score"] is not None:
-            if result["f_score"] >= 7:
+        if result["has_prior_year"] and result["f_score"] is not None and result["max_possible"] >= 5:
+            ratio = result["f_score"] / result["max_possible"]
+            if ratio >= 7 / 9:
                 assert result["grade"] == "STRONG"
-            elif result["f_score"] >= 4:
+            elif ratio >= 4 / 9:
                 assert result["grade"] == "AVERAGE"
             else:
                 assert result["grade"] == "WEAK"

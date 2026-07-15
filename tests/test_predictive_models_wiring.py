@@ -161,12 +161,17 @@ class TestPredictiveScoresWiring:
         assert distress["distress"] is True
 
     def test_piotroski_nu_acorda_puncte_pt_criterii_nemasurabile(self):
-        """F5 (lichiditate curenta) si F7 (marja bruta) nu sunt masurabile din
-        ANAF Bilant. Inainte de fix acordau punctul MEREU (0/1 >= 0/1 si
+        """F2 (CFO pozitiv), F3 (CFO > profit), F5 (lichiditate curenta) si F7
+        (marja bruta) nu sunt masurabile din ANAF Bilant. Inainte de fixul
+        2026-07-16, F2/F3 foloseau proxy-ul `cfo = profit*1.1`, care le facea
+        IDENTICE cu F1 (ecou al semnului profitului, nu masuratori independente).
+        Inainte de fixul F5/F7, acestea acordau punctul MEREU (0/1 >= 0/1 si
         1.0 >= 1.0) — puncte gratuite intr-un detector de faliment = fals confort.
-        Acum trebuie sa fie None, nu 1."""
+        Acum toate patru trebuie sa fie None, nu 0/1."""
         result = calculate_all_predictive_scores(self._verified(), FICTIONAL_OFFICIAL)
         criteria = result["piotroski_f"]["criteria"]
+        assert criteria[1] is None, "F2 (CFO pozitiv) a produs un scor din CFO fabricat"
+        assert criteria[2] is None, "F3 (CFO > profit) a produs un scor din CFO fabricat"
         assert criteria[4] is None, "F5 (lichiditate) a acordat punct fara sa masoare nimic"
         assert criteria[6] is None, "F7 (marja bruta) a acordat punct fara sa masoare nimic"
 
@@ -177,12 +182,102 @@ class TestPredictiveScoresWiring:
             "Piotroski nu a primit bilant_t1 — regresie la bug-ul din 2026-07-15 "
             "(Beneish/Piotroski apelate cu un singur argument)"
         )
-        # 7, nu 9: F5+F7 raman nemasurabile din ANAF (vezi testul dedicat).
-        # Inainte de fix: 3 (fara an anterior deloc).
-        assert piotroski["max_possible"] == 7, (
-            f"Asteptat 7 criterii calculabile din ANAF cu 2 ani de date, primit {piotroski['max_possible']}"
+        # 5, nu 9: F2+F3 (cash-flow operational fabricat, fix 2026-07-16) si
+        # F5+F7 (vezi testul dedicat) raman nemasurabile din ANAF. Inainte de
+        # fixul F2/F3: 7. Inainte de fixul F5/F7 + an anterior: 3.
+        assert piotroski["max_possible"] == 5, (
+            f"Asteptat 5 criterii calculabile din ANAF cu 2 ani de date, primit {piotroski['max_possible']}"
         )
         assert piotroski["grade"] != "INSUFICIENT"
+
+    def test_f2_f3_none_indiferent_de_semnul_profitului(self):
+        """Contract explicit D5: F2 si F3 sunt None (nedisponibile), niciodata
+        0 si niciodata 1, indiferent de datele de profit/pierdere — pentru ca
+        `cash_flow_operational` nu e scris nicaieri in backend, deci gate-ul
+        se declanseaza mereu, nu doar pe cazul fictiv de mai sus."""
+        from backend.agents.verification.predictive_models import calculate_piotroski_f
+
+        bilant_t_profit = {"active_totale": 800_000, "profit_net": 120_000, "cifra_afaceri": 2_000_000}
+        bilant_t1_profit = {"active_totale": 650_000, "profit_net": 90_000, "cifra_afaceri": 1_600_000}
+        r_profit = calculate_piotroski_f(bilant_t_profit, bilant_t1_profit)
+        assert r_profit["criteria"][1] is None
+        assert r_profit["criteria"][2] is None
+
+        bilant_t_pierdere = {"active_totale": 800_000, "profit_net": -120_000, "cifra_afaceri": 2_000_000}
+        bilant_t1_pierdere = {"active_totale": 650_000, "profit_net": -90_000, "cifra_afaceri": 1_600_000}
+        r_pierdere = calculate_piotroski_f(bilant_t_pierdere, bilant_t1_pierdere)
+        assert r_pierdere["criteria"][1] is None
+        assert r_pierdere["criteria"][2] is None
+
+    def test_f2_f3_calculabile_daca_apare_cash_flow_real(self):
+        """Contra-proba: gate-ul e pe DATE lipsa, nu o dezactivare permanenta —
+        acelasi principiu aplicat deja la Altman/Beneish. Daca o sursa viitoare
+        aduce `cash_flow_operational` real, F2/F3 redevin masurabile."""
+        from backend.agents.verification.predictive_models import calculate_piotroski_f
+
+        bilant_t = {
+            "active_totale": 800_000, "profit_net": 120_000, "cifra_afaceri": 2_000_000,
+            "cash_flow_operational": 150_000,
+        }
+        bilant_t1 = {
+            "active_totale": 650_000, "profit_net": 90_000, "cifra_afaceri": 1_600_000,
+            "cash_flow_operational": 80_000,
+        }
+        r = calculate_piotroski_f(bilant_t, bilant_t1)
+        assert r["criteria"][1] == 1, "CFO=150k > 0 -> F2 trebuia sa fie 1"
+        assert r["criteria"][2] == 1, "CFO=150k > profit=120k -> F3 trebuia sa fie 1"
+        assert r["max_possible"] == 7, "cu CFO real, F2+F3 redevin masurabile (5 + 2 = 7)"
+
+    def test_numitorul_e_onest_reflecta_doar_criteriile_evaluate(self):
+        """`max_possible` (numitorul afisat, ex. "3/5") trebuie sa reflecte STRICT
+        cate criterii au fost chiar evaluate — nu 9 (numarul teoretic Piotroski)
+        si nu 7 (numarul de dinainte de fixul F2/F3). Verificat si separat, si
+        prin `calculate_all_predictive_scores` (calea reala de productie)."""
+        result = calculate_all_predictive_scores(self._verified(), FICTIONAL_OFFICIAL)
+        piotroski = result["piotroski_f"]
+        assert piotroski["max_possible"] == len(
+            [c for c in piotroski["criteria"] if c is not None]
+        ), "max_possible trebuie sa fie EXACT numarul de criterii ne-None din lista"
+        assert piotroski["max_possible"] not in (7, 9), (
+            "numitorul nu mai poate fi 7 (vechiul numar, dinainte de fixul F2/F3) "
+            "si nici 9 (numarul teoretic Piotroski, niciodata atins din ANAF)"
+        )
+
+    def test_f_score_plauzibil_profit_vs_pierdere_acelasi_numitor(self):
+        """O firma pe profit crescator si una pe pierdere cronica trebuie sa
+        produca f_score plauzibile (nu identice, nu inversate) cu ACELASI
+        numitor (max_possible) — dovada ca gate-ul F2/F3 nu introduce o
+        asimetrie ascunsa intre cele doua cazuri."""
+        from backend.agents.verification.predictive_models import calculate_piotroski_f
+
+        profit_t = {
+            "active_totale": 1_000_000, "total_datorii": 300_000, "capitaluri_proprii": 700_000,
+            "profit_net": 150_000, "cifra_afaceri": 3_000_000,
+        }
+        profit_t1 = {
+            "active_totale": 800_000, "total_datorii": 350_000, "capitaluri_proprii": 450_000,
+            "profit_net": 80_000, "cifra_afaceri": 2_200_000,
+        }
+        r_profit = calculate_piotroski_f(profit_t, profit_t1)
+
+        pierdere_t = {
+            "active_totale": 1_000_000, "total_datorii": 900_000, "capitaluri_proprii": 100_000,
+            "profit_net": -200_000, "cifra_afaceri": 900_000,
+        }
+        pierdere_t1 = {
+            "active_totale": 1_100_000, "total_datorii": 700_000, "capitaluri_proprii": 400_000,
+            "profit_net": -50_000, "cifra_afaceri": 1_400_000,
+        }
+        r_pierdere = calculate_piotroski_f(pierdere_t, pierdere_t1)
+
+        assert r_profit["max_possible"] == r_pierdere["max_possible"] == 5
+        assert 0 <= r_profit["f_score"] <= 5
+        assert 0 <= r_pierdere["f_score"] <= 5
+        assert r_profit["f_score"] > r_pierdere["f_score"], (
+            "firma pe profit crescator ar trebui sa scoreze strict mai bine "
+            "decat una pe pierdere cronica in accelerare"
+        )
+        assert r_pierdere["grade"] in ("WEAK", "AVERAGE", "INSUFICIENT")
 
     def test_beneish_nu_acuza_cu_intrari_fabricate(self):
         """Beneish NU are voie sa emita verdict de manipulare cand 2 din 5 indici

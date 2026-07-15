@@ -131,12 +131,23 @@ def calculate_piotroski_f(bilant_t: dict, bilant_t1: dict | None = None) -> dict
     # F1: ROA pozitiv
     f1 = 1 if (profit / TA) > 0 else 0
 
-    # F2: Cash flow operational pozitiv (estimat din profit)
-    cfo = bilant_t.get("cash_flow_operational", profit * 1.1)
-    f2 = 1 if cfo and cfo > 0 else 0
-
-    # F3: CFO > Profit net (calitate accruals)
-    f3 = 1 if cfo and profit and cfo > profit else 0
+    # F2: Cash flow operational pozitiv. F3: CFO > Profit net (calitate accruals).
+    # `cash_flow_operational` NU e scris NICAIERI in backend (verificat prin grep
+    # 2026-07-15, confirmat separat in `calculate_beneish_m` mai jos). Proxy-ul
+    # anterior `profit * 1.1` facea ca semnul lui cfo sa fie IDENTIC cu semnul
+    # lui profit -> F2 == F1 mereu (acelasi test, profit>0). Si cfo > profit se
+    # reduce la 1.1*profit > profit, adevarat DOAR cand profit>0 -> F3 == F1
+    # mereu. Deci 3 din 9 criterii (33%) erau, de fapt, un singur semnal (semnul
+    # profitului) repetat de 3 ori — nu 3 masuratori independente ale calitatii
+    # cash-flow-ului. Acelasi mod de esec ca F5/F7: date lipsa -> criteriu
+    # nemasurabil -> None, nu un punct (sau un ecou al lui F1) deghizat in calcul.
+    cfo = _num(bilant_t, "cash_flow_operational")
+    if cfo is None:
+        f2 = None
+        f3 = None
+    else:
+        f2 = 1 if cfo > 0 else 0
+        f3 = 1 if profit and cfo > profit else 0
 
     if bilant_t1:
         TA1 = bilant_t1.get("active_totale", bilant_t1.get("total_active", 0)) or 1
@@ -207,11 +218,15 @@ def calculate_piotroski_f(bilant_t: dict, bilant_t1: dict | None = None) -> dict
     f_score = sum(available)
 
     # Pragurile originale (7 si 4) sunt calibrate pe 9 criterii. Cand unele
-    # criterii sunt nemasurabile (F5/F7 fara split datorii / cheltuieli
-    # materiale), un prag absolut de 7 devine aproape imposibil de atins din
-    # 7 criterii disponibile -> orice firma ar aparea WEAK/AVERAGE artificial.
-    # Scalam proportional: raportul 7/9 si 4/9 se pastreaza. Pe cazul complet
-    # (9 criterii) rezultatul e IDENTIC cu pragurile absolute anterioare.
+    # criterii sunt nemasurabile (F2/F3 fara cash-flow operational real, F5
+    # fara split datorii curente/necurente, F7 fara cheltuieli materiale — toate
+    # patru absente din ANAF Bilant), un prag absolut de 7 devine aproape
+    # imposibil de atins din cele 5 criterii ramase disponibile (F1/F4/F6/F8/F9)
+    # -> orice firma ar aparea WEAK/AVERAGE artificial. Scalam proportional:
+    # raportul 7/9 si 4/9 se pastreaza. Pe cazul complet (9 criterii, cand o
+    # sursa viitoare aduce toate componentele) rezultatul e IDENTIC cu pragurile
+    # absolute anterioare. `max_possible` de mai jos raporteaza numitorul REAL
+    # (5, nu 7 sau 9) — onest despre cate criterii au fost chiar evaluate.
     if len(available) < 5:
         grade = "INSUFICIENT"
     else:
