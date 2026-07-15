@@ -13,6 +13,7 @@ import { useToast } from "@/components/Toast";
 import { logAction, logValidation, validateReportData } from "@/lib/logger";
 import { ANALYSIS_TYPE_LABELS } from "@/lib/constants";
 import { getRiskBucket } from "@/lib/risk";
+import { buildFinancialChartData } from "@/lib/financialChart";
 import type { AnalysisType } from "@/lib/types";
 import { ReportHeader } from "@/components/report/ReportHeader";
 import { ReportTabs } from "@/components/report/ReportTabs";
@@ -135,28 +136,10 @@ export default function ReportView() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  const financialChartData = useMemo(() => {
-    if (!report?.full_data?.financial) return null;
-    const fin = report.full_data.financial as Record<
-      string,
-      { value?: number; historical?: Record<string, number> }
-    >;
-    const caHist = fin.cifra_afaceri?.historical || {};
-    const profitHist = fin.profit_net?.historical || {};
-    const angajatiHist = fin.numar_angajati?.historical || {};
-    const years = [
-      ...new Set([...Object.keys(caHist), ...Object.keys(profitHist)]),
-    ]
-      .sort()
-      .slice(-5);
-    if (years.length < 2) return null;
-    return {
-      years,
-      ca: years.map((y) => caHist[y] ?? null),
-      profit: years.map((y) => profitHist[y] ?? null),
-      angajati: years.map((y) => angajatiHist[y] ?? null),
-    };
-  }, [report]);
+  const financialChartData = useMemo(
+    () => buildFinancialChartData(report?.full_data?.financial ?? null),
+    [report],
+  );
 
   if (loading) {
     return (
