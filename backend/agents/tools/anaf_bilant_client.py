@@ -84,8 +84,32 @@ async def get_bilant(cui: str, year: int) -> dict:
         result["caen_code"] = str(data.get("caen", ""))
         result["caen_description"] = data.get("den_caen", "")
 
-        # ANAF are formate diferite pt firme mari vs mici
-        # Parsam dupa val_den_indicator (text) nu dupa cod (variabil)
+        # Verificat live 2026-07-15 (OMV Petrom CUI 1590082, TAROM CUI 477647,
+        # MOSSLEIN CUI 26313362, ani 2021-2023): indicatorii I1-I20 sunt STABILI
+        # — aceleasi 20 coduri, aceeasi semnificatie, indiferent de marimea firmei
+        # sau de an. Comentariul vechi ("formate diferite pt firme mari vs mici",
+        # "parsam dupa text pt ca dupa cod e variabil") era FALS pe ambele afirmatii
+        # — codul e stabil, TEXTUL (val_den_indicator) e cel inconsecvent.
+        #
+        # Dovada concreta: I19 (Pierdere neta) vine cu eticheta text diferita per
+        # firma — la OMV/TAROM apare DUPLICAT ca "Pierdere bruta" (identic cu I17),
+        # la MOSSLEIN apare corect ca "Pierdere  neta" (dar cu SPATIU DUBLU). Text
+        # matching pe "pierdere brut"/"pierdere net" (spatiu simplu) fie suprascria
+        # tacut pierdere_bruta cu valoarea NETA (last-write-wins pe I17 apoi I19),
+        # fie rata complet "Pierdere  neta" (spatiul dublu rupe substring-ul) — in
+        # ambele cazuri pierdere_neta nu era scrisa NICIODATA si profit_net ramanea
+        # 0 pt firme cu pierdere neta (ANAF pune 0 la "Profit net"/I18 cand firma
+        # e pe pierdere, valoarea reala fiind la I19).
+        #
+        # Fix: cei 4 indicatori de profit/pierdere se parseaza DUPA COD (stabil),
+        # nu dupa text (inconsecvent). Restul campurilor raman pe text matching.
+        CODE_FIELD_MAP = {
+            "I16": "profit_brut",
+            "I17": "pierdere_bruta",
+            "I18": "profit_net",
+            "I19": "pierdere_neta",
+        }
+
         name_map = {
             "active imobilizate": "active_imobilizate",
             "active circulante": "active_circulante",
@@ -102,23 +126,35 @@ async def get_bilant(cui: str, year: int) -> dict:
             "cifra de afaceri": "cifra_afaceri_neta",
             "venituri totale": "venituri_totale",
             "cheltuieli totale": "cheltuieli_totale",
-            "profit brut": "profit_brut",
-            "pierdere brut": "pierdere_bruta",
-            "profit net": "profit_net",
-            "pierdere net": "pierdere_neta",
             "numar mediu": "numar_mediu_salariati",
         }
 
         indicators = data.get("i", [])
         for item in indicators:
-            if isinstance(item, dict):
-                val = item.get("val_indicator")
-                den = (item.get("val_den_indicator") or "").lower().strip()
-                if val is not None and den:
-                    for pattern, field_name in name_map.items():
-                        if pattern in den:
-                            result[field_name] = val
-                            break
+            if not isinstance(item, dict):
+                continue
+            val = item.get("val_indicator")
+            if val is None:
+                continue
+            code = item.get("indicator")
+            if code in CODE_FIELD_MAP:
+                result[CODE_FIELD_MAP[code]] = val
+                continue
+            # Normalizeaza whitespace-ul (colapseaza spatii multiple) — ieftin si
+            # prinde variante ca "Pierdere  neta" (spatiu dublu) pe orice camp viitor.
+            den = " ".join((item.get("val_den_indicator") or "").lower().split())
+            if den:
+                for pattern, field_name in name_map.items():
+                    if pattern in den:
+                        result[field_name] = val
+                        break
+
+        # ANAF pune 0 la "Profit net" (I18) cand firma e pe pierdere si muta
+        # valoarea reala la "Pierdere neta" (I19) — facem semnul explicit aici,
+        # o singura data la parsare, ca toti consumatorii (scoring, predictive
+        # models) sa vada profit_net negativ direct din dictul principal.
+        if result.get("profit_net") == 0 and (result.get("pierdere_neta") or 0) > 0:
+            result["profit_net"] = -result["pierdere_neta"]
 
         # Total Active = Active imobilizate + Active circulante + Cheltuieli in avans
         # (identitate bilant prescurtat ANAF — verificat pe date live 2026-07-15 ca se

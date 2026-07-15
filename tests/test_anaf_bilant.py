@@ -79,6 +79,86 @@ class TestActiveTotaleComputed:
         assert "active_totale" not in result
 
 
+# Payload fictiv de firma PE PIERDERE, cu ambele variante reale de mislabel ANAF
+# gasite live 2026-07-15 pe I19 (Pierdere neta): la firmele mari I19 vine DUPLICAT
+# ca "Pierdere bruta" (identic cu I17); aici testam explicit acel caz. Cifre 100%
+# fictive — repo public.
+FICTIONAL_ANAF_LOSS_PAYLOAD = {
+    "an": 2024, "cui": 88888888, "deni": "FIRMA PE PIERDERE FICTIVA SRL", "caen": "4711",
+    "den_caen": "Comert cu amanuntul in magazine nespecializate",
+    "i": [
+        {"indicator": "I1", "val_indicator": 500_000, "val_den_indicator": "ACTIVE IMOBILIZATE - TOTAL "},
+        {"indicator": "I2", "val_indicator": 300_000, "val_den_indicator": "ACTIVE CIRCULANTE - TOTAL, din care:"},
+        {"indicator": "I7", "val_indicator": 250_000, "val_den_indicator": "DATORII"},
+        {"indicator": "I10", "val_indicator": 554_000, "val_den_indicator": "CAPITALURI - TOTAL, din care:"},
+        {"indicator": "I13", "val_indicator": 2_000_000, "val_den_indicator": "Cifra de afaceri neta"},
+        {"indicator": "I16", "val_indicator": 0, "val_den_indicator": "Profit brut"},
+        {"indicator": "I17", "val_indicator": 94_327, "val_den_indicator": "Pierdere bruta"},
+        {"indicator": "I18", "val_indicator": 0, "val_den_indicator": "Profit net"},
+        # Mislabel real ANAF: I19 (Pierdere neta) apare DUPLICAT ca "Pierdere bruta",
+        # identic cu I17 — text matching l-ar suprascrie pe pierdere_bruta cu asta.
+        {"indicator": "I19", "val_indicator": 87_104, "val_den_indicator": "Pierdere bruta"},
+        {"indicator": "I20", "val_indicator": 5, "val_den_indicator": "Numar mediu de salariati"},
+    ],
+}
+
+# Aceeasi firma pe pierdere, dar cu cealalta varianta reala de eticheta gasita
+# live: I19 corect "Pierdere neta" insa cu SPATIU DUBLU intre cuvinte (rupe
+# text matching pe "pierdere net" cu spatiu simplu).
+FICTIONAL_ANAF_LOSS_PAYLOAD_DOUBLE_SPACE = {
+    **FICTIONAL_ANAF_LOSS_PAYLOAD,
+    "cui": 77777777,
+    "i": [
+        item if item["indicator"] != "I19"
+        else {"indicator": "I19", "val_indicator": 87_104, "val_den_indicator": "Pierdere  neta"}
+        for item in FICTIONAL_ANAF_LOSS_PAYLOAD["i"]
+    ],
+}
+
+
+class TestProfitNetPierdereParsing:
+    """Bug real (2026-07-15): pierdere_neta nu era scrisa NICIODATA — ANAF eticheteaza
+    I19 inconsecvent ('Pierdere bruta' duplicat SAU 'Pierdere  neta' cu spatiu dublu),
+    ambele variante rupeau text matching-ul vechi. Fix: parsare dupa cod (I16-I19)."""
+
+    @pytest.mark.asyncio
+    async def test_profit_net_negativ_cand_i19_mislabeled_ca_pierdere_bruta(self):
+        with patch("backend.agents.tools.anaf_bilant_client.get_client") as mc:
+            mc.return_value.get = AsyncMock(return_value=_mock_resp(FICTIONAL_ANAF_LOSS_PAYLOAD))
+            result = await get_bilant("88888888", 2024)
+
+        assert result["found"] is True
+        assert result["profit_net"] == -87_104
+        assert result["pierdere_neta"] == 87_104
+        assert result["pierdere_bruta"] == 94_327  # NU trebuie suprascris de I19
+
+    @pytest.mark.asyncio
+    async def test_profit_net_negativ_cand_i19_spatiu_dublu(self):
+        with patch("backend.agents.tools.anaf_bilant_client.get_client") as mc:
+            mc.return_value.get = AsyncMock(
+                return_value=_mock_resp(FICTIONAL_ANAF_LOSS_PAYLOAD_DOUBLE_SPACE)
+            )
+            result = await get_bilant("77777777", 2024)
+
+        assert result["found"] is True
+        assert result["profit_net"] == -87_104
+        assert result["pierdere_neta"] == 87_104
+        assert result["pierdere_bruta"] == 94_327
+
+    @pytest.mark.asyncio
+    async def test_firma_profitabila_neschimbata(self):
+        """Firma profitabila (fixture-ul existent) nu trebuie afectata de fix."""
+        with patch("backend.agents.tools.anaf_bilant_client.get_client") as mc:
+            mc.return_value.get = AsyncMock(return_value=_mock_resp(FICTIONAL_ANAF_PAYLOAD))
+            result = await get_bilant("99999999", 2024)
+
+        assert result["profit_net"] == 120_000
+        # I17/I19 absente in acest fixture (firma profitabila) -> campurile deriv­ate
+        # raman absente, nu 0 fals-pozitiv.
+        assert "pierdere_neta" not in result
+        assert "pierdere_bruta" not in result
+
+
 class TestCalculateTrends:
     """Test financial trend calculations from multi-year data."""
 
