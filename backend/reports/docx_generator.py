@@ -134,11 +134,10 @@ def _add_rich_fields_docx(doc, verified_data: dict):
         doc.add_heading("Garantii si Istoric (OSINT)", level=1)
         if aegrm_ok:
             doc.add_paragraph(f"Garantii reale mobiliare (AEGRM): {aegrm.get('count', 0)}")
-            guarantees = aegrm.get("guarantees") or aegrm.get("results") or []
-            if isinstance(guarantees, list):
-                for g in guarantees[:8]:
-                    txt = (g.get("descriere") or g.get("creditor") or g.get("title") or str(g)) if isinstance(g, dict) else str(g)
-                    doc.add_paragraph(str(txt)[:200], style="List Bullet")
+            guarantees = model["garantii"]["guarantees"]
+            for g in guarantees[:8]:
+                txt = f"{g['creditor']} - {g['tip_bun']} (status: {g['status']}, data: {g['data']})"
+                doc.add_paragraph(txt[:200], style="List Bullet")
         if hist_ok:
             for flx in hist:
                 if flx["is_dict"]:

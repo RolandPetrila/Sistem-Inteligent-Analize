@@ -343,11 +343,10 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
             _add_section_header(pdf, "Garantii si Istoric (OSINT)")
             if aegrm_ok:
                 pdf.multi_cell(0, 6, _sanitize(f"Garantii reale mobiliare (AEGRM): {aegrm.get('count', 0)}"), new_x="LMARGIN", new_y="NEXT")
-                guarantees = aegrm.get("guarantees") or aegrm.get("results") or []
-                if isinstance(guarantees, list):
-                    for g in guarantees[:8]:
-                        txt = (g.get("descriere") or g.get("creditor") or g.get("title") or str(g)) if isinstance(g, dict) else str(g)
-                        pdf.multi_cell(0, 5.5, _sanitize(f"  * {str(txt)[:200]}"), new_x="LMARGIN", new_y="NEXT")
+                guarantees = model["garantii"]["guarantees"]
+                for g in guarantees[:8]:
+                    txt = f"{g['creditor']} - {g['tip_bun']} (status: {g['status']}, data: {g['data']})"
+                    pdf.multi_cell(0, 5.5, _sanitize(f"  * {txt[:200]}"), new_x="LMARGIN", new_y="NEXT")
             if hist_ok:
                 for flx in hist:
                     if flx["is_dict"]:

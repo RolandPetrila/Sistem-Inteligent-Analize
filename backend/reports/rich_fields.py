@@ -14,6 +14,8 @@ in fiecare renderer -- modelul centralizeaza DOAR:
   (3) normalizarea preferintelor de nume pt semnalele istorice OSINT
       (label-peste-type, snippet-peste-detail) -- zona care a produs bug-urile
       din 2026-06-27, triplicata independent in 3 fisiere.
+  (4) normalizarea listei itemizate de garantii AEGRM (cheia reala e
+      "details", nu "guarantees"/"results" cum cautau cele 3 randere).
 """
 
 
@@ -51,6 +53,27 @@ def build_rich_fields_model(verified_data: dict) -> dict:
     hist = verified_data.get("historical_flags", [])
     hist_ok = bool(isinstance(hist, list) and hist)
     has_garantii = bool(aegrm_ok or hist_ok)
+
+    # aegrm_client.check_aegrm_guarantees() pune lista itemizata sub cheia
+    # "details" -- NICIODATA "guarantees"/"results". Cele 3 randere (HTML/PDF/
+    # DOCX) cauta "guarantees"/"results", deci lista detaliata (creditor/data/
+    # tip bun/status) era mereu goala. Normalizata O SINGURA DATA aici, ca la
+    # historical_flags mai sus.
+    aegrm_details = aegrm.get("details") if isinstance(aegrm, dict) else None
+    aegrm_guarantees_normalized: list[dict] = []
+    if isinstance(aegrm_details, list):
+        for g in aegrm_details:
+            if isinstance(g, dict):
+                aegrm_guarantees_normalized.append({
+                    "creditor": str(g.get("creditor") or "N/A"),
+                    "data": str(g.get("data") or "N/A"),
+                    "tip_bun": str(g.get("tip_bun") or "N/A"),
+                    "status": str(g.get("status") or "N/A"),
+                })
+            else:
+                aegrm_guarantees_normalized.append({
+                    "creditor": str(g), "data": "N/A", "tip_bun": "N/A", "status": "N/A",
+                })
 
     historical_flags_normalized: list[dict] = []
     if hist_ok:
@@ -90,6 +113,7 @@ def build_rich_fields_model(verified_data: dict) -> dict:
         "sanctions": {"shown": has_sanctions, "data": sanc},
         "garantii": {
             "shown": has_garantii, "aegrm_ok": aegrm_ok, "aegrm": aegrm,
+            "guarantees": aegrm_guarantees_normalized,
             "hist_ok": hist_ok, "historical_flags": historical_flags_normalized,
         },
         "funding_programs": {"shown": has_funding, "data": funding},

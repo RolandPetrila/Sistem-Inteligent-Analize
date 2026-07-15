@@ -66,9 +66,13 @@ def _rich_verified_data() -> dict:
                     "has_data": True,
                     "count": 2,
                     "has_guarantees": True,
-                    "guarantees": [
-                        {"descriere": "Gaj mobiliar — autovehicul, garanție către BCR"},
-                        {"creditor": "Banca Transilvania S.A. — ipotecă mobiliară"},
+                    "details": [
+                        {"nr_inregistrare": "2024-000456", "data": "2024-06-02",
+                         "creditor": "Exemplu Leasing SA", "tip_bun": "Autovehicul — garanție către BCR",
+                         "status": "ACTIV"},
+                        {"nr_inregistrare": "2023-000789", "data": "2023-11-20",
+                         "creditor": "Banca Transilvania S.A.", "tip_bun": "Ipotecă mobiliară",
+                         "status": "RADIAT"},
                     ],
                 }
             }

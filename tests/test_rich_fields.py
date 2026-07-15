@@ -65,6 +65,66 @@ class TestHistoricalFlagsNormalization:
         assert flx["detail"] == "raw string signal"
 
 
+class TestAegrmGuaranteesNormalization:
+    """Bug real: aegrm_client.check_aegrm_guarantees() pune lista itemizata
+    sub cheia "details" -- NICIODATA "guarantees"/"results", care e ce
+    citeau (direct, fara trecere prin model) html/pdf/docx_generator. Lista
+    detaliata era mereu goala in toate 3 formatele. Date sintetice (structura
+    reala a payload-ului AEGRM, valori inventate -- repo public)."""
+
+    def _aegrm_field(self, details):
+        return {
+            "risk": {
+                "aegrm_guarantees": {
+                    "value": {
+                        "has_data": True,
+                        "has_guarantees": True,
+                        "count": len(details),
+                        "details": details,
+                        "source": "AEGRM",
+                    }
+                }
+            }
+        }
+
+    def test_details_key_normalizata_in_guarantees(self):
+        details = [{
+            "nr_inregistrare": "2024-000123",
+            "data": "2024-03-11",
+            "creditor": "BANCA EXEMPLU SA",
+            "tip_bun": "Echipamente industriale",
+            "status": "ACTIV",
+        }]
+        model = build_rich_fields_model(self._aegrm_field(details))
+        guarantees = model["garantii"]["guarantees"]
+        assert len(guarantees) == 1
+        assert guarantees[0]["creditor"] == "BANCA EXEMPLU SA"
+        assert guarantees[0]["tip_bun"] == "Echipamente industriale"
+        assert guarantees[0]["status"] == "ACTIV"
+        assert guarantees[0]["data"] == "2024-03-11"
+
+    def test_guarantees_results_keys_ignorate_deliberat(self):
+        """Cheile vechi cautate de bug ("guarantees"/"results") nu exista
+        NICIODATA pe raspunsul real -- modelul trebuie sa produca lista din
+        "details", nu sa ramana gol pentru ca acele chei lipsesc."""
+        aegrm_data = self._aegrm_field([{"creditor": "X", "tip_bun": "Y", "status": "Z", "data": "2025-01-01"}])
+        # confirma ca payload-ul real NU are "guarantees"/"results"
+        raw = aegrm_data["risk"]["aegrm_guarantees"]["value"]
+        assert "guarantees" not in raw
+        assert "results" not in raw
+
+        model = build_rich_fields_model(aegrm_data)
+        assert len(model["garantii"]["guarantees"]) == 1
+
+    def test_fara_details_lista_goala(self):
+        model = build_rich_fields_model(self._aegrm_field([]))
+        assert model["garantii"]["guarantees"] == []
+
+    def test_no_aegrm_data_guarantees_lista_goala(self):
+        model = build_rich_fields_model({})
+        assert model["garantii"]["guarantees"] == []
+
+
 class TestGateBooleans:
     def test_empty_verified_data_all_hidden(self):
         model = build_rich_fields_model({})

@@ -183,8 +183,11 @@ class TestRichFields:
             "actionariat": {"available": True, "asociati": [{"nume": "Ion Popescu"}],
                             "administratori": ["Maria Ionescu"], "capital_social": 200, "stare": "activa"},
             "relations": {"flags": [{"type": "ONE_PERSON", "detail": "Admin = asociat", "severity": "INFO"}]},
-            "risk": {"aegrm_guarantees": {"value": {"has_data": True, "count": 2,
-                     "has_guarantees": True, "guarantees": [{"descriere": "Gaj auto"}]}}},
+            "risk": {"aegrm_guarantees": {"value": {"has_data": True, "count": 1,
+                     "has_guarantees": True, "details": [
+                         {"nr_inregistrare": "2024-000123", "data": "2024-03-11",
+                          "creditor": "Banca Exemplu SA", "tip_bun": "Gaj auto", "status": "ACTIV"},
+                     ]}}},
             "historical_flags": [{"type": "CESIUNE", "detail": "Cesiune 2023",
                                   "date": "2023-05", "severity": "YELLOW"}],
             "funding_programs": {"eligible": [{"nume": "Start-Up Nation", "suma_max_eur": 200000,

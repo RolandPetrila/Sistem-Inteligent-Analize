@@ -748,12 +748,12 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
             cnt = aegrm.get("count", 0)
             gc = "#eab308" if aegrm.get("has_guarantees") else "#22c55e"
             body += f'<p style="color:{gc};font-weight:600">Garantii reale mobiliare (AEGRM): {cnt}</p>'
-            guarantees = aegrm.get("guarantees") or aegrm.get("results") or []
-            if isinstance(guarantees, list) and guarantees:
+            guarantees = model["garantii"]["guarantees"]
+            if guarantees:
                 body += '<ul class="list-disc ml-6">'
                 for g in guarantees[:8]:
-                    txt = (g.get("descriere") or g.get("creditor") or g.get("title") or str(g)) if isinstance(g, dict) else str(g)
-                    body += f'<li style="color:#cbd5e1">{_escape(str(txt)[:200])}</li>'
+                    txt = f"{g['creditor']} — {g['tip_bun']} (status: {g['status']}, data: {g['data']})"
+                    body += f'<li style="color:#cbd5e1">{_escape(txt[:200])}</li>'
                 body += "</ul>"
         if model["garantii"]["hist_ok"]:
             body += '<h3 style="color:#818cf8;margin:14px 0 6px;font-size:1em">Semnale istorice (Monitorul Oficial)</h3>'

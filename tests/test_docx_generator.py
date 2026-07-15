@@ -195,8 +195,11 @@ class TestGenerateDocx:
             "actionariat": {"available": True, "asociati": [{"nume": "Ion Popescu"}],
                             "administratori": ["Maria Ionescu"], "capital_social": 200, "stare": "activa"},
             "relations": {"flags": [{"type": "ONE_PERSON", "detail": "Admin = asociat", "severity": "INFO"}]},
-            "risk": {"aegrm_guarantees": {"value": {"has_data": True, "count": 2,
-                     "has_guarantees": True, "guarantees": [{"descriere": "Gaj auto"}]}}},
+            "risk": {"aegrm_guarantees": {"value": {"has_data": True, "count": 1,
+                     "has_guarantees": True, "details": [
+                         {"nr_inregistrare": "2024-000123", "data": "2024-03-11",
+                          "creditor": "Banca Exemplu SA", "tip_bun": "Gaj auto", "status": "ACTIV"},
+                     ]}}},
             "historical_flags": [{"type": "cesiune_parti_sociale",
                                   "label": "Cesiune parti sociale detectata", "severity": "HIGH",
                                   "snippet": "cesiune 60% parti sociale catre o terta persoana"}],
@@ -245,9 +248,11 @@ class TestGenerateDocx:
                         "has_data": True,
                         "count": 2,
                         "has_guarantees": True,
-                        "guarantees": [
-                            {"descriere": "Gaj mobiliar — autovehicul, garanție către BCR"},
-                            {"creditor": "Banca Transilvania S.A. — ipotecă mobiliară"},
+                        "details": [
+                            {"nr_inregistrare": "2024-000456", "data": "2024-06-02",
+                             "creditor": "Exemplu Leasing SA", "tip_bun": "Autovehicul", "status": "ACTIV"},
+                            {"nr_inregistrare": "2023-000789", "data": "2023-11-20",
+                             "creditor": "Banca Transilvania S.A.", "tip_bun": "Ipoteca mobiliara", "status": "RADIAT"},
                         ],
                     }
                 }
