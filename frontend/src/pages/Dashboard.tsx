@@ -307,18 +307,14 @@ export default function Dashboard() {
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
-                      {/* 10C M1.3: Completeness Gate Badge */}
-                      {job.status === "DONE" &&
-                        (job as unknown as Record<string, unknown>)
-                          .completeness_score !== undefined &&
-                        Number(
-                          (job as unknown as Record<string, unknown>)
-                            .completeness_score,
-                        ) < 50 && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-900/50 text-red-400">
-                            LOW DATA
-                          </span>
-                        )}
+                      {/* A3 fix (2026-07-15): "LOW DATA" badge sters — cheia
+                          `job.completeness_score` nu a existat NICIODATA
+                          (tabela `jobs` n-are aceasta coloana, list_jobs nu o
+                          selecteaza). Cod mort de la introducere (10C M1.3).
+                          Daca se doreste inapoi: completitudinea reala
+                          traieste in reports.full_data.agent_diagnostics
+                          .completeness_score, per raport nu per job — ar
+                          necesita join explicit, nu doar re-citire de camp. */}
                       {job.status === "RUNNING" && (
                         <div className="w-24 h-1.5 bg-dark-border rounded-full overflow-hidden">
                           <div
