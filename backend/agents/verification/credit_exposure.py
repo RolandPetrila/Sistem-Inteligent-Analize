@@ -6,8 +6,8 @@ NU modifica scoring-ul 0-100 existent — doar il consuma (read-only).
 
 Formula: media a 3 metode standard de trade-credit (cifra lunara / activ net /
 venit operational), ponderata cu multiplicatorul culorii de risc, anulata
-(kill-switch) daca firma e inactiva ANAF, in insolventa (BPI) sau in zona
-Altman DISTRESS.
+(kill-switch) daca firma e inactiva ANAF, in insolventa (BPI), in zona
+Altman DISTRESS sau semnalata de Zmijewski X ca fiind in distres financiar.
 """
 
 MULTIPLIER_BY_COLOR = {"Verde": 1.0, "Galben": 0.5, "Rosu": 0.15}
@@ -47,7 +47,7 @@ def commercial_exposure_ron(verified: dict) -> dict:
     `mult` = {Verde: 1.0, Galben: 0.5, Rosu: 0.15}[color].
     `expunere` = base * mult.
     Kill-switch -> expunere = 0 daca ORICARE: inactiv ANAF, insolventa (BPI found),
-    Altman zone == DISTRESS.
+    Altman zone == DISTRESS, Zmijewski X distress.
     """
     financial = verified.get("financial", {}) or {}
     risk = verified.get("risk", {}) or {}
@@ -65,6 +65,20 @@ def commercial_exposure_ron(verified: dict) -> dict:
     insolventa = bool(bpi_val.get("found")) if isinstance(bpi_val, dict) else False
     altman = predictive.get("altman_z", {}) or {}
     altman_distress = altman.get("zone") == "DISTRESS"
+
+    # 2026-07-15: kill-switch-ul pe Altman e STRUCTURAL inaccesibil cu datele
+    # gratuite ANAF — Altman are nevoie de capital circulant net, deci de split-ul
+    # datorii curente/necurente, pe care ANAF Bilant nu-l expune (verificat la
+    # sursa pe 4 firma-ani). `altman_distress` va fi deci MEREU False in productie,
+    # oricat de rau ar sta firma. Un kill-switch care nu se poate declansa nu e
+    # un kill-switch — deci il cuplam SI la Zmijewski X, care e un model de
+    # distres la fel de consacrat, calculabil integral din ANAF (rentabilitate +
+    # indatorare; termenul de lichiditate omis are coeficient 0.004, sub 1% impact)
+    # si care discrimineaza corect (verificat: firma sanatoasa -3.2, datorii>active
+    # +2.4, capitaluri negative +13.5). Altman ramane cablat pentru cazul in care
+    # o sursa viitoare aduce split-ul de datorii.
+    zmijewski = predictive.get("zmijewski_x", {}) or {}
+    zmijewski_distress = bool(zmijewski.get("available") and zmijewski.get("distress"))
 
     methods: list[tuple[str, float]] = []
 
@@ -93,6 +107,8 @@ def commercial_exposure_ron(verified: dict) -> dict:
         kill_reasons.append("insolventa (BPI)")
     if altman_distress:
         kill_reasons.append("Altman DISTRESS")
+    if zmijewski_distress:
+        kill_reasons.append("Zmijewski distres financiar")
 
     kill_switch = bool(kill_reasons)
     if kill_switch:
