@@ -1,6 +1,7 @@
 """F15: Tests for html_generator — _render_content (headers, lists, tables, bold)."""
 
 from backend.reports.html_generator import (
+    _build_company_network_html,
     _build_rich_fields_html,
     _build_table,
     _render_content,
@@ -335,3 +336,99 @@ class TestRichFields:
         assert "Cesiune parti sociale detectata" in html  # human label
         assert "cesiune 60%" in html                       # snippet, not dropped
         assert 'href="#garantii"' in nav
+
+
+class TestCompanyNetworkHtml:
+    """Bug real: gate-ul citea stats.total_persons/stats.total_firms, chei care nu
+    exista NICIODATA pe raspunsul real al network_client.get_company_network()
+    (backend/agents/tools/network_client.py) -- sectiunea afisa mereu "Date retea
+    indisponibile" chiar cu has_data=True si date reale. Fixate cu forma REALA:
+    persons (top-level), total_connected (top-level), related_companies (nu
+    related_firms), risk_flags ca LISTA DE DICT-uri (nu strings — crash TypeError
+    daca gate-ul era reparat izolat, fara sa se repare si bucla de badge-uri).
+    Date sintetice (structura reala, valori inventate — repo public)."""
+
+    def _empty_network(self):
+        return {"company_network": {
+            "has_data": True, "persons": [], "related_companies": [],
+            "total_connected": 0, "risk_flags": [], "stats": {},
+        }}
+
+    def _populated_network(self, risk_flags=None):
+        return {"company_network": {
+            "has_data": True,
+            "persons": [
+                {"name": "Ion Popescu", "role": "administrator", "ownership_pct": 60},
+                {"name": "Maria Ionescu", "role": "asociat", "ownership_pct": None},
+            ],
+            "related_companies": [
+                {"cui": "11111111", "company_name": "Exemplu Beta SRL", "persons": [],
+                 "is_active": 0, "has_profile": True, "depth": 1},
+                {"cui": "22222222", "company_name": "Exemplu Gamma SRL", "persons": [],
+                 "is_active": 1, "has_profile": True, "depth": 2},
+                {"cui": "33333333", "company_name": "Exemplu Delta SRL", "persons": [],
+                 "is_active": None, "has_profile": False, "depth": 1},
+            ],
+            "total_connected": 3,
+            "risk_flags": risk_flags if risk_flags is not None else [],
+            "network_depth_reached": 2,
+            "toxic_persons": [],
+            "stats": {"inactive": 1, "unknown_status": 1, "active": 1, "depth_1": 2, "depth_2_plus": 1},
+            "nx_stats": {"available": True, "depth_used": 4},
+        }}
+
+    def test_no_data_shows_unavailable_message(self):
+        html = _build_company_network_html({"company_network": {
+            "has_data": False, "persons": [], "related_companies": [], "risk_flags": [],
+        }})
+        assert "Date retea indisponibile" in html
+
+    def test_empty_company_network_key_returns_empty_string(self):
+        assert _build_company_network_html({}) == ""
+
+    def test_populated_network_does_not_show_unavailable_message(self):
+        """Regression guard for the actual bug: real data must NOT hit the
+        'indisponibile' branch."""
+        html = _build_company_network_html(self._populated_network())
+        assert "Date retea indisponibile" not in html
+        assert 'id="network"' in html
+
+    def test_populated_network_shows_real_counts(self):
+        html = _build_company_network_html(self._populated_network())
+        # 2 persons, 3 related companies (total_connected), 1 inactive (stats.inactive)
+        assert ">2</div>" in html  # persoane comune
+        assert ">3</div>" in html  # firme conexe
+        assert ">1</div>" in html  # firme inactive
+
+    def test_persons_table_renders_names_and_ownership(self):
+        html = _build_company_network_html(self._populated_network())
+        assert "Ion Popescu" in html
+        assert "60%" in html
+        assert "Maria Ionescu" in html
+
+    def test_related_companies_table_uses_company_name_and_is_active(self):
+        html = _build_company_network_html(self._populated_network())
+        assert "Exemplu Beta SRL" in html
+        assert "Exemplu Gamma SRL" in html
+        assert "Exemplu Delta SRL" in html
+        assert "INACTIV" in html
+        assert "ACTIV" in html
+
+    def test_risk_flags_as_dicts_do_not_crash_and_render_detail(self):
+        """The critical regression guard: risk_flags are dicts, not strings.
+        A gate-only fix (without fixing this loop) raises TypeError here."""
+        risk_flags = [
+            {"type": "ASOCIAT_FIRMA_INACTIVA", "severity": "YELLOW",
+             "detail": "Asociat comun cu 1 firma(e) inactiva(e): Exemplu Beta SRL"},
+            {"type": "TOXIC_NETWORK", "severity": "RED",
+             "detail": "Persoana(e) cu istoric toxic detectate: Ion Popescu"},
+        ]
+        html = _build_company_network_html(self._populated_network(risk_flags=risk_flags))
+        assert "Asociat comun cu 1 firma(e) inactiva(e)" in html
+        assert "Persoana(e) cu istoric toxic detectate" in html
+
+    def test_unknown_risk_flag_type_falls_back_to_default_color(self):
+        risk_flags = [{"type": "CONFLICT_INTERESE", "severity": "YELLOW",
+                        "detail": "X este asociat la 5 firme active simultan"}]
+        html = _build_company_network_html(self._populated_network(risk_flags=risk_flags))
+        assert "X este asociat la 5 firme active simultan" in html

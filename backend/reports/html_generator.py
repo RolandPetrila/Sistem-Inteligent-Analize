@@ -365,10 +365,17 @@ def _build_company_network_html(verified_data: dict) -> str:
     if not network:
         return ""
 
+    # network_client.get_company_network() (backend/agents/tools/network_client.py)
+    # returneaza total_persons/total_firms sub forma len(persons) / "total_connected"
+    # TOP-LEVEL, niciodata sub "stats" (care contine doar inactive/unknown_status/
+    # active/depth_1/depth_2_plus) -- gate-ul citea chei care nu au existat
+    # NICIODATA, deci sectiunea afisa mereu "Date retea indisponibile", chiar
+    # cu has_data=True si date reale.
     stats = network.get("stats", {})
-    total_persons = stats.get("total_persons", 0)
-    total_firms = stats.get("total_firms", 0)
-    inactive_firms = stats.get("inactive_firms", 0)
+    persons = network.get("persons", [])
+    total_persons = len(persons)
+    total_firms = network.get("total_connected", 0)
+    inactive_firms = stats.get("inactive", 0)
 
     if total_persons == 0 and total_firms == 0:
         return '''
@@ -378,20 +385,26 @@ def _build_company_network_html(verified_data: dict) -> str:
     </section>'''
 
     # ── Risk flags badges ─────────────────────────────────────────────────────
+    # network_client emite risk_flags ca LISTA DE DICT-uri {type, severity, detail}
+    # -- niciodata liste de string-uri. FLAG_COLORS.get(flag, ...) cu flag=dict
+    # arunca TypeError (unhashable) inainte de acest fix.
     risk_flags = network.get("risk_flags", [])
     flags_html = ""
     FLAG_COLORS = {
         "ASOCIAT_FIRMA_INACTIVA": ("#ef4444", "#ef444420"),   # ROSU
         "RETEA_EXTINSA": ("#eab308", "#eab30820"),             # GALBEN
-        "ASOCIAT_INSOLVENTA": ("#ef4444", "#ef444420"),        # ROSU
-        "ADMINISTRATOR_MULTIPLU": ("#f97316", "#f9731620"),    # PORTOCALIU
+        "TOXIC_NETWORK": ("#ef4444", "#ef444420"),             # ROSU
+        "CONFLICT_INTERESE": ("#f97316", "#f9731620"),         # PORTOCALIU
     }
     for flag in risk_flags:
-        fg, bg = FLAG_COLORS.get(flag, ("#94a3b8", "#94a3b820"))
+        flag_type = flag.get("type", "") if isinstance(flag, dict) else str(flag)
+        flag_detail = flag.get("detail") if isinstance(flag, dict) else None
+        fg, bg = FLAG_COLORS.get(flag_type, ("#94a3b8", "#94a3b820"))
+        label = _escape(flag_detail or flag_type)
         flags_html += (
             f'<span style="display:inline-block;padding:3px 10px;border-radius:12px;'
             f'font-size:0.78em;font-weight:700;background:{bg};color:{fg};'
-            f'border:1px solid {fg}40;margin:2px 4px 2px 0">{_escape(flag)}</span>'
+            f'border:1px solid {fg}40;margin:2px 4px 2px 0" title="{_escape(flag_type)}">{label}</span>'
         )
 
     # ── Stats summary ─────────────────────────────────────────────────────────
@@ -410,14 +423,14 @@ def _build_company_network_html(verified_data: dict) -> str:
     )
 
     # ── Tabel persoane comune ─────────────────────────────────────────────────
-    persons = network.get("persons", [])
     persons_html = ""
     if persons:
         rows = ""
         for p in persons:
             name = _escape(str(p.get("name") or p.get("nume") or "N/A"))
             role = _escape(str(p.get("role") or p.get("rol") or "—"))
-            ownership = p.get("ownership") or p.get("ownership_percent") or p.get("cota_participare")
+            ownership = p.get("ownership_pct") if p.get("ownership_pct") is not None else (
+                p.get("ownership") or p.get("ownership_percent") or p.get("cota_participare"))
             own_str = f"{ownership}%" if ownership is not None else "—"
             rows += (
                 f'<tr>'
@@ -438,28 +451,31 @@ def _build_company_network_html(verified_data: dict) -> str:
         </table>'''
 
     # ── Tabel firme conexe ────────────────────────────────────────────────────
-    related_firms = network.get("related_firms", [])
+    # network_client pune lista sub cheia "related_companies" (nu "related_firms"),
+    # cu campurile "company_name" (nu "denumire"/"name") si "is_active" int 0/1/None
+    # (nu "activ"/"status_activ") -- niciun camp nu se potrivea, tabelul era mereu gol.
+    related_firms = network.get("related_companies", [])
     firms_html = ""
     if related_firms:
         rows = ""
         for f in related_firms:
-            den = _escape(str(f.get("denumire") or f.get("name") or "N/A"))
+            den = _escape(str(f.get("company_name") or "N/A"))
             cui_val = _escape(str(f.get("cui") or "—"))
-            is_active = f.get("activ") if f.get("activ") is not None else f.get("status_activ")
-            if is_active is True or str(is_active).lower() in ("activ", "true", "1"):
-                status_badge = '<span style="color:#22c55e;font-weight:700">ACTIV</span>'
-            elif is_active is False or str(is_active).lower() in ("inactiv", "false", "0"):
+            is_active = f.get("is_active")
+            if is_active == 0:
                 status_badge = '<span style="color:#ef4444;font-weight:700">INACTIV</span>'
-            else:
+            elif is_active is None:
                 status_badge = '<span style="color:#64748b">N/A</span>'
-            ownership = f.get("ownership") or f.get("ownership_percent") or f.get("cota_participare")
-            own_str = f"{ownership}%" if ownership is not None else "—"
+            else:
+                status_badge = '<span style="color:#22c55e;font-weight:700">ACTIV</span>'
+            depth = f.get("depth", 1)
+            depth_str = "Directa" if depth == 1 else f"Extinsa (nivel {depth})"
             rows += (
                 f'<tr>'
                 f'<td style="padding:8px 12px;color:#e2e8f0;font-weight:500">{den}</td>'
                 f'<td style="padding:8px 12px;color:#94a3b8;font-size:0.85em">{cui_val}</td>'
                 f'<td style="padding:8px 12px;text-align:center">{status_badge}</td>'
-                f'<td style="padding:8px 12px;color:#a5b4fc;text-align:right">{own_str}</td>'
+                f'<td style="padding:8px 12px;color:#a5b4fc;text-align:right">{_escape(depth_str)}</td>'
                 f'</tr>'
             )
         firms_html = f'''
@@ -469,7 +485,7 @@ def _build_company_network_html(verified_data: dict) -> str:
                 <th style="padding:8px 12px;text-align:left;color:#94a3b8;font-size:0.85em">Denumire</th>
                 <th style="padding:8px 12px;text-align:left;color:#94a3b8;font-size:0.85em">CUI</th>
                 <th style="padding:8px 12px;text-align:center;color:#94a3b8;font-size:0.85em">Status</th>
-                <th style="padding:8px 12px;text-align:right;color:#94a3b8;font-size:0.85em">Participare</th>
+                <th style="padding:8px 12px;text-align:right;color:#94a3b8;font-size:0.85em">Legatura</th>
             </tr></thead>
             <tbody>{rows}</tbody>
         </table>'''
