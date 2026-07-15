@@ -304,12 +304,17 @@ def _build_executive_summary(verified_data: dict, meta: dict) -> str:
     score_color = {"Verde": "#22c55e", "Galben": "#eab308", "Rosu": "#ef4444"}.get(color, "#888")
     score_str = f'<span style="color:{score_color};font-weight:700">{score}/100 ({color})</span>' if score else "N/A"
 
-    # Key risk factor
+    # Key risk factor — CRITICAL must outrank HIGH (scoring.py emits both; a factor's
+    # severity, not its position in the list, decides which one leads the summary).
     factors = risk_score.get("factors", [])
-    high_risks = [f[0] for f in factors if isinstance(f, (list, tuple)) and len(f) >= 2 and f[1] == "HIGH"]
+    _KEY_RISK_RANK = {"CRITICAL": 0, "HIGH": 1}
+    key_risks = sorted(
+        (f for f in factors if isinstance(f, (list, tuple)) and len(f) >= 2 and f[1] in _KEY_RISK_RANK),
+        key=lambda f: _KEY_RISK_RANK[f[1]],
+    )
     risk_line = ""
-    if high_risks:
-        risk_line = f'<div style="color:#ef4444;font-size:0.85em;margin-top:4px">Risc principal: {_escape(high_risks[0])}</div>'
+    if key_risks:
+        risk_line = f'<div style="color:#ef4444;font-size:0.85em;margin-top:4px">Risc principal: {_escape(key_risks[0][0])}</div>'
 
     return f'''
     <div class="exec-summary">

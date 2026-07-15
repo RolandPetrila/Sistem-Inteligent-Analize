@@ -399,6 +399,30 @@ def generate_docx(report_sections: dict, meta: dict, output_path: str, verified_
 
         doc.add_paragraph()  # spacer
 
+    # BUG2 fix (2026-07-16): risk_score["factors"] was never rendered in DOCX — the
+    # score's actual drivers (BPI insolvency, Portal Just litigation, Monitorul
+    # Oficial cesiuni, etc.) were invisible in this format. Sorted by real severity
+    # rank (CRITICAL > HIGH > MEDIUM > LOW), matching the Executive Summary discipline.
+    risk_factors = verified_data.get("risk_score", {}).get("factors", [])
+    _FACTOR_SEV_RANK = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+    _FACTOR_SEV_COLOR = {
+        "CRITICAL": RGBColor(150, 20, 20), "HIGH": RGBColor(220, 50, 50),
+        "MEDIUM": RGBColor(200, 150, 0), "LOW": RGBColor(120, 120, 120),
+    }
+    sorted_risk_factors = sorted(
+        (f for f in risk_factors if isinstance(f, (list, tuple)) and len(f) >= 2),
+        key=lambda f: _FACTOR_SEV_RANK.get(f[1], 99),
+    )
+    if sorted_risk_factors:
+        doc.add_page_break()
+        doc.add_heading("Factori de Risc", level=1)
+        for text, severity in sorted_risk_factors:
+            p = doc.add_paragraph()
+            sev_run = p.add_run(f"[{severity}] ")
+            sev_run.bold = True
+            sev_run.font.color.rgb = _FACTOR_SEV_COLOR.get(severity, RGBColor(80, 80, 80))
+            p.add_run(str(text))
+
     # B15: Due Diligence Checklist from verified_data
     due_diligence = verified_data.get("due_diligence", {})
     dd_checklist = []

@@ -170,6 +170,55 @@ class TestGenerateDocx:
             if os.path.exists(path):
                 os.remove(path)
 
+    def test_risk_factors_rendered_with_diacritics_and_severity_order(self):
+        """BUG2 (2026-07-16): risk_score['factors'] was never rendered in DOCX — the
+        score's actual drivers (BPI insolvency, litigation, Monitorul Oficial cesiuni)
+        were invisible in this format. Fixture is 100% synthetic (repo public) and
+        includes diacritics; assert CONTENT (not just 'does not raise'), and assert
+        CRITICAL factors are ordered before HIGH regardless of input list order."""
+        from docx import Document
+
+        from backend.reports.docx_generator import generate_docx
+
+        verified_data = {
+            "risk_score": {
+                "numeric_score": 15,
+                "score": "Rosu",
+                "factors": [
+                    ("Firma inactiva la ANAF", "HIGH"),
+                    ("ZOMBIE: CA=0 + angajati=0 + status activ - firma nu opereaza", "CRITICAL"),
+                    ("Firma in insolvență - dosar deschis la Tribunalul Târgoviște", "CRITICAL"),
+                    ("Litigii găsite - cauțiune și garanție reală mobiliară", "MEDIUM"),
+                    ("Dosare judecătorești multiple", "LOW"),
+                ],
+            }
+        }
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as f:
+            path = f.name
+        try:
+            generate_docx(_make_sections(), _make_meta(), path, verified_data)
+            doc = Document(path)
+            paragraphs = [p.text for p in doc.paragraphs]
+            full_text = "\n".join(paragraphs)
+
+            assert "Factori de Risc" in full_text
+            assert "[CRITICAL]" in full_text
+            assert "[HIGH]" in full_text
+            assert "ZOMBIE" in full_text
+            assert "Tribunalul Târgoviște" in full_text
+            assert "Dosare judecătorești multiple" in full_text
+
+            # Severity ordering: both CRITICAL paragraphs before the HIGH paragraph,
+            # regardless of the order they appear in the input list.
+            idx_zombie = next(i for i, t in enumerate(paragraphs) if "ZOMBIE" in t)
+            idx_insolventa = next(i for i, t in enumerate(paragraphs) if "Tribunalul Târgoviște" in t)
+            idx_high = next(i for i, t in enumerate(paragraphs) if t.startswith("[HIGH]"))
+            assert idx_zombie < idx_high
+            assert idx_insolventa < idx_high
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
     def test_docx_content_all_rich_sections_rendered(self):
         """DRY #3 (2026-07-14): verifica CONTINUTUL randat (nu doar 'nu arunca'),
         pe fixture-ul populat -- companion la TestRichFields (html) + TestRichFieldsPdf."""

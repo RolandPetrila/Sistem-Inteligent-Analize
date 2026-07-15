@@ -678,6 +678,41 @@ def generate_pdf(report_sections: dict, meta: dict, output_path: str, verified_d
 
         pdf.set_text_color(40, 40, 40)
 
+    # BUG2 fix (2026-07-16): risk_score["factors"] was never rendered in PDF — the
+    # single most-shared format never explained WHY the score dropped (BPI insolvency,
+    # Portal Just litigation, Monitorul Oficial cesiuni, etc. were all invisible).
+    # Sorted by real severity rank (CRITICAL > HIGH > MEDIUM > LOW), not list position —
+    # same discipline as the Executive Summary "Risc principal" line.
+    risk_factors = verified_data.get("risk_score", {}).get("factors", [])
+    _FACTOR_SEV_RANK = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+    _FACTOR_SEV_COLOR = {
+        "CRITICAL": (185, 28, 28), "HIGH": (239, 68, 68),
+        "MEDIUM": (234, 179, 8), "LOW": (148, 163, 184),
+    }
+    sorted_risk_factors = sorted(
+        (f for f in risk_factors if isinstance(f, (list, tuple)) and len(f) >= 2),
+        key=lambda f: _FACTOR_SEV_RANK.get(f[1], 99),
+    )
+    if sorted_risk_factors:
+        pdf.add_page()
+        pdf.start_section("Factori de Risc", level=0)
+        pdf.set_font("Helvetica", "B", 16)
+        pdf.set_text_color(99, 102, 241)
+        pdf.cell(0, 12, "Factori de Risc", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_draw_color(99, 102, 241)
+        pdf.line(10, pdf.get_y(), 80, pdf.get_y())
+        pdf.ln(6)
+        pdf.set_font("Helvetica", "", 10)
+        for text, severity in sorted_risk_factors:
+            color = _FACTOR_SEV_COLOR.get(severity, (80, 80, 80))
+            pdf.set_text_color(*color)
+            pdf.set_font("Helvetica", "B", 10)
+            pdf.cell(24, 6, f"[{severity}]")
+            pdf.set_font("Helvetica", "", 10)
+            pdf.set_text_color(40, 40, 40)
+            pdf.multi_cell(0, 6, _sanitize(str(text)), new_x="LMARGIN", new_y="NEXT")
+        pdf.set_text_color(40, 40, 40)
+
     # B15: Due Diligence Checklist from verified_data
     due_diligence = verified_data.get("due_diligence", {})
     dd_checklist = []

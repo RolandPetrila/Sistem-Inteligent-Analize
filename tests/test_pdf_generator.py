@@ -232,3 +232,70 @@ class TestTableCellTruncation:
         truncated = sanitized[: max_chars - 3] + "..."
         assert len(truncated) <= max_chars
         truncated.encode("latin-1")  # nu trebuie sa arunce UnicodeEncodeError
+
+
+class TestRiskFactorsPdf:
+    """BUG2 (2026-07-16): risk_score['factors'] was never rendered in PDF — the most
+    shared report format never explained WHY the score dropped (BPI insolvency,
+    Portal Just litigation, Monitorul Oficial cesiuni were all invisible). Fixture
+    is 100% synthetic (repo is public) and includes diacritics to probe the latin-1
+    sanitize path, per the TASK 2 precedent where the populated path had never run
+    until a dedicated test exercised it."""
+
+    def _verified_data_with_factors(self):
+        return {
+            "risk_score": {
+                "numeric_score": 15,
+                "score": "Rosu",
+                "factors": [
+                    ("Firma inactiva la ANAF", "HIGH"),
+                    ("ZOMBIE: CA=0 + angajati=0 + status activ - firma nu opereaza", "CRITICAL"),
+                    ("Firma in insolvență - dosar deschis la Tribunalul Târgoviște", "CRITICAL"),
+                    ("Litigii găsite - cauțiune și garanție reală mobiliară", "MEDIUM"),
+                    ("Dosare judecătorești multiple", "LOW"),
+                ],
+            }
+        }
+
+    def test_factors_rendered_with_diacritics_and_severity_order(self):
+        from backend.reports.pdf_generator import generate_pdf
+
+        sections = {
+            "executive_summary": {"title": "Rezumat Executiv", "content": "Firma analizata."}
+        }
+        meta = {
+            "title": "Raport RIS", "company_name": "Test SRL", "report_level": 2,
+            "generated_at": "2026-07-16T10:00:00", "sources_count": 3,
+            "risk_score": "Rosu", "numeric_score": 15,
+            "sources": [{"name": "ANAF", "level": 1, "status": "OK"}],
+        }
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            path = f.name
+        try:
+            # Must not raise on the latin-1 diacritic path (ă/î/â/ș/ț in factor text).
+            generate_pdf(sections, meta, path, self._verified_data_with_factors())
+            assert os.path.exists(path)
+            assert os.path.getsize(path) > 0
+
+            import pdfplumber
+
+            with pdfplumber.open(path) as pdf:
+                full_text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+
+            assert "Factori de Risc" in full_text
+            assert "[CRITICAL]" in full_text
+            assert "[HIGH]" in full_text
+            assert "ZOMBIE" in full_text
+            # Diacritics sanitized to ASCII (latin-1 path), but the wording survives:
+            assert "insolventa" in full_text or "insolven" in full_text
+            assert "Tribunalul T" in full_text
+
+            # Severity ordering: CRITICAL factors must appear before the HIGH factor,
+            # regardless of their original position in the input list.
+            pos_critical_zombie = full_text.find("ZOMBIE")
+            pos_high = full_text.find("[HIGH] Firma inactiva")
+            assert pos_critical_zombie != -1 and pos_high != -1
+            assert pos_critical_zombie < pos_high
+        finally:
+            if os.path.exists(path):
+                os.remove(path)

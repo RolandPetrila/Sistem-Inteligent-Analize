@@ -2,11 +2,55 @@
 
 from backend.reports.html_generator import (
     _build_company_network_html,
+    _build_executive_summary,
     _build_rich_fields_html,
     _build_table,
     _render_content,
     _render_inline,
 )
+
+
+class TestExecutiveSummaryRiskFactorSeverity:
+    """BUG1 (2026-07-16): 'Risc principal' used to filter strictly on severity ==
+    "HIGH", silently excluding CRITICAL (BPI insolvency, ZOMBIE detection — the
+    2 most severe verdicts scoring.py emits) and picking the FIRST HIGH in list
+    order even when a CRITICAL factor was present later in the list."""
+
+    def _verified_data(self, factors):
+        return {
+            "company": {"denumire": {"value": "Test SRL"}, "cui": {"value": "12345678"}},
+            "financial": {},
+            "risk_score": {"numeric_score": 20, "score": "Rosu", "factors": factors},
+        }
+
+    def test_critical_factor_is_shown_not_dropped(self):
+        """On unpatched code this line was silently empty for insolvent firms."""
+        factors = [("Firma in procedura insolventa BPI (deschisa)", "CRITICAL")]
+        html = _build_executive_summary(self._verified_data(factors), {})
+        assert "Risc principal" in html
+        assert "Firma in procedura insolventa BPI" in html
+
+    def test_critical_outranks_high_regardless_of_list_order(self):
+        """A HIGH factor appears BEFORE the CRITICAL one in the list — the strict
+        '== HIGH' filter used to grab the HIGH one, showing a less severe risk
+        than the one actually driving the low score."""
+        factors = [
+            ("Firma inactiva la ANAF", "HIGH"),
+            ("ZOMBIE: CA=0 + angajati=0 + status activ - firma nu opereaza", "CRITICAL"),
+        ]
+        html = _build_executive_summary(self._verified_data(factors), {})
+        assert "ZOMBIE" in html
+        assert "Firma inactiva la ANAF" not in html
+
+    def test_high_still_shown_when_no_critical(self):
+        factors = [("Firma inactiva la ANAF", "HIGH")]
+        html = _build_executive_summary(self._verified_data(factors), {})
+        assert "Firma inactiva la ANAF" in html
+
+    def test_medium_and_low_never_shown_as_principal_risk(self):
+        factors = [("Numar ridicat de litigii (5+)", "MEDIUM"), ("Litigii gasite", "LOW")]
+        html = _build_executive_summary(self._verified_data(factors), {})
+        assert "Risc principal" not in html
 
 
 class TestRenderInline:
