@@ -135,7 +135,16 @@ class OfficialAgent(BaseAgent):
             anaf_source, openapi_source, bilant_source, bnr_source, bpi_source, aegrm_source = await asyncio.gather(
                 self._fetch_with_timeout(self.fetch_with_retry(lambda: self._fetch_anaf(cui_clean), source_name="ANAF", source_url="https://webservicesp.anaf.ro"), "ANAF", 15),
                 self._fetch_with_timeout(self.fetch_with_retry(lambda: self._fetch_openapi_ro(cui_clean), source_name="openapi.ro", source_url="https://openapi.ro"), "openapi.ro", 10),
-                self._fetch_with_timeout(self.fetch_with_retry(lambda: self._fetch_anaf_bilant(cui_clean), source_name="ANAF Bilant", source_url="https://webservicesp.anaf.ro/bilant"), "ANAF Bilant", 15),
+                # Timeout 45s (nu 15): `get_bilant_multi_year` interogheaza pana la 7 ani
+                # consecutivi, cu REQUEST_DELAY=2s intre cereri (rate-limit ANAF 1 req/2s,
+                # deliberat) -> durata MINIMA structurala ~15.5s. Timeout-ul de 15s era deci
+                # sub durata minima posibila a operatiei pe care o pazea: pe cache rece,
+                # bilantul se pierdea integral. Masurat live 2026-07-15: 16.0s (CUI 26313362,
+                # pierdea datele) vs 14.3s (CUI 6719278, trecea la limita) — un coin-flip.
+                # Bug LATENT, mascat de cache-ul cald; expus de bump-ul CACHE_SCHEMA_VERSION
+                # v1->v2. Sursele ruleaza in paralel (asyncio.gather) sub un buget de agent
+                # de 300s, deci headroom-ul nu costa nimic in cazul normal.
+                self._fetch_with_timeout(self.fetch_with_retry(lambda: self._fetch_anaf_bilant(cui_clean), source_name="ANAF Bilant", source_url="https://webservicesp.anaf.ro/bilant"), "ANAF Bilant", 45),
                 self._fetch_with_timeout(self.fetch_with_retry(lambda: self._fetch_bnr(), source_name="BNR", source_url="https://www.bnr.ro/nbrfxrates.xml"), "BNR", 5),
                 self._fetch_with_timeout(self.fetch_with_retry(lambda c=cui_clean: self._fetch_bpi(c), source_name="BPI (buletinul.ro)", source_url="https://www.buletinul.ro"), "BPI (buletinul.ro)", 10),
                 self._fetch_with_timeout(self._fetch_aegrm(cui_clean), "AEGRM", 15),
