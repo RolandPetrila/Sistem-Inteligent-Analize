@@ -22,6 +22,7 @@ import { RadarChartSVG } from "@/components/report/RadarChartSVG";
 import { DeltaView } from "@/components/report/DeltaView";
 import { SimpleBarChart } from "@/components/report/SimpleBarChart";
 import { EmailModal } from "@/components/report/EmailModal";
+import { RichDataTab } from "@/components/report/RichDataTab";
 
 // A synthesis section value is normally an object {title, content, word_count};
 // the orchestrator error path stores a bare string instead — handle both.
@@ -220,6 +221,7 @@ export default function ReportView() {
     { key: "overview", label: "Rezumat" },
     { key: "company", label: "Profil Firma" },
     { key: "risk", label: "Risc" },
+    { key: "extended", label: "Date Extinse" },
     { key: "charts", label: "Grafice" },
     { key: "delta", label: "Modificari" },
     { key: "predictive", label: "Predictiv" },
@@ -588,6 +590,13 @@ export default function ReportView() {
                 );
               })}
           </div>
+        )}
+
+        {activeTab === "extended" && (
+          <RichDataTab
+            fullData={data}
+            cui={data?.company?.cui?.value as string | undefined}
+          />
         )}
 
         {activeTab === "charts" && (
