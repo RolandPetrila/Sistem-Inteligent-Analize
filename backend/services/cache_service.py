@@ -278,7 +278,10 @@ async def invalidate_company(cui: str) -> None:
     for source in ("anaf", "onrc", "seap", "tavily"):
         for ident in possible_identifiers:
             key = make_cache_key(source, ident)
-            result = await db.execute("DELETE FROM data_cache WHERE cache_key = ?", (key,))
+            # B: cursorul de retur (rowcount) nu a fost niciodata citit —
+            # `count` numara variantele VERIFICATE, nu cele efectiv sterse
+            # (asa cum spune si log-ul de mai jos: "checked N key variants").
+            await db.execute("DELETE FROM data_cache WHERE cache_key = ?", (key,))
             count += 1
     _l1.clear()  # conservative: clear all L1 on company invalidation
     logger.info(f"Cache invalidated for CUI {cui_clean[:3]}***: checked {count} key variants")

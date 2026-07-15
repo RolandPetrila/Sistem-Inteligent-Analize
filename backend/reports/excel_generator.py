@@ -481,7 +481,7 @@ def generate_excel(report_sections: dict, meta: dict, verified_data: dict, outpu
     if isinstance(trend_kpi_val, dict) and trend_kpi_val:
         # Check we have at least 2 years of data
         all_trend_years = set()
-        for mk, md in trend_kpi_val.items():
+        for md in trend_kpi_val.values():
             if isinstance(md, dict) and "values" in md:
                 for v in md["values"]:
                     all_trend_years.add(v.get("year"))

@@ -9,7 +9,11 @@ def build_due_diligence(verified: dict, official: dict) -> list[dict]:
     Fiecare item: name, status (DA/NU/INDISPONIBIL), severity (info/warning/critical), source.
     """
     checklist = []
-    company = verified.get("company", {})
+    # B: `company = verified.get("company", {})` era aici, niciodata folosit —
+    # toate cele 10 verificari din checklist (vezi mai jos) folosesc financial/
+    # risk/anaf/anomalies, nu company. Reziduu de extractie (fisierul e extras
+    # din agent_verification.py — copiat alaturi de celelalte variabile, dar
+    # nu era necesar aici).
     financial = verified.get("financial", {})
     risk = verified.get("risk", {})
     anaf = official.get("anaf", {})

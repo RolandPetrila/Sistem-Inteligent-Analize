@@ -141,7 +141,7 @@ async def generate_all_reports(
             zip_name = f"raport_{cui_part}_{date_part}.zip" if cui_part else f"raport_{date_part}.zip"
             zip_path = output_dir / zip_name
             with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-                for fmt, fpath in paths.items():
+                for fpath in paths.values():
                     p = Path(fpath)
                     if p.exists():
                         zf.write(p, p.name)

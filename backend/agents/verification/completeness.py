@@ -106,7 +106,13 @@ def check_completeness(verified: dict, official: dict, market: dict) -> dict:
 
     # --- SEAP/Market ---
     total_checks += 1
-    market_verified = verified.get("market", {})
+    # B: `market_verified = verified.get("market", {})` a fost aici, orfan de
+    # la B6 fix (git history confirma: linia originala era
+    # `if market_verified or seap_data...` — B6 a scos truthiness-ul pe dict
+    # WRAPPED, corect, dar a lasat asignarea neutilizata). `market` (parametru,
+    # date RAW) e sursa corecta pt seap_data — verified["market"] e
+    # WRAPPED per-camp (_make_field), deci .get("total_contracts") ar fi
+    # intors mereu 0 pe acel dict.
     seap_data = market.get("seap", {})
     # B6 fix: Check actual SEAP data, not bare dict truthiness
     seap_contracts = seap_data.get("total_contracts", 0) or 0

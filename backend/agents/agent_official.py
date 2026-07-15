@@ -870,7 +870,10 @@ class OfficialAgent(BaseAgent):
         )
 
     async def _fetch_insolvency(self, name: str, cui: str) -> dict:
-        query = f'"{cui or name}" insolventa'
+        # B: variabila `query` era calculata aici si niciodata folosita —
+        # search_company_info(info_type="insolvency") isi construieste singur
+        # query-ul intern (site:bpi.ro), nu accepta un query custom. Reziduu
+        # sters, comportamentul e neschimbat (verificat in tavily_client.py).
         cache_key = cache_service.make_cache_key("tavily", f"bpi_{cui or name}")
         return await cache_service.get_or_fetch(
             key=cache_key,
