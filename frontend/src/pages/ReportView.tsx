@@ -364,20 +364,28 @@ export default function ReportView() {
         </div>
       )}
 
-      {/* F6-3: Completeness warning banner */}
-      {report &&
-        (report as any).completeness_score != null &&
-        (report as any).completeness_score < 50 && (
+      {/* F6-3 / A2 fix: Completeness warning banner. Sursa reala e
+          full_data.agent_diagnostics.completeness_score / .missing_sources —
+          `report.completeness_score`/`report.failed_sources` nu au existat
+          NICIODATA (zero coloana DB in report_service.get_report_by_id). */}
+      {(() => {
+        const diag = data?.agent_diagnostics as
+          | { completeness_score?: number; missing_sources?: string[] }
+          | undefined;
+        if (diag?.completeness_score == null || diag.completeness_score >= 50)
+          return null;
+        return (
           <div className="mb-4 p-3 rounded-lg border border-yellow-600 bg-yellow-900/20 text-yellow-300 text-sm">
-            ⚠ Date insuficiente ({(report as any).completeness_score}%
-            completitudine) — rezultatele pot fi imprecise.
-            {(report as any).failed_sources?.length > 0 && (
+            ⚠ Date insuficiente ({diag.completeness_score}% completitudine) —
+            rezultatele pot fi imprecise.
+            {diag.missing_sources && diag.missing_sources.length > 0 && (
               <span className="ml-1">
-                Surse esuate: {(report as any).failed_sources.join(", ")}
+                Surse esuate: {diag.missing_sources.join(", ")}
               </span>
             )}
           </div>
-        )}
+        );
+      })()}
 
       {/* Tabs (extracted component) */}
       <ReportTabs
