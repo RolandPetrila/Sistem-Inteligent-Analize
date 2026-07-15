@@ -19,6 +19,43 @@ from backend.agents.verification.scoring import risk_bucket
 from backend.prompts.section_prompts import get_sections_for_analysis
 from backend.prompts.system_prompt import SYSTEM_PROMPT
 
+# Runda 2 / C: nucleul analitic pe care niciun prompt de sectiune nu-l poate pierde
+# (fara el, sectiunile nu au date de baza — vezi verificarea la sursa in raportul
+# Sonnet: _build_context_summary citeste doar company/financial/risk_score/completeness,
+# dar restul sectiunilor citesc direct din JSON-ul "--- DATE VERIFICATE ---").
+_CORE_JSON_FIELDS = {
+    "company", "financial", "risk", "risk_score", "completeness",
+    "credit_exposure", "predictive_scores",
+}
+
+# Ordine de renuntare la reducerea JSON-ului din prompt: de la voluminos-si-putin-relevant
+# catre esential. Ordinea reflecta marimea REALA masurata pe un job real bogat (CUI 6719278,
+# 2026-07-15) — nu o presupunere din nume: tender_opportunities/market/web_presence sunt cele
+# mai mari campuri non-esentiale (mii de caractere fiecare), restul sunt marunte in comparatie.
+_JSON_DROP_PRIORITY = [
+    "tender_opportunities", "market", "web_presence", "web_intelligence",
+    "agent_diagnostics", "due_diligence", "sources_used", "benchmark",
+    "eurostat_sector", "cross_validation", "caen_context", "data_freshness",
+    "sanctions", "funding_programs", "maps_rating", "actionariat",
+    "company_network", "relations", "brave_reputation", "historical_flags",
+    "lead_candidates", "anomalies", "early_warnings",
+]
+
+
+def _cap_long_strings(obj, max_len: int):
+    """Trunchiaza recursiv orice string > max_len caractere, pastrand STRUCTURA
+    (chei/liste) intacta — folosit DOAR ca ultim refugiu, cand nucleul analitic
+    (_CORE_JSON_FIELDS) tot nu incape in json_limit dupa eliminarea completa a
+    campurilor optionale. Spre deosebire de slice-ul orb pe JSON serializat,
+    rezultatul ramane mereu JSON valid la orice nivel de recursivitate."""
+    if isinstance(obj, dict):
+        return {k: _cap_long_strings(v, max_len) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_cap_long_strings(v, max_len) for v in obj]
+    if isinstance(obj, str) and len(obj) > max_len:
+        return obj[:max_len] + f"... [trunchiat, original {len(obj)} chars]"
+    return obj
+
 
 class SynthesisAgent(BaseAgent, SynthesisProvidersMixin):
     name = "synthesis"
@@ -292,6 +329,63 @@ Reguli:
             data_tokens = len(data_str) // 4  # fallback: 1 token ~ 4 chars
         return 500 + data_tokens + word_target * 2
 
+    def _reduce_verified_data_for_json(self, verified_data: dict, json_limit: int) -> tuple[str, list[str]]:
+        """Runda 2 / C: inlocuieste slice-ul orb de caractere (care taia JSON-ul la
+        mijloc si producea text sintactic invalid) cu o reducere PE CHEI INTREGI —
+        rezultatul e mereu JSON valid (json.dumps al unui dict, niciodata slice).
+
+        1. Daca incape, intors neschimbat.
+        2. Altfel, elimina chei optionale intregi in _JSON_DROP_PRIORITY (masurat pe
+           date reale, nu ghicit), remasurand dupa fiecare, pana incape.
+        3. Daca nici asa nu incape (nucleul _CORE_JSON_FIELDS insusi e prea mare —
+           confirmat ca se intampla real pe joburi bogate pt limita groq/mistral/
+           cerebras de 20000), comprima textele lungi din interiorul nucleului
+           (nu elimina cheile) cu caplevele descrescatoare, pana incape.
+        4. Ultim refugiu (practic inatins): doar campurile headline.
+
+        Returneaza (data_json, omitted) — `omitted` contine numele campurilor
+        eliminate SAU o eticheta descriptiva pt comprimarea de nucleu, niciodata gol
+        silentios cand s-a intamplat o reducere reala."""
+        data_json = json.dumps(verified_data, ensure_ascii=False, default=str, indent=2)
+        if len(data_json) <= json_limit:
+            return data_json, []
+
+        reduced = dict(verified_data)
+        omitted: list[str] = []
+        for key in _JSON_DROP_PRIORITY:
+            if key not in reduced:
+                continue
+            del reduced[key]
+            omitted.append(key)
+            data_json = json.dumps(reduced, ensure_ascii=False, default=str, indent=2)
+            if len(data_json) <= json_limit:
+                return data_json, omitted
+
+        # Nucleul insusi tot nu incape — comprima textele lungi din interior (NU
+        # elimina cheile de nucleu). Semnalat ca WARNING: schimba ce vede AI-ul.
+        core_only = {k: v for k, v in reduced.items() if k in _CORE_JSON_FIELDS}
+        logger.warning(
+            f"[synthesis] Nucleul analitic ({len(json.dumps(core_only, ensure_ascii=False, default=str))} "
+            f"chars) depaseste json_limit={json_limit} chiar dupa eliminarea completa a "
+            f"campurilor optionale — comprim textele lungi din nucleu."
+        )
+        for cap in (500, 150, 50):
+            capped = _cap_long_strings(core_only, cap)
+            data_json = json.dumps(capped, ensure_ascii=False, default=str, indent=2)
+            if len(data_json) <= json_limit:
+                return data_json, [*omitted, f"<nucleu comprimat la {cap} chars/text>"]
+
+        # Ultim refugiu, practic inatins pe date reale (verificat pe cel mai bogat
+        # job disponibil): pastreaza doar headline-ul, acelasi minim pe care
+        # _build_context_summary il garanteaza oricum.
+        logger.warning(
+            f"[synthesis] Nucleul comprimat tot depaseste json_limit={json_limit} — "
+            f"pastrez doar headline (company/risk_score/completeness)."
+        )
+        headline = {k: v for k, v in core_only.items() if k in ("company", "risk_score", "completeness")}
+        data_json = json.dumps(headline, ensure_ascii=False, default=str, indent=2)
+        return data_json, [*omitted, "<nucleu redus la headline: financial/risk/credit_exposure/predictive_scores omise>"]
+
     def _build_section_prompt(self, section: dict, verified_data: dict, provider: str = "claude") -> str:
         """Construieste prompt-ul optimizat per provider AI.
         8C: Context awareness — inject structured summary instead of raw JSON dump."""
@@ -311,10 +405,15 @@ Reguli:
             "cerebras": 20000, # 128K context (gpt-oss-120b)
         }
         json_limit = max_json_chars.get(provider, 15000)
-        data_json = json.dumps(verified_data, ensure_ascii=False, default=str, indent=2)
-        # Only truncate if actually exceeds limit — small data passes through intact
-        if len(data_json) > json_limit:
-            data_json = data_json[:json_limit] + f"\n... [date trunchiate la {json_limit} chars pt {provider}]"
+        data_json, omitted_keys = self._reduce_verified_data_for_json(verified_data, json_limit)
+        omitted_note = ""
+        if omitted_keys:
+            omitted_note = f"\n[omise pt limita de context: {', '.join(omitted_keys)}]"
+            logger.info(
+                f"[synthesis] JSON redus pt provider={provider} sectiune={section['key']}: "
+                f"omise {len(omitted_keys)} campuri ({', '.join(omitted_keys)}), "
+                f"lungime finala {len(data_json)} chars (limita {json_limit})"
+            )
 
         # Provider-specific instructions
         style = {
@@ -405,7 +504,7 @@ Reguli:
             f"NU inventa competitori, cifre, proiecte sau contracte.\n"
             f"{gaps_text}\n"
             f"--- DATE VERIFICATE (JSON) ---\n"
-            f"{data_json}\n\n"
+            f"{data_json}{omitted_note}\n\n"
             f"Scrie DIRECT textul sectiunii, fara introduceri sau explicatii meta. "
             f"Limita: ~{section['word_count']} cuvinte."
         )
