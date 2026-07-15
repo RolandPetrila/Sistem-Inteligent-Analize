@@ -163,6 +163,12 @@ export default function ReportView() {
         dimensions?: Record<string, { score: number; weight: number }>;
         factors: [string, string][];
         recommendation: string;
+        // 10B M3.4: bucket per metrica ("P90+"/"P75-P90"/...), NU un procent
+        // numeric unic — vezi scoring.py::_score_piata.
+        sector_position?: Record<
+          string,
+          { ratio_vs_avg: number; estimated_percentile: string }
+        >;
       }
     | undefined;
 
@@ -524,37 +530,56 @@ export default function ReportView() {
                 <RadarChartSVG scoringDimensions={scoringDimensions} />
               )}
 
-            {/* F6-4: Sector Benchmark Bar */}
+            {/* F6-4 / A1 fix: Pozitie in Sector — sursa reala e
+                riskScore.sector_position: dict per metrica cu bucket estimat
+                ("P90+"/"P75-P90"/"P50-P75"/"P25-P50"/"sub P25"), NU un
+                procentil numeric unic (vezi scoring.py::_score_piata). O bara
+                de progres pe un bucket categorial ar fi o inventie — randam
+                etichete oneste per metrica. */}
             {(() => {
-              const sectorPos =
-                (data?.risk as any)?.sector_position ||
-                (data as any)?.sector_position;
-              const percentile =
-                sectorPos?.percentile || (data as any)?.benchmark?.percentile;
-              if (!percentile) return null;
+              const sectorPos = riskScore?.sector_position;
+              if (!sectorPos || Object.keys(sectorPos).length === 0)
+                return null;
+              const bucketStyle: Record<string, string> = {
+                "P90+": "bg-green-900/40 text-green-300 border-green-700",
+                "P75-P90": "bg-green-900/20 text-green-400 border-green-800",
+                "P50-P75": "bg-yellow-900/30 text-yellow-300 border-yellow-700",
+                "P25-P50": "bg-orange-900/30 text-orange-300 border-orange-700",
+                "sub P25": "bg-red-900/30 text-red-300 border-red-700",
+              };
               return (
                 <div className="p-3 bg-dark-surface rounded-lg mb-4">
                   <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                    Pozitie in Sector
+                    Pozitie in Sector (estimata)
                   </h4>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm text-gray-300">
-                      Top {100 - percentile}% in sectorul tau
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      ({percentile}a percentila)
-                    </span>
+                  <div className="space-y-2">
+                    {Object.entries(sectorPos).map(([metric, pos]) => (
+                      <div
+                        key={metric}
+                        className="flex items-center justify-between gap-2"
+                      >
+                        <span className="text-sm text-gray-300">{metric}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500">
+                            {pos.ratio_vs_avg}x media sectorului
+                          </span>
+                          <span
+                            className={clsx(
+                              "text-[10px] font-mono px-1.5 py-0.5 rounded border",
+                              bucketStyle[pos.estimated_percentile] ||
+                                "bg-dark-border text-gray-400 border-gray-700",
+                            )}
+                          >
+                            {pos.estimated_percentile}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="w-full h-3 bg-dark-border rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-indigo-500 rounded-full"
-                      style={{ width: `${100 - percentile}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-xs text-gray-600 mt-1">
-                    <span>Mai bun</span>
-                    <span>Mai slab</span>
-                  </div>
+                  <p className="text-[10px] text-gray-600 italic mt-2">
+                    Bucket estimat din raportul CA/angajati vs media sectorului
+                    CAEN — nu e un percentil statistic exact.
+                  </p>
                 </div>
               );
             })()}
