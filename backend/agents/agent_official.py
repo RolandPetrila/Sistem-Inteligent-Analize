@@ -419,13 +419,25 @@ class OfficialAgent(BaseAgent):
                 })
 
     async def _fetch_google_maps(self, official_data: dict, sources: list, company_name: str) -> None:
-        """F5-2: PASTREAZA bug-ul preexistent `address` mort (official_data.get("address")
-        nu e setat nicaieri in execute(), deci parametrul e mereu gol) -- NU reparat aici,
-        semnalat separat in raport."""
+        """F5-2: adresa reala vine din ANAF (`official_data["anaf"]["adresa"]`, string,
+        populat de `_process_anaf_result` la linia ~154) cu fallback la openapi.ro
+        (`official_data["onrc_structured"]["adresa"]`, populat de `_process_openapi_result`
+        la linia ~166) -- ambele scrise INAINTE de acest apel (linia ~187). Bug-ul reparat
+        aici (2026-07-15): cheia citita anterior era `official_data["address"]`, care nu
+        era scrisa NICAIERI in execute() -> Google Maps cauta mereu DOAR dupa numele firmei,
+        risc de potrivire cu firma gresita pt nume comune (rating-ul intra direct in scoring
+        reputational, vezi `scoring.py::_score_reputational`). Daca ambele surse lipsesc,
+        `address` ramane "" -- acelasi comportament sigur ca inainte de fix."""
         if company_name and settings.google_cloud_api_key:
             try:
                 from backend.agents.tools.maps_client import get_maps_rating
-                address = official_data.get("address", {}).get("adresa", "") if isinstance(official_data.get("address"), dict) else ""
+                anaf_data = official_data.get("anaf")
+                onrc_data = official_data.get("onrc_structured")
+                address = ""
+                if isinstance(anaf_data, dict) and anaf_data.get("adresa"):
+                    address = anaf_data["adresa"]
+                elif isinstance(onrc_data, dict) and onrc_data.get("adresa"):
+                    address = onrc_data["adresa"]
                 maps_result = await asyncio.wait_for(
                     get_maps_rating(company_name, address), timeout=8.0
                 )
