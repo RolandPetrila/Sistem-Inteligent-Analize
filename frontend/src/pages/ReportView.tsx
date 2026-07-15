@@ -99,6 +99,11 @@ export default function ReportView() {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [regeneratingKey, setRegeneratingKey] = useState<string | null>(null);
   const [exportingIcs, setExportingIcs] = useState(false);
+  // A4 fix: fullData.delta_info/.previous_report_id nu au existat NICIODATA —
+  // sursa reala e GET /reports/{id}/delta (deja consumata de tabul
+  // "Modificari" prin DeltaView). Preluat separat aici doar pt badge-ul din
+  // antet (boolean has_delta), fara sa duplice logica DeltaView.
+  const [hasDelta, setHasDelta] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -135,6 +140,11 @@ export default function ReportView() {
       })
       .catch(() => toast("Eroare la incarcarea raportului", "error"))
       .finally(() => setLoading(false));
+
+    api
+      .getReportDelta(id)
+      .then((d) => setHasDelta(Boolean(d?.has_delta)))
+      .catch(() => setHasDelta(null));
   }, [id]);
 
   const financialChartData = useMemo(
@@ -316,7 +326,7 @@ export default function ReportView() {
       {/* Header + Risk Score Card (extracted component) */}
       <ReportHeader
         report={report}
-        fullData={data}
+        hasDelta={hasDelta}
         riskScore={riskScore}
         riskColor={riskColor}
         reanalyzing={reanalyzing}

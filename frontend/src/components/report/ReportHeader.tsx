@@ -43,7 +43,11 @@ interface ReportHeaderProps {
     formats_available: string[];
     sources: ReportSource[];
   };
-  fullData: Record<string, unknown> | null;
+  // A4 fix: booleanul REAL vine din GET /reports/{id}/delta (has_delta),
+  // preluat de ReportView — fullData.delta_info/.previous_report_id nu au
+  // existat niciodata (delta traieste in tabela report_deltas, nu in full_data),
+  // deci fullData a fost eliminat din props (era folosit DOAR pt acele 2 chei moarte).
+  hasDelta?: boolean | null;
   riskScore: RiskScore | undefined;
   riskColor: string;
   reanalyzing: boolean;
@@ -54,7 +58,7 @@ interface ReportHeaderProps {
 
 export function ReportHeader({
   report,
-  fullData,
+  hasDelta,
   riskScore,
   riskColor,
   reanalyzing,
@@ -154,19 +158,12 @@ export function ReportHeader({
           <Layers className="w-3.5 h-3.5" />
           Nivel {report.report_level}
         </span>
-        {Boolean((fullData as any)?.delta_info) && (
+        {hasDelta === true && (
           <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-accent-primary/10 text-accent-secondary border border-accent-primary/20">
             <GitCompare className="w-3.5 h-3.5" />
             vs anterior
           </span>
         )}
-        {Boolean((fullData as any)?.previous_report_id) &&
-          !(fullData as any)?.delta_info && (
-            <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
-              <GitCompare className="w-3.5 h-3.5" />
-              vs anterior
-            </span>
-          )}
       </div>
 
       {/* Risk Score Card */}
