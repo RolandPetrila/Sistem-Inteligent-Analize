@@ -214,23 +214,11 @@ class VerificationAgent(BaseAgent):
             verified["historical_flags"] = hist["historical_flags"]
 
         # IMB-B2: Scoruri predictive de faliment (Altman/Piotroski/Beneish/Zmijewski) persistate in raport.
-        try:
-            from backend.agents.verification.predictive_models import (
-                calculate_all_predictive_scores,
-            )
-            verified["predictive_scores"] = calculate_all_predictive_scores(verified, official)
-        except Exception as _pe:
-            logger.debug(f"[verification] predictive scores error: {_pe}")
+        verified["predictive_scores"] = self._compute_predictive_scores(verified, official)
 
         # P1-4: Bonitate & Expunere comerciala recomandata (RON) — metrica NOUA
         # aditiva, determinista (ZERO apel AI), NU atinge scoring-ul 0-100 existent.
-        try:
-            from backend.agents.verification.credit_exposure import (
-                commercial_exposure_ron,
-            )
-            verified["credit_exposure"] = commercial_exposure_ron(verified)
-        except Exception as _ce:
-            logger.debug(f"[verification] credit exposure error: {_ce}")
+        verified["credit_exposure"] = self._compute_credit_exposure(verified)
 
         # --- Diagnostic completitudine raport ---
         verified["completeness"] = self._check_completeness(verified, official, market)
@@ -295,6 +283,66 @@ class VerificationAgent(BaseAgent):
             "current_step": f"Verificare completa. Risc: {verified['risk_score']['score']} | Completitudine: {verified['completeness']['score']}%",
             "progress": 0.50,
         }
+
+    def _compute_predictive_scores(self, verified: dict, official: dict) -> dict:
+        """IMB-B2 + A1 (2026-07-16): scoruri predictive de faliment.
+
+        `calculate_all_predictive_scores` e deja DEFENSIVA fata de date lipsa —
+        pentru orice combinatie de bilant incomplet, ea returneaza INDISPONIBIL/
+        INSUFICIENT pe modelul afectat, nu arunca. O exceptie care scapa pana aici
+        (ImportError la modul, TypeError/AttributeError pe o forma de date
+        neasteptata) e deci aproape garantat un BUG DE PROGRAMARE, nu o conditie
+        normala de runtime — trebuie sa fie ZGOMOTOASA (logger.exception, cu
+        traceback), nu inghitita la logger.debug ca inainte (precedent dovedit de
+        2 ori in acest proiect: un ImportError si un TypeError ascunse la debug au
+        stat nedescoperite zile/saptamani). Raportul arata INDISPONIBIL cu motiv
+        explicit, niciodata disparitia tacuta a cheii `predictive_scores`.
+        """
+        try:
+            from backend.agents.verification.predictive_models import (
+                calculate_all_predictive_scores,
+            )
+            return calculate_all_predictive_scores(verified, official)
+        except Exception as _pe:
+            logger.exception(f"[verification] predictive scores CRASH (bug, nu date lipsa): {_pe}")
+            return {
+                "altman_z": {"z_score": None, "zone": "INDISPONIBIL", "confidence": 0, "reason": "Eroare interna la calcul"},
+                "piotroski_f": {"f_score": None, "grade": "INSUFICIENT", "criteria": [], "reason": "Eroare interna la calcul"},
+                "beneish_m": {"m_score": None, "risk": "INDISPONIBIL", "available": False, "reason": "Eroare interna la calcul"},
+                "zmijewski_x": {"x_score": None, "distress": None, "available": False, "reason": "Eroare interna la calcul"},
+                "distress_signals": 0,
+                "models_available": 0,
+                "models_total": 4,
+                "screening_signals": [],
+                "summary": (
+                    "Modelele predictive nu au putut fi calculate (eroare interna) — "
+                    "riscul de faliment NU a fost evaluat din aceasta sursa, verifica logs/ris_runtime.log."
+                ),
+                "error": True,
+            }
+
+    def _compute_credit_exposure(self, verified: dict) -> dict:
+        """A1 (2026-07-16): acelasi tratament ca `_compute_predictive_scores` —
+        `commercial_exposure_ron` e deja defensiva fata de date lipsa (base=0 daca
+        nicio metoda e disponibila), deci o exceptie aici e tot un bug real."""
+        try:
+            from backend.agents.verification.credit_exposure import (
+                commercial_exposure_ron,
+            )
+            return commercial_exposure_ron(verified)
+        except Exception as _ce:
+            logger.exception(f"[verification] credit exposure CRASH (bug, nu date lipsa): {_ce}")
+            return {
+                "expunere_ron": 0,
+                "metode_folosite": 0,
+                "formula": "eroare interna la calcul — vezi logs/ris_runtime.log",
+                "kill_switch": True,
+                "disclaimer": (
+                    "Eroare interna la calculul expunerii comerciale — valoare "
+                    "INDISPONIBILA (nu un 0 real confirmat)."
+                ),
+                "error": True,
+            }
 
     def _trust_label(self, source_name: str) -> str:
         """Determina eticheta trust pentru o sursa."""
@@ -1075,6 +1123,33 @@ class VerificationAgent(BaseAgent):
             logger.debug(f"[verification] Dynamic thresholds error: {e}")
             return None
 
+    def _parse_data_inregistrare(self, data_inreg: str) -> datetime | None:
+        """A2 (2026-07-16): parseaza `anaf.data_inregistrare`.
+
+        Verificat LIVE 2026-07-16 pe 3 CUI-uri reale (6719278, 26313362, 477647,
+        via `get_anaf_data`): ANAF returneaza data ISO (`yyyy-mm-dd`) in toate 3
+        cazurile — NICIUNUL in formatul `%d.%m.%Y` pe care codul vechi il astepta
+        exclusiv (`datetime.strptime(..., "%d.%m.%Y")`). Rezultat: `ValueError`
+        garantat pe date reale, prins de un except generic mai jos -> Regula 5
+        (firma tanara + CA mare) sarita SILENTIOS pentru practic orice firma.
+        Toate fixture-urile existente in `tests/` (scoring_golden_inputs.py,
+        test_compare_score.py, test_scoring.py) foloseau deja ISO, confirmand ca
+        formatul cu punct nu reflecta sursa reala.
+
+        Accepta ambele formate (ISO e prioritar, e formatul REAL confirmat) plus
+        cateva variante inrudite, si un eventual sufix de timp separat prin spatiu
+        (`yyyy-mm-dd hh:mm:ss`) — nu presupune un singur format canonic."""
+        raw = (data_inreg or "").strip()
+        if not raw:
+            return None
+        candidate = raw.split(" ")[0] if " " in raw else raw
+        for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d-%m-%Y", "%Y.%m.%d"):
+            try:
+                return datetime.strptime(candidate, fmt)
+            except ValueError:
+                continue
+        return None
+
     def _detect_anomalies(self, official: dict, verified: dict) -> list[dict]:
         """
         Detecteaza pattern-uri suspecte / firme fantoma.
@@ -1146,9 +1221,8 @@ class VerificationAgent(BaseAgent):
 
         # Regula 5: Firma foarte noua + CA mare
         if data_inreg:
-            try:
-                from datetime import UTC, datetime
-                inreg_date = datetime.strptime(data_inreg.split(" ")[-1] if " " in data_inreg else data_inreg, "%d.%m.%Y")
+            inreg_date = self._parse_data_inregistrare(data_inreg)
+            if inreg_date is not None:
                 age_years = (datetime.now(UTC) - inreg_date.replace(tzinfo=UTC)).days / 365.25
                 if age_years < 1 and ca is not None and ca > 500_000:
                     anomalies.append({
@@ -1162,8 +1236,8 @@ class VerificationAgent(BaseAgent):
                         "rule": "Firma tanara",
                         "detail": f"Firma infiintata in {data_inreg} (sub 2 ani vechime).",
                     })
-            except (ValueError, IndexError) as e:
-                logger.debug(f"[verification] Age parse error for {data_inreg}: {e}")
+            else:
+                logger.debug(f"[verification] Age parse error for {data_inreg!r}: format de data necunoscut")
 
         # Regula 6: CA = 0 dar nu e inactiva
         if ca is not None and ca == 0 and not inactiv:
