@@ -55,7 +55,7 @@ def detect_early_warnings(official: dict) -> list[dict]:
                 warnings.append({
                     "signal": "Pierdere consecutiva 2+ ani",
                     "severity": "HIGH",
-                    "detail": f"Pierdere neta in anii: {', '.join(loss_years[-consecutive_loss:])}",
+                    "detail": f"Pierdere neta in anii: {', '.join(str(y) for y in loss_years[-consecutive_loss:])}",
                     "years": f"{loss_years[-consecutive_loss]}-{loss_years[-1]}",
                 })
             consecutive_loss = 0
@@ -65,7 +65,7 @@ def detect_early_warnings(official: dict) -> list[dict]:
         warnings.append({
             "signal": "Pierdere consecutiva 2+ ani",
             "severity": "HIGH",
-            "detail": f"Pierdere neta in anii: {', '.join(loss_years[-consecutive_loss:])}",
+            "detail": f"Pierdere neta in anii: {', '.join(str(y) for y in loss_years[-consecutive_loss:])}",
             "years": f"{loss_years[-consecutive_loss]}-{loss_years[-1]}",
         })
 
