@@ -288,7 +288,7 @@ Reguli:
             f"positive_kw={has_positive} negative_kw={has_negative}"
         )
 
-        risk_factors = risk_score.get("risk_factors", [])[:5]
+        risk_factors = risk_score.get("factors", [])[:5]
         factors_text = "\n".join(
             f"- {r[0]} ({r[1]})" if isinstance(r, (list, tuple)) and len(r) >= 2 else f"- {r}"
             for r in risk_factors
