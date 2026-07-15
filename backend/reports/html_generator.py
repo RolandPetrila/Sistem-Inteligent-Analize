@@ -919,6 +919,50 @@ def generate_html(report_sections: dict, meta: dict, verified_data: dict, output
 
         nav_items += '<a href="#completeness" class="nav-link">Diagnostic</a>\n'
 
+    # A3 fix: Due Diligence Checklist section in HTML (was missing — PDF/DOCX/Excel had it, HTML didn't)
+    due_diligence_html = ""
+    dd_raw = verified_data.get("due_diligence", [])
+    if isinstance(dd_raw, list):
+        dd_checklist = dd_raw
+    elif isinstance(dd_raw, dict):
+        dd_checklist = dd_raw.get("checklist", [])
+    else:
+        dd_checklist = []
+    dd_checklist = [item for item in dd_checklist if isinstance(item, dict)]
+    if dd_checklist:
+        dd_items = ""
+        dd_passed = 0
+        for item in dd_checklist:
+            status = item.get("status", "INDISPONIBIL")
+            if status == "DA":
+                dd_passed += 1
+                dd_color = "#22c55e"
+                dd_icon = "DA"
+            elif status == "NU":
+                dd_color = "#ef4444"
+                dd_icon = "NU"
+            else:
+                dd_color = "#6b7280"
+                dd_icon = "N/A"
+            dd_name = _escape(str(item.get("name", "")))
+            dd_source = _escape(str(item.get("source", "")))
+            dd_items += (
+                f'<div style="padding:10px 14px;margin-bottom:8px;background:#16213e;border-radius:8px;'
+                f'display:flex;align-items:center;gap:12px">'
+                f'<span style="background:{dd_color}20;color:{dd_color};font-weight:700;font-size:0.85em;'
+                f'padding:2px 10px;border-radius:4px;min-width:34px;text-align:center">{dd_icon}</span>'
+                f'<span style="color:#e2e8f0;flex:1">{dd_name}</span>'
+                f'<span style="color:#64748b;font-size:0.8em">{dd_source}</span>'
+                f'</div>\n'
+            )
+        due_diligence_html = f'''
+        <section id="due-diligence" class="report-section">
+            <h2>Due Diligence Checklist</h2>
+            <div style="color:#94a3b8;font-size:0.85em;margin-bottom:12px">{dd_passed}/{len(dd_checklist)} verificari OK</div>
+            <div>{dd_items}</div>
+        </section>'''
+        nav_items += '<a href="#due-diligence" class="nav-link">Due Diligence</a>\n'
+
     # D11 fix: Early Warnings section in HTML (was missing — PDF/DOCX had it, HTML didn't)
     early_warnings_html = ""
     ew_list = risk_score_obj.get("early_warning_confidence", [])
@@ -1043,6 +1087,7 @@ body{{font-family:'Segoe UI',system-ui,sans-serif;background:#1a1a2e;color:#e2e8
     {sparkline_html}
     {charts_html}
     {sections_html}
+    {due_diligence_html}
     {early_warnings_html}
     {company_network_html}
     {rich_fields_html}

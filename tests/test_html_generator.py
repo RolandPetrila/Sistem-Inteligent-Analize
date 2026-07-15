@@ -5,8 +5,10 @@ from backend.reports.html_generator import (
     _build_executive_summary,
     _build_rich_fields_html,
     _build_table,
+    _escape,
     _render_content,
     _render_inline,
+    generate_html,
 )
 
 
@@ -476,3 +478,82 @@ class TestCompanyNetworkHtml:
                         "detail": "X este asociat la 5 firme active simultan"}]
         html = _build_company_network_html(self._populated_network(risk_flags=risk_flags))
         assert "X este asociat la 5 firme active simultan" in html
+
+
+class TestDueDiligenceHtml:
+    """A3 (2026-07-16): the Due Diligence Checklist (10 DA/NU/INDISPONIBIL checks)
+    was rendered in PDF/DOCX/Excel/1-pager but silently absent from HTML — the
+    exact format used for the public share link (/api/reports/public/*). Real
+    shape confirmed at the producer (backend/agents/verification/due_diligence.py)
+    and in data/ris.db reports.full_data: verified["due_diligence"] is a plain
+    LIST of dicts {name, status, severity, source} — NOT wrapped in
+    {"value": ...} and NOT nested under a "checklist" key (matches the shape
+    pdf_generator.py/docx_generator.py already handle). Fixture below uses that
+    real shape with synthetic values (repo public)."""
+
+    def _meta(self):
+        return {
+            "company_name": "Exemplu Test SRL",
+            "title": "Raport Test",
+            "generated_at": "2026-07-16",
+            "risk_score": "Verde",
+            "numeric_score": 82,
+            "risk_recommendation": "",
+            "report_level": 2,
+            "sources": [],
+        }
+
+    def _checklist(self):
+        return [
+            {"name": "Firma activa la ANAF", "status": "DA", "severity": "info", "source": "ANAF"},
+            {"name": "Platitor TVA", "status": "DA", "severity": "info", "source": "ANAF"},
+            {"name": "Fara Split TVA", "status": "DA", "severity": "info", "source": "ANAF"},
+            {"name": "Fara insolventa", "status": "NU", "severity": "critical", "source": "BPI"},
+            {"name": "Are angajati (>0)", "status": "DA", "severity": "info", "source": "ANAF Bilant"},
+            {"name": "Cifra de afaceri > 0", "status": "DA", "severity": "info", "source": "ANAF Bilant"},
+            {"name": "Profit pozitiv", "status": "NU", "severity": "warning", "source": "ANAF Bilant"},
+            {"name": "Capitaluri proprii pozitive", "status": "INDISPONIBIL", "severity": "info", "source": "-"},
+            {"name": "Date ONRC disponibile", "status": "DA", "severity": "info", "source": "openapi.ro"},
+            {"name": "Fara anomalii suspecte", "status": "DA", "severity": "info", "source": "Analiza interna"},
+        ]
+
+    def test_checklist_rendered_with_all_ten_items_and_states(self, tmp_path):
+        verified = {"company": {}, "financial": {}, "due_diligence": self._checklist()}
+        out = tmp_path / "report.html"
+        generate_html({}, self._meta(), verified, str(out))
+        html = out.read_text(encoding="utf-8")
+
+        assert 'id="due-diligence"' in html
+        assert "Due Diligence Checklist" in html
+        for item in self._checklist():
+            assert _escape(item["name"]) in html
+        # 7 DA / 2 NU / 1 INDISPONIBIL in the fixture above
+        assert "7/10 verificari OK" in html
+        # Scope the state-icon counts to the due-diligence section only — other
+        # sections (e.g. executive summary "CA: N/A") also emit these tokens.
+        section_start = html.index('id="due-diligence"')
+        section_end = html.index("</section>", section_start)
+        dd_section = html[section_start:section_end]
+        assert dd_section.count(">DA<") == 7
+        assert dd_section.count(">NU<") == 2
+        assert dd_section.count(">N/A<") == 1
+        # nav link present so the section is actually reachable
+        assert '<a href="#due-diligence" class="nav-link">Due Diligence</a>' in html
+
+    def test_empty_checklist_omits_section_cleanly(self, tmp_path):
+        verified = {"company": {}, "financial": {}, "due_diligence": []}
+        out = tmp_path / "report.html"
+        generate_html({}, self._meta(), verified, str(out))
+        html = out.read_text(encoding="utf-8")
+
+        assert 'id="due-diligence"' not in html
+        assert "Due Diligence Checklist" not in html
+
+    def test_missing_key_omits_section_cleanly(self, tmp_path):
+        verified = {"company": {}, "financial": {}}
+        out = tmp_path / "report.html"
+        generate_html({}, self._meta(), verified, str(out))
+        html = out.read_text(encoding="utf-8")
+
+        assert 'id="due-diligence"' not in html
+        assert "Due Diligence Checklist" not in html
