@@ -218,7 +218,7 @@ class VerificationAgent(BaseAgent):
             from backend.agents.verification.predictive_models import (
                 calculate_all_predictive_scores,
             )
-            verified["predictive_scores"] = calculate_all_predictive_scores(verified)
+            verified["predictive_scores"] = calculate_all_predictive_scores(verified, official)
         except Exception as _pe:
             logger.debug(f"[verification] predictive scores error: {_pe}")
 
@@ -489,6 +489,29 @@ class VerificationAgent(BaseAgent):
                 cap_v, "ANAF",
                 f"An {cap_y}" if cap_y else "ANAF Bilant",
             )
+
+            # FIX CRITIC: campuri orfane pana acum — existau deja parsate in
+            # bilant_data (anaf_bilant_client name_map + active_totale calculat),
+            # dar nu ajungeau niciodata in verified["financial"]. Consumate de
+            # scoring._calculate_financial_ratios (ROA/Datorii-Capital/Rata
+            # Capitalizare) si de predictive_models (Altman/Zmijewski — azi
+            # INDISPONIBIL 100% din timp fara active_totale). Adaugate DOAR
+            # daca au valoare reala — un camp lipsa e mai sigur decat unul gresit.
+            dt_v, dt_y = _latest_val("datorii_totale")
+            if dt_v is not None:
+                financial["datorii_totale"] = self._make_field(
+                    dt_v, "ANAF",
+                    f"An {dt_y}" if dt_y else "ANAF Bilant",
+                )
+            at_v, at_y = _latest_val("active_totale")
+            if at_v is not None:
+                financial["active_totale"] = self._make_field(
+                    at_v, "ANAF",
+                    (
+                        f"An {at_y} — calculat (active imobilizate + active "
+                        "circulante + cheltuieli in avans)"
+                    ) if at_y else "ANAF Bilant",
+                )
 
             # Trend multi-an
             trend = bilant.get("trend", {})

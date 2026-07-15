@@ -120,6 +120,19 @@ async def get_bilant(cui: str, year: int) -> dict:
                             result[field_name] = val
                             break
 
+        # Total Active = Active imobilizate + Active circulante + Cheltuieli in avans
+        # (identitate bilant prescurtat ANAF — verificat pe date live 2026-07-15 ca se
+        # echilibreaza exact cu Capitaluri + Datorii + Provizioane + Venituri in avans,
+        # atat pt o firma mica (MOSSLEIN, CUI 26313362) cat si una mare (MEGA IMAGE,
+        # CUI 6719278) — formatul "i" e uniform indiferent de marimea firmei pe acest
+        # endpoint simplificat, deci formula nu difera pe marime de firma).
+        if "active_imobilizate" in result and "active_circulante" in result:
+            result["active_totale"] = (
+                result["active_imobilizate"]
+                + result["active_circulante"]
+                + result.get("cheltuieli_avans", 0)
+            )
+
     return result
 
 
