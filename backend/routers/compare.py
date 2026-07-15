@@ -352,16 +352,9 @@ async def sector_dashboard(caen_code: str):
         (caen_code,),
     )
 
-    try:
-        from backend.agents.tools.caen_context import get_caen_info
-        caen_info = get_caen_info(caen_code)
-    except Exception as e:
-        logger.debug(f"[compare] caen_info lookup failed for {caen_code}: {e}")
-        caen_info = {}
-
     return {
         "caen_code": caen_code,
-        "caen_description": caen_info.get("description", "") if isinstance(caen_info, dict) else "",
+        "caen_description": get_caen_description(caen_code),
         "stats": dict(stats) if stats else {},
         "top_companies": [dict(r) for r in top_companies],
     }

@@ -152,8 +152,17 @@ async def _filter_active_tenders(candidates: list[dict]) -> list[dict]:
         except (json.JSONDecodeError, TypeError):
             continue
         seap_won = (data.get("market", {}) or {}).get("seap", {}) or {}
+        # market.seap e infasurat de _verify_market() -> _make_field():
+        # {"value": {...total_contracts...}, "trust":..., "source":..., "timestamp":...}.
+        # Fara unwrap, total_contracts nu exista niciodata pe wrapper (doar pe .value) ->
+        # citit mereu 0 (fix aliniat cu 738cf22, acelasi pattern deja folosit in
+        # scoring.py/agent_verification.py/agent_synthesis.py/section_prompts.py).
+        seap_val = seap_won.get("value", seap_won) if isinstance(seap_won, dict) else {}
+        # tender_opportunities NU e infasurat (assignat direct in
+        # agent_verification.py::_fetch_tender_opportunities, fara _make_field) -> "count"
+        # e la nivelul de top, deja corect, verificat pe date reale din data/ris.db.
         tenders = (data.get("tender_opportunities", {}) or {})
-        won_count = seap_won.get("total_contracts", 0) or 0
+        won_count = seap_val.get("total_contracts", 0) or 0
         open_count = tenders.get("count", 0) or 0
         if won_count > 0 or open_count > 0:
             c["match_reason"] = f"{won_count} contracte castigate, {open_count} licitatii deschise identificate"
