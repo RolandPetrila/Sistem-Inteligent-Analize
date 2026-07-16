@@ -554,6 +554,167 @@ def _score_profit_trend(pn_trend: dict) -> tuple[int, list[dict], list[tuple[str
     return 0, [], []
 
 
+def _resolve_caen_section(caen_code_toplevel, company: dict) -> str:
+    """Sub-bloc _score_financiar: rezolva sectiunea CAEN (litera A-N) folosita
+    ca baza pt SECTOR_VOLATILITY_BASELINE. Extras VERBATIM (nu tabelizat) —
+    elif-urile numerice sunt mecanic identice intre ele, dar tabelizarea ar
+    risca sa schimbe comportamentul pe cazuri de margine neacoperite de
+    golden (coduri alfanumerice mixte tip "6A", goluri intre intervale tip
+    34/40/44/48/54/57/67/76/83+, precedenta alpha-inainte-de-digit) — vezi
+    tests/test_scoring.py::TestResolveCaenSection pt acoperire directa a
+    tuturor ramurilor (inclusiv cele 12 nedeclansate de golden). Complexitate
+    proprie ~16 — acceptata separat de tinta <20 a lui _score_financiar.
+
+    NOTA productie: `caen_code_toplevel` (verified["caen_code"] la nivel
+    top-level) nu e setat NICIODATA de agent_verification.py (verificat cu
+    grep pe tot backend/) — in productie e mereu falsy, deci codul cade
+    intotdeauna pe fallback-ul `company.get("caen_code", {})` (dict
+    _make_field-wrapped). Ramura alpha-first-char (caen_code[0].isalpha())
+    e probabil moarta si ea in productie: codurile CAEN reale sunt integral
+    numerice (ex. "6201"), litera de sectiune fiind derivata, nu stocata."""
+    caen_code = (
+        caen_code_toplevel
+        or company.get("caen_code", {})
+        or ""
+    )
+    if isinstance(caen_code, dict):
+        caen_code = caen_code.get("value", "") or ""
+    caen_code = str(caen_code).strip()
+
+    caen_section = ""
+    if caen_code and caen_code[0].isalpha():
+        caen_section = caen_code[0].upper()
+    elif caen_code and caen_code.isdigit():
+        caen_num = int(caen_code)
+        if 1 <= caen_num <= 3:
+            caen_section = "A"
+        elif 5 <= caen_num <= 9:
+            caen_section = "B"
+        elif 10 <= caen_num <= 33:
+            caen_section = "C"
+        elif caen_num == 35:
+            caen_section = "D"
+        elif 36 <= caen_num <= 39:
+            caen_section = "E"
+        elif 41 <= caen_num <= 43:
+            caen_section = "F"
+        elif 45 <= caen_num <= 47:
+            caen_section = "G"
+        elif 49 <= caen_num <= 53:
+            caen_section = "H"
+        elif 55 <= caen_num <= 56:
+            caen_section = "I"
+        elif 58 <= caen_num <= 63:
+            caen_section = "J"
+        elif 64 <= caen_num <= 66:
+            caen_section = "K"
+        elif caen_num == 68:
+            caen_section = "L"
+        elif 69 <= caen_num <= 75:
+            caen_section = "M"
+        elif 77 <= caen_num <= 82:
+            caen_section = "N"
+        else:
+            caen_section = "DEFAULT"
+
+    return caen_section
+
+
+@dataclass
+class TrendDecomposition:
+    """Rezultatul decompozitiei numerice a trendului CA (regresie liniara +
+    coeficient de variatie + ani-anomalie) — cuplare EXPLICITA intre
+    `_decompose_ca_trend` (calcul pur) si `_score_trend_decomposition`
+    (transforma in scor+reasons), in loc de variabile libere partajate
+    intr-un singur bloc uriaș (asta era forma originala a bug-ului clasei
+    `litigation`: o valoare calculata conditionat, folosita neconditionat)."""
+    base_growth_pct: float
+    cv: float
+    anomaly_years: list
+
+
+def _decompose_ca_trend(ca_values: list) -> TrendDecomposition | None:
+    """Sub-bloc _score_financiar: extras verbatim din blocul de decompozitie
+    (regresie liniara pt panta normalizata + CV pt volatilitate + detectie
+    ani-anomalie >2 std fata de trend). Pastreaza EXACT dublul guard din
+    original (len(ca_values)>=3 SI len(nums)>=3 dupa filtrare numerica) —
+    returneaza None daca oricare din ele nu e satisfacut, caz in care
+    orchestratorul sare peste scoring-ul de decompozitie in intregime."""
+    if len(ca_values) < 3:
+        return None
+    nums = [v.get("value", 0) for v in ca_values if isinstance(v.get("value"), (int, float))]
+    if not nums or len(nums) < 3:
+        return None
+
+    mean = sum(nums) / len(nums)
+
+    # Base Growth: linear regression slope (normalized by mean)
+    n = len(nums)
+    x_mean = (n - 1) / 2
+    xy_sum = sum((i - x_mean) * (nums[i] - mean) for i in range(n))
+    xx_sum = sum((i - x_mean) ** 2 for i in range(n))
+    slope = (xy_sum / xx_sum) if xx_sum > 0 else 0
+    base_growth_pct = round((slope / mean * 100) if mean > 0 else 0, 1)
+
+    # Volatility: CV (coefficient of variation)
+    variance = sum((x - mean) ** 2 for x in nums) / len(nums)
+    cv = math.sqrt(variance) / mean if mean > 0 else 0
+
+    # Anomaly: detect single-year deviations >2 std from linear trend
+    std_dev = math.sqrt(variance) if variance > 0 else 0
+    anomaly_years = []
+    for i, v in enumerate(ca_values):
+        if isinstance(v.get("value"), (int, float)) and std_dev > 0:
+            expected = mean + slope * (i - x_mean)
+            deviation = abs(v["value"] - expected)
+            if deviation > 2 * std_dev:
+                anomaly_years.append(v.get("year", i))
+
+    return TrendDecomposition(base_growth_pct=base_growth_pct, cv=cv, anomaly_years=anomaly_years)
+
+
+def _score_trend_decomposition(
+    decomp: TrendDecomposition, caen_section: str
+) -> tuple[int, list[dict], list[tuple[str, str]]]:
+    """Sub-bloc _score_financiar: transforma TrendDecomposition + sectiunea
+    CAEN in delta scor + reasons + risk_factors (trend structural, anomalii,
+    volatilitate normalizata sectorial FIX #10). Extras verbatim."""
+    delta = 0
+    reasons: list[dict] = []
+    risk_factors: list[tuple[str, str]] = []
+
+    # Store decomposition in risk_factors for synthesis
+    if decomp.base_growth_pct > 10:
+        reasons.append({"text": f"Trend structural pozitiv: +{decomp.base_growth_pct}%/an", "impact": 0})
+        risk_factors.append((f"Trend structural pozitiv: +{decomp.base_growth_pct}%/an", "POSITIVE"))
+    elif decomp.base_growth_pct < -10:
+        delta -= 5
+        reasons.append({"text": f"Trend structural negativ: {decomp.base_growth_pct}%/an", "impact": -5})
+        risk_factors.append((f"Trend structural negativ: {decomp.base_growth_pct}%/an", "HIGH"))
+
+    if decomp.anomaly_years:
+        reasons.append({"text": f"Anomalii CA detectate in {decomp.anomaly_years}", "impact": 0})
+        risk_factors.append((f"Anomalii CA in {decomp.anomaly_years} (deviatie >2 std)", "MEDIUM"))
+
+    # FIX #10: Volatility scoring — sector-normalized (relative to industry baseline)
+    baseline = SECTOR_VOLATILITY_BASELINE.get(
+        caen_section, SECTOR_VOLATILITY_BASELINE["DEFAULT"]
+    )
+    ratio = decomp.cv / baseline if baseline > 0 else decomp.cv / 0.35
+
+    if ratio > 2.0:
+        delta -= 10
+        reasons.append({"text": f"Volatilitate CA ridicata vs sector (CV={decomp.cv:.1%}, {ratio:.1f}x)", "impact": -10})
+        risk_factors.append((f"Volatilitate CA ridicata vs sector (CV={decomp.cv:.1%}, ratio={ratio:.1f}x)", "MEDIUM"))
+    elif ratio > 1.5:
+        delta -= 5
+        reasons.append({"text": f"Volatilitate CA moderata vs sector (CV={decomp.cv:.1%}, {ratio:.1f}x)", "impact": -5})
+        risk_factors.append((f"Volatilitate CA moderata vs sector (CV={decomp.cv:.1%}, ratio={ratio:.1f}x)", "LOW"))
+    # else: Normal volatility for sector — no penalty
+
+    return delta, reasons, risk_factors
+
+
 def _score_financiar(
     financial: dict, company: dict, caen_code_toplevel, thresholds: dict
 ) -> tuple[dict, list[tuple[str, str]], FinancialFacts]:
@@ -588,107 +749,13 @@ def _score_financiar(
 
         # 10B M3.1: Multi-Year Trend Decomposition — Base Growth + Volatility + Anomaly
         ca_values = ca_trend.get("values", [])
-        if len(ca_values) >= 3:
-            nums = [v.get("value", 0) for v in ca_values if isinstance(v.get("value"), (int, float))]
-            if nums and len(nums) >= 3:
-                mean = sum(nums) / len(nums)
-
-                # Base Growth: linear regression slope (normalized by mean)
-                n = len(nums)
-                x_mean = (n - 1) / 2
-                xy_sum = sum((i - x_mean) * (nums[i] - mean) for i in range(n))
-                xx_sum = sum((i - x_mean) ** 2 for i in range(n))
-                slope = (xy_sum / xx_sum) if xx_sum > 0 else 0
-                base_growth_pct = round((slope / mean * 100) if mean > 0 else 0, 1)
-
-                # Volatility: CV (coefficient of variation)
-                variance = sum((x - mean) ** 2 for x in nums) / len(nums)
-                cv = math.sqrt(variance) / mean if mean > 0 else 0
-
-                # Anomaly: detect single-year deviations >2 std from linear trend
-                std_dev = math.sqrt(variance) if variance > 0 else 0
-                anomaly_years = []
-                for i, v in enumerate(ca_values):
-                    if isinstance(v.get("value"), (int, float)) and std_dev > 0:
-                        expected = mean + slope * (i - x_mean)
-                        deviation = abs(v["value"] - expected)
-                        if deviation > 2 * std_dev:
-                            anomaly_years.append(v.get("year", i))
-
-                # Store decomposition in risk_factors for synthesis
-                if base_growth_pct > 10:
-                    fin_reasons.append({"text": f"Trend structural pozitiv: +{base_growth_pct}%/an", "impact": 0})
-                    risk_factors.append((f"Trend structural pozitiv: +{base_growth_pct}%/an", "POSITIVE"))
-                elif base_growth_pct < -10:
-                    fin_score -= 5
-                    fin_reasons.append({"text": f"Trend structural negativ: {base_growth_pct}%/an", "impact": -5})
-                    risk_factors.append((f"Trend structural negativ: {base_growth_pct}%/an", "HIGH"))
-
-                if anomaly_years:
-                    fin_reasons.append({"text": f"Anomalii CA detectate in {anomaly_years}", "impact": 0})
-                    risk_factors.append((f"Anomalii CA in {anomaly_years} (deviatie >2 std)", "MEDIUM"))
-
-                # FIX #10: Volatility scoring — sector-normalized (relative to industry baseline)
-                # Determine CAEN section for sector-aware baseline
-                caen_code = (
-                    caen_code_toplevel
-                    or company.get("caen_code", {})
-                    or ""
-                )
-                if isinstance(caen_code, dict):
-                    caen_code = caen_code.get("value", "") or ""
-                caen_code = str(caen_code).strip()
-
-                caen_section = ""
-                if caen_code and caen_code[0].isalpha():
-                    caen_section = caen_code[0].upper()
-                elif caen_code and caen_code.isdigit():
-                    caen_num = int(caen_code)
-                    if 1 <= caen_num <= 3:
-                        caen_section = "A"
-                    elif 5 <= caen_num <= 9:
-                        caen_section = "B"
-                    elif 10 <= caen_num <= 33:
-                        caen_section = "C"
-                    elif caen_num == 35:
-                        caen_section = "D"
-                    elif 36 <= caen_num <= 39:
-                        caen_section = "E"
-                    elif 41 <= caen_num <= 43:
-                        caen_section = "F"
-                    elif 45 <= caen_num <= 47:
-                        caen_section = "G"
-                    elif 49 <= caen_num <= 53:
-                        caen_section = "H"
-                    elif 55 <= caen_num <= 56:
-                        caen_section = "I"
-                    elif 58 <= caen_num <= 63:
-                        caen_section = "J"
-                    elif 64 <= caen_num <= 66:
-                        caen_section = "K"
-                    elif caen_num == 68:
-                        caen_section = "L"
-                    elif 69 <= caen_num <= 75:
-                        caen_section = "M"
-                    elif 77 <= caen_num <= 82:
-                        caen_section = "N"
-                    else:
-                        caen_section = "DEFAULT"
-
-                baseline = SECTOR_VOLATILITY_BASELINE.get(
-                    caen_section, SECTOR_VOLATILITY_BASELINE["DEFAULT"]
-                )
-                ratio = cv / baseline if baseline > 0 else cv / 0.35
-
-                if ratio > 2.0:
-                    fin_score -= 10
-                    fin_reasons.append({"text": f"Volatilitate CA ridicata vs sector (CV={cv:.1%}, {ratio:.1f}x)", "impact": -10})
-                    risk_factors.append((f"Volatilitate CA ridicata vs sector (CV={cv:.1%}, ratio={ratio:.1f}x)", "MEDIUM"))
-                elif ratio > 1.5:
-                    fin_score -= 5
-                    fin_reasons.append({"text": f"Volatilitate CA moderata vs sector (CV={cv:.1%}, {ratio:.1f}x)", "impact": -5})
-                    risk_factors.append((f"Volatilitate CA moderata vs sector (CV={cv:.1%}, ratio={ratio:.1f}x)", "LOW"))
-                # else: Normal volatility for sector — no penalty
+        decomp = _decompose_ca_trend(ca_values)
+        if decomp is not None:
+            caen_section = _resolve_caen_section(caen_code_toplevel, company)
+            _d, _r, _rf = _score_trend_decomposition(decomp, caen_section)
+            fin_score += _d
+            fin_reasons.extend(_r)
+            risk_factors.extend(_rf)
 
         # Profit trend
         pn_trend = trend_val.get("profit_net", {})

@@ -2,12 +2,99 @@
 import pytest
 
 from backend.agents.agent_verification import VerificationAgent
-from backend.agents.verification.scoring import COLOR_MAP, risk_bucket
+from backend.agents.verification.scoring import COLOR_MAP, _resolve_caen_section, risk_bucket
 
 
 @pytest.fixture
 def agent():
     return VerificationAgent()
+
+
+class TestResolveCaenSection:
+    """Refactor _score_financiar Etapa 2 (2026-07-16): _resolve_caen_section a
+    fost extras VERBATIM (nu tabelizat) din codul original, ca sa nu schimbe
+    comportament pe cazuri de margine. Golden-ul (Pas 0) acopera doar 3 din
+    cele 14 ramuri numerice ale mapei (F, J, DEFAULT-fallthrough) — testele
+    de mai jos acopera DIRECT toate cele 14, plus goluri intre intervale,
+    coduri alfanumerice mixte si precedenta alpha-inainte-de-digit, asa cum
+    a fost promis in Pas 0/raportul refactorului.
+
+    Asteptarile sunt derivate din structura reala NACE Rev.2 (nu copiate din
+    outputul codului nou): A=Agricultura(01-03), B=Extractiva(05-09),
+    C=Prelucratoare(10-33), D=Energie(35), E=Apa/Salubritate(36-39),
+    F=Constructii(41-43), G=Comert(45-47), H=Transport(49-53),
+    I=Hoteluri/Restaurante(55-56), J=Info/Comunicatii(58-63),
+    K=Financiar(64-66), L=Imobiliare(68), M=Profesional/Stiintific(69-75),
+    N=Administrativ(77-82) — coincide cu mapa din scoring.py, ceea ce
+    confirma independent ca implementarea respecta standardul real."""
+
+    @pytest.mark.parametrize("caen_num,expected", [
+        (1, "A"), (2, "A"), (3, "A"),
+        (5, "B"), (7, "B"), (9, "B"),
+        (10, "C"), (20, "C"), (33, "C"),
+        (35, "D"),
+        (36, "E"), (38, "E"), (39, "E"),
+        (41, "F"), (42, "F"), (43, "F"),
+        (45, "G"), (46, "G"), (47, "G"),
+        (49, "H"), (52, "H"), (53, "H"),
+        (55, "I"), (56, "I"),
+        (58, "J"), (60, "J"), (63, "J"),
+        (64, "K"), (65, "K"), (66, "K"),
+        (68, "L"),
+        (69, "M"), (72, "M"), (75, "M"),
+        (77, "N"), (80, "N"), (82, "N"),
+    ])
+    def test_numeric_ranges_map_to_correct_section(self, caen_num, expected):
+        assert _resolve_caen_section(str(caen_num), {}) == expected
+
+    @pytest.mark.parametrize("caen_num", [0, 4, 34, 40, 44, 48, 54, 57, 67, 76, 83, 999])
+    def test_gap_numbers_fall_to_default(self, caen_num):
+        """Numere intre intervalele definite (sau peste 82) -> "DEFAULT",
+        prin ramura explicita else a lantului elif (nu prin lipsa de match)."""
+        assert _resolve_caen_section(str(caen_num), {}) == "DEFAULT"
+
+    def test_alpha_first_char_takes_precedence_over_digit_check(self):
+        """caen_code care incepe cu litera foloseste litera direct, fara sa
+        mai ajunga la ramura .isdigit()."""
+        assert _resolve_caen_section("J6201", {}) == "J"
+        assert _resolve_caen_section("f4120", {}) == "F"  # lowercase -> upper()
+
+    def test_mixed_alnum_not_alpha_first_not_all_digit_falls_to_empty_string(self):
+        """"6A": primul caracter NU e litera (e cifra) -> nu intra pe ramura
+        alpha; dar .isdigit() e False (are litera in coada) -> nu intra nici
+        pe ramura numerica. Rezultat: caen_section ramane "" (NU "DEFAULT" —
+        distinctie reala: "" nu e cheie in SECTOR_VOLATILITY_BASELINE, deci
+        _score_trend_decomposition cade oricum pe baseline DEFAULT prin
+        `.get(caen_section, ...["DEFAULT"])`, dar valoarea INTERMEDIARA
+        difera de "DEFAULT" explicit — comportament pastrat verbatim din
+        codul original, nu introdus de refactor)."""
+        assert _resolve_caen_section("6A", {}) == ""
+
+    def test_empty_caen_code_falls_to_empty_string(self):
+        assert _resolve_caen_section("", {}) == ""
+        assert _resolve_caen_section(None, {}) == ""
+
+    def test_toplevel_takes_priority_over_company_dict(self):
+        company = {"caen_code": {"value": "4120"}}  # would resolve to F
+        assert _resolve_caen_section("62", company) == "J"
+
+    def test_falls_back_to_company_dict_when_toplevel_falsy(self):
+        """Forma REALA de productie: verified["caen_code"] top-level nu e
+        niciodata setat de agent_verification.py — codul cade mereu pe
+        company["caen_code"] (dict _make_field-wrapped, cu cheia "value").
+        NOTA: "41" (sectiune cu 2 cifre), NU "4120" (codul CAEN complet cu 4
+        cifre) — int("4120")=4120 nu se incadreaza in niciun interval
+        (max 82), deci ar cadea pe DEFAULT. Asta confirma independent
+        gasirea din raport: codurile CAEN reale (4 cifre) NU se potrivesc
+        niciodata cu aceasta mapa numerica — doar sectiuni scurte (1-2
+        cifre) o fac."""
+        company = {"caen_code": {"value": "41", "trust": "OFICIAL"}}
+        assert _resolve_caen_section("", company) == "F"
+        assert _resolve_caen_section(None, company) == "F"
+
+    def test_company_dict_without_wrapper_falsy_value_falls_to_empty(self):
+        company = {"caen_code": {"value": ""}}
+        assert _resolve_caen_section("", company) == ""
 
 
 class TestRiskBucketBoundaries:
