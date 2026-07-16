@@ -492,6 +492,68 @@ def _fval(field):
     return None
 
 
+def _score_ca_level(ca_val, thresholds) -> tuple[int, list[dict], list[tuple[str, str]]]:
+    """Sub-bloc _score_financiar: nivel absolut CA vs praguri (dinamice sau
+    SCORING_THRESHOLDS). Extras verbatim — vezi orchestratorul pt ordinea
+    de apel (parte din contractul golden)."""
+    if ca_val is None:
+        return 0, [], []
+    ca_excellent = thresholds["ca_excellent"]
+    ca_good = thresholds["ca_good"]
+    ca_ok = thresholds["ca_ok"]
+    if ca_val > ca_excellent:
+        return 15, [{"text": f"CA excelenta (>{ca_val/1_000_000:.1f}M RON)", "impact": 15}], []
+    elif ca_val > ca_good:
+        return 10, [{"text": f"CA buna ({ca_val/1_000:.0f}K RON)", "impact": 10}], []
+    elif ca_val > ca_ok:
+        return 5, [{"text": f"CA moderata ({ca_val/1_000:.0f}K RON)", "impact": 5}], []
+    elif ca_val <= 0:
+        return -20, [{"text": "CA zero sau negativa", "impact": -20}], [("CA zero sau negativa", "MEDIUM")]
+    return 0, [], []
+
+
+def _score_profit_level(profit_val) -> tuple[int, list[dict], list[tuple[str, str]]]:
+    """Sub-bloc _score_financiar: profit net pozitiv/negativ (nivel absolut,
+    distinct de trendul profitului — vezi `_score_profit_trend`)."""
+    if profit_val is None:
+        return 0, [], []
+    if profit_val > 0:
+        return 10, [{"text": f"Profit pozitiv ({profit_val/1_000:.0f}K RON)", "impact": 10}], []
+    elif profit_val < 0:
+        return -15, [{"text": f"Pierdere neta ({profit_val/1_000:.0f}K RON)", "impact": -15}], [("Pierdere neta", "MEDIUM")]
+    return 0, [], []
+
+
+def _score_ca_growth(growth) -> tuple[int, list[dict], list[tuple[str, str]]]:
+    """Sub-bloc _score_financiar: crestere/scadere an-peste-an a CA
+    (growth_percent din trend_financiar), distinct de decompozitia
+    multi-an (`_score_trend_decomposition`, care foloseste seria de
+    valori, nu procentul unic)."""
+    if growth is None:
+        return 0, [], []
+    if growth > 50:
+        return 15, [{"text": f"Crestere CA exceptionala +{growth:.0f}%", "impact": 15}], [(f"Crestere CA exceptionala +{growth:.0f}%", "POSITIVE")]
+    elif growth > 20:
+        return 10, [{"text": f"Crestere CA semnificativa +{growth:.0f}%", "impact": 10}], []
+    elif growth > 0:
+        return 5, [{"text": f"Crestere CA moderata +{growth:.0f}%", "impact": 5}], []
+    elif growth < -30:
+        return -20, [{"text": f"Scadere CA critica {growth:.0f}%", "impact": -20}], [(f"Scadere CA critica {growth:.0f}%", "HIGH")]
+    elif growth < -10:
+        return -10, [{"text": f"Scadere CA {growth:.0f}%", "impact": -10}], [(f"Scadere CA {growth:.0f}%", "MEDIUM")]
+    elif growth < 0:
+        return -5, [{"text": f"Scadere CA minora {growth:.0f}%", "impact": -5}], []
+    return 0, [], []
+
+
+def _score_profit_trend(pn_trend: dict) -> tuple[int, list[dict], list[tuple[str, str]]]:
+    """Sub-bloc _score_financiar: scadere profit net an-peste-an (>30%)."""
+    pn_growth = pn_trend.get("growth_percent")
+    if pn_growth is not None and pn_growth < -30:
+        return -5, [{"text": f"Scadere profit neta {pn_growth:.0f}%", "impact": -5}], [(f"Scadere profit neta {pn_growth:.0f}%", "MEDIUM")]
+    return 0, [], []
+
+
 def _score_financiar(
     financial: dict, company: dict, caen_code_toplevel, thresholds: dict
 ) -> tuple[dict, list[tuple[str, str]], FinancialFacts]:
@@ -502,35 +564,16 @@ def _score_financiar(
     fin_reasons = []
     risk_factors: list[tuple[str, str]] = []
     ca_val = _fval(financial.get("cifra_afaceri", {}))
-    if ca_val is not None:
-        # Dynamic thresholds: daca avem percentile din DB, folosim valorile locale
-        # altfel: valorile hardcodate din SCORING_THRESHOLDS
-        ca_excellent = thresholds["ca_excellent"]
-        ca_good = thresholds["ca_good"]
-        ca_ok = thresholds["ca_ok"]
-        if ca_val > ca_excellent:
-            fin_score += 15
-            fin_reasons.append({"text": f"CA excelenta (>{ca_val/1_000_000:.1f}M RON)", "impact": 15})
-        elif ca_val > ca_good:
-            fin_score += 10
-            fin_reasons.append({"text": f"CA buna ({ca_val/1_000:.0f}K RON)", "impact": 10})
-        elif ca_val > ca_ok:
-            fin_score += 5
-            fin_reasons.append({"text": f"CA moderata ({ca_val/1_000:.0f}K RON)", "impact": 5})
-        elif ca_val <= 0:
-            fin_score -= 20
-            fin_reasons.append({"text": "CA zero sau negativa", "impact": -20})
-            risk_factors.append(("CA zero sau negativa", "MEDIUM"))
+    _d, _r, _rf = _score_ca_level(ca_val, thresholds)
+    fin_score += _d
+    fin_reasons.extend(_r)
+    risk_factors.extend(_rf)
 
     profit_val = _fval(financial.get("profit_net", {}))
-    if profit_val is not None:
-        if profit_val > 0:
-            fin_score += 10
-            fin_reasons.append({"text": f"Profit pozitiv ({profit_val/1_000:.0f}K RON)", "impact": 10})
-        elif profit_val < 0:
-            fin_score -= 15
-            fin_reasons.append({"text": f"Pierdere neta ({profit_val/1_000:.0f}K RON)", "impact": -15})
-            risk_factors.append(("Pierdere neta", "MEDIUM"))
+    _d, _r, _rf = _score_profit_level(profit_val)
+    fin_score += _d
+    fin_reasons.extend(_r)
+    risk_factors.extend(_rf)
 
     # Trend Scoring (8B) — growth factor bonus/penalty
     trend_field = financial.get("trend_financiar", {})
@@ -538,28 +581,10 @@ def _score_financiar(
     if isinstance(trend_val, dict):
         ca_trend = trend_val.get("cifra_afaceri_neta", {})
         growth = ca_trend.get("growth_percent")
-        if growth is not None:
-            if growth > 50:
-                fin_score += 15
-                fin_reasons.append({"text": f"Crestere CA exceptionala +{growth:.0f}%", "impact": 15})
-                risk_factors.append((f"Crestere CA exceptionala +{growth:.0f}%", "POSITIVE"))
-            elif growth > 20:
-                fin_score += 10
-                fin_reasons.append({"text": f"Crestere CA semnificativa +{growth:.0f}%", "impact": 10})
-            elif growth > 0:
-                fin_score += 5
-                fin_reasons.append({"text": f"Crestere CA moderata +{growth:.0f}%", "impact": 5})
-            elif growth < -30:
-                fin_score -= 20
-                fin_reasons.append({"text": f"Scadere CA critica {growth:.0f}%", "impact": -20})
-                risk_factors.append((f"Scadere CA critica {growth:.0f}%", "HIGH"))
-            elif growth < -10:
-                fin_score -= 10
-                fin_reasons.append({"text": f"Scadere CA {growth:.0f}%", "impact": -10})
-                risk_factors.append((f"Scadere CA {growth:.0f}%", "MEDIUM"))
-            elif growth < 0:
-                fin_score -= 5
-                fin_reasons.append({"text": f"Scadere CA minora {growth:.0f}%", "impact": -5})
+        _d, _r, _rf = _score_ca_growth(growth)
+        fin_score += _d
+        fin_reasons.extend(_r)
+        risk_factors.extend(_rf)
 
         # 10B M3.1: Multi-Year Trend Decomposition — Base Growth + Volatility + Anomaly
         ca_values = ca_trend.get("values", [])
@@ -667,11 +692,10 @@ def _score_financiar(
 
         # Profit trend
         pn_trend = trend_val.get("profit_net", {})
-        pn_growth = pn_trend.get("growth_percent")
-        if pn_growth is not None and pn_growth < -30:
-            fin_score -= 5
-            fin_reasons.append({"text": f"Scadere profit neta {pn_growth:.0f}%", "impact": -5})
-            risk_factors.append((f"Scadere profit neta {pn_growth:.0f}%", "MEDIUM"))
+        _d, _r, _rf = _score_profit_trend(pn_trend)
+        fin_score += _d
+        fin_reasons.extend(_r)
+        risk_factors.extend(_rf)
 
     # Solvency Ratio (8B)
     cap_val = _fval(financial.get("capitaluri_proprii", {}))
