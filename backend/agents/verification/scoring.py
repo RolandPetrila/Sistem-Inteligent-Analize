@@ -715,6 +715,57 @@ def _score_trend_decomposition(
     return delta, reasons, risk_factors
 
 
+def _score_solvency_ratio(cap_val, ca_val) -> tuple[int, list[dict], list[tuple[str, str]]]:
+    """Sub-bloc _score_financiar: raport capitaluri proprii / CA (8B) —
+    capital negativ, subcapitalizare (<5% din CA), capitalizare solida
+    (>30% din CA). Extras verbatim."""
+    if cap_val is None or ca_val is None or ca_val <= 0:
+        return 0, [], []
+    solvency_ratio = cap_val / ca_val
+    if cap_val < 0:
+        return -15, [{"text": "Capitaluri proprii NEGATIVE — subcapitalizare", "impact": -15}], [("Capitaluri proprii NEGATIVE — subcapitalizare", "HIGH")]
+    elif solvency_ratio < 0.05:
+        return -10, [{"text": f"Subcapitalizare (capital={solvency_ratio:.1%} din CA)", "impact": -10}], [("Subcapitalizare (capital < 5% din CA)", "MEDIUM")]
+    elif solvency_ratio > 0.3:
+        return 5, [{"text": f"Capitalizare solida ({solvency_ratio:.1%} din CA)", "impact": 5}], []
+    return 0, [], []
+
+
+def _flag_missing_financials(ca_val, profit_val, cap_val) -> tuple[int, list[dict], list[tuple[str, str]]]:
+    """Sub-bloc _score_financiar: C5 fix — semnaleaza profit/capitaluri
+    indisponibile (cand CA e disponibila si pozitiva) ca INDETERMINAT, nu
+    ca zero implicit. Extras verbatim (pastreaza ordinea profit-apoi-capital
+    in AMBELE liste, reasons si risk_factors)."""
+    if ca_val is None or ca_val <= 0:
+        return 0, [], []
+    delta = 0
+    reasons: list[dict] = []
+    risk_factors: list[tuple[str, str]] = []
+    if profit_val is None:
+        risk_factors.append(("Profit net indisponibil — solvabilitate inestimabila", "MEDIUM"))
+        delta -= 5
+        reasons.append({"text": "Profit net indisponibil", "impact": -5})
+    if cap_val is None:
+        risk_factors.append(("Capitaluri proprii indisponibile — subcapitalizare neverificabila", "MEDIUM"))
+        delta -= 5
+        reasons.append({"text": "Capitaluri proprii indisponibile", "impact": -5})
+    return delta, reasons, risk_factors
+
+
+def _score_cashflow_stress(ca_val, profit_val, cap_val) -> tuple[int, list[dict], list[tuple[str, str]]]:
+    """Sub-bloc _score_financiar: Cash Flow Proxy Intelligence (9B) — CA mare
+    + profit mic/negativ + capital in scadere = semnal de stress de
+    lichiditate. Extras verbatim (guard + if/elif mutual-exclusiv identic)."""
+    if not (ca_val and ca_val > 0 and profit_val is not None and cap_val is not None):
+        return 0, [], []
+    profit_margin = profit_val / ca_val if ca_val > 0 else 0
+    if profit_margin < -0.1 and cap_val < 0:
+        return -10, [{"text": "Cash flow stress: marja negativa + capital negativ", "impact": -10}], [("Cash flow stress: marja negativa + capital negativ", "HIGH")]
+    elif profit_margin < 0.01 and ca_val > 1_000_000:
+        return -5, [{"text": "Marja profit sub 1% la CA > 1M RON", "impact": -5}], [("Marja profit sub 1% la CA > 1M — posibil cash flow strain", "MEDIUM")]
+    return 0, [], []
+
+
 def _score_financiar(
     financial: dict, company: dict, caen_code_toplevel, thresholds: dict
 ) -> tuple[dict, list[tuple[str, str]], FinancialFacts]:
@@ -766,30 +817,16 @@ def _score_financiar(
 
     # Solvency Ratio (8B)
     cap_val = _fval(financial.get("capitaluri_proprii", {}))
-    if cap_val is not None and ca_val is not None and ca_val > 0:
-        solvency_ratio = cap_val / ca_val
-        if cap_val < 0:
-            fin_score -= 15
-            fin_reasons.append({"text": "Capitaluri proprii NEGATIVE — subcapitalizare", "impact": -15})
-            risk_factors.append(("Capitaluri proprii NEGATIVE — subcapitalizare", "HIGH"))
-        elif solvency_ratio < 0.05:
-            fin_score -= 10
-            fin_reasons.append({"text": f"Subcapitalizare (capital={solvency_ratio:.1%} din CA)", "impact": -10})
-            risk_factors.append(("Subcapitalizare (capital < 5% din CA)", "MEDIUM"))
-        elif solvency_ratio > 0.3:
-            fin_score += 5
-            fin_reasons.append({"text": f"Capitalizare solida ({solvency_ratio:.1%} din CA)", "impact": 5})
+    _d, _r, _rf = _score_solvency_ratio(cap_val, ca_val)
+    fin_score += _d
+    fin_reasons.extend(_r)
+    risk_factors.extend(_rf)
 
     # C5 fix: Flag missing profit/equity as INDETERMINAT
-    if ca_val is not None and ca_val > 0:
-        if profit_val is None:
-            risk_factors.append(("Profit net indisponibil — solvabilitate inestimabila", "MEDIUM"))
-            fin_score -= 5
-            fin_reasons.append({"text": "Profit net indisponibil", "impact": -5})
-        if cap_val is None:
-            risk_factors.append(("Capitaluri proprii indisponibile — subcapitalizare neverificabila", "MEDIUM"))
-            fin_score -= 5
-            fin_reasons.append({"text": "Capitaluri proprii indisponibile", "impact": -5})
+    _d, _r, _rf = _flag_missing_financials(ca_val, profit_val, cap_val)
+    fin_score += _d
+    fin_reasons.extend(_r)
+    risk_factors.extend(_rf)
 
     # --- 10F M3.3: Solvency Stress Matrix 3x3 ---
     solvency_matrix = None
@@ -846,16 +883,10 @@ def _score_financiar(
                 risk_factors.append((f"Matrice solvabilitate: {risk_zone} (marja={profit_margin_pct:.1f}%, capital={equity_ratio_pct:.1f}%)", "MEDIUM"))
 
     # Cash Flow Proxy Intelligence (9B) — high CA + low profit + capital change = stress
-    if ca_val and ca_val > 0 and profit_val is not None and cap_val is not None:
-        profit_margin = profit_val / ca_val if ca_val > 0 else 0
-        if profit_margin < -0.1 and cap_val < 0:
-            fin_score -= 10
-            fin_reasons.append({"text": "Cash flow stress: marja negativa + capital negativ", "impact": -10})
-            risk_factors.append(("Cash flow stress: marja negativa + capital negativ", "HIGH"))
-        elif profit_margin < 0.01 and ca_val > 1_000_000:
-            fin_score -= 5
-            fin_reasons.append({"text": "Marja profit sub 1% la CA > 1M RON", "impact": -5})
-            risk_factors.append(("Marja profit sub 1% la CA > 1M — posibil cash flow strain", "MEDIUM"))
+    _d, _r, _rf = _score_cashflow_stress(ca_val, profit_val, cap_val)
+    fin_score += _d
+    fin_reasons.extend(_r)
+    risk_factors.extend(_rf)
 
     dim = {"score": max(0, min(100, fin_score)), "weight": 30, "reasons": fin_reasons}
     return dim, risk_factors, FinancialFacts(
