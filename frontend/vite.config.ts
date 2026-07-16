@@ -11,6 +11,7 @@ export default defineConfig({
     setupFiles: ["./src/__tests__/setup.ts"],
     css: false,
     testTimeout: 15000,
+    pool: "threads",
   },
   plugins: [
     react(),
