@@ -48,11 +48,19 @@ Sistem local de Business Intelligence care ruleaza pe Windows 10. Extrage automa
   **n-a rulat niciodata cu date reale**. La orice client de sursa: verifica setul de chei REAL emis,
   nu ce zice documentatia. Comentariul "ANAF are formate diferite pt firme mari vs mici" era, tot
   asa, **fals** — infirmat empiric 2026-07-15 (OMV Petrom si o firma mica primesc acelasi set I1-I20).
-- **Google Maps e MORT din ~2026-07 (`REQUEST_DENIED`, legacy API)** — necesita migrare la "Places
-  API (New)" din Google Cloud Console (actiune manuala, la user). Pana atunci `maps_rating` e
-  `{"found": false}` pt orice firma, deci dimensiunea reputational ruleaza doar pe `web_presence`.
-  **`AUDIT_FUNCTII.html` inca raporteaza "Google Maps OK"** (din 07-12) — dashboard-ul minte pasiv:
-  ping-ul stie sa detecteze `request_denied` (`connectivity.py:248`), doar ca nimeni nu l-a re-rulat.
+- ~~**Google Maps e MORT din ~2026-07**~~ **[FALS — INFIRMAT 2026-07-16 cu date de PRODUCTIE.
+  Google Maps FUNCTIONEAZA. NU e nicio actiune de facut la Google Cloud Console.]** Dovada: joburi
+  reale 2026-07-16 — TAROM `found=True rating=3.3 (767 recenzii)`, CIP INSPECTION `found=True
+rating=5 (349 recenzii)`. Dimensiunea reputational **nu** rula "doar pe web_presence".
+  **`AUDIT_FUNCTII.html` avea DREPTATE**; textul de mai sus (care il acuza ca "minte pasiv") era el
+  minciuna. **CAUZA — GOTCHA MAJOR, se repeta:** `GOOGLE_CLOUD_API_KEY` din **env var-ul userului**
+  DIFERA de cel din `.env`, iar `pydantic-settings` citeste env var-ul **INAINTEA** lui `.env`.
+  Serviciul ruleaza ca **SYSTEM** -> nu vede env var-ul userului -> foloseste `.env` (cheia BUNA).
+  Un test din shell foloseste cheia VECHE -> `request_denied` -> concluzia falsa "API mort".
+  **4 chei difera intre shell si productie: `GOOGLE_CLOUD_API_KEY`, `GOOGLE_AI_API_KEY`,
+  `TELEGRAM_CHAT_ID`, `XAI_API_KEY`.** Nu declara NICIO sursa "moarta" pe baza unui test din shell —
+  confirma in `reports.full_data` (joburi reale) sau prin `POST /api/settings/test/{service}` (ruleaza
+  IN serviciu). Cand ping-ul live si CLAUDE.md se contrazic, **productia castiga**.
 
 ## Cum se citeste "COMPLETATA" mai jos (citeste asta INAINTE de Status)
 
