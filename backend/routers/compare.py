@@ -159,10 +159,24 @@ def _calculate_compare_score(company: dict) -> int:
             "profit_brut": _field(company.get("profit_brut")),
             "capitaluri_proprii": _field(company.get("capitaluri")),
             "numar_angajati": _field(company.get("angajati")),
+            # FIX 2026-07-16: contractul canonic (_score_fiscal, scoring.py) citeste
+            # platitor_tva din FINANCIAL, nu din RISK — vezi agent_verification.py:555-556
+            # (acelasi loc unde e scris pe calea reala Agent 4). `_field()` (nu default
+            # False) e intentionat: pt firma NEGASITA in ANAF (compare.py ~68-76 nu
+            # seteaza deloc "platitor_tva"), un default False ar afirma cu confidence
+            # 1.0 ceva ce nu stim ("Neplatitor TVA" fals) — vezi clasa de bug din
+            # CLAUDE.md ".get(cheie, default) MASCHEAZA absenta". Firma gasita ->
+            # valoare reala (True/False, niciodata None) -> comportament neschimbat.
+            "platitor_tva": _field(company.get("platitor_tva")),
         },
         "risk": {
-            "inactiv": {"value": company.get("inactiv", False)},
-            "platitor_tva": {"value": company.get("platitor_tva", False)},
+            # FIX 2026-07-16: redenumit din "inactiv" -> "anaf_inactive" — _score_fiscal
+            # citeste risk_data.get("anaf_inactive"), cheia veche nu era citita de nimeni,
+            # deci penalizarea "Firma inactiva la ANAF" (-50) nu se aplica NICIODATA in
+            # Comparator. Vezi agent_verification.py:685 (aceeasi cheie pe calea reala).
+            # `_field()` (nu default False) — acelasi motiv ca mai sus: firma negasita
+            # nu trebuie sa afirme "activa" cu incredere.
+            "anaf_inactive": _field(company.get("inactiv")),
         },
         "company": {
             "data_inregistrare": {"value": company.get("data_inregistrare", "")},
