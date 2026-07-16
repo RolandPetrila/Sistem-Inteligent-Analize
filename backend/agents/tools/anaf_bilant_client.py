@@ -16,6 +16,15 @@ ANAF_BILANT_URL = "https://webservicesp.anaf.ro/bilant"
 REQUEST_DELAY = 2  # secunde intre request-uri
 
 
+def _apply_pierdere_sign(result: dict, profit_key: str, pierdere_key: str) -> None:
+    """ANAF pune 0 la campul de profit cand firma e pe pierdere si muta valoarea
+    reala la campul de pierdere corespunzator — facem semnul explicit, in-place,
+    ca toti consumatorii sa vada valoarea negativa direct (valabil identic pt
+    perechea net/neta si pt perechea brut/bruta)."""
+    if result.get(profit_key) == 0 and (result.get(pierdere_key) or 0) > 0:
+        result[profit_key] = -result[pierdere_key]
+
+
 async def get_bilant(cui: str, year: int) -> dict:
     """
     Interogheaza ANAF Bilant API pentru un CUI si an specific.
@@ -149,12 +158,13 @@ async def get_bilant(cui: str, year: int) -> dict:
                         result[field_name] = val
                         break
 
-        # ANAF pune 0 la "Profit net" (I18) cand firma e pe pierdere si muta
-        # valoarea reala la "Pierdere neta" (I19) — facem semnul explicit aici,
-        # o singura data la parsare, ca toti consumatorii (scoring, predictive
-        # models) sa vada profit_net negativ direct din dictul principal.
-        if result.get("profit_net") == 0 and (result.get("pierdere_neta") or 0) > 0:
-            result["profit_net"] = -result["pierdere_neta"]
+        # ANAF pune 0 la campul de profit (I16/I18) cand firma e pe pierdere si
+        # muta valoarea reala la campul de pierdere corespunzator (I17/I19) —
+        # facem semnul explicit aici, o singura data la parsare, ca toti
+        # consumatorii (scoring, predictive models, compare) sa vada valoarea
+        # negativa direct din dictul principal, atat pt net cat si pt brut.
+        _apply_pierdere_sign(result, "profit_net", "pierdere_neta")
+        _apply_pierdere_sign(result, "profit_brut", "pierdere_bruta")
 
         # Total Active = Active imobilizate + Active circulante + Cheltuieli in avans
         # (identitate bilant prescurtat ANAF — verificat pe date live 2026-07-15 ca se

@@ -159,6 +159,55 @@ class TestProfitNetPierdereParsing:
         assert "pierdere_bruta" not in result
 
 
+class TestProfitBrutPierdereBrutaParsing:
+    """Bug simetric la fix-ul profit_net/pierdere_neta de mai sus: ANAF pune 0 la
+    'Profit brut' (I16) cand firma e pe pierdere si muta valoarea reala la
+    'Pierdere bruta' (I17) — acelasi mecanism, nereparat pana acum pt campul brut.
+    Consumatori (predictive_models.py Altman X3, routers/compare.py) primeau 0
+    in loc de valoarea reala negativa."""
+
+    @pytest.mark.asyncio
+    async def test_profit_brut_negativ_cand_pierdere_bruta_pozitiva(self):
+        with patch("backend.agents.tools.anaf_bilant_client.get_client") as mc:
+            mc.return_value.get = AsyncMock(return_value=_mock_resp(FICTIONAL_ANAF_LOSS_PAYLOAD))
+            result = await get_bilant("88888888", 2024)
+
+        assert result["found"] is True
+        assert result["profit_brut"] == -94_327
+        assert result["pierdere_bruta"] == 94_327
+
+    @pytest.mark.asyncio
+    async def test_firma_profitabila_profit_brut_neschimbat(self):
+        """Firma profitabila (I16>0, I17 absent) — profit_brut ramane pozitiv,
+        neschimbat de fix (non-regresie)."""
+        with patch("backend.agents.tools.anaf_bilant_client.get_client") as mc:
+            mc.return_value.get = AsyncMock(return_value=_mock_resp(FICTIONAL_ANAF_PAYLOAD))
+            result = await get_bilant("99999999", 2024)
+
+        assert result["profit_brut"] == 150_000
+        assert "pierdere_bruta" not in result
+
+    @pytest.mark.asyncio
+    async def test_firma_la_zero_real_profit_brut_ramane_zero(self):
+        """I16=0 SI I17=0 (firma la zero real, nu pe pierdere) -> profit_brut
+        ramane 0, nu -0 bizar (conditia e strict > 0 pe pierdere_bruta)."""
+        payload = {
+            **FICTIONAL_ANAF_LOSS_PAYLOAD,
+            "cui": 66666666,
+            "i": [
+                item if item["indicator"] != "I17"
+                else {"indicator": "I17", "val_indicator": 0, "val_den_indicator": "Pierdere bruta"}
+                for item in FICTIONAL_ANAF_LOSS_PAYLOAD["i"]
+            ],
+        }
+        with patch("backend.agents.tools.anaf_bilant_client.get_client") as mc:
+            mc.return_value.get = AsyncMock(return_value=_mock_resp(payload))
+            result = await get_bilant("66666666", 2024)
+
+        assert result["profit_brut"] == 0
+        assert result["pierdere_bruta"] == 0
+
+
 class TestCalculateTrends:
     """Test financial trend calculations from multi-year data."""
 
