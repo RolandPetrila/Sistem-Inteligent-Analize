@@ -7,6 +7,7 @@ import {
   Plus,
   History,
   AlertCircle,
+  Ban,
 } from "lucide-react";
 import clsx from "clsx";
 import { useToast } from "@/components/Toast";
@@ -23,6 +24,8 @@ interface MonitoringAlert {
   check_frequency: string;
   last_checked_at: string | null;
   telegram_notify: boolean;
+  suppressed_until?: string | null;
+  suppress_reason?: string | null;
 }
 
 // F2-9: Mapare frecventa la eticheta lizibila
@@ -77,6 +80,8 @@ export default function Monitoring() {
   const [isError, setIsError] = useState(false);
   // Alerta al carei audit-log este expandat (null = niciunul)
   const [expandedAuditId, setExpandedAuditId] = useState<string | null>(null);
+  // Alerta al carei formular de suprimare este deschis (null = niciunul)
+  const [suppressingId, setSuppressingId] = useState<string | null>(null);
 
   const loadData = async () => {
     setIsError(false);
@@ -316,6 +321,18 @@ export default function Monitoring() {
                       {alert.last_checked_at &&
                         ` | Ultima verificare: ${new Date(alert.last_checked_at).toLocaleDateString("ro-RO")}`}
                     </p>
+                    {alert.suppressed_until !== undefined &&
+                      alert.suppressed_until !== null && (
+                        <p className="text-xs text-amber-400 mt-0.5">
+                          Suprimata pana la{" "}
+                          {new Date(alert.suppressed_until).toLocaleDateString(
+                            "ro-RO",
+                          )}
+                          {alert.suppress_reason
+                            ? ` — ${alert.suppress_reason}`
+                            : ""}
+                        </p>
+                      )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -348,6 +365,23 @@ export default function Monitoring() {
                     <History className="w-4 h-4" />
                   </button>
                   <button
+                    onClick={() =>
+                      setSuppressingId((cur) =>
+                        cur === alert.id ? null : alert.id,
+                      )
+                    }
+                    className={clsx(
+                      "p-1.5 hover:text-amber-400 transition-colors",
+                      suppressingId === alert.id
+                        ? "text-amber-400"
+                        : "text-gray-600",
+                    )}
+                    title="Suprima alerta"
+                    aria-expanded={suppressingId === alert.id}
+                  >
+                    <Ban className="w-4 h-4" />
+                  </button>
+                  <button
                     onClick={() => deleteAlert(alert.id)}
                     className="p-1.5 text-gray-600 hover:text-red-400"
                   >
@@ -357,6 +391,16 @@ export default function Monitoring() {
               </div>
               {expandedAuditId === alert.id && (
                 <AuditLogPanel alertId={alert.id} />
+              )}
+              {suppressingId === alert.id && (
+                <SuppressForm
+                  alertId={alert.id}
+                  onDone={() => {
+                    setSuppressingId(null);
+                    loadData();
+                  }}
+                  onCancel={() => setSuppressingId(null)}
+                />
               )}
             </div>
           ))}
@@ -448,6 +492,99 @@ export default function Monitoring() {
             })}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// F4-4: Panou expandabil cu formularul de suprimare a unei alerte (motiv +
+// data optionala pana cand). "reason" e obligatoriu in backend (SuppressRequest);
+// "suppress_until" ramane null daca userul nu alege o data (= suprimare
+// nedefinita, pana la reactivare manuala).
+function SuppressForm({
+  alertId,
+  onDone,
+  onCancel,
+}: {
+  alertId: string;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const { toast } = useToast();
+  const [reason, setReason] = useState("");
+  const [until, setUntil] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async () => {
+    if (!reason.trim()) {
+      toast("Motivul suprimarii este obligatoriu", "error");
+      return;
+    }
+    setSubmitting(true);
+    logAction("Monitoring", "suppressAlert", { alertId, hasUntil: !!until });
+    try {
+      // <input type="date"> da "YYYY-MM-DD" — backend accepta orice string
+      // ISO datetime, deci normalizam la miezul noptii UTC.
+      const suppressUntil = until ? `${until}T00:00:00` : null;
+      await api.suppressAlert(alertId, {
+        reason: reason.trim(),
+        suppress_until: suppressUntil,
+      });
+      toast("Alerta suprimata", "success");
+      onDone();
+    } catch {
+      toast("Eroare la suprimarea alertei", "error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 pt-3 border-t border-dark-border space-y-2">
+      <label
+        className="block text-xs text-gray-500"
+        htmlFor={`suppress-reason-${alertId}`}
+      >
+        Motiv suprimare (obligatoriu)
+      </label>
+      <input
+        id={`suppress-reason-${alertId}`}
+        type="text"
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        placeholder="Ex: firma in vacanta fiscala, verificare manuala facuta deja"
+        className="w-full bg-dark-surface border border-dark-border rounded-lg px-3 py-2
+                   text-white text-sm focus:border-accent-primary focus:outline-none"
+      />
+      <label
+        className="block text-xs text-gray-500"
+        htmlFor={`suppress-until-${alertId}`}
+      >
+        Suprima pana la (optional — necompletat = pana la reactivare manuala)
+      </label>
+      <input
+        id={`suppress-until-${alertId}`}
+        type="date"
+        value={until}
+        onChange={(e) => setUntil(e.target.value)}
+        className="bg-dark-surface border border-dark-border rounded-lg px-3 py-2
+                   text-white text-sm focus:border-accent-primary focus:outline-none"
+      />
+      <div className="flex items-center gap-2 pt-1">
+        <button
+          onClick={submit}
+          disabled={submitting}
+          className="btn-primary text-xs px-3 py-1.5 disabled:opacity-50"
+        >
+          {submitting ? "Se suprima..." : "Confirma suprimarea"}
+        </button>
+        <button
+          onClick={onCancel}
+          disabled={submitting}
+          className="text-xs px-3 py-1.5 rounded-lg text-gray-400 hover:text-white transition-colors"
+        >
+          Anuleaza
+        </button>
       </div>
     </div>
   );

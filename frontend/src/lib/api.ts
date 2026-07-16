@@ -822,6 +822,25 @@ export const api = {
       }[];
     }>(`/monitoring/${alertId}/audit-log`),
 
+  // F4-4: Suprima o alerta de monitorizare pentru o perioada definita (sau
+  // nedefinit, daca suppress_until lipseste). Backend: POST /monitoring/{id}/suppress
+  // (SuppressRequest: reason: str, suppress_until: str | None). Poate raspunde
+  // si cu {status:"accepted", note} daca migrarea coloanei nu a rulat inca.
+  suppressAlert: (
+    alertId: string,
+    data: { reason: string; suppress_until?: string | null },
+  ) =>
+    request<{
+      alert_id: string;
+      suppressed_until?: string | null;
+      reason?: string;
+      status: string;
+      note?: string;
+    }>(`/monitoring/${alertId}/suppress`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
   // Regenerate a single report section (re-runs synthesis for one section).
   // Quality-route sections (e.g. executive_summary via Claude CLI) can take well
   // over the default 30s, so use an extended client timeout (~server ceiling 210s).
