@@ -41,6 +41,21 @@ _JSON_DROP_PRIORITY = [
     "lead_candidates", "anomalies", "early_warnings",
 ]
 
+# Bug confirmat pe date reale (2026-07-16, masurat pe 72 rapoarte din data/ris.db):
+# 59/72 (82%) au nucleul JSON pt provider "fast" (limita 20000 chars — groq/mistral/
+# cerebras) suficient de mare incat _JSON_DROP_PRIORITY taie efectiv tender_opportunities/
+# market/funding_programs/web_presence. Sectiunea "opportunities" (route "fast" -- vezi
+# SECTION_PROVIDER_PREFERENCE) e alimentata EXCLUSIV de aceste campuri (verificat la sursa:
+# _has_sufficient_data("opportunities") + _extract_raw_dict_for_section's section_data_map
+# de mai jos) — ordinea generica dupa marime le taie exact pe ELE primele, inaintea unor
+# campuri irelevante pentru sectiune (ex. agent_diagnostics, sources_used). Protejam DOAR
+# sectiunea "opportunities" (mutam campurile ei la finalul ordinii de taiere, nu le scoatem
+# din ea) — celelalte sectiuni raman pe ordinea generica dupa marime, neschimbata (nu s-a
+# verificat separat daca ele au aceeasi problema; extinde doar dupa verificare la sursa).
+_SECTION_PROTECTED_OPTIONAL_FIELDS: dict[str, set[str]] = {
+    "opportunities": {"tender_opportunities", "market", "funding_programs", "web_presence"},
+}
+
 
 def _cap_long_strings(obj, max_len: int):
     """Trunchiaza recursiv orice string > max_len caractere, pastrand STRUCTURA
@@ -329,14 +344,20 @@ Reguli:
             data_tokens = len(data_str) // 4  # fallback: 1 token ~ 4 chars
         return 500 + data_tokens + word_target * 2
 
-    def _reduce_verified_data_for_json(self, verified_data: dict, json_limit: int) -> tuple[str, list[str]]:
+    def _reduce_verified_data_for_json(
+        self, verified_data: dict, json_limit: int, section_key: str | None = None,
+    ) -> tuple[str, list[str]]:
         """Runda 2 / C: inlocuieste slice-ul orb de caractere (care taia JSON-ul la
         mijloc si producea text sintactic invalid) cu o reducere PE CHEI INTREGI —
         rezultatul e mereu JSON valid (json.dumps al unui dict, niciodata slice).
 
         1. Daca incape, intors neschimbat.
         2. Altfel, elimina chei optionale intregi in _JSON_DROP_PRIORITY (masurat pe
-           date reale, nu ghicit), remasurand dupa fiecare, pana incape.
+           date reale, nu ghicit), remasurand dupa fiecare, pana incape. Daca
+           `section_key` are campuri protejate in _SECTION_PROTECTED_OPTIONAL_FIELDS,
+           acestea sunt mutate la FINALUL ordinii de taiere (taiate ultimele dintre
+           campurile optionale, nu scoase din lista) — restul pastreaza ordinea
+           generica dupa marime, neschimbata.
         3. Daca nici asa nu incape (nucleul _CORE_JSON_FIELDS insusi e prea mare —
            confirmat ca se intampla real pe joburi bogate pt limita groq/mistral/
            cerebras de 20000), comprima textele lungi din interiorul nucleului
@@ -350,9 +371,15 @@ Reguli:
         if len(data_json) <= json_limit:
             return data_json, []
 
+        protected = _SECTION_PROTECTED_OPTIONAL_FIELDS.get(section_key, set())
+        drop_order = (
+            [k for k in _JSON_DROP_PRIORITY if k not in protected]
+            + [k for k in _JSON_DROP_PRIORITY if k in protected]
+        )
+
         reduced = dict(verified_data)
         omitted: list[str] = []
-        for key in _JSON_DROP_PRIORITY:
+        for key in drop_order:
             if key not in reduced:
                 continue
             del reduced[key]
@@ -405,7 +432,8 @@ Reguli:
             "cerebras": 20000, # 128K context (gpt-oss-120b)
         }
         json_limit = max_json_chars.get(provider, 15000)
-        data_json, omitted_keys = self._reduce_verified_data_for_json(verified_data, json_limit)
+        data_json, omitted_keys = self._reduce_verified_data_for_json(
+            verified_data, json_limit, section_key=section.get("key"))
         omitted_note = ""
         if omitted_keys:
             omitted_note = f"\n[omise pt limita de context: {', '.join(omitted_keys)}]"

@@ -86,6 +86,80 @@ class TestReduceVerifiedDataForJson:
         assert omitted
 
 
+def _opportunities_fixture() -> dict:
+    """Fixture SINTETIC (repo public — zero date reale de firme): nucleu mic + 4
+    campuri optionale de care sectiunea 'opportunities' DEPINDE (verificat la sursa:
+    `_has_sufficient_data('opportunities')` + `section_data_map['opportunities']` din
+    `_extract_raw_dict_for_section`) + 2 campuri optionale mari dar IRELEVANTE pentru
+    ea (`agent_diagnostics`, `due_diligence`). Dimensionat astfel incat, la
+    json_limit=4000, ordinea VECHE (dupa marime, fara constienta de sectiune) taie
+    exact campurile relevante primele (tender_opportunities e primul din
+    `_JSON_DROP_PRIORITY`), inainte de campurile irelevante."""
+    return {
+        "company": {"denumire": {"value": "Test SRL"}, "cui": {"value": "12345678"}},
+        "financial": {"cifra_afaceri": {"value": 1_000_000}},
+        "risk": {"insolvency": {"value": {"found": False}}},
+        "risk_score": {"score": "Verde", "numeric_score": 87.3, "dimensions": {}},
+        "completeness": {"score": 80, "gaps": []},
+        "credit_exposure": {"expunere_ron": 100000},
+        "predictive_scores": {"altman_z": {"zone": "safe"}},
+        "tender_opportunities": {"opportunities": [{"title": "Licitatie SEAP X"}]},
+        "market": {"seap": {"value": {"total_contracts": 3}}},
+        "funding_programs": {"eligible": [{"name": "PNRR"}]},
+        "web_presence": {"opportunities": ["oportunitate web"]},
+        # Irelevante pt "opportunities", dar voluminoase -> ar trebui taiate INAINTEA
+        # campurilor de mai sus, o data ce sectiunea e constienta de nevoile ei.
+        "agent_diagnostics": {"blob": "d" * 3000},
+        "due_diligence": {"blob": "e" * 3000},
+    }
+
+
+class TestSectionAwareProtection:
+    """Bug confirmat pe date reale (2026-07-16, masurat pe data/ris.db, 72 rapoarte):
+    82% aveau nucleul JSON pt route 'fast' (limita 20000) suficient de mare incat
+    `_JSON_DROP_PRIORITY` taia efectiv tender_opportunities/market/funding_programs —
+    exact campurile care alimenteaza sectiunea 'opportunities' (route 'fast' —
+    `SECTION_PROVIDER_PREFERENCE`), taiate INAINTEA unor campuri irelevante pt ea
+    (ex. agent_diagnostics). Fix: `_reduce_verified_data_for_json` accepta
+    `section_key` si muta campurile din `_SECTION_PROTECTED_OPTIONAL_FIELDS[section_key]`
+    la finalul ordinii de taiere (nu le scoate din ea)."""
+
+    def test_opportunities_section_protects_its_own_fields(self, agent):
+        data = _opportunities_fixture()
+        data_json, omitted = agent._reduce_verified_data_for_json(
+            data, json_limit=4000, section_key="opportunities")
+        parsed = json.loads(data_json)
+
+        # Campul care da bug-ul numele lui — supravietuieste taierii.
+        assert "tender_opportunities" in parsed
+        assert "tender_opportunities" not in omitted
+        # Restul campurilor de care sectiunea depinde REAL supravietuiesc si ele.
+        for needed in ("market", "funding_programs", "web_presence"):
+            assert needed in parsed, f"{needed} ar fi trebuit protejat pt 'opportunities'"
+
+        # Campul mare dar IRELEVANT pentru sectiune e cel taiat, nu cele relevante.
+        assert "agent_diagnostics" in omitted
+        assert "agent_diagnostics" not in parsed
+
+    def test_other_sections_keep_the_original_size_based_order(self, agent):
+        """Non-regresie: o sectiune fara intrare in _SECTION_PROTECTED_OPTIONAL_FIELDS
+        (ex. 'financial_analysis') taie EXACT in ordinea veche — tender_opportunities
+        tot primul, la fel ca inainte de fix (section_key=None == comportament vechi)."""
+        data = _opportunities_fixture()
+
+        data_json_no_section, omitted_no_section = agent._reduce_verified_data_for_json(
+            data, json_limit=4000)
+        data_json_unmapped, omitted_unmapped = agent._reduce_verified_data_for_json(
+            data, json_limit=4000, section_key="financial_analysis")
+
+        assert omitted_unmapped == omitted_no_section
+        assert data_json_unmapped == data_json_no_section
+        # Documenteaza explicit bug-ul original (fara protectie de sectiune):
+        # tender_opportunities e taiat PRIMUL, inaintea campurilor irelevante.
+        assert omitted_no_section[0] == "tender_opportunities"
+        assert "tender_opportunities" not in json.loads(data_json_no_section)
+
+
 class TestBlindSliceRegressionDocumentation:
     """Documenteaza exact defectul codului VECHI (pastrat aici ca proba, verificat
     separat cu `git stash` ca noul `_reduce_verified_data_for_json` NU-l reproduce —
