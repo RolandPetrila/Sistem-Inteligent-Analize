@@ -158,7 +158,7 @@ def _calculate_compare_score(company: dict) -> int:
             "profit_net": _field(company.get("profit_net")),
             "profit_brut": _field(company.get("profit_brut")),
             "capitaluri_proprii": _field(company.get("capitaluri")),
-            "numar_mediu_salariati": _field(company.get("angajati")),
+            "numar_angajati": _field(company.get("angajati")),
         },
         "risk": {
             "inactiv": {"value": company.get("inactiv", False)},

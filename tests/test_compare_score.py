@@ -12,7 +12,18 @@ repo public, zero date reale de firme terte) ca scorul:
 
 Rulat pe codul dinaintea fix-ului (git stash), acest test PICA: ambele firme
 primesc 70 (fallback declansat de KeyError implicit din .get() -> default).
+
+FIX 2026-07-16: al doilea bug de granita, gasit in ACELASI `_calculate_compare_score` —
+scria `verified["financial"]["numar_mediu_salariati"]`, dar consumatorul canonic
+`_score_operational` (scoring.py) citeste `financial["numar_angajati"]`. Efect: dimensiunea
+operationala (15% din scor) era oarba la angajati pentru ORICE firma comparata — vezi
+`TestCompareScoreAngajatiiContract` mai jos. `numar_mediu_salariati` din testul de echivalenta
+de mai jos (linia cu "numar_angajati" acum) a fost aliniat la acelasi fix — inainte,
+testul isi construia manual acelasi `verified` cu ACEEASI cheie gresita ca si codul,
+deci cele doua se confirmau reciproc fara sa prinda bug-ul (clasa de bug documentata in
+CLAUDE.md: fixture-urile codifica aceeasi presupunere gresita ca si codul).
 """
+from backend.agents.verification.scoring import risk_bucket
 from backend.routers.compare import _calculate_compare_score
 
 
@@ -74,7 +85,7 @@ class TestCalculateCompareScore:
                 "profit_net": {"value": company["profit_net"]},
                 "profit_brut": {"value": company["profit_brut"]},
                 "capitaluri_proprii": {"value": company["capitaluri"]},
-                "numar_mediu_salariati": {"value": company["angajati"]},
+                "numar_angajati": {"value": company["angajati"]},
             },
             "risk": {
                 "inactiv": {"value": company["inactiv"]},
@@ -88,3 +99,49 @@ class TestCalculateCompareScore:
         expected = calculate_risk_score(verified)["numeric_score"]
         actual = _calculate_compare_score(company)
         assert actual == expected
+
+
+class TestCompareScoreAngajatiiContract:
+    """FIX 2026-07-16: `_calculate_compare_score` scria cheia `numar_mediu_salariati`
+    in `verified["financial"]`, dar `_score_operational` (scoring.py) citeste
+    `numar_angajati`. Efect: dimensiunea operationala (15% din scor) era mereu
+    oarba la angajati pe calea Comparatorului — bonusul "forta de munca
+    semnificativa" nu se aplica NICIODATA, indiferent de firma.
+
+    Datele de mai jos au fost alese prin RULARE reala (nu calcul mental) astfel
+    incat bug-ul sa produca un flip de culoare vizibil pentru utilizator:
+    Galben (69.7, <70) pe codul vechi vs Verde (72.8, >=70) cu cheia corecta.
+    """
+
+    @staticmethod
+    def _company_pe_granita_verde() -> dict:
+        return {
+            "cifra_afaceri": 8_000_000,
+            "profit_net": 100_000,
+            "profit_brut": 150_000,
+            "capitaluri": 2_000_000,
+            "angajati": 9_000,
+            "inactiv": False,
+            "platitor_tva": True,
+            "data_inregistrare": "2015-05-10",
+            "stare": "ACTIVA",
+        }
+
+    def test_angajatii_trec_pragul_de_culoare_verde(self):
+        """PICA pe codul vechi (`numar_mediu_salariati`): scorul ramane 69.7 /
+        Galben, pentru ca bonusul de angajati nu ajunge niciodata la scoring.
+        Cu cheia corecta (`numar_angajati`), bonusul se aplica si scorul trece
+        la 72.8 / Verde — exact flip-ul vizibil in Comparator."""
+        company = self._company_pe_granita_verde()
+        score = _calculate_compare_score(company)
+
+        assert score >= 70, (
+            f"scor {score} sub pragul Verde — dimensiunea operationala nu vede "
+            f"angajatii (cheia scrisa de compare.py nu coincide cu cea citita "
+            f"de _score_operational din scoring.py)"
+        )
+        assert risk_bucket(score) == "Verde", (
+            f"culoare {risk_bucket(score)} in loc de Verde — bug-ul de cheie "
+            f"'numar_mediu_salariati' vs 'numar_angajati' schimba culoarea "
+            f"afisata utilizatorului in Comparator"
+        )
