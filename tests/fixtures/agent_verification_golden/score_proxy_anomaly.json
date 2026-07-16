@@ -1,0 +1,590 @@
+{
+  "current_step": "Verificare completa. Risc: Galben | Completitudine: 69%",
+  "progress": 0.5,
+  "verified_data": {
+    "actionariat": {
+      "available": false,
+      "source": "openapi.ro"
+    },
+    "anomalies": [
+      {
+        "detail": "Firma declara 0 angajati dar are cifra de afaceri de 6,000,000 RON. Posibil firma fantoma sau externalizare totala.",
+        "level": "SUSPECT",
+        "rule": "0 angajati + CA > 1,000,000 RON"
+      },
+      {
+        "detail": "Capital social 200 RON (minim legal) dar CA de 6,000,000 RON. Subcapitalizare semnificativa.",
+        "level": "ATENTIE",
+        "rule": "Capital social minim + CA mare"
+      },
+      {
+        "detail": "Firma a inregistrat pierdere neta de 50,000 RON in 2025.",
+        "level": "ATENTIE",
+        "rule": "Pierdere neta declarata"
+      },
+      {
+        "detail": "Firma infiintata recent (2026-01-05) dar deja are CA de 6,000,000 RON. Crestere neobisnuit de rapida.",
+        "level": "ATENTIE",
+        "rule": "Firma sub 1 an + CA > 500K"
+      }
+    ],
+    "benchmark": {
+      "available": false
+    },
+    "company": {
+      "adresa": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": {
+          "judet": "Arad",
+          "localitate": "Arad",
+          "strada": "Str. Test nr. 2"
+        }
+      },
+      "caen_code": {
+        "note": "Fallback: cod CAEN din ANAF Bilant an 2025",
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": "6201"
+      },
+      "caen_description": {
+        "note": "Fallback: descriere CAEN din ANAF Bilant an 2025",
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": "Activitati de realizare a soft-ului la comanda"
+      },
+      "cui": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": "26313362"
+      },
+      "data_inregistrare": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": "2026-01-05"
+      },
+      "denumire": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": "ANOMALY TEST SRL"
+      },
+      "inactiv": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": false
+      },
+      "nr_reg_com": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": "J02/999/2026"
+      },
+      "platitor_tva": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": true
+      },
+      "split_tva": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": false
+      },
+      "stare_inregistrare": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": "INREGISTRAT"
+      }
+    },
+    "company_network": {
+      "nodes": [],
+      "risk_flags": []
+    },
+    "completeness": {
+      "gaps": [
+        {
+          "field": "Actionariat (asociati + administratori)",
+          "reason": "openapi.ro nu a returnat date ONRC structurate",
+          "section": "Actionariat",
+          "severity": "HIGH"
+        },
+        {
+          "field": "Context sector CAEN (nr firme, benchmark)",
+          "reason": "Cod CAEN nedisponibil sau INS TEMPO nereachabil",
+          "section": "CAEN",
+          "severity": "MEDIUM"
+        },
+        {
+          "field": "Benchmark financiar sector",
+          "reason": "Necesita CAEN context + date financiare firma",
+          "section": "Benchmark",
+          "severity": "MEDIUM"
+        },
+        {
+          "field": "Contracte publice SEAP",
+          "reason": "SEAP nu a returnat contracte sau Agent 3 nu a fost activat",
+          "section": "Piata",
+          "severity": "MEDIUM"
+        },
+        {
+          "field": "Verificare litigii",
+          "reason": "portal.just.ro nu a returnat date via Tavily",
+          "section": "Risc",
+          "severity": "MEDIUM"
+        }
+      ],
+      "gaps_count": 5,
+      "passed": 11,
+      "quality_level": "PARTIAL",
+      "score": 69,
+      "total_checks": 16
+    },
+    "credit_exposure": {
+      "disclaimer": "Estimare orientativa pe SANATATE FINANCIARA (bilant), NU pe istoric de plati (DSO/comportament real) — RIS nu e birou de credit. Proxy de bonitate, nu scor de creditworthiness complet; limita se revizuieste periodic.",
+      "expunere_ron": 12500,
+      "formula": "(CA 6.0M/12)x10% + capitaluri x10%, medie, x0.5 Galben",
+      "kill_switch": false,
+      "metode_folosite": 2
+    },
+    "cross_validation": {
+      "cui": {
+        "confidence": 1.0,
+        "sources": [
+          "ANAF"
+        ],
+        "sources_count": 1,
+        "status": "CONFIRMAT"
+      },
+      "denumire": {
+        "confidence": 1.0,
+        "sources": [
+          "ANAF"
+        ],
+        "sources_count": 1,
+        "status": "CONFIRMAT"
+      },
+      "financiar": {
+        "confidence": 1.0,
+        "sources": [
+          "ANAF Bilant"
+        ],
+        "sources_count": 1,
+        "status": "CONFIRMAT"
+      }
+    },
+    "due_diligence": [
+      {
+        "name": "Firma activa la ANAF",
+        "severity": "info",
+        "source": "ANAF",
+        "status": "DA"
+      },
+      {
+        "name": "Platitor TVA",
+        "severity": "info",
+        "source": "ANAF",
+        "status": "DA"
+      },
+      {
+        "name": "Fara Split TVA",
+        "severity": "info",
+        "source": "ANAF",
+        "status": "DA"
+      },
+      {
+        "name": "Fara insolventa",
+        "severity": "info",
+        "source": "BPI",
+        "status": "DA"
+      },
+      {
+        "name": "Are angajati (>0)",
+        "severity": "warning",
+        "source": "ANAF Bilant",
+        "status": "NU"
+      },
+      {
+        "name": "Cifra de afaceri > 0",
+        "severity": "info",
+        "source": "ANAF Bilant",
+        "status": "DA"
+      },
+      {
+        "name": "Profit pozitiv",
+        "severity": "warning",
+        "source": "ANAF Bilant",
+        "status": "NU"
+      },
+      {
+        "name": "Capitaluri proprii pozitive",
+        "severity": "info",
+        "source": "ANAF Bilant",
+        "status": "DA"
+      },
+      {
+        "name": "Date ONRC disponibile",
+        "severity": "info",
+        "source": "openapi.ro",
+        "status": "NU"
+      },
+      {
+        "name": "Fara anomalii suspecte",
+        "severity": "critical",
+        "source": "Analiza interna",
+        "status": "NU"
+      }
+    ],
+    "early_warnings": [],
+    "eurostat_sector": {
+      "available": false,
+      "source": "Eurostat"
+    },
+    "financial": {
+      "capitaluri_proprii": {
+        "note": "An 2025",
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": 200
+      },
+      "cifra_afaceri": {
+        "note": "An 2025 - sursa ANAF Bilant OFICIAL",
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": 6000000
+      },
+      "inactiv": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": false
+      },
+      "numar_angajati": {
+        "note": "An 2025",
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": 0
+      },
+      "platitor_tva": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": true
+      },
+      "profit_net": {
+        "note": "An 2025",
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": -50000
+      },
+      "split_tva": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": false
+      }
+    },
+    "funding_programs": {
+      "count": 0,
+      "eligible": [],
+      "profile_used": {
+        "angajati": 0,
+        "caen": "6201",
+        "vechime_ani": 0
+      },
+      "summary": "Nu s-au identificat programe de finantare eligibile pentru profilul firmei."
+    },
+    "predictive_scores": {
+      "altman_z": {
+        "confidence": 0,
+        "disclaimer": "Active totale indisponibile — scor nu poate fi calculat",
+        "reason": "Active totale indisponibile",
+        "z_score": null,
+        "zone": "INDISPONIBIL"
+      },
+      "beneish_m": {
+        "available": false,
+        "m_score": null,
+        "reason": "Necesita date pentru 2 ani consecutivi",
+        "risk": "INDISPONIBIL"
+      },
+      "distress_signals": 0,
+      "models_available": 0,
+      "models_total": 4,
+      "piotroski_f": {
+        "criteria": [
+          0,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "f_score": 0,
+        "grade": "INSUFICIENT",
+        "has_prior_year": false,
+        "max_possible": 1
+      },
+      "screening_signals": [],
+      "summary": "Niciun model predictiv nu a putut fi calculat — lipsesc datele de bilant necesare (active/datorii totale sau bilant pe 2 ani consecutivi pentru Piotroski/Beneish). Riscul de faliment NU a fost evaluat din aceasta sursa — nu se poate deduce ca firma e in zona normala.",
+      "zmijewski_x": {
+        "available": false,
+        "distress": null,
+        "reason": "Active totale indisponibile",
+        "x_score": null
+      }
+    },
+    "relations": {
+      "available": false
+    },
+    "risk": {
+      "anaf_inactive": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": false
+      },
+      "bpi_insolventa": {
+        "note": "Nicio procedura gasita",
+        "source": "BPI (buletinul.ro)",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "VERIFICAT",
+        "value": {}
+      },
+      "risc_fiscal": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": {}
+      }
+    },
+    "risk_score": {
+      "anomalies": [
+        "ANOMALIE: 0 angajati + CA > 500K → posibila firma fantoma sau subcontractare masiva"
+      ],
+      "company_age_years": 0,
+      "confidence": {
+        "financiar": 0.75,
+        "fiscal": 1.0,
+        "juridic": 0.2,
+        "operational": 0.8,
+        "piata": 0.3,
+        "reputational": 0.3
+      },
+      "dimensions": {
+        "financiar": {
+          "confidence": 0.75,
+          "data_available": true,
+          "insufficient_data": false,
+          "raw_score": 50,
+          "reasons": [
+            {
+              "impact": 10,
+              "text": "CA buna (6000K RON)"
+            },
+            {
+              "impact": -15,
+              "text": "Pierdere neta (-50K RON)"
+            },
+            {
+              "impact": -10,
+              "text": "Subcapitalizare (capital=0.0% din CA)"
+            },
+            {
+              "impact": -5,
+              "text": "Marja profit sub 1% la CA > 1M RON"
+            }
+          ],
+          "score": 50.0,
+          "weight": 30
+        },
+        "fiscal": {
+          "confidence": 1.0,
+          "data_available": true,
+          "insufficient_data": false,
+          "raw_score": 90,
+          "reasons": [
+            {
+              "impact": 0,
+              "text": "Platitor TVA activ"
+            }
+          ],
+          "score": 90.0,
+          "weight": 15
+        },
+        "juridic": {
+          "confidence": 0.2,
+          "data_available": false,
+          "insufficient_data": false,
+          "raw_score": 85,
+          "reasons": [
+            {
+              "impact": 0,
+              "text": "Fara litigii identificate"
+            }
+          ],
+          "score": 65.7,
+          "weight": 20
+        },
+        "operational": {
+          "confidence": 0.8,
+          "data_available": true,
+          "insufficient_data": false,
+          "raw_score": 45,
+          "reasons": [
+            {
+              "impact": -10,
+              "text": "0 angajati declarati"
+            },
+            {
+              "impact": -20,
+              "text": "0 angajati cu CA > 1M RON (suspect)"
+            },
+            {
+              "impact": 5,
+              "text": "Startup (0 ani) — toleranta pierderi initiale"
+            }
+          ],
+          "score": 45.5,
+          "weight": 15
+        },
+        "piata": {
+          "confidence": 0.3,
+          "data_available": false,
+          "insufficient_data": false,
+          "raw_score": 50,
+          "reasons": [
+            {
+              "impact": 0,
+              "text": "Date de piata indisponibile"
+            }
+          ],
+          "score": 50.0,
+          "weight": 10
+        },
+        "reputational": {
+          "confidence": 0.3,
+          "data_available": false,
+          "insufficient_data": false,
+          "raw_score": 50,
+          "reasons": [
+            {
+              "impact": 0,
+              "text": "Fara prezenta online detectata"
+            }
+          ],
+          "score": 50.0,
+          "weight": 10
+        }
+      },
+      "early_warning_confidence": [
+        {
+          "confidence": 80,
+          "severity": "HIGH",
+          "warning": "ANOMALIE: 0 angajati + CA > 500K → posibila firma fantoma sau subcontractare masiva"
+        },
+        {
+          "confidence": 70,
+          "severity": "HIGH",
+          "warning": "Matrice solvabilitate: RISC CRITIC (marja=-0.8%, capital=0.0%)"
+        },
+        {
+          "confidence": 70,
+          "severity": "HIGH",
+          "warning": "0 angajati + CA > 1M RON = SUSPECT"
+        }
+      ],
+      "factor_count": 6,
+      "factors": [
+        [
+          "Pierdere neta",
+          "MEDIUM"
+        ],
+        [
+          "Subcapitalizare (capital < 5% din CA)",
+          "MEDIUM"
+        ],
+        [
+          "Matrice solvabilitate: RISC CRITIC (marja=-0.8%, capital=0.0%)",
+          "HIGH"
+        ],
+        [
+          "Marja profit sub 1% la CA > 1M — posibil cash flow strain",
+          "MEDIUM"
+        ],
+        [
+          "0 angajati + CA > 1M RON = SUSPECT",
+          "HIGH"
+        ],
+        [
+          "Firma <2 ani cu pierderi (toleranta startup)",
+          "LOW"
+        ]
+      ],
+      "financial_ratios": [
+        {
+          "interpretation": "Pierdere",
+          "name": "Marja Profit Net",
+          "unit": "%",
+          "value": -0.83
+        },
+        {
+          "interpretation": "Negativ",
+          "name": "ROE",
+          "unit": "%",
+          "value": -25000.0
+        }
+      ],
+      "numeric_score": 58.5,
+      "recommendation": "Risc mediu - se recomanda verificare suplimentara inainte de angajament",
+      "score": "Galben",
+      "sector_position": {},
+      "solvency_matrix": {
+        "equity_ratio_pct": 0.0,
+        "equity_zone": "Subcapitalizat",
+        "profit_margin_pct": -0.83,
+        "profit_zone": "Pierdere",
+        "risk_level": 1,
+        "risk_zone": "RISC CRITIC"
+      },
+      "thresholds_source": "score_proxy_6_companies_CAEN6201"
+    },
+    "sanctions": {
+      "checked": [],
+      "hits": [],
+      "status": "unavailable"
+    },
+    "sources_used": [
+      {
+        "level": 1,
+        "name": "ANAF",
+        "status": "OK"
+      },
+      {
+        "level": 1,
+        "name": "ANAF Bilant",
+        "status": "OK"
+      }
+    ],
+    "tender_opportunities": {
+      "available": false
+    },
+    "timestamp": "2026-07-16T12:00:00+00:00",
+    "verification_version": "1.0"
+  }
+}

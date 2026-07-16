@@ -1,0 +1,390 @@
+{
+  "current_step": "Verificare completa. Risc: Galben | Completitudine: 0%",
+  "progress": 0.5,
+  "verified_data": {
+    "actionariat": {
+      "available": false,
+      "source": "openapi.ro"
+    },
+    "anomalies": [],
+    "benchmark": {
+      "available": false
+    },
+    "company": {},
+    "completeness": {
+      "gaps": [
+        {
+          "field": "CUI firma",
+          "reason": "Sursa nu a returnat date sau camp absent",
+          "section": "Profil firma",
+          "severity": "HIGH"
+        },
+        {
+          "field": "Denumire firma",
+          "reason": "Sursa nu a returnat date sau camp absent",
+          "section": "Profil firma",
+          "severity": "HIGH"
+        },
+        {
+          "field": "Adresa sediu",
+          "reason": "Sursa nu a returnat date sau camp absent",
+          "section": "Profil firma",
+          "severity": "MEDIUM"
+        },
+        {
+          "field": "Stare inregistrare",
+          "reason": "Sursa nu a returnat date sau camp absent",
+          "section": "Profil firma",
+          "severity": "MEDIUM"
+        },
+        {
+          "field": "Data inregistrare",
+          "reason": "Sursa nu a returnat date sau camp absent",
+          "section": "Profil firma",
+          "severity": "MEDIUM"
+        },
+        {
+          "field": "Status TVA",
+          "reason": "Sursa nu a returnat date sau camp absent",
+          "section": "Profil firma",
+          "severity": "MEDIUM"
+        },
+        {
+          "field": "Cod CAEN",
+          "reason": "Sursa nu a returnat date sau camp absent",
+          "section": "Profil firma",
+          "severity": "HIGH"
+        },
+        {
+          "field": "Descriere CAEN",
+          "reason": "Sursa nu a returnat date sau camp absent",
+          "section": "Profil firma",
+          "severity": "MEDIUM"
+        },
+        {
+          "field": "Actionariat (asociati + administratori)",
+          "reason": "openapi.ro nu a returnat date ONRC structurate",
+          "section": "Actionariat",
+          "severity": "HIGH"
+        },
+        {
+          "field": "Cifra de afaceri",
+          "reason": "ANAF Bilant nu a returnat date",
+          "section": "Financiar",
+          "severity": "HIGH"
+        },
+        {
+          "field": "Profit net",
+          "reason": "ANAF Bilant nu a returnat date",
+          "section": "Financiar",
+          "severity": "HIGH"
+        },
+        {
+          "field": "Numar angajati",
+          "reason": "ANAF Bilant nu a returnat date",
+          "section": "Financiar",
+          "severity": "HIGH"
+        },
+        {
+          "field": "Context sector CAEN (nr firme, benchmark)",
+          "reason": "Cod CAEN nedisponibil sau INS TEMPO nereachabil",
+          "section": "CAEN",
+          "severity": "MEDIUM"
+        },
+        {
+          "field": "Benchmark financiar sector",
+          "reason": "Necesita CAEN context + date financiare firma",
+          "section": "Benchmark",
+          "severity": "MEDIUM"
+        },
+        {
+          "field": "Contracte publice SEAP",
+          "reason": "SEAP nu a returnat contracte sau Agent 3 nu a fost activat",
+          "section": "Piata",
+          "severity": "MEDIUM"
+        },
+        {
+          "field": "Verificare litigii",
+          "reason": "portal.just.ro nu a returnat date via Tavily",
+          "section": "Risc",
+          "severity": "MEDIUM"
+        }
+      ],
+      "gaps_count": 16,
+      "passed": 0,
+      "quality_level": "INCOMPLET",
+      "score": 0,
+      "total_checks": 16
+    },
+    "credit_exposure": {
+      "disclaimer": "Estimare orientativa pe SANATATE FINANCIARA (bilant), NU pe istoric de plati (DSO/comportament real) — RIS nu e birou de credit. Proxy de bonitate, nu scor de creditworthiness complet; limita se revizuieste periodic.",
+      "expunere_ron": 0,
+      "formula": "nicio metoda disponibila, x0.5 Galben",
+      "kill_switch": false,
+      "metode_folosite": 0
+    },
+    "cross_validation": {
+      "cui": {
+        "confidence": 0.0,
+        "sources": [],
+        "sources_count": 0,
+        "status": "NECONCLUDENT"
+      },
+      "denumire": {
+        "confidence": 0.0,
+        "sources": [],
+        "sources_count": 0,
+        "status": "INDISPONIBIL"
+      },
+      "financiar": {
+        "confidence": 0.0,
+        "sources": [],
+        "sources_count": 0,
+        "status": "INDISPONIBIL"
+      }
+    },
+    "due_diligence": [
+      {
+        "name": "Firma activa la ANAF",
+        "severity": "info",
+        "source": "ANAF",
+        "status": "INDISPONIBIL"
+      },
+      {
+        "name": "Platitor TVA",
+        "severity": "info",
+        "source": "ANAF",
+        "status": "INDISPONIBIL"
+      },
+      {
+        "name": "Fara Split TVA",
+        "severity": "info",
+        "source": "ANAF",
+        "status": "INDISPONIBIL"
+      },
+      {
+        "name": "Fara insolventa",
+        "severity": "info",
+        "source": "BPI",
+        "status": "DA"
+      },
+      {
+        "name": "Are angajati (>0)",
+        "severity": "info",
+        "source": "-",
+        "status": "INDISPONIBIL"
+      },
+      {
+        "name": "Cifra de afaceri > 0",
+        "severity": "info",
+        "source": "-",
+        "status": "INDISPONIBIL"
+      },
+      {
+        "name": "Profit pozitiv",
+        "severity": "info",
+        "source": "-",
+        "status": "INDISPONIBIL"
+      },
+      {
+        "name": "Capitaluri proprii pozitive",
+        "severity": "info",
+        "source": "-",
+        "status": "INDISPONIBIL"
+      },
+      {
+        "name": "Date ONRC disponibile",
+        "severity": "info",
+        "source": "openapi.ro",
+        "status": "NU"
+      },
+      {
+        "name": "Fara anomalii suspecte",
+        "severity": "info",
+        "source": "Analiza interna",
+        "status": "DA"
+      }
+    ],
+    "early_warnings": [],
+    "eurostat_sector": {
+      "available": false,
+      "reason": "CAEN necunoscut",
+      "source": "Eurostat"
+    },
+    "financial": {},
+    "funding_programs": {
+      "count": 1,
+      "eligible": [
+        {
+          "descriere": "Investitii in modernizarea exploatatiilor agricole vegetale si zootehnice",
+          "id": "afir_masura_4_1",
+          "link": "https://www.afir.info",
+          "nume": "AFIR — Masura 4.1 Investitii in exploatatii agricole",
+          "suma_max_eur": 1500000,
+          "sursa": "afir.info",
+          "termen": "2027-12-31"
+        }
+      ],
+      "profile_used": {
+        "angajati": 0,
+        "caen": "",
+        "vechime_ani": 0
+      },
+      "summary": "Au fost identificate 1 programe de finantare eligibile, cu un maxim de 1,500,000 EUR per proiect. Principale: AFIR — Masura 4.1 Investitii in exploatatii agricole."
+    },
+    "predictive_scores": {
+      "altman_z": {
+        "confidence": 0,
+        "disclaimer": "Active totale indisponibile — scor nu poate fi calculat",
+        "reason": "Active totale indisponibile",
+        "z_score": null,
+        "zone": "INDISPONIBIL"
+      },
+      "beneish_m": {
+        "available": false,
+        "m_score": null,
+        "reason": "Necesita date pentru 2 ani consecutivi",
+        "risk": "INDISPONIBIL"
+      },
+      "distress_signals": 0,
+      "models_available": 0,
+      "models_total": 4,
+      "piotroski_f": {
+        "criteria": [],
+        "f_score": null,
+        "grade": "INSUFICIENT",
+        "reason": "Date bilant indisponibile"
+      },
+      "screening_signals": [],
+      "summary": "Niciun model predictiv nu a putut fi calculat — lipsesc datele de bilant necesare (active/datorii totale sau bilant pe 2 ani consecutivi pentru Piotroski/Beneish). Riscul de faliment NU a fost evaluat din aceasta sursa — nu se poate deduce ca firma e in zona normala.",
+      "zmijewski_x": {
+        "available": false,
+        "distress": null,
+        "x_score": null
+      }
+    },
+    "relations": {
+      "available": false
+    },
+    "risk": {
+      "bpi_insolventa": {
+        "note": "Nicio procedura gasita",
+        "source": "BPI (buletinul.ro)",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "VERIFICAT",
+        "value": {}
+      },
+      "risc_fiscal": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": {}
+      }
+    },
+    "risk_score": {
+      "anomalies": [],
+      "company_age_years": null,
+      "confidence": {
+        "financiar": 0.0,
+        "fiscal": 0.3,
+        "juridic": 0.2,
+        "operational": 0.4,
+        "piata": 0.3,
+        "reputational": 0.3
+      },
+      "dimensions": {
+        "financiar": {
+          "confidence": 0.0,
+          "data_available": false,
+          "insufficient_data": true,
+          "raw_score": 70,
+          "reasons": [],
+          "score": 50,
+          "weight": 30
+        },
+        "fiscal": {
+          "confidence": 0.3,
+          "data_available": false,
+          "insufficient_data": false,
+          "raw_score": 90,
+          "reasons": [],
+          "score": 71.9,
+          "weight": 15
+        },
+        "juridic": {
+          "confidence": 0.2,
+          "data_available": false,
+          "insufficient_data": false,
+          "raw_score": 85,
+          "reasons": [
+            {
+              "impact": 0,
+              "text": "Fara litigii identificate"
+            }
+          ],
+          "score": 65.7,
+          "weight": 20
+        },
+        "operational": {
+          "confidence": 0.4,
+          "data_available": true,
+          "insufficient_data": false,
+          "raw_score": 70,
+          "reasons": [],
+          "score": 62.6,
+          "weight": 15
+        },
+        "piata": {
+          "confidence": 0.3,
+          "data_available": false,
+          "insufficient_data": false,
+          "raw_score": 50,
+          "reasons": [
+            {
+              "impact": 0,
+              "text": "Date de piata indisponibile"
+            }
+          ],
+          "score": 50.0,
+          "weight": 10
+        },
+        "reputational": {
+          "confidence": 0.3,
+          "data_available": false,
+          "insufficient_data": false,
+          "raw_score": 50,
+          "reasons": [
+            {
+              "impact": 0,
+              "text": "Fara prezenta online detectata"
+            }
+          ],
+          "score": 50.0,
+          "weight": 10
+        }
+      },
+      "early_warning_confidence": [],
+      "factor_count": 0,
+      "factors": [],
+      "financial_ratios": [],
+      "numeric_score": 58.3,
+      "recommendation": "Risc mediu - se recomanda verificare suplimentara inainte de angajament",
+      "score": "Galben",
+      "sector_position": {},
+      "solvency_matrix": null
+    },
+    "sanctions": {
+      "checked": [],
+      "hits": [],
+      "note": "Fara nume de ecranat",
+      "status": "unavailable"
+    },
+    "sources_used": [],
+    "tender_opportunities": {
+      "available": false,
+      "reason": "CAEN necunoscut si fara istoric CPV"
+    },
+    "timestamp": "2026-07-16T12:00:00+00:00",
+    "verification_version": "1.0"
+  }
+}

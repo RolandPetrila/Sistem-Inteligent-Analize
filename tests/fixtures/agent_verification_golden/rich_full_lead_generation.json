@@ -1,0 +1,1005 @@
+{
+  "current_step": "Verificare completa. Risc: Verde | Completitudine: 100%",
+  "progress": 0.5,
+  "verified_data": {
+    "actionariat": {
+      "administratori": [
+        {
+          "nume": "Ion Popescu"
+        }
+      ],
+      "asociati": [
+        {
+          "nume": "Ion Popescu",
+          "procent": 100
+        }
+      ],
+      "available": true,
+      "capital_social": 200,
+      "source": "openapi.ro",
+      "stare": "FUNCTIONEAZA"
+    },
+    "agent_diagnostics": {
+      "completeness_score": 90,
+      "missing_sources": []
+    },
+    "anomalies": [],
+    "benchmark": {
+      "available": true,
+      "caen_code": "6201",
+      "caen_section_name": "Servicii IT",
+      "comparisons": [
+        {
+          "firma": 2000000,
+          "media_sector": 900000,
+          "metric": "Cifra de afaceri",
+          "pozitie": "Semnificativ peste medie",
+          "ratio": 2.22,
+          "text": "CA firma: 2,000,000 RON. Media sector: 900,000 RON. Semnificativ peste medie (2.2x)."
+        },
+        {
+          "firma": 12,
+          "media_sector": 8,
+          "metric": "Numar angajati",
+          "pozitie": "Peste medie",
+          "ratio": 1.5,
+          "text": "Angajati firma: 12. Media sector: 8. Peste medie (1.5x)."
+        }
+      ],
+      "nr_firme_sector": 4200
+    },
+    "brave_reputation": {
+      "mentions": 5,
+      "sentiment": "neutru"
+    },
+    "caen_context": {
+      "available": true,
+      "benchmark": {
+        "angajati_medii": 8,
+        "ca_medie": 900000
+      },
+      "caen_code": "6201",
+      "caen_description": "Activitati de realizare a soft-ului la comanda",
+      "caen_section_name": "Servicii IT",
+      "nr_firme_caen": 4200
+    },
+    "company": {
+      "administratori": {
+        "source": "ONRC",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": [
+          {
+            "nume": "Ion Popescu"
+          }
+        ]
+      },
+      "adresa": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": "Str. Exemplu nr. 1, Arad"
+      },
+      "asociati": {
+        "source": "ONRC",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": [
+          {
+            "nume": "Ion Popescu",
+            "procent": 100
+          }
+        ]
+      },
+      "caen_code": {
+        "source": "ONRC",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": "6201"
+      },
+      "caen_description": {
+        "source": "ONRC",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": "Activitati de realizare a soft-ului la comanda"
+      },
+      "capital_social": {
+        "source": "ONRC",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": 200
+      },
+      "cui": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": "26313362"
+      },
+      "data_inregistrare": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": "2015-03-10"
+      },
+      "denumire": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": "MOSSLEIN TEST SRL"
+      },
+      "inactiv": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": false
+      },
+      "judet": {
+        "source": "ONRC",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": "Arad"
+      },
+      "nr_reg_com": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": "J02/123/2015"
+      },
+      "platitor_tva": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": true
+      },
+      "split_tva": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": false
+      },
+      "stare_inregistrare": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": "INREGISTRAT"
+      },
+      "stare_onrc": {
+        "source": "ONRC",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": "FUNCTIONEAZA"
+      },
+      "telefon": {
+        "source": "ONRC",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": "0257000000"
+      }
+    },
+    "company_network": {
+      "nodes": [
+        {
+          "cui": "26313362",
+          "role": "self"
+        }
+      ],
+      "risk_flags": [
+        {
+          "detail": "Administrator comun cu 3 firme radiate",
+          "severity": "RED"
+        }
+      ]
+    },
+    "completeness": {
+      "gaps": [],
+      "gaps_count": 0,
+      "passed": 16,
+      "quality_level": "COMPLET",
+      "score": 100,
+      "total_checks": 16
+    },
+    "credit_exposure": {
+      "disclaimer": "Estimare orientativa pe SANATATE FINANCIARA (bilant), NU pe istoric de plati (DSO/comportament real) — RIS nu e birou de credit. Proxy de bonitate, nu scor de creditworthiness complet; limita se revizuieste periodic.",
+      "expunere_ron": 43900,
+      "formula": "(CA 2.0M/12)x10% + capitaluri x10% + profit x50%, medie, x1.0 Verde",
+      "kill_switch": false,
+      "metode_folosite": 3
+    },
+    "cross_validation": {
+      "cui": {
+        "confidence": 1.0,
+        "sources": [
+          "ANAF"
+        ],
+        "sources_count": 1,
+        "status": "CONFIRMAT"
+      },
+      "denumire": {
+        "confidence": 1.0,
+        "sources": [
+          "ANAF"
+        ],
+        "sources_count": 1,
+        "status": "CONFIRMAT"
+      },
+      "financiar": {
+        "confidence": 1.0,
+        "sources": [
+          "ANAF Bilant"
+        ],
+        "sources_count": 1,
+        "status": "CONFIRMAT"
+      }
+    },
+    "data_freshness": {
+      "anaf": "2026-07-01",
+      "bilant": "2025-12-01"
+    },
+    "due_diligence": [
+      {
+        "name": "Firma activa la ANAF",
+        "severity": "info",
+        "source": "ANAF",
+        "status": "DA"
+      },
+      {
+        "name": "Platitor TVA",
+        "severity": "info",
+        "source": "ANAF",
+        "status": "DA"
+      },
+      {
+        "name": "Fara Split TVA",
+        "severity": "info",
+        "source": "ANAF",
+        "status": "DA"
+      },
+      {
+        "name": "Fara insolventa",
+        "severity": "critical",
+        "source": "BPI",
+        "status": "NU"
+      },
+      {
+        "name": "Are angajati (>0)",
+        "severity": "info",
+        "source": "ANAF Bilant",
+        "status": "DA"
+      },
+      {
+        "name": "Cifra de afaceri > 0",
+        "severity": "info",
+        "source": "ANAF Bilant",
+        "status": "DA"
+      },
+      {
+        "name": "Profit pozitiv",
+        "severity": "info",
+        "source": "ANAF Bilant",
+        "status": "DA"
+      },
+      {
+        "name": "Capitaluri proprii pozitive",
+        "severity": "info",
+        "source": "ANAF Bilant",
+        "status": "DA"
+      },
+      {
+        "name": "Date ONRC disponibile",
+        "severity": "info",
+        "source": "openapi.ro",
+        "status": "DA"
+      },
+      {
+        "name": "Fara anomalii suspecte",
+        "severity": "info",
+        "source": "Analiza interna",
+        "status": "DA"
+      }
+    ],
+    "early_warnings": [],
+    "eurostat_sector": {
+      "angajati_per_firma_ue": 6.2,
+      "available": true,
+      "caen_code": "6201",
+      "nr_firme_ue": 250000,
+      "source": "Eurostat"
+    },
+    "financial": {
+      "active_totale": {
+        "note": "An 2024 — calculat (active imobilizate + active circulante + cheltuieli in avans)",
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": 700000
+      },
+      "capitaluri_proprii": {
+        "note": "An 2024",
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": 400000
+      },
+      "cifra_afaceri": {
+        "note": "An 2024 - sursa ANAF Bilant OFICIAL",
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": 2000000
+      },
+      "datorii_totale": {
+        "note": "An 2024",
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": 300000
+      },
+      "eur_ron_rate": {
+        "note": "Curs la data 2026-07-16",
+        "source": "BNR",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": 5.05
+      },
+      "inactiv": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": false
+      },
+      "numar_angajati": {
+        "note": "An 2024",
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": 12
+      },
+      "platitor_tva": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": true
+      },
+      "profit_net": {
+        "note": "An 2024",
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": 150000
+      },
+      "split_tva": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": false
+      },
+      "trend_financiar": {
+        "note": "Trend ['2023', '2024']",
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": {
+          "capitaluri_proprii": {
+            "direction": "crestere",
+            "first_year": "2023",
+            "growth_percent": 33.3,
+            "last_year": "2024",
+            "name": "Capitaluri",
+            "values": [
+              {
+                "value": 300000,
+                "year": "2023"
+              },
+              {
+                "value": 400000,
+                "year": "2024"
+              }
+            ]
+          },
+          "cifra_afaceri_neta": {
+            "direction": "crestere",
+            "first_year": "2023",
+            "growth_percent": 33.3,
+            "last_year": "2024",
+            "name": "CA",
+            "values": [
+              {
+                "value": 1500000,
+                "year": "2023"
+              },
+              {
+                "value": 2000000,
+                "year": "2024"
+              }
+            ]
+          },
+          "numar_mediu_salariati": {
+            "direction": "crestere",
+            "first_year": "2023",
+            "growth_percent": 33.3,
+            "last_year": "2024",
+            "name": "Angajati",
+            "values": [
+              {
+                "value": 9,
+                "year": "2023"
+              },
+              {
+                "value": 12,
+                "year": "2024"
+              }
+            ]
+          },
+          "profit_net": {
+            "direction": "crestere",
+            "first_year": "2023",
+            "growth_percent": 66.7,
+            "last_year": "2024",
+            "name": "Profit Net",
+            "values": [
+              {
+                "value": 90000,
+                "year": "2023"
+              },
+              {
+                "value": 150000,
+                "year": "2024"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "funding_programs": {
+      "count": 1,
+      "eligible": [
+        {
+          "descriere": "Granturi pentru asigurarea capitalului de lucru al IMM-urilor",
+          "id": "granturi_imm_2024",
+          "link": "https://imm.gov.ro",
+          "nume": "Granturi IMM — Capital de Lucru",
+          "suma_max_eur": 200000,
+          "sursa": "imm.gov.ro",
+          "termen": "2026-12-31"
+        }
+      ],
+      "profile_used": {
+        "angajati": 12,
+        "caen": "6201",
+        "vechime_ani": 11
+      },
+      "summary": "Au fost identificate 1 programe de finantare eligibile, cu un maxim de 200,000 EUR per proiect. Principale: Granturi IMM — Capital de Lucru."
+    },
+    "historical_flags": [
+      {
+        "label": "Cesiune parti sociale detectata",
+        "severity": "HIGH",
+        "snippet": "test snippet",
+        "type": "cesiune_parti_sociale"
+      }
+    ],
+    "lead_candidates": {
+      "available": true,
+      "candidates": [
+        {
+          "cui": "11111111",
+          "denumire": "CANDIDAT UNU SRL",
+          "score": 72
+        },
+        {
+          "cui": "22222222",
+          "denumire": "CANDIDAT DOI SRL",
+          "score": 65
+        }
+      ],
+      "count": 2,
+      "criteria_used": {
+        "caen_prefix": "62",
+        "judet": "Arad",
+        "min_angajati": 5
+      },
+      "pool_note": "Cautare limitata la firmele deja analizate in RIS (nu un registru national complet — pool creste cu fiecare analiza noua).",
+      "priority": "crestere"
+    },
+    "maps_rating": {
+      "found": true,
+      "rating": 4.5,
+      "reviews": 12
+    },
+    "market": {
+      "seap": {
+        "source": "Tavily",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "ESTIMAT",
+        "value": {
+          "total_contracts": 4,
+          "won_cpv_codes": [
+            "72212000"
+          ]
+        }
+      }
+    },
+    "predictive_scores": {
+      "altman_z": {
+        "confidence": 0,
+        "reason": "Eroare interna la calcul",
+        "z_score": null,
+        "zone": "INDISPONIBIL"
+      },
+      "beneish_m": {
+        "available": false,
+        "m_score": null,
+        "reason": "Eroare interna la calcul",
+        "risk": "INDISPONIBIL"
+      },
+      "distress_signals": 0,
+      "error": true,
+      "models_available": 0,
+      "models_total": 4,
+      "piotroski_f": {
+        "criteria": [],
+        "f_score": null,
+        "grade": "INSUFICIENT",
+        "reason": "Eroare interna la calcul"
+      },
+      "screening_signals": [],
+      "summary": "Modelele predictive nu au putut fi calculate (eroare interna) — riscul de faliment NU a fost evaluat din aceasta sursa, verifica logs/ris_runtime.log.",
+      "zmijewski_x": {
+        "available": false,
+        "distress": null,
+        "reason": "Eroare interna la calcul",
+        "x_score": null
+      }
+    },
+    "relations": {
+      "address": "",
+      "administrators": [
+        {
+          "name": "Ion Popescu"
+        }
+      ],
+      "available": true,
+      "flags": [
+        {
+          "detail": "Administratorul unic este si asociatul unic",
+          "severity": "INFO",
+          "type": "ONE_PERSON"
+        }
+      ],
+      "shareholders": [
+        {
+          "name": "Ion Popescu"
+        }
+      ]
+    },
+    "risk": {
+      "aegrm_guarantees": {
+        "note": "2 garantii reale mobiliare inregistrate",
+        "source": "AEGRM (aegrm.justportal.ro)",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "ESTIMAT",
+        "value": {
+          "count": 2,
+          "has_data": true,
+          "has_guarantees": true
+        }
+      },
+      "anaf_inactive": {
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": false
+      },
+      "bpi_insolventa": {
+        "note": "Nicio procedura gasita",
+        "source": "BPI (buletinul.ro)",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "VERIFICAT",
+        "value": {
+          "found": false,
+          "status": "NICIO PROCEDURA"
+        }
+      },
+      "dosare_just": {
+        "note": "3 dosare gasite (real-time SOAP)",
+        "source": "portal.just.ro (SOAP)",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "ESTIMAT",
+        "value": {
+          "dosare": [
+            {
+              "instanta": "Tribunalul Arad",
+              "numar": "123/2026"
+            }
+          ],
+          "parat": 1,
+          "reclamant": 2,
+          "total": 3
+        }
+      },
+      "insolvency": {
+        "note": "Verificare insolventa via Tavily — rezultat ESTIMAT",
+        "source": "BPI (Tavily)",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "ESTIMAT",
+        "value": {
+          "found": true,
+          "results": [
+            {
+              "content": "curat",
+              "title": "fara insolventa"
+            }
+          ]
+        }
+      },
+      "litigation": {
+        "note": "Litigii gasite via Tavily search — verificare manuala pe portal.just.ro recomandata",
+        "source": "portal.just.ro (Tavily)",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "ESTIMAT",
+        "value": {
+          "count": 1,
+          "found": true,
+          "results": [
+            {
+              "content": "detalii",
+              "title": "un litigiu minor"
+            }
+          ]
+        }
+      },
+      "monitorul_oficial": {
+        "source": "Monitorul Oficial",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "ESTIMAT",
+        "value": [
+          {
+            "data": "2025-01-01",
+            "tip": "cesiune"
+          }
+        ]
+      },
+      "risc_fiscal": {
+        "note": "RISC SCAZUT",
+        "source": "ANAF",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "OFICIAL",
+        "value": {
+          "tip_risc": "RISC SCAZUT"
+        }
+      }
+    },
+    "risk_score": {
+      "anomalies": [],
+      "company_age_years": 11,
+      "confidence": {
+        "financiar": 1.0,
+        "fiscal": 1.0,
+        "juridic": 1.0,
+        "operational": 0.8,
+        "piata": 0.8,
+        "reputational": 0.7
+      },
+      "dimensions": {
+        "financiar": {
+          "confidence": 1.0,
+          "data_available": true,
+          "insufficient_data": false,
+          "raw_score": 100,
+          "reasons": [
+            {
+              "impact": 10,
+              "text": "CA buna (2000K RON)"
+            },
+            {
+              "impact": 10,
+              "text": "Profit pozitiv (150K RON)"
+            },
+            {
+              "impact": 10,
+              "text": "Crestere CA semnificativa +33%"
+            }
+          ],
+          "score": 100.0,
+          "weight": 30
+        },
+        "fiscal": {
+          "confidence": 1.0,
+          "data_available": true,
+          "insufficient_data": false,
+          "raw_score": 90,
+          "reasons": [
+            {
+              "impact": 0,
+              "text": "Platitor TVA activ"
+            }
+          ],
+          "score": 90.0,
+          "weight": 15
+        },
+        "juridic": {
+          "confidence": 1.0,
+          "data_available": true,
+          "insufficient_data": false,
+          "raw_score": 15,
+          "reasons": [
+            {
+              "impact": -60,
+              "text": "Mentiune insolventa gasita"
+            },
+            {
+              "impact": -5,
+              "text": "Dosare judecatoresti: 3"
+            },
+            {
+              "impact": -5,
+              "text": "Garantii reale mobiliare inregistrate (2)"
+            }
+          ],
+          "score": 15.0,
+          "weight": 20
+        },
+        "operational": {
+          "confidence": 0.8,
+          "data_available": true,
+          "insufficient_data": false,
+          "raw_score": 90,
+          "reasons": [
+            {
+              "impact": 10,
+              "text": "Echipa medie (12 angajati)"
+            },
+            {
+              "impact": 10,
+              "text": "Firma stabila (11 ani vechime)"
+            },
+            {
+              "impact": 0,
+              "text": "Crestere forta de munca +33%"
+            }
+          ],
+          "score": 85.8,
+          "weight": 15
+        },
+        "piata": {
+          "confidence": 0.8,
+          "data_available": true,
+          "insufficient_data": false,
+          "raw_score": 90,
+          "reasons": [
+            {
+              "impact": 20,
+              "text": "Date de piata disponibile"
+            },
+            {
+              "impact": 10,
+              "text": "Contracte SEAP active (4)"
+            },
+            {
+              "impact": 10,
+              "text": "Peste media sectorului pe 2 indicatori"
+            },
+            {
+              "impact": 0,
+              "text": "Pozitie sector: Cifra de afaceri=P90+, Numar angajati=P75-P90"
+            }
+          ],
+          "score": 85.8,
+          "weight": 10
+        },
+        "reputational": {
+          "confidence": 0.7,
+          "data_available": true,
+          "insufficient_data": false,
+          "raw_score": 75,
+          "reasons": [
+            {
+              "impact": 20,
+              "text": "Prezenta online buna (2 categorii)"
+            },
+            {
+              "impact": 5,
+              "text": "Google Maps: 4.5/5 (None recenzii)"
+            }
+          ],
+          "score": 70.9,
+          "weight": 10
+        }
+      },
+      "early_warning_confidence": [
+        {
+          "confidence": 70,
+          "severity": "HIGH",
+          "warning": "Mentiune insolventa gasita"
+        }
+      ],
+      "factor_count": 3,
+      "factors": [
+        [
+          "Mentiune insolventa gasita",
+          "HIGH"
+        ],
+        [
+          "Garantii reale mobiliare (2)",
+          "LOW"
+        ],
+        [
+          "Pozitie sector: Cifra de afaceri=P90+, Numar angajati=P75-P90",
+          "INFO"
+        ]
+      ],
+      "financial_ratios": [
+        {
+          "interpretation": "Bun",
+          "name": "Marja Profit Net",
+          "unit": "%",
+          "value": 7.5
+        },
+        {
+          "interpretation": "Excelent",
+          "name": "ROE",
+          "unit": "%",
+          "value": 37.5
+        },
+        {
+          "interpretation": "Excelent",
+          "name": "ROA",
+          "unit": "%",
+          "value": 21.43
+        },
+        {
+          "interpretation": "Conservator",
+          "name": "Datorii/Capital",
+          "unit": "x",
+          "value": 0.75
+        },
+        {
+          "interpretation": "Solid",
+          "name": "Rata Capitalizare",
+          "unit": "%",
+          "value": 57.14
+        },
+        {
+          "interpretation": "",
+          "name": "CA per Angajat",
+          "unit": "RON",
+          "value": 166667
+        }
+      ],
+      "numeric_score": 75.0,
+      "recommendation": "Risc scazut - parteneriat recomandat cu verificare standard",
+      "score": "Verde",
+      "sector_position": {
+        "Cifra de afaceri": {
+          "estimated_percentile": "P90+",
+          "ratio_vs_avg": 2.22
+        },
+        "Numar angajati": {
+          "estimated_percentile": "P75-P90",
+          "ratio_vs_avg": 1.5
+        }
+      },
+      "solvency_matrix": {
+        "equity_ratio_pct": 20.0,
+        "equity_zone": "Moderat",
+        "profit_margin_pct": 7.5,
+        "profit_zone": "Sanatos",
+        "risk_level": 7,
+        "risk_zone": "RISC SCAZUT"
+      },
+      "thresholds_source": "ca_real_6_companies_CAEN6201"
+    },
+    "sanctions": {
+      "checked": [
+        "MOSSLEIN TEST SRL",
+        "Ion Popescu"
+      ],
+      "hits": [
+        {
+          "list": "TEST",
+          "name": "Ion Popescu"
+        }
+      ],
+      "status": "ok"
+    },
+    "sources_used": [
+      {
+        "level": 1,
+        "name": "ANAF",
+        "status": "OK"
+      },
+      {
+        "level": 1,
+        "name": "ANAF Bilant",
+        "status": "OK"
+      },
+      {
+        "level": 1,
+        "name": "openapi.ro (ONRC)",
+        "status": "OK"
+      },
+      {
+        "level": 1,
+        "name": "BNR",
+        "status": "OK"
+      },
+      {
+        "level": 3,
+        "name": "BPI (Tavily)",
+        "status": "OK"
+      },
+      {
+        "level": 3,
+        "name": "portal.just.ro (Tavily)",
+        "status": "OK"
+      },
+      {
+        "level": 1,
+        "name": "CAEN Context (INS TEMPO)",
+        "status": "OK"
+      },
+      {
+        "contracts": 4,
+        "level": 1,
+        "name": "SEAP (e-licitatie.ro)",
+        "status": "OK"
+      },
+      {
+        "level": 3,
+        "name": "Tavily (prezenta online)",
+        "status": "OK"
+      },
+      {
+        "level": 3,
+        "name": "Tavily (stiri)",
+        "status": "OK"
+      }
+    ],
+    "tavily_quota_exhausted": {
+      "usage": {
+        "limit": 1000,
+        "used": 1000
+      },
+      "value": true
+    },
+    "tender_opportunities": {
+      "available": true,
+      "count": 2,
+      "tenders": [
+        {
+          "cpv": "72212000",
+          "title": "Licitatie software"
+        }
+      ]
+    },
+    "timestamp": "2026-07-16T12:00:00+00:00",
+    "verification_version": "1.0",
+    "web_intelligence": {
+      "classified": "prezenta activa",
+      "score": 0.8
+    },
+    "web_presence": {
+      "news": {
+        "source": "Tavily",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "ESTIMAT",
+        "value": {
+          "found": false,
+          "source": "Tavily"
+        }
+      },
+      "online_presence": {
+        "source": "Tavily",
+        "timestamp": "2026-07-16T12:00:00+00:00",
+        "trust": "ESTIMAT",
+        "value": {
+          "found": true,
+          "source": "Tavily",
+          "urls": [
+            "https://mosslein.example"
+          ]
+        }
+      }
+    }
+  }
+}

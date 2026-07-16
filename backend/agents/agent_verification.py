@@ -120,44 +120,7 @@ class VerificationAgent(BaseAgent):
         verified["sanctions"] = await self._screen_sanctions(official, verified)
 
         # --- F15: Programe de finantare eligibile (modul existent, acum cablat in pipeline) ---
-        try:
-            import re as _re
-
-            from backend.agents.tools.funding_programs import (
-                get_funding_summary,
-                match_programs,
-            )
-            _co = verified.get("company", {})
-            _fin = verified.get("financial", {})
-
-            def _uw(x):
-                return x.get("value") if isinstance(x, dict) else x
-
-            _caen = str(_uw(_co.get("caen_code", "")) or "")
-            _ang = 0
-            for _k in ("numar_angajati", "angajati", "numar_mediu_salariati", "nr_angajati"):
-                _v = _uw(_fin.get(_k)) if _k in _fin else _uw(_co.get(_k))
-                if isinstance(_v, int | float) and _v > 0:
-                    _ang = int(_v)
-                    break
-            _vech = 0
-            for _k in ("data_inregistrare", "an_infiintare", "data_infiintare"):
-                _v = _uw(_co.get(_k))
-                if _v:
-                    _m = _re.search(r"(19|20)\d{2}", str(_v))
-                    if _m:
-                        _vech = max(0, datetime.now(UTC).year - int(_m.group(0)))
-                        break
-            _eligible = match_programs(caen_code=_caen, angajati=_ang, vechime_ani=_vech)
-            verified["funding_programs"] = {
-                "eligible": _eligible[:10],
-                "count": len(_eligible),
-                "summary": get_funding_summary(_eligible),
-                "profile_used": {"caen": _caen, "angajati": _ang, "vechime_ani": _vech},
-            }
-        except Exception as _fund_e:
-            logger.debug(f"[verification] funding match error: {_fund_e}")
-            verified["funding_programs"] = {"eligible": [], "count": 0, "summary": ""}
+        verified["funding_programs"] = self._compute_funding_programs(verified)
 
         # --- Firme candidate (leads) — DOAR pt LEAD_GENERATION (implica un apel AI de
         # parsare, gate-uit explicit ca sa nu incarce inutil celelalte 8 tipuri) ---
@@ -165,35 +128,11 @@ class VerificationAgent(BaseAgent):
             verified["lead_candidates"] = await self._search_lead_candidates(state)
 
         # --- Dynamic thresholds din DB proprie (percentile CAEN + judet) ---
-        caen_for_dyn = ""
-        county_for_dyn = None
-        try:
-            caen_raw = verified.get("company", {}).get("caen_code", {})
-            caen_for_dyn = (caen_raw.get("value", "") if isinstance(caen_raw, dict) else str(caen_raw or ""))[:4]
-            county_raw = verified.get("company", {}).get("adresa", {})
-            if isinstance(county_raw, dict):
-                county_for_dyn = county_raw.get("value", {})
-                if isinstance(county_for_dyn, dict):
-                    county_for_dyn = county_for_dyn.get("judet", None)
-                elif isinstance(county_for_dyn, str):
-                    county_for_dyn = None  # adresa e string, nu extragem judetul
-        except Exception as e:
-            logger.debug(f"[verification] dynamic thresholds extraction error: {e}")
+        dynamic_thresholds = await self._resolve_dynamic_thresholds(verified)
 
-        dynamic_thresholds = await self._get_dynamic_thresholds(caen_for_dyn, county_for_dyn)
-
-        # P0-1: cablare campuri orfane official_data -> verified, cu consumator real in
-        # scoring.py. Contract impus de scoring, NU decis aici: maps_rating RAW top-level
-        # (_score_reputational face maps_data.get("found")/score_from_rating direct pe
-        # dict), monitorul_oficial WRAPPED cu _make_field in verified["risk"] (_score_juridic
-        # face risk_data.get("monitorul_oficial") apoi isinstance(..., dict) + .get("value", [])
-        # — official["monitorul_oficial"] e o LISTA bruta, un atribuit direct ar pica gate-ul).
-        if "maps_rating" in official:
-            verified["maps_rating"] = official["maps_rating"]
-        if "monitorul_oficial" in official:
-            verified.setdefault("risk", {})["monitorul_oficial"] = self._make_field(
-                official["monitorul_oficial"], "Monitorul Oficial"
-            )
+        # --- Campuri orfane official_data -> verified consumate de scoring.py (ruleaza
+        # INAINTE de risk_score, vezi docstring-ul metodei) ---
+        self._wire_orphan_fields_pre_score(official, verified)
 
         # --- Scor risc general ---
         verified["risk_score"] = self._calculate_risk_score(verified, dynamic_thresholds=dynamic_thresholds)
@@ -223,18 +162,149 @@ class VerificationAgent(BaseAgent):
         # --- Diagnostic completitudine raport ---
         verified["completeness"] = self._check_completeness(verified, official, market)
 
+        self._log_verification_summary(verified)
+
+        # Dynamic percentile scoring: stocheaza CA real in companies pentru percentile viitoare
+        await self._persist_latest_ca(verified)
+
+        # F1-6: Retea firme — query DB pentru asociati comuni
+        await self._attach_company_network(verified)
+
+        # --- Campuri orfane fara consumator azi in scoring (staging in full_data —
+        # randare in rapoarte e P0-2/P2-14, alta runda). Ruleaza ULTIMA, vezi
+        # docstring-ul metodei pt de ce ordinea conteaza (byte-identic JSON truncat). ---
+        self._wire_orphan_fields_post_score(official, verified)
+
+        return {
+            "verified_data": verified,
+            "current_step": f"Verificare completa. Risc: {verified['risk_score']['score']} | Completitudine: {verified['completeness']['score']}%",
+            "progress": 0.50,
+        }
+
+    def _compute_funding_programs(self, verified: dict) -> dict:
+        """F15: Programe de finantare eligibile (modul existent, cablat in pipeline).
+        Determinist, ZERO I/O in afara citirii JSON-ului static la import-ul modulului
+        `funding_programs` — o exceptie aici e degradare de date (camp lipsa/forma
+        neasteptata), nu bug de programare, deci ramane la logger.debug."""
+        try:
+            import re as _re
+
+            from backend.agents.tools.funding_programs import (
+                get_funding_summary,
+                match_programs,
+            )
+            _co = verified.get("company", {})
+            _fin = verified.get("financial", {})
+
+            def _uw(x):
+                return x.get("value") if isinstance(x, dict) else x
+
+            _caen = str(_uw(_co.get("caen_code", "")) or "")
+            _ang = 0
+            for _k in ("numar_angajati", "angajati", "numar_mediu_salariati", "nr_angajati"):
+                _v = _uw(_fin.get(_k)) if _k in _fin else _uw(_co.get(_k))
+                if isinstance(_v, int | float) and _v > 0:
+                    _ang = int(_v)
+                    break
+            _vech = 0
+            for _k in ("data_inregistrare", "an_infiintare", "data_infiintare"):
+                _v = _uw(_co.get(_k))
+                if _v:
+                    _m = _re.search(r"(19|20)\d{2}", str(_v))
+                    if _m:
+                        _vech = max(0, datetime.now(UTC).year - int(_m.group(0)))
+                        break
+            _eligible = match_programs(caen_code=_caen, angajati=_ang, vechime_ani=_vech)
+            return {
+                "eligible": _eligible[:10],
+                "count": len(_eligible),
+                "summary": get_funding_summary(_eligible),
+                "profile_used": {"caen": _caen, "angajati": _ang, "vechime_ani": _vech},
+            }
+        except Exception as _fund_e:
+            logger.debug(f"[verification] funding match error: {_fund_e}")
+            return {"eligible": [], "count": 0, "summary": ""}
+
+    async def _resolve_dynamic_thresholds(self, verified: dict) -> dict | None:
+        """Extrage CAEN (4 cifre) + judet din profilul deja verificat (`verified["company"]`)
+        si calculeaza pragurile dinamice via `_get_dynamic_thresholds`. Extractia e
+        defensiva (forma `adresa`/`caen_code` variaza dupa sursa care le-a populat) —
+        o eroare aici degradeaza la praguri lipsa (`None`), nu la crash."""
+        caen_for_dyn = ""
+        county_for_dyn = None
+        try:
+            caen_raw = verified.get("company", {}).get("caen_code", {})
+            caen_for_dyn = (caen_raw.get("value", "") if isinstance(caen_raw, dict) else str(caen_raw or ""))[:4]
+            county_raw = verified.get("company", {}).get("adresa", {})
+            if isinstance(county_raw, dict):
+                county_for_dyn = county_raw.get("value", {})
+                if isinstance(county_for_dyn, dict):
+                    county_for_dyn = county_for_dyn.get("judet", None)
+                elif isinstance(county_for_dyn, str):
+                    county_for_dyn = None  # adresa e string, nu extragem judetul
+        except Exception as e:
+            logger.debug(f"[verification] dynamic thresholds extraction error: {e}")
+
+        return await self._get_dynamic_thresholds(caen_for_dyn, county_for_dyn)
+
+    def _wire_orphan_fields_pre_score(self, official: dict, verified: dict) -> None:
+        """P0-1: cablare campuri orfane official_data -> verified, cu consumator real in
+        scoring.py. Contract impus de scoring, NU decis aici: maps_rating RAW top-level
+        (_score_reputational face maps_data.get("found")/score_from_rating direct pe
+        dict), monitorul_oficial WRAPPED cu _make_field in verified["risk"] (_score_juridic
+        face risk_data.get("monitorul_oficial") apoi isinstance(..., dict) + .get("value", [])
+        — official["monitorul_oficial"] e o LISTA bruta, un atribuit direct ar pica gate-ul).
+        Ruleaza INAINTE de risk_score (consumat de scoring) -- ordinea conteaza."""
+        if "maps_rating" in official:
+            verified["maps_rating"] = official["maps_rating"]
+        if "monitorul_oficial" in official:
+            verified.setdefault("risk", {})["monitorul_oficial"] = self._make_field(
+                official["monitorul_oficial"], "Monitorul Oficial"
+            )
+
+    def _wire_orphan_fields_post_score(self, official: dict, verified: dict) -> None:
+        """P0-1: cablare campuri orfane fara consumator azi in scoring (staging in
+        full_data — randare in rapoarte e P0-2/P2-14, alta runda). Ruleaza ULTIMA,
+        dupa toate celelalte chei, ca prefixul JSON folosit la truncarea prompt-urilor
+        de sinteza (agent_synthesis.py, data_json[:json_limit]) sa ramana byte-identic
+        pt campurile deja existente.
+
+        A6 (2026-07-16): include si `tavily_quota_exhausted` — official_data-ul scrie
+        acest flag cand cota Tavily lunara e epuizata (agent_official.py, _check_tavily
+        _quota), care gateaza SI cautarea legala (litigii/insolventa), SI semnalele
+        istorice OSINT. Pana la acest fix nimic nu citea flagul: cu cota epuizata,
+        raportul afisa "niciun litigiu / niciun semnal istoric" identic cu o firma cu
+        adevarat curata — absenta dovezii randata ca dovada a absentei, cel mai
+        periculos mod de esec pentru un produs de risc. Randat onest in rich_fields.py
+        — mesajul spune "verificarea NU a fost facuta", NU "nu s-a gasit nimic"."""
+        if "web_intelligence" in official:
+            verified["web_intelligence"] = official["web_intelligence"]
+        if "brave_reputation" in official:
+            verified["brave_reputation"] = official["brave_reputation"]
+        if "data_freshness" in official:
+            verified["data_freshness"] = official["data_freshness"]
+        if official.get("tavily_quota_exhausted"):
+            verified["tavily_quota_exhausted"] = {
+                "value": True,
+                "usage": official.get("tavily_usage"),
+            }
+
+    def _log_verification_summary(self, verified: dict) -> None:
+        """Sumarul final logat la fiecare rulare (risk score + completitudine + gaps)."""
         logger.info(
             f"[verification] Done. Risk score: {verified['risk_score']['score']} | "
             f"Completeness: {verified['completeness']['score']}% | "
             f"Gaps: {len(verified['completeness']['gaps'])}"
         )
-
         if verified["completeness"]["gaps"]:
             logger.warning(
                 f"[verification] DATE LIPSA: {', '.join(g['field'] for g in verified['completeness']['gaps'])}"
             )
 
-        # Dynamic percentile scoring: stocheaza CA real in companies pentru percentile viitoare
+    async def _persist_latest_ca(self, verified: dict) -> None:
+        """Dynamic percentile scoring: stocheaza CA real in companies pentru percentile
+        viitoare (consumat de `_get_dynamic_thresholds` la analize ulterioare pe acelasi
+        CAEN). Best-effort — o eroare de DB nu trebuie sa opreasca verificarea."""
         try:
             from backend.database import db
             ca_raw = verified.get("financial", {}).get("cifra_afaceri", {})
@@ -250,55 +320,25 @@ class VerificationAgent(BaseAgent):
         except Exception as _ca_err:
             logger.debug(f"[verification] latest_ca store error: {_ca_err}")
 
-        # F1-6: Retea firme — query DB pentru asociati comuni
+    async def _attach_company_network(self, verified: dict) -> None:
+        """F1-6: Retea firme — query DB pentru asociati comuni. Aplica doar penalizari
+        de LOGGING aici (scoring-ul propriu-zis citeste `verified["company_network"]`
+        separat) — best-effort, o eroare de retea/DB nu opreste verificarea."""
         cui_verified = verified.get("company", {}).get("cui", {})
         cui_val = cui_verified.get("value", "") if isinstance(cui_verified, dict) else str(cui_verified or "")
-        if cui_val:
-            try:
-                from backend.agents.tools.network_client import get_company_network
-                network_data = await get_company_network(cui_val)
-                verified["company_network"] = network_data
-                # Aplica penalizari scoring daca retea toxica
-                if network_data.get("risk_flags"):
-                    for flag in network_data["risk_flags"]:
-                        if flag.get("severity") == "RED":
-                            logger.info(f"[verification] Network risk flag: {flag['detail']}")
-            except Exception as _ne:
-                logger.debug(f"[verification] network query error: {_ne}")
-
-        # P0-1: cablare campuri orfane fara consumator azi in scoring (staging in
-        # full_data — randare in rapoarte e P0-2/P2-14, alta runda). Adaugate ULTIMELE,
-        # dupa toate celelalte chei, ca prefixul JSON folosit la truncarea prompt-urilor
-        # de sinteza (agent_synthesis.py, data_json[:json_limit]) sa ramana byte-identic
-        # pt campurile deja existente.
-        if "web_intelligence" in official:
-            verified["web_intelligence"] = official["web_intelligence"]
-        if "brave_reputation" in official:
-            verified["brave_reputation"] = official["brave_reputation"]
-        if "data_freshness" in official:
-            verified["data_freshness"] = official["data_freshness"]
-
-        # A6 (2026-07-16): official_data["tavily_quota_exhausted"] (agent_official.py,
-        # _check_tavily_quota) e scris cand cota Tavily lunara e epuizata — gateaza
-        # SI cautarea legala (litigii/insolventa), SI semnalele istorice OSINT (vezi
-        # nota din _check_tavily_quota). Pana acum NIMIC nu citea acest flag: cand
-        # cota era epuizata, raportul afisa "niciun litigiu / niciun semnal istoric"
-        # identic cu o firma cu adevarat curata — absenta dovezii randata ca dovada
-        # a absentei, cel mai periculos mod de esec pentru un produs de risc.
-        # Propagat aici (acelasi pattern ca web_intelligence de mai sus); randat
-        # onest in rapoarte de rich_fields.py — mesajul spune "verificarea NU a
-        # fost facuta", NU "nu s-a gasit nimic".
-        if official.get("tavily_quota_exhausted"):
-            verified["tavily_quota_exhausted"] = {
-                "value": True,
-                "usage": official.get("tavily_usage"),
-            }
-
-        return {
-            "verified_data": verified,
-            "current_step": f"Verificare completa. Risc: {verified['risk_score']['score']} | Completitudine: {verified['completeness']['score']}%",
-            "progress": 0.50,
-        }
+        if not cui_val:
+            return
+        try:
+            from backend.agents.tools.network_client import get_company_network
+            network_data = await get_company_network(cui_val)
+            verified["company_network"] = network_data
+            # Aplica penalizari scoring daca retea toxica
+            if network_data.get("risk_flags"):
+                for flag in network_data["risk_flags"]:
+                    if flag.get("severity") == "RED":
+                        logger.info(f"[verification] Network risk flag: {flag['detail']}")
+        except Exception as _ne:
+            logger.debug(f"[verification] network query error: {_ne}")
 
     def _compute_predictive_scores(self, verified: dict, official: dict) -> dict:
         """IMB-B2 + A1 (2026-07-16): scoruri predictive de faliment.
