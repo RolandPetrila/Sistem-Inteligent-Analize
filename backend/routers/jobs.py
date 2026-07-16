@@ -210,7 +210,7 @@ async def get_job_diagnostics(job_id: str):
             lines = log_path.read_text(encoding="utf-8").splitlines()
             diagnostics["log_lines"] = len(lines)
             # Last 20 lines as summary
-            diagnostics["log_tail"] = [l.rstrip() for l in lines[-20:]]
+            diagnostics["log_tail"] = [line.rstrip() for line in lines[-20:]]
         except Exception as e:
             logger.debug(f"[diagnostics] Log read failed: {e}")
 

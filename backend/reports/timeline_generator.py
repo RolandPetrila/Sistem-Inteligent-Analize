@@ -181,7 +181,7 @@ def generate_timeline_pdf(timeline_data: dict, output_path: str) -> None:
         pdf.set_font("Helvetica", "B", 9)
         pdf.set_fill_color(99, 102, 241)
         pdf.set_text_color(255, 255, 255)
-        for h, w in zip(headers, col_widths):
+        for h, w in zip(headers, col_widths, strict=True):
             pdf.cell(w, 8, h, border=1, fill=True, align="C")
         pdf.ln()
 

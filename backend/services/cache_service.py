@@ -4,9 +4,13 @@ Foloseste tabelul data_cache din SQLite.
 9A: Hit/miss tracking per source.
 """
 
+import asyncio as _asyncio
 import hashlib
 import json
 import threading
+from collections import OrderedDict as _LRUDict
+from collections import OrderedDict as _OrderedDict
+from time import time as _time_now
 
 from loguru import logger
 
@@ -35,8 +39,6 @@ def _track(source: str, hit: bool) -> None:
 
 
 # --- L1 In-Memory Cache (hot data layer) ---
-from collections import OrderedDict as _LRUDict
-from time import time as _time_now
 
 
 class _L1Cache:
@@ -212,8 +214,6 @@ async def get_stats() -> dict:
 
 # B24 fix: In-flight lock to prevent duplicate fetches for same key
 # D18 fix: Bounded OrderedDict to prevent memory leak (max 500 entries)
-import asyncio as _asyncio
-from collections import OrderedDict as _OrderedDict
 
 _fetch_locks: _OrderedDict[str, _asyncio.Lock] = _OrderedDict()
 _MAX_LOCKS = 500

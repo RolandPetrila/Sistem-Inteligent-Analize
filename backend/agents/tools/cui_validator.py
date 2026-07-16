@@ -33,7 +33,10 @@ def validate_cui(cui: str) -> dict:
         digits.insert(0, 0)
 
     # Calculeaza suma ponderata
-    weighted_sum = sum(d * w for d, w in zip(digits, weights))
+    # strict=True: digits e pad-uit la exact 9 iar weights are 9 — egalitatea e o
+    # invarianta, nu o coincidenta. Daca pad-area se strica vreodata, vrem exceptie
+    # zgomotoasa, nu o cifra de control calculata pe o lista trunchiata tacut.
+    weighted_sum = sum(d * w for d, w in zip(digits, weights, strict=True))
 
     # MOD 11, apoi MOD 10 daca rezultatul e 10
     remainder = (weighted_sum * 10) % 11
