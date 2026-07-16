@@ -205,4 +205,227 @@ FIXTURES: dict[str, dict] = {
         },
         "caen_code": "6311",
     },
+
+    # --- 7-14: adaugate la refactorul _score_financiar (2026-07-16, PLAN
+    #     REFACTOR — sub-task scoring.py). Cele 6 fixture-uri de mai sus
+    #     lasau NEACOPERITE ~57 statement-uri din interiorul lui
+    #     _score_financiar (verificat cu coverage.py, nu presupus) —
+    #     ramurile de mai jos completeaza acoperirea INAINTE de orice
+    #     extragere de cod, ca sa nu se refactorizeze orbeste peste cod
+    #     nevazut de niciun test.
+
+    # --- 7. Crestere CA exceptionala (>50%) + forma REALA de productie a
+    #        caen_code: verified["caen_code"] absent (ca in productie —
+    #        agent_verification.py NU seteaza niciodata cheia top-level),
+    #        deci fallback la company["caen_code"] dict-wrapped cu litera
+    #        de sectiune ("J...") — exercita unwrap-ul dict + ramura alpha,
+    #        niciuna atinsa de fixture-urile 1-6 (care foloseau artificial
+    #        un string simplu la nivel top-level, forma NEREALA fata de
+    #        productie).
+    "trend_growth_exceptional_dict_caen": {
+        "company": {
+            "cui": {"value": "66666666", "trust": "OFICIAL", "source": "ANAF"},
+            "denumire": {"value": "Crestere Exceptionala SRL", "trust": "OFICIAL", "source": "ANAF"},
+            "stare_firma": {"value": "ACTIVA", "trust": "OFICIAL", "source": "ANAF"},
+            "caen_code": {"value": "J6201", "trust": "OFICIAL", "source": "ONRC"},
+        },
+        "financial": {
+            "cifra_afaceri": {"value": 2_000_000},
+            "profit_net": {"value": 100_000},
+            "trend_financiar": {
+                "value": {
+                    "cifra_afaceri_neta": {
+                        "growth_percent": 65,
+                        # valori 3 ani, crestere blanda — doar ca sa intre in
+                        # blocul de decompozitie (>=3 valori) si sa ajunga la
+                        # rezolvarea sectiunii CAEN; NU declanseaza anomalie
+                        # sau trend structural (verificat numeric).
+                        "values": [
+                            {"year": "2022", "value": 1_800_000},
+                            {"year": "2023", "value": 1_900_000},
+                            {"year": "2024", "value": 2_000_000},
+                        ],
+                    },
+                }
+            },
+        },
+        "risk": {"anaf_inactive": {"value": False}},
+        # NOTA: fara cheia "caen_code" la nivel top-level — forma REALA de
+        # productie (verified.get("caen_code","") e mereu falsy acolo).
+    },
+
+    # --- 8. Scadere CA CRITICA (<-30%) + trend structural negativ multi-an
+    #        (regresie liniara pe 4 ani, panta negativa) + sectiune CAEN
+    #        numerica "F" (Constructii, coduri 41-43) — nicio ramura atinsa
+    #        de fixture-urile 1-6.
+    "trend_decline_critical_structural": {
+        "company": {
+            "cui": {"value": "77777777", "trust": "OFICIAL", "source": "ANAF"},
+            "denumire": {"value": "Constructii In Declin SRL", "trust": "OFICIAL", "source": "ANAF"},
+            "stare_firma": {"value": "ACTIVA", "trust": "OFICIAL", "source": "ANAF"},
+            "caen_code": {"value": "4120", "trust": "OFICIAL", "source": "ANAF"},
+        },
+        "financial": {
+            "cifra_afaceri": {"value": 5_500_000},
+            "profit_net": {"value": 50_000},
+            "capitaluri_proprii": {"value": 800_000},
+            "trend_financiar": {
+                "value": {
+                    "cifra_afaceri_neta": {
+                        "growth_percent": -35,
+                        "values": [
+                            {"year": "2021", "value": 10_000_000},
+                            {"year": "2022", "value": 8_500_000},
+                            {"year": "2023", "value": 7_000_000},
+                            {"year": "2024", "value": 5_500_000},
+                        ],
+                    },
+                }
+            },
+        },
+        "risk": {"anaf_inactive": {"value": False}},
+        "caen_code": "41",  # sectiune numerica F (41-43), NU codul CAEN complet 4120
+    },
+
+    # --- 9. Scadere CA MODERATA (-10% < growth < -30%, adica intre -30 si
+    #        -10) — ramura distincta de #8 (critica) si de #10 (minora) —
+    #        + sectiune CAEN numerica "C" (Manufacturing, 10-33).
+    "trend_decline_moderate": {
+        "company": {
+            "cui": {"value": "88888888", "trust": "OFICIAL", "source": "ANAF"},
+            "denumire": {"value": "Manufactura Moderata SRL", "trust": "OFICIAL", "source": "ANAF"},
+            "stare_firma": {"value": "ACTIVA", "trust": "OFICIAL", "source": "ANAF"},
+            "caen_code": {"value": "2059", "trust": "OFICIAL", "source": "ANAF"},
+        },
+        "financial": {
+            "cifra_afaceri": {"value": 900_000},
+            "trend_financiar": {
+                "value": {
+                    "cifra_afaceri_neta": {"growth_percent": -15},
+                }
+            },
+        },
+        "risk": {"anaf_inactive": {"value": False}},
+        "caen_code": "20",  # sectiune numerica C (10-33)
+    },
+
+    # --- 10. Scadere CA MINORA (-10% < growth < 0%) — ultima ramura din
+    #        lantul de scadere, + sectiune CAEN numerica "N" (77-82).
+    "trend_decline_minor": {
+        "company": {
+            "cui": {"value": "99999999", "trust": "OFICIAL", "source": "ANAF"},
+            "denumire": {"value": "Servicii Usor In Scadere SRL", "trust": "OFICIAL", "source": "ANAF"},
+            "stare_firma": {"value": "ACTIVA", "trust": "OFICIAL", "source": "ANAF"},
+            "caen_code": {"value": "7739", "trust": "OFICIAL", "source": "ANAF"},
+        },
+        "financial": {
+            "cifra_afaceri": {"value": 400_000},
+            "trend_financiar": {
+                "value": {
+                    "cifra_afaceri_neta": {"growth_percent": -3},
+                }
+            },
+        },
+        "risk": {"anaf_inactive": {"value": False}},
+        "caen_code": "80",  # sectiune numerica N (77-82)
+    },
+
+    # --- 11. Anomalie CA (deviatie >2 std fata de trendul liniar pe un an
+    #        singular, an 2023 cu spike x8) + volatilitate CA RIDICATA vs
+    #        sector (ratio CV/baseline > 2.0, distinct de "moderata" deja
+    #        acoperita de fixture-ul 5) — + sectiune CAEN numerica "J" (IT,
+    #        58-63), baseline volatilitate cea mai mica (0.25), amplifica
+    #        ratio-ul. Valorile au fost verificate numeric (nu ghicite)
+    #        inainte de a fi introduse in fixture, cu acelasi algoritm ca
+    #        in scoring.py (regresie liniara + std dev).
+    "trend_anomaly_and_high_volatility": {
+        "company": {
+            "cui": {"value": "10101010", "trust": "OFICIAL", "source": "ANAF"},
+            "denumire": {"value": "IT Cu Spike Anormal SRL", "trust": "OFICIAL", "source": "ANAF"},
+            "stare_firma": {"value": "ACTIVA", "trust": "OFICIAL", "source": "ANAF"},
+            "caen_code": {"value": "6201", "trust": "OFICIAL", "source": "ANAF"},
+        },
+        "financial": {
+            "cifra_afaceri": {"value": 1_150_000},
+            "profit_net": {"value": 60_000},
+            "trend_financiar": {
+                "value": {
+                    "cifra_afaceri_neta": {
+                        "growth_percent": 5,
+                        "values": [
+                            {"year": "2019", "value": 1_000_000},
+                            {"year": "2020", "value": 1_020_000},
+                            {"year": "2021", "value": 1_050_000},
+                            {"year": "2022", "value": 8_000_000},
+                            {"year": "2023", "value": 1_100_000},
+                            {"year": "2024", "value": 1_150_000},
+                        ],
+                    },
+                }
+            },
+        },
+        "risk": {"anaf_inactive": {"value": False}},
+        "caen_code": "62",  # sectiune numerica J (58-63)
+    },
+
+    # --- 12. Capitaluri proprii NEGATIVE (ca_val>0) + cash-flow stress
+    #        (marja negativa <-10% SI capital negativ) — ramuri neatinse
+    #        de fixture-ul adversarial (acolo ca_val=0, deci garda
+    #        `ca_val>0` a blocurilor de solvabilitate nu se activeaza
+    #        deloc). Combinatia Pierdere+Subcapitalizat -> risk_level=1
+    #        din matricea de solvabilitate (risc HIGH in factors).
+    "solvency_negative_capital_cashflow_stress": {
+        "company": {
+            "cui": {"value": "11223344", "trust": "OFICIAL", "source": "ANAF"},
+            "denumire": {"value": "Capital Negativ SRL", "trust": "OFICIAL", "source": "ANAF"},
+            "stare_firma": {"value": "ACTIVA", "trust": "OFICIAL", "source": "ANAF"},
+            "caen_code": {"value": "4632", "trust": "OFICIAL", "source": "ANAF"},
+        },
+        "financial": {
+            "cifra_afaceri": {"value": 5_000_000},
+            "profit_net": {"value": -800_000},
+            "capitaluri_proprii": {"value": -300_000},
+        },
+        "risk": {"anaf_inactive": {"value": False}},
+        "caen_code": "4632",
+    },
+
+    # --- 13. Capital pozitiv dar sub 5% din CA (subcapitalizare cu capital
+    #        POZITIV — ramura distincta de #12, unde capitalul e negativ) +
+    #        marja profit sub 1% la CA > 1M (ramura cash-flow separata,
+    #        elif mutual-exclusiv fata de stress-ul din #12).
+    "solvency_thin_positive_capital": {
+        "company": {
+            "cui": {"value": "22334455", "trust": "OFICIAL", "source": "ANAF"},
+            "denumire": {"value": "Capital Subtire SRL", "trust": "OFICIAL", "source": "ANAF"},
+            "stare_firma": {"value": "ACTIVA", "trust": "OFICIAL", "source": "ANAF"},
+            "caen_code": {"value": "4941", "trust": "OFICIAL", "source": "ANAF"},
+        },
+        "financial": {
+            "cifra_afaceri": {"value": 10_000_000},
+            "profit_net": {"value": -100_000},
+            "capitaluri_proprii": {"value": 200_000},
+        },
+        "risk": {"anaf_inactive": {"value": False}},
+        "caen_code": "4941",
+    },
+
+    # --- 14. Matrice solvabilitate zona (Pierdere, Solid) -> risk_level=3
+    #        (RISC MEDIU-RIDICAT) — singura combinatie cu risk_level exact 3
+    #        din harta 3x3; distincta de risk_level<=2 (fixture #12/#13).
+    "solvency_pierdere_solid_risk3": {
+        "company": {
+            "cui": {"value": "33445566", "trust": "OFICIAL", "source": "ANAF"},
+            "denumire": {"value": "Capital Solid Pierdere Mica SRL", "trust": "OFICIAL", "source": "ANAF"},
+            "stare_firma": {"value": "ACTIVA", "trust": "OFICIAL", "source": "ANAF"},
+            "caen_code": {"value": "6820", "trust": "OFICIAL", "source": "ANAF"},
+        },
+        "financial": {
+            "cifra_afaceri": {"value": 5_000_000},
+            "profit_net": {"value": -50_000},
+            "capitaluri_proprii": {"value": 2_000_000},
+        },
+        "risk": {"anaf_inactive": {"value": False}},
+        "caen_code": "6820",
+    },
 }

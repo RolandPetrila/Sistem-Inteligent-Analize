@@ -1,0 +1,142 @@
+{
+  "anomalies": [],
+  "company_age_years": null,
+  "confidence": {
+    "financiar": 0.75,
+    "fiscal": 1.0,
+    "juridic": 0.2,
+    "operational": 0.4,
+    "piata": 0.3,
+    "reputational": 0.3
+  },
+  "dimensions": {
+    "financiar": {
+      "confidence": 0.75,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 65,
+      "reasons": [
+        {
+          "impact": 10,
+          "text": "CA buna (5000K RON)"
+        },
+        {
+          "impact": -15,
+          "text": "Pierdere neta (-50K RON)"
+        },
+        {
+          "impact": 5,
+          "text": "Capitalizare solida (40.0% din CA)"
+        },
+        {
+          "impact": -5,
+          "text": "Marja profit sub 1% la CA > 1M RON"
+        }
+      ],
+      "score": 63.0,
+      "weight": 30
+    },
+    "fiscal": {
+      "confidence": 1.0,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 90,
+      "reasons": [],
+      "score": 90.0,
+      "weight": 15
+    },
+    "juridic": {
+      "confidence": 0.2,
+      "data_available": false,
+      "insufficient_data": false,
+      "raw_score": 85,
+      "reasons": [
+        {
+          "impact": 0,
+          "text": "Fara litigii identificate"
+        }
+      ],
+      "score": 65.7,
+      "weight": 20
+    },
+    "operational": {
+      "confidence": 0.4,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 70,
+      "reasons": [],
+      "score": 62.6,
+      "weight": 15
+    },
+    "piata": {
+      "confidence": 0.3,
+      "data_available": false,
+      "insufficient_data": false,
+      "raw_score": 50,
+      "reasons": [
+        {
+          "impact": 0,
+          "text": "Date de piata indisponibile"
+        }
+      ],
+      "score": 50.0,
+      "weight": 10
+    },
+    "reputational": {
+      "confidence": 0.3,
+      "data_available": false,
+      "insufficient_data": false,
+      "raw_score": 50,
+      "reasons": [
+        {
+          "impact": 0,
+          "text": "Fara prezenta online detectata"
+        }
+      ],
+      "score": 50.0,
+      "weight": 10
+    }
+  },
+  "early_warning_confidence": [],
+  "factor_count": 3,
+  "factors": [
+    [
+      "Pierdere neta",
+      "MEDIUM"
+    ],
+    [
+      "Matrice solvabilitate: RISC MEDIU-RIDICAT (marja=-1.0%, capital=40.0%)",
+      "MEDIUM"
+    ],
+    [
+      "Marja profit sub 1% la CA > 1M — posibil cash flow strain",
+      "MEDIUM"
+    ]
+  ],
+  "financial_ratios": [
+    {
+      "interpretation": "Pierdere",
+      "name": "Marja Profit Net",
+      "unit": "%",
+      "value": -1.0
+    },
+    {
+      "interpretation": "Negativ",
+      "name": "ROE",
+      "unit": "%",
+      "value": -2.5
+    }
+  ],
+  "numeric_score": 64.9,
+  "recommendation": "Risc mediu - se recomanda verificare suplimentara inainte de angajament",
+  "score": "Galben",
+  "sector_position": {},
+  "solvency_matrix": {
+    "equity_ratio_pct": 40.0,
+    "equity_zone": "Solid",
+    "profit_margin_pct": -1.0,
+    "profit_zone": "Pierdere",
+    "risk_level": 3,
+    "risk_zone": "RISC MEDIU-RIDICAT"
+  }
+}

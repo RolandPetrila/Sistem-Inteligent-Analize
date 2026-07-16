@@ -1,0 +1,156 @@
+{
+  "anomalies": [],
+  "company_age_years": null,
+  "confidence": {
+    "financiar": 0.75,
+    "fiscal": 1.0,
+    "juridic": 0.2,
+    "operational": 0.4,
+    "piata": 0.3,
+    "reputational": 0.3
+  },
+  "dimensions": {
+    "financiar": {
+      "confidence": 0.75,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 40,
+      "reasons": [
+        {
+          "impact": 10,
+          "text": "CA buna (5000K RON)"
+        },
+        {
+          "impact": -15,
+          "text": "Pierdere neta (-800K RON)"
+        },
+        {
+          "impact": -15,
+          "text": "Capitaluri proprii NEGATIVE — subcapitalizare"
+        },
+        {
+          "impact": -10,
+          "text": "Cash flow stress: marja negativa + capital negativ"
+        }
+      ],
+      "score": 41.3,
+      "weight": 30
+    },
+    "fiscal": {
+      "confidence": 1.0,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 90,
+      "reasons": [],
+      "score": 90.0,
+      "weight": 15
+    },
+    "juridic": {
+      "confidence": 0.2,
+      "data_available": false,
+      "insufficient_data": false,
+      "raw_score": 85,
+      "reasons": [
+        {
+          "impact": 0,
+          "text": "Fara litigii identificate"
+        }
+      ],
+      "score": 65.7,
+      "weight": 20
+    },
+    "operational": {
+      "confidence": 0.4,
+      "data_available": true,
+      "insufficient_data": false,
+      "raw_score": 70,
+      "reasons": [],
+      "score": 62.6,
+      "weight": 15
+    },
+    "piata": {
+      "confidence": 0.3,
+      "data_available": false,
+      "insufficient_data": false,
+      "raw_score": 50,
+      "reasons": [
+        {
+          "impact": 0,
+          "text": "Date de piata indisponibile"
+        }
+      ],
+      "score": 50.0,
+      "weight": 10
+    },
+    "reputational": {
+      "confidence": 0.3,
+      "data_available": false,
+      "insufficient_data": false,
+      "raw_score": 50,
+      "reasons": [
+        {
+          "impact": 0,
+          "text": "Fara prezenta online detectata"
+        }
+      ],
+      "score": 50.0,
+      "weight": 10
+    }
+  },
+  "early_warning_confidence": [
+    {
+      "confidence": 70,
+      "severity": "HIGH",
+      "warning": "Capitaluri proprii NEGATIVE — subcapitalizare"
+    },
+    {
+      "confidence": 70,
+      "severity": "HIGH",
+      "warning": "Matrice solvabilitate: RISC CRITIC (marja=-16.0%, capital=-6.0%)"
+    },
+    {
+      "confidence": 70,
+      "severity": "HIGH",
+      "warning": "Cash flow stress: marja negativa + capital negativ"
+    }
+  ],
+  "factor_count": 4,
+  "factors": [
+    [
+      "Pierdere neta",
+      "MEDIUM"
+    ],
+    [
+      "Capitaluri proprii NEGATIVE — subcapitalizare",
+      "HIGH"
+    ],
+    [
+      "Matrice solvabilitate: RISC CRITIC (marja=-16.0%, capital=-6.0%)",
+      "HIGH"
+    ],
+    [
+      "Cash flow stress: marja negativa + capital negativ",
+      "HIGH"
+    ]
+  ],
+  "financial_ratios": [
+    {
+      "interpretation": "Pierdere",
+      "name": "Marja Profit Net",
+      "unit": "%",
+      "value": -16.0
+    }
+  ],
+  "numeric_score": 58.4,
+  "recommendation": "Risc mediu - se recomanda verificare suplimentara inainte de angajament",
+  "score": "Galben",
+  "sector_position": {},
+  "solvency_matrix": {
+    "equity_ratio_pct": -6.0,
+    "equity_zone": "Subcapitalizat",
+    "profit_margin_pct": -16.0,
+    "profit_zone": "Pierdere",
+    "risk_level": 1,
+    "risk_zone": "RISC CRITIC"
+  }
+}
