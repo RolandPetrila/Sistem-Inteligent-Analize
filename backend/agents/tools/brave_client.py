@@ -59,7 +59,14 @@ async def search_company_reputation(
                     "count": _MAX_RESULTS,
                     "freshness": freshness,
                     "search_lang": "ro",
-                    "country": "RO",
+                    # Brave nu accepta RO in enum-ul "country" (verificat live:
+                    # HTTP 422 "Input should be 'AR','AU',...,'US' or 'ALL'" — Romania
+                    # nu e in lista). "ALL" (fara restrictie de tara) verificat live
+                    # sa dea rezultate identice/echivalente cu a omite parametrul,
+                    # pt query-uri in romana pe firme reale (search_lang='ro' e cel
+                    # care aduce relevanta RO, nu country) — ales explicit in loc de
+                    # a omite parametrul, ca sa nu depindem de un default nedocumentat.
+                    "country": "ALL",
                     "text_decorations": False,
                     "spellcheck": False,
                 },

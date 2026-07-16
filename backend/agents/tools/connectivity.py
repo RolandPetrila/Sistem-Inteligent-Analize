@@ -207,21 +207,23 @@ async def ping_just() -> dict:
 
 
 async def ping_brave() -> dict:
+    """Exercita ACEEASI cale ca productia (search_company_reputation), nu un GET
+    minimal separat -- un GET minimal cu params inventati (fara 'country') trecea cu
+    200 chiar si atunci cand cererea REALA de productie (cu country='RO', invalid la
+    Brave -> HTTP 422) pica sistematic pe toate cele 78/78 rapoarte reale. Un ping
+    care nu poate reflecta o rupere reala de productie nu e dovada, e zgomot."""
     from backend.config import settings
     if not settings.brave_api_key:
         return {"ok": False, "message": "BRAVE_API_KEY nu este configurat"}
-    from backend.http_client import get_client
+    from backend.agents.tools.brave_client import search_company_reputation
+    # DANTE INTERNATIONAL SA — denumirea reala pt TEST_CUI (verificat live via ANAF).
     try:
-        client = get_client()
-        resp = await client.get(
-            "https://api.search.brave.com/res/v1/web/search",
-            headers={"Accept": "application/json", "X-Subscription-Token": settings.brave_api_key},
-            params={"q": "test", "count": 1},
-            timeout=10,
-        )
+        data = await search_company_reputation("DANTE INTERNATIONAL SA", TEST_CUI)
     except Exception as e:
-        return {"ok": False, "message": f"Brave Search eroare: {e}"[:200]}
-    return {"ok": resp.status_code == 200, "message": f"Brave Search HTTP {resp.status_code}"}
+        return {"ok": False, "message": f"Brave Search eroare neasteptata: {e}"[:200]}
+    if not data:
+        return {"ok": False, "message": "Brave Search: niciun rezultat (verifica parametrii cererii sau cota 2000/luna)"}
+    return {"ok": True, "message": f"Brave Search OK ({len(data.get('results', []))} rezultate pt CUI test)"}
 
 
 async def ping_jina() -> dict:
