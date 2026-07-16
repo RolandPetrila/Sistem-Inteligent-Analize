@@ -80,6 +80,16 @@ const JUDETE_RO = [
 
 const PAGE_SIZE = 20;
 
+// Stable empty-array reference — `companiesData?.companies ?? []` would otherwise
+// allocate a NEW array literal on every render while companiesData is still
+// undefined (initial load), making it an unstable useEffect dependency below.
+// Combined with setFavorites always spreading into a new object reference, that
+// caused an unbounded render -> effect -> setState -> render loop (verified: it
+// spins synchronously inside React's act() effect-flush, which never yields to
+// the microtask queue, so even an already-resolved query promise never gets a
+// turn to settle — reproduced as a genuine hang in Companies.test.tsx).
+const EMPTY_COMPANIES: Company[] = [];
+
 // A2: Badge colorat cu scor numeric pentru risc
 const riskBadge = (score: number | null | undefined) => {
   if (score == null)
@@ -171,7 +181,7 @@ export default function Companies() {
     placeholderData: (prev) => prev,
   });
 
-  const companies: Company[] = companiesData?.companies ?? [];
+  const companies: Company[] = companiesData?.companies ?? EMPTY_COMPANIES;
   const total: number = companiesData?.total ?? 0;
 
   // Log on data change
