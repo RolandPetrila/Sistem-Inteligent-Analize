@@ -27,7 +27,8 @@ npm install
 npm run dev             # Port 5173
 ```
 
-Sau dublu-click **START_RIS.vbs** pentru pornire automata.
+Sau dublu-click **RIS.vbs** pentru pornire automata (serviciu Windows `RIS-Backend` +
+PWA in Chrome pe portul 8001).
 
 ## Functionalitati
 
@@ -37,14 +38,16 @@ Sau dublu-click **START_RIS.vbs** pentru pornire automata.
 - Comparatie 2+ firme side-by-side
 - Batch analysis CSV (procesare multipla)
 - Monitorizare automata firme cu alerte Telegram
-- 43 REST endpoints + 1 WebSocket + 12 pagini frontend
+- 85 REST endpoints + 1 WebSocket + 15 pagini frontend (16 rute, incl. 404)
 
 ## Teste
 
 ```bash
-python -m pytest tests/ -v      # 156 pytest
-cd frontend && npx vitest run   # 11 vitest
-# Sau: dublu-click RIS_TEST.bat
+python -m pytest tests/ -v          # numarul de teste e afisat de comanda
+cd frontend && npx vitest run --pool=threads --exclude "**/Companies.test.tsx"
+# Companies.test.tsx e exclus intentionat — hang preexistent confirmat pe acest
+# repo, indiferent de pool. Vezi RIS_TEST.bat pentru rularea completa cu log.
+# Sau: dublu-click RIS_TEST.bat  (scrie TEST_RESULTS.log)
 ```
 
 ## API Docs
