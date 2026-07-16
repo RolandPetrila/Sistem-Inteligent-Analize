@@ -43,6 +43,19 @@ interface ServerPreview {
   estimated_time_minutes: number;
 }
 
+// Starile TERMINALE ale unui job de tip BATCH_*, exact cum le declara backend-ul
+// (`backend/routers/batch.py:270` — `if row["status"] not in ("DONE","ERROR","PAUSED")`).
+// ATENTIE: la nivel de BATCH, backend-ul scrie DOAR 'DONE' | 'ERROR' | 'PAUSED' |
+// 'RUNNING' | 'PENDING'. NU scrie NICIODATA 'FAILED' — acela exista doar per-CUI,
+// in `results[].status`. Codul de aici astepta 'FAILED', deci pe un batch esuat real
+// (ex. timeout > 4h -> 'ERROR') polling-ul nu se oprea niciodata: spinner infinit,
+// starea de eroare nerandata. Reparat 2026-07-16.
+const TERMINAL_BATCH_STATUSES = ["DONE", "ERROR", "PAUSED"] as const;
+
+function isBatchTerminal(status: string | undefined): boolean {
+  return (TERMINAL_BATCH_STATUSES as readonly string[]).includes(status ?? "");
+}
+
 export default function BatchAnalysis() {
   const { toast } = useToast();
   const [file, setFile] = useState<File | null>(null);
@@ -120,7 +133,7 @@ export default function BatchAnalysis() {
           )) as unknown as BatchStatus;
           setBatch(status);
 
-          if (status.status === "DONE" || status.status === "FAILED") {
+          if (isBatchTerminal(status.status)) {
             clearInterval(interval);
             intervalRef.current = null;
             setPolling(false);
@@ -153,7 +166,7 @@ export default function BatchAnalysis() {
           storedId,
         )) as unknown as BatchStatus;
         if (cancelled) return;
-        if (status.status === "DONE" || status.status === "FAILED") {
+        if (isBatchTerminal(status.status)) {
           // Finished while away — show final state (ZIP still downloadable) + clear
           localStorage.removeItem(ACTIVE_BATCH_KEY);
           setBatch(status);
@@ -439,7 +452,7 @@ export default function BatchAnalysis() {
                 "text-xs font-medium px-2 py-1 rounded",
                 batch.status === "DONE"
                   ? "bg-green-500/20 text-green-400"
-                  : batch.status === "FAILED"
+                  : batch.status === "ERROR"
                     ? "bg-red-500/20 text-red-400"
                     : "bg-blue-500/20 text-blue-400",
               )}
@@ -505,8 +518,9 @@ export default function BatchAnalysis() {
               Backend accepta doar status DONE/ERROR/PAUSED (batch-ul in ansamblu
               nu ajunge niciodata la "FAILED" — acela e statusul per-CUI din
               rezultate; gatam pe valorile reale, nu pe cele presupuse).
-              NU gatam si pe `!polling`: efectul de resume-on-mount (mai sus)
-              porneste polling-ul si pt status "ERROR" (acelasi bug — verifica
+              NU gatam pe `!polling`: gate-ul pe status e sursa de adevar, nu
+              starea locala de polling (care e derivata). Nota: pana la fix-ul din
+              2026-07-16, resume-on-mount pornea polling si pt "ERROR" (verifica
               doar DONE/FAILED, nu si ERROR/PAUSED, deci `polling` ramane true
               la nesfarsit pt un batch picat definitiv; semnalat, neatins). */}
           {batch.failed > 0 &&
@@ -541,7 +555,7 @@ export default function BatchAnalysis() {
           )}
 
           {/* New batch */}
-          {(batch.status === "DONE" || batch.status === "FAILED") && (
+          {isBatchTerminal(batch.status) && (
             <button
               onClick={() => {
                 setBatch(null);

@@ -105,3 +105,38 @@ describe("BatchAnalysis — Reia CUI-uri esuate", () => {
     });
   });
 });
+
+/**
+ * Fix 2026-07-16: statusul TERMINAL al unui batch e DONE|ERROR|PAUSED (asa cum
+ * declara `backend/routers/batch.py:270`). Codul astepta "FAILED" — valoare pe
+ * care backend-ul NU o scrie NICIODATA la nivel de batch (exista doar per-CUI).
+ * Consecinta pe un batch esuat real (ex. timeout > 4h -> "ERROR"): polling-ul
+ * nu se oprea niciodata (spinner infinit) si butonul "Batch Nou" nu aparea —
+ * userul ramanea blocat pe un batch mort.
+ *
+ * Testele de mai jos PICA pe codul dinainte de fix (verificat cu git stash).
+ */
+describe("BatchAnalysis — status terminal ERROR (nu FAILED)", () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    localStorage.setItem("ris_active_batch", "batch-xyz");
+    vi.resetModules();
+    const mod = await import("../pages/BatchAnalysis");
+    BatchAnalysisComponent = mod.default;
+  });
+
+  it("ERROR e tratat ca terminal: curata batch-ul activ, nu porneste polling la nesfarsit", async () => {
+    render(<BatchAnalysisComponent />);
+    // Vechiul cod astepta DONE|FAILED -> ERROR cadea pe ramura "inca ruleaza",
+    // pastra cheia si pornea polling. Acum ERROR e terminal -> cheia dispare.
+    await waitFor(() => {
+      expect(localStorage.getItem("ris_active_batch")).toBeNull();
+    });
+  });
+
+  it("ERROR arata butonul 'Batch Nou' (inainte aparea doar la DONE|FAILED)", async () => {
+    const { findByRole } = render(<BatchAnalysisComponent />);
+    const button = await findByRole("button", { name: /Batch Nou/i });
+    expect(button).toBeTruthy();
+  });
+});
