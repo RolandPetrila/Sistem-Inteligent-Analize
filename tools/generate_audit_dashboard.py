@@ -352,14 +352,48 @@ document.addEventListener('DOMContentLoaded', () => {
 """
 
 
+def _walk_routes_with_prefix(routes, prefix=""):
+    """Parcurge recursiv `routes`, urmarind prefixul real acumulat prin routerele
+    incluse.
+
+    FASTAPI 0.139 GOTCHA (motivul acestei functii): incepand cu 0.139.0 (upgrade
+    2026-07-13, commit 5806cd3), `app.routes` nu mai contine rutele incluse prin
+    `app.include_router(...)` direct/aplatizat — apar ca obiecte `_IncludedRouter`
+    care NU expun `.routes` (introspectia veche `for r in app.routes` vedea doar
+    cele ~19 rute definite direct pe `app`, ratand ~70 din routere).
+    `_IncludedRouter` are `original_router` (routerul original, cu `.routes` proprii
+    dar CU PATH-URI RELATIVE, fara prefix — verificat empiric) si `include_context`
+    (obiect intern cu `.prefix`, prefixul dat la `include_router(..., prefix=...)`).
+    Recursam prin `original_router.routes` acumuland prefixul, ca sa reconstruim
+    path-ul complet exact cum il vede FastAPI la runtime.
+
+    Verificat empiric (2026-07-16): rezultatul acestei functii, filtrat identic ca
+    mai jos, produce 89/89 chei IDENTICE cu `CURATED_ENDPOINTS` (0 lipsa, 0 in plus)
+    — inclusiv `/api/reports/public/{token}`, care are `include_in_schema=False` si
+    de-aia NU apare deloc in `app.openapi()["paths"]` (sursa alternativa, testata si
+    respinsa: da 85/89, rateaza exact acest endpoint).
+    """
+    for r in routes:
+        if type(r).__name__ == "_IncludedRouter":
+            original_router = getattr(r, "original_router", None)
+            if original_router is None:
+                continue
+            sub_prefix = prefix + getattr(r.include_context, "prefix", "")
+            yield from _walk_routes_with_prefix(original_router.routes, sub_prefix)
+        else:
+            yield r, prefix
+
+
 def introspect_routes():
-    """Extrage automat toate rutele REST + WebSocket din aplicatia FastAPI reala."""
+    """Extrage automat toate rutele REST + WebSocket din aplicatia FastAPI reala,
+    inclusiv cele incluse prin sub-routere (vezi gotcha in `_walk_routes_with_prefix`)."""
     rows = []
     seen = set()
-    for r in app.routes:
-        path = getattr(r, "path", None)
-        if not path:
+    for r, prefix in _walk_routes_with_prefix(app.routes):
+        raw_path = getattr(r, "path", None)
+        if raw_path is None:
             continue
+        path = prefix + raw_path
         if type(r).__name__ == "APIWebSocketRoute":
             key = f"WS {path}"
             if key not in seen:
@@ -378,6 +412,56 @@ def introspect_routes():
                 seen.add(key)
     rows.sort(key=lambda x: (x["path"], x["method"]))
     return rows
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GARDA ANTI-REGRESIE (2026-07-16): introspectia de mai sus a fost rupta tacut
+# 3 zile de un upgrade fastapi (0.115.5 -> 0.139.0, 2026-07-13) — vechea versiune
+# nu arunca nicio eroare, doar scria un dashboard "13/13" plauzibil-dar-fals peste
+# cel bun "88/88". `CURATED_ENDPOINTS` (metadate curate, acumulate manual, in git)
+# e folosit ca linie de baza REALA — nu fisierul HTML generat anterior, care poate
+# fi el insusi deja stricat de o rulare anterioara cu bug. Orice scadere mare fata
+# de acest numar cunoscut opreste scrierea, zgomotos, cu explicatie + pasi de verificat.
+# ─────────────────────────────────────────────────────────────────────────────
+MIN_ENDPOINTS_FLOOR = 50  # sub asta e implauzibil pentru RIS, indiferent de CURATED_ENDPOINTS
+REGRESSION_FRACTION = 0.7  # sub 70% din CURATED_ENDPOINTS cunoscute = regresie de introspectie
+
+
+class IntrospectionRegressionError(RuntimeError):
+    """Ridicata cand introspectia gaseste implauzibil de putine endpoint-uri —
+    semn ca introspect_routes() s-a rupt (vezi gotcha fastapi 0.139 de mai sus),
+    NU ca proiectul chiar are atat de putine rute."""
+
+
+def _validate_endpoint_count(rows):
+    total = len(rows)
+    curated_total = len(CURATED_ENDPOINTS)
+    threshold = max(MIN_ENDPOINTS_FLOOR, int(curated_total * REGRESSION_FRACTION))
+    if total < threshold:
+        raise IntrospectionRegressionError(
+            f"\n"
+            f"REFUZ sa scriu {OUTPUT.name} — introspectia a gasit doar {total} endpoint-uri\n"
+            f"REST+WS, dar CURATED_ENDPOINTS (metadate curate, acumulate manual in\n"
+            f"tools/generate_audit_dashboard.py, in git) contine {curated_total} chei\n"
+            f"cunoscute. Pragul minim acceptat acum e {threshold}.\n"
+            f"\n"
+            f"Asta e aproape sigur o REGRESIE DE INTROSPECTIE, nu o scadere reala a\n"
+            f"numarului de endpoint-uri din RIS (s-a intamplat deja o data: upgrade\n"
+            f"fastapi 0.115.5 -> 0.139.0 pe 2026-07-13 a schimbat cum `app.routes`\n"
+            f"expune rutele incluse prin `include_router()`, iar introspectia veche\n"
+            f"a scris tacut un dashboard '13/13' peste unul bun '88/88').\n"
+            f"\n"
+            f"Verifica manual inainte de a rula din nou acest script:\n"
+            f"  1. python -c \"import sys; sys.path.insert(0,'.'); from backend.main import app; "
+            f"print(len(app.routes))\" — compara cu ce te astepti\n"
+            f"  2. Daca s-a facut recent un upgrade fastapi/starlette: verifica daca\n"
+            f"     `_IncludedRouter`/`original_router`/`include_context.prefix` (folosite\n"
+            f"     de introspect_routes()) inca exista cu acelasi nume/forma in noua versiune\n"
+            f"  3. NU edita manual {OUTPUT.name} ca sa 'repari' numarul — repara\n"
+            f"     introspect_routes() in acest script si ruleaza-l din nou\n"
+            f"\n"
+            f"Fisierul {OUTPUT.name} existent NU a fost modificat.\n"
+        )
 
 
 def build_endpoint_data():
@@ -648,6 +732,7 @@ def main():
         git_sha = "unknown"
 
     endpoint_data, uncurated = build_endpoint_data()
+    _validate_endpoint_count(endpoint_data)  # arunca IntrospectionRegressionError daca e implauzibil
     html = render_html(endpoint_data, uncurated, git_sha)
     OUTPUT.write_text(html, encoding="utf-8")
     OUTPUT_JS.write_text(AUDIT_JS.strip() + "\n", encoding="utf-8")

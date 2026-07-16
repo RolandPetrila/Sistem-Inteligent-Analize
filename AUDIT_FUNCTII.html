@@ -56,10 +56,10 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
 <body>
 
 <h1>RIS — Audit Functii (dashboard live)</h1>
-<div class="subtitle">Generat din codul real la commit <code>cf240d5</code> — regenereaza cu <code>python tools/generate_audit_dashboard.py</code> dupa orice functie noua.</div>
+<div class="subtitle">Generat din codul real la commit <code>ba87270</code> — regenereaza cu <code>python tools/generate_audit_dashboard.py</code> dupa orice functie noua.</div>
 
 <div class="stats-bar">
-  <div class="stat-card"><div class="num">88/88</div><div class="label">Endpoint-uri REST+WS testate</div></div>
+  <div class="stat-card"><div class="num">89/89</div><div class="label">Endpoint-uri REST+WS testate</div></div>
   <div class="stat-card"><div class="num">9/9</div><div class="label">Tipuri de analiza</div></div>
   <div class="stat-card"><div class="num">5/5</div><div class="label">Provideri AI</div></div>
   <div class="stat-card"><div class="num">18/18</div><div class="label">Surse externe cu test live</div></div>
@@ -96,10 +96,10 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
   <a href="#pages">Pagini frontend</a>
 </div>
 
-<h2 id="endpoints">Endpoint-uri REST + WebSocket (88 total)</h2>
+<h2 id="endpoints">Endpoint-uri REST + WebSocket (89 total)</h2>
 <div class="filters">
-  <button class="active" data-filter="all">Toate (88)</button>
-  <button data-filter="tested">Testate (88)</button>
+  <button class="active" data-filter="all">Toate (89)</button>
+  <button data-filter="tested">Testate (89)</button>
   <button data-filter="untested">Netestate (0)</button>
   <button data-filter="safe">Testabile live acum</button>
 </div>
@@ -191,7 +191,7 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
   </table>
 </div>
 <div class="cat-block" data-catblock="Companies">
-  <h3>Companies <span class="cat-count">21/21 testate</span></h3>
+  <h3>Companies <span class="cat-count">22/22 testate</span></h3>
   <table class="ep-table">
     <thead><tr><th>Metoda</th><th>Path</th><th>Status</th><th>Dovada / notă</th><th>Test</th></tr></thead>
     <tbody>
@@ -320,6 +320,13 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
   <td><span class="badge badge-pass">TESTAT</span></td>
   <td class="evidence">E2E 2026-07-12: OK (gol pt Mosslein — plauzibil, nu bug).</td>
   <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/companies/{company_id}/timeline">Testeaza live</button></td>
+</tr>
+<tr data-cat="Companies" data-tested="true">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/companies/{cui}/credit-exposure</code></td>
+  <td><span class="badge badge-pass">TESTAT</span></td>
+  <td class="evidence">P1-4 (2026-07-14): Bonitate &amp; Expunere comerciala (RON), recalculata din ultimul raport. Verificat live CUI 26313362: 432.000 RON, 3 metode, Verde x1.0. Randat si in HTML/PDF/DOCX + card CompanyDetail.</td>
+  <td><button class="btn-test" data-kind="endpoint" data-method="GET" data-path="/api/companies/{cui}/credit-exposure">Testeaza live</button></td>
 </tr>
 <tr data-cat="Companies" data-tested="true">
   <td><span class="method method-get">GET</span></td>
