@@ -766,6 +766,73 @@ def _score_cashflow_stress(ca_val, profit_val, cap_val) -> tuple[int, list[dict]
     return 0, [], []
 
 
+# 10F M3.3: 3x3 risk zone mapping (profit_zone, equity_zone) -> (risk_zone, risk_level 1-9)
+_SOLVENCY_MATRIX_MAP = {
+    ("Pierdere", "Subcapitalizat"):  ("RISC CRITIC",        1),
+    ("Pierdere", "Moderat"):         ("RISC RIDICAT",       2),
+    ("Pierdere", "Solid"):           ("RISC MEDIU-RIDICAT", 3),
+    ("Fragil",   "Subcapitalizat"):  ("RISC RIDICAT",       2),
+    ("Fragil",   "Moderat"):         ("RISC MEDIU",         5),
+    ("Fragil",   "Solid"):           ("RISC MODERAT",       6),
+    ("Sanatos",  "Subcapitalizat"):  ("RISC MEDIU",         4),
+    ("Sanatos",  "Moderat"):         ("RISC SCAZUT",        7),
+    ("Sanatos",  "Solid"):           ("RISC MINIM",         9),
+}
+
+
+def _build_solvency_matrix(ca_val, profit_val, cap_val) -> tuple[dict | None, list[tuple[str, str]]]:
+    """Sub-bloc _score_financiar: 10F M3.3 Solvency Stress Matrix 3x3 (profit
+    margin x equity ratio -> zona de risc). Extras verbatim, inclusiv NOTA
+    pre-existenta (nu introdusa de refactor): apelat DUPA ce fin_score a fost
+    deja acumulat de celelalte sub-blocuri, deci override-ul de zona nu
+    modifica scorul — doar adauga risk_factors (comportament pastrat
+    identic fata de original, verificat cu golden)."""
+    if ca_val is None or ca_val <= 0:
+        return None, []
+    profit_margin_pct = round((profit_val / ca_val * 100), 2) if profit_val is not None else None
+    equity_ratio_pct = round((cap_val / ca_val * 100), 2) if cap_val is not None else None
+    if profit_margin_pct is None or equity_ratio_pct is None:
+        return None, []
+
+    # X axis: Profit Margin zone
+    if profit_margin_pct < 0:
+        profit_zone = "Pierdere"
+    elif profit_margin_pct <= 5:
+        profit_zone = "Fragil"
+    else:
+        profit_zone = "Sanatos"
+
+    # Y axis: Equity Ratio zone
+    if equity_ratio_pct < 5:
+        equity_zone = "Subcapitalizat"
+    elif equity_ratio_pct <= 20:
+        equity_zone = "Moderat"
+    else:
+        equity_zone = "Solid"
+
+    risk_zone, risk_level = _SOLVENCY_MATRIX_MAP.get(
+        (profit_zone, equity_zone), ("NEDETERMINAT", 5)
+    )
+
+    solvency_matrix = {
+        "profit_margin_pct": profit_margin_pct,
+        "equity_ratio_pct": equity_ratio_pct,
+        "profit_zone": profit_zone,
+        "equity_zone": equity_zone,
+        "risk_zone": risk_zone,
+        "risk_level": risk_level,
+    }
+
+    risk_factors: list[tuple[str, str]] = []
+    # Add risk factor if zone is critical or high
+    if risk_level <= 2:
+        risk_factors.append((f"Matrice solvabilitate: {risk_zone} (marja={profit_margin_pct:.1f}%, capital={equity_ratio_pct:.1f}%)", "HIGH"))
+    elif risk_level == 3:
+        risk_factors.append((f"Matrice solvabilitate: {risk_zone} (marja={profit_margin_pct:.1f}%, capital={equity_ratio_pct:.1f}%)", "MEDIUM"))
+
+    return solvency_matrix, risk_factors
+
+
 def _score_financiar(
     financial: dict, company: dict, caen_code_toplevel, thresholds: dict
 ) -> tuple[dict, list[tuple[str, str]], FinancialFacts]:
@@ -829,58 +896,8 @@ def _score_financiar(
     risk_factors.extend(_rf)
 
     # --- 10F M3.3: Solvency Stress Matrix 3x3 ---
-    solvency_matrix = None
-    if ca_val is not None and ca_val > 0:
-        profit_margin_pct = round((profit_val / ca_val * 100), 2) if profit_val is not None else None
-        equity_ratio_pct = round((cap_val / ca_val * 100), 2) if cap_val is not None else None
-
-        if profit_margin_pct is not None and equity_ratio_pct is not None:
-            # X axis: Profit Margin zone
-            if profit_margin_pct < 0:
-                profit_zone = "Pierdere"
-            elif profit_margin_pct <= 5:
-                profit_zone = "Fragil"
-            else:
-                profit_zone = "Sanatos"
-
-            # Y axis: Equity Ratio zone
-            if equity_ratio_pct < 5:
-                equity_zone = "Subcapitalizat"
-            elif equity_ratio_pct <= 20:
-                equity_zone = "Moderat"
-            else:
-                equity_zone = "Solid"
-
-            # 3x3 risk zone mapping (profit_zone, equity_zone) -> (risk_zone, risk_level 1-9)
-            _matrix_map = {
-                ("Pierdere", "Subcapitalizat"):  ("RISC CRITIC",        1),
-                ("Pierdere", "Moderat"):         ("RISC RIDICAT",       2),
-                ("Pierdere", "Solid"):           ("RISC MEDIU-RIDICAT", 3),
-                ("Fragil",   "Subcapitalizat"):  ("RISC RIDICAT",       2),
-                ("Fragil",   "Moderat"):         ("RISC MEDIU",         5),
-                ("Fragil",   "Solid"):           ("RISC MODERAT",       6),
-                ("Sanatos",  "Subcapitalizat"):  ("RISC MEDIU",         4),
-                ("Sanatos",  "Moderat"):         ("RISC SCAZUT",        7),
-                ("Sanatos",  "Solid"):           ("RISC MINIM",         9),
-            }
-            risk_zone, risk_level = _matrix_map.get(
-                (profit_zone, equity_zone), ("NEDETERMINAT", 5)
-            )
-
-            solvency_matrix = {
-                "profit_margin_pct": profit_margin_pct,
-                "equity_ratio_pct": equity_ratio_pct,
-                "profit_zone": profit_zone,
-                "equity_zone": equity_zone,
-                "risk_zone": risk_zone,
-                "risk_level": risk_level,
-            }
-
-            # Add risk factor if zone is critical or high
-            if risk_level <= 2:
-                risk_factors.append((f"Matrice solvabilitate: {risk_zone} (marja={profit_margin_pct:.1f}%, capital={equity_ratio_pct:.1f}%)", "HIGH"))
-            elif risk_level == 3:
-                risk_factors.append((f"Matrice solvabilitate: {risk_zone} (marja={profit_margin_pct:.1f}%, capital={equity_ratio_pct:.1f}%)", "MEDIUM"))
+    solvency_matrix, _matrix_rf = _build_solvency_matrix(ca_val, profit_val, cap_val)
+    risk_factors.extend(_matrix_rf)
 
     # Cash Flow Proxy Intelligence (9B) — high CA + low profit + capital change = stress
     _d, _r, _rf = _score_cashflow_stress(ca_val, profit_val, cap_val)
