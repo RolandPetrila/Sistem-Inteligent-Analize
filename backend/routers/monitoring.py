@@ -96,30 +96,24 @@ async def check_all_now():
 @router.get("/history")
 async def get_monitoring_history(limit: int = 20):
     """Returneaza ultimele N triggere din monitoring_audit."""
+    # monitoring_audit (migrations/002_phase8.sql) leaga firma prin company_cui, nu
+    # company_id (coloana care nu exista pe acest tabel) — ambele variante de mai jos
+    # (primara + "fallback"-ul care incerca created_at) esuau identic cu "no such
+    # column: ma.company_id", inghitit tacut -> istoricul era mereu gol. triggered_at
+    # e coloana reala (nu exista created_at pe monitoring_audit), deci fallback-ul era
+    # oricum bazat pe o presupunere gresita — eliminat, ramane un singur query corect.
     try:
         rows = await db.fetch_all(
             """SELECT ma.*, c.name as company_name
                FROM monitoring_audit ma
-               LEFT JOIN companies c ON ma.company_id = c.id
+               LEFT JOIN companies c ON ma.company_cui = c.cui
                ORDER BY ma.triggered_at DESC LIMIT ?""",
             (limit,),
         )
         return {"history": [dict(r) for r in rows]}
     except Exception as e:
         logger.debug(f"[monitoring] history query error: {e}")
-        # Incearca cu created_at daca triggered_at nu exista
-        try:
-            rows = await db.fetch_all(
-                """SELECT ma.*, c.name as company_name
-                   FROM monitoring_audit ma
-                   LEFT JOIN companies c ON ma.company_id = c.id
-                   ORDER BY ma.created_at DESC LIMIT ?""",
-                (limit,),
-            )
-            return {"history": [dict(r) for r in rows]}
-        except Exception as e2:
-            logger.debug(f"[monitoring] history fallback error: {e2}")
-            return {"history": []}
+        return {"history": []}
 
 
 @router.get("/{alert_id}/audit-log")
@@ -200,11 +194,13 @@ async def monitoring_health():
     )
 
     # Get failed alert count (last 24h) from audit log
+    # monitoring_audit nu are coloana created_at (doar triggered_at, vezi 002_phase8.sql)
+    # -> acest query arunca mereu, inghitit de except -> red_alerts_24h era mereu 0.
     failed_count = 0
     try:
         row = await db.fetch_one(
             "SELECT COUNT(*) as cnt FROM monitoring_audit "
-            "WHERE severity = 'RED' AND created_at >= datetime('now', '-24 hours')"
+            "WHERE severity = 'RED' AND triggered_at >= datetime('now', '-24 hours')"
         )
         failed_count = row["cnt"] if row else 0
     except Exception as e:

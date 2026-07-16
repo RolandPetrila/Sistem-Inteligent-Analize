@@ -375,9 +375,15 @@ async def toggle_auto_reanalyze(company_id: str) -> dict:
 @router.get("/{company_id}/timeline")
 async def company_timeline(company_id: str) -> dict:
     """Chronological list of events: reports, score changes, monitoring alerts."""
-    row = await db.fetch_one("SELECT id FROM companies WHERE id = ?", (company_id,))
+    row = await db.fetch_one("SELECT id, cui FROM companies WHERE id = ?", (company_id,))
     if not row:
         raise HTTPException(status_code=404, detail="Company not found")
+
+    # monitoring_audit (migrations/002_phase8.sql) nu are NICIODATA company_id/message —
+    # coloanele reale sunt company_cui, change_type, old_value, new_value, triggered_at.
+    # Query-ul vechi arunca "no such column" pe orice firma, inghitit de except-ul de mai
+    # jos -> tab-ul de alerte din timeline era mereu gol. Compunem un text din cele 3 campuri.
+    cui = row["cui"]
 
     # H5: Single UNION query — eliminam 3 round-trips DB
     TIMELINE_SQL = """
@@ -400,15 +406,15 @@ async def company_timeline(company_id: str) -> dict:
         SELECT 'alert' as type,
                CAST(id AS TEXT) as ref_id,
                'Alertă [' || severity || ']' as title,
-               message as detail,
-               created_at as event_date,
+               COALESCE(change_type, '') || ': ' || COALESCE(old_value, '?') || ' -> ' || COALESCE(new_value, '?') as detail,
+               triggered_at as event_date,
                '' as link
-        FROM monitoring_audit WHERE company_id = ? AND created_at IS NOT NULL
+        FROM monitoring_audit WHERE company_cui = ? AND triggered_at IS NOT NULL
         ORDER BY event_date DESC
         LIMIT 50
     """
     try:
-        rows = await db.fetch_all(TIMELINE_SQL, (company_id, company_id, company_id))
+        rows = await db.fetch_all(TIMELINE_SQL, (company_id, company_id, cui))
         events = [
             {
                 "type": r["type"],

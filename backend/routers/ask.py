@@ -11,6 +11,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 from backend.database import db
+from backend.models import JobStatus
 from backend.security import require_api_key
 
 router = APIRouter(prefix="/api/ask", tags=["Ask"])
@@ -69,7 +70,9 @@ async def ask_ris(req: AskRequest, _=Depends(require_api_key)):
         )
 
     if intent == "statistici":
-        total = await db.fetch_one("SELECT COUNT(*) as c FROM jobs WHERE status='COMPLETED'")
+        total = await db.fetch_one(
+            "SELECT COUNT(*) as c FROM jobs WHERE status = ?", (JobStatus.DONE.value,)
+        )
         companies = await db.fetch_one("SELECT COUNT(*) as c FROM companies")
         alerts = await db.fetch_one("SELECT COUNT(*) as c FROM monitoring_alerts WHERE is_active=1")
         return AskResponse(
@@ -83,9 +86,17 @@ async def ask_ris(req: AskRequest, _=Depends(require_api_key)):
         )
 
     if intent == "ultimele":
+        # j.input_data e un blob JSON ("{"cui": "...", ...}"), nu un CUI direct — un join
+        # c.cui = j.input_data nu se potriveste NICIODATA. company_id nu exista pe jobs.
+        # Firma reala rezolvata de job e deja legata prin reports.company_id (populat in
+        # job_service._save_job_results dupa fiecare analiza reusita) — refolosim acel FK
+        # in loc sa parsam JSON (unele tipuri de analiza, ex. LEAD_GENERATION, nu au deloc
+        # cheia "cui" in input_data).
         rows = await db.fetch_all(
             "SELECT j.id, c.name, c.cui, j.created_at, j.status "
-            "FROM jobs j LEFT JOIN companies c ON c.cui = j.input_data "
+            "FROM jobs j "
+            "LEFT JOIN reports r ON r.job_id = j.id "
+            "LEFT JOIN companies c ON c.id = r.company_id "
             "ORDER BY j.created_at DESC LIMIT 5"
         )
         if not rows:
