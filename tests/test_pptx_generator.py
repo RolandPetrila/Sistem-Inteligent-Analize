@@ -93,6 +93,55 @@ class TestPptxAnomalyIcons:
             if os.path.exists(path):
                 os.remove(path)
 
+    def test_risk_score_anomalies_rendered_real_production_shape(self):
+        """2026-07-16: verified_data["anomalies"] is ALWAYS EMPTY in production
+        (confirmed: 0/78 reports in data/ris.db) -- the anomalies slide never
+        rendered even for firms WITH real anomalies. The real path is
+        risk_score["anomalies"] (scoring._detect_zombie_and_anomalies, 6/78
+        reports populated) -- a list of plain strings, NOT the {level,rule,detail}
+        dict shape. Real value from data/ris.db (job 85ec7fff, TAROM CUI 477647)."""
+        from pptx import Presentation
+
+        from backend.reports.pptx_generator import generate_pptx
+
+        report_sections = {"executive_summary": {"title": "Rezumat", "content": "Firma analizata."}}
+        verified_data = {
+            "company": {"denumire": {"value": "TAROM"}, "cui": {"value": "477647"}},
+            "risk_score": {
+                "score": "Verde", "numeric_score": 74.5, "dimensions": {}, "factors": [],
+                "anomalies": ["ANOMALIE: capitaluri negative la CA > 5M → risc insolventa tehnica"],
+            },
+            "financial": {},
+            "anomalies": [],  # confirmed real production shape: always empty
+        }
+        meta = _meta()
+
+        with tempfile.NamedTemporaryFile(suffix=".pptx", delete=False) as f:
+            path = f.name
+        try:
+            generate_pptx(report_sections, meta, verified_data, path)
+            assert os.path.exists(path)
+
+            prs = Presentation(path)
+            anomaly_slide = None
+            for slide in prs.slides:
+                for shape in slide.shapes:
+                    if shape.has_text_frame and "Alerte si Anomalii" in shape.text_frame.text:
+                        anomaly_slide = slide
+                        break
+                if anomaly_slide:
+                    break
+            assert anomaly_slide is not None, "Slide-ul de anomalii nu a fost gasit (bug: verified_data['anomalies'] gol -> slide omis chiar cu risc_score['anomalies'] populat)"
+
+            slide_text = "\n".join(
+                shape.text_frame.text for shape in anomaly_slide.shapes if shape.has_text_frame
+            )
+            assert "capitaluri negative la CA > 5M" in slide_text
+            assert "risc insolventa tehnica" in slide_text
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
     def test_no_anomalies_skips_slide_without_raising(self):
         """Edge case: verified_data['anomalies'] gol -> slide-ul de anomalii nu
         trebuie generat, iar functia nu trebuie sa arunce."""
