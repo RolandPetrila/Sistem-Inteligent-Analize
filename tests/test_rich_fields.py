@@ -241,3 +241,119 @@ class TestWebIntelligenceNormalization:
         items = model["web_intelligence"]["categories"][0]["items"]
         assert len(items) == 1
         assert items[0]["title"] == "Valid"
+
+
+class TestTavilyQuotaExhausted:
+    """A6 (2026-07-16): official_data["tavily_quota_exhausted"] (agent_official.py,
+    _check_tavily_quota) gateaza cautarea legala (litigii) SI semnalele OSINT
+    istorice -- pana la acest fix, NIMIC nu citea flagul, deci un raport generat
+    cu cota epuizata arata IDENTIC cu o firma curata (absenta dovezii randata ca
+    dovada a absentei). Propagat in agent_verification.py, randat onest aici."""
+
+    def test_shown_and_message_when_flag_true(self):
+        data = {"tavily_quota_exhausted": {"value": True, "usage": 823}}
+        model = build_rich_fields_model(data)
+        assert model["tavily_quota_exhausted"]["shown"] is True
+        msg = model["tavily_quota_exhausted"]["message"]
+        assert "NU a fost efectuata" in msg
+        assert "823/1000 interogari" in msg
+
+    def test_hidden_when_absent(self):
+        model = build_rich_fields_model({})
+        assert model["tavily_quota_exhausted"]["shown"] is False
+        assert model["tavily_quota_exhausted"]["message"] == ""
+
+    def test_hidden_when_value_false(self):
+        data = {"tavily_quota_exhausted": {"value": False}}
+        model = build_rich_fields_model(data)
+        assert model["tavily_quota_exhausted"]["shown"] is False
+
+    def test_message_without_usage_says_unknown(self):
+        data = {"tavily_quota_exhausted": {"value": True, "usage": None}}
+        model = build_rich_fields_model(data)
+        assert "uzaj necunoscut" in model["tavily_quota_exhausted"]["message"]
+
+
+class TestPredictiveDivergence:
+    """A4 (2026-07-16): compara FAPTIC scorul 6D (verified['risk_score']) cu
+    semnalul fiecarui model predictiv DISPONIBIL. Randeaza doar FAPTUL
+    dezacordului, niciodata un verdict nou -- scoring.py ramane neatins.
+    Caz real verificat in data/ris.db (TAROM, CUI 477647): scor 74.5/Verde,
+    Zmijewski -0.85 = fara semnal de distres -- NU diverge (ambele "ok")."""
+
+    def _pred(self, **overrides):
+        base = {
+            "altman_z": {"z_score": None, "zone": "INDISPONIBIL"},
+            "piotroski_f": {"f_score": 4, "max_possible": 5, "grade": "STRONG"},
+            "beneish_m": {"m_score": None, "risk": "INDISPONIBIL", "available": False},
+            "zmijewski_x": {"x_score": -0.85, "distress": False, "available": True},
+            "distress_signals": 0,
+            "summary": "Indicatori financiari in zona normala",
+        }
+        base.update(overrides)
+        return base
+
+    def test_real_tarom_case_no_divergence(self):
+        """Scor 74.5/Verde, Zmijewski fara distres -- ambele "healthy", NU diverge."""
+        data = {"risk_score": {"score": "Verde", "numeric_score": 74.5}, "predictive_scores": self._pred()}
+        model = build_rich_fields_model(data)
+        assert model["predictive_scores"]["divergences"] == []
+
+    def test_verde_vs_zmijewski_distress_diverges(self):
+        """Fixture SINTETIC (nu real): scor 6D Verde dar Zmijewski semnaleaza distres."""
+        pred = self._pred(zmijewski_x={"x_score": 2.4, "distress": True, "available": True})
+        data = {"risk_score": {"score": "Verde", "numeric_score": 78.0}, "predictive_scores": pred}
+        model = build_rich_fields_model(data)
+        divergences = model["predictive_scores"]["divergences"]
+        assert len(divergences) == 1
+        assert divergences[0]["model"] == "Zmijewski X"
+        text = divergences[0]["text"]
+        assert "Scor 6D: Verde (78.0)" in text
+        assert "semnal de distres" in text
+        assert "Cele doua metode nu concorda" in text
+        # NU un verdict nou -- scorul 6D original ramane neschimbat in output.
+        assert data["risk_score"]["score"] == "Verde"
+
+    def test_verde_vs_piotroski_weak_diverges(self):
+        pred = self._pred(piotroski_f={"f_score": 1, "max_possible": 5, "grade": "WEAK"})
+        data = {"risk_score": {"score": "Verde", "numeric_score": 74.5}, "predictive_scores": pred}
+        model = build_rich_fields_model(data)
+        divergences = model["predictive_scores"]["divergences"]
+        assert any(d["model"] == "Piotroski F" for d in divergences)
+
+    def test_indisponibil_altman_never_diverges(self):
+        """Altman INDISPONIBIL (zone-ul real cel mai frecvent, confirmat in DB) nu
+        poate diverge -- exclus din comparatie, nu tratat ca 'de acord'."""
+        data = {"risk_score": {"score": "Verde", "numeric_score": 74.5}, "predictive_scores": self._pred()}
+        model = build_rich_fields_model(data)
+        assert all(d["model"] != "Altman Z''" for d in model["predictive_scores"]["divergences"])
+
+    def test_galben_bucket_never_compared(self):
+        """Zona ambigua (Galben) nu se compara cu niciun model -- ar fi zgomot."""
+        pred = self._pred(zmijewski_x={"x_score": 2.4, "distress": True, "available": True})
+        data = {"risk_score": {"score": "Galben", "numeric_score": 55.0}, "predictive_scores": pred}
+        model = build_rich_fields_model(data)
+        assert model["predictive_scores"]["divergences"] == []
+
+    def test_no_predictive_scores_no_divergence(self):
+        data = {"risk_score": {"score": "Rosu", "numeric_score": 20.0}}
+        model = build_rich_fields_model(data)
+        assert model["predictive_scores"]["divergences"] == []
+
+    def test_missing_risk_score_no_divergence(self):
+        data = {"predictive_scores": self._pred(zmijewski_x={"x_score": 2.4, "distress": True, "available": True})}
+        model = build_rich_fields_model(data)
+        assert model["predictive_scores"]["divergences"] == []
+
+    def test_beneish_ok_agrees_with_verde_no_divergence(self):
+        pred = self._pred(beneish_m={"m_score": -3.0, "risk": "OK", "available": True})
+        data = {"risk_score": {"score": "Verde", "numeric_score": 80.0}, "predictive_scores": pred}
+        model = build_rich_fields_model(data)
+        assert all(d["model"] != "Beneish M" for d in model["predictive_scores"]["divergences"])
+
+    def test_beneish_manipulator_diverges_from_verde(self):
+        pred = self._pred(beneish_m={"m_score": -1.0, "risk": "MANIPULATOR_PROBABIL", "available": True})
+        data = {"risk_score": {"score": "Verde", "numeric_score": 80.0}, "predictive_scores": pred}
+        model = build_rich_fields_model(data)
+        divergences = model["predictive_scores"]["divergences"]
+        assert any(d["model"] == "Beneish M" for d in divergences)

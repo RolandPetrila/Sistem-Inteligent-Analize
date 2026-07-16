@@ -391,3 +391,75 @@ class TestGenerateDocx:
         finally:
             if os.path.exists(path):
                 os.remove(path)
+
+
+class TestTavilyQuotaAndDivergenceDocx:
+    """A6 + A4 (2026-07-16): mesajul onest de cota Tavily epuizata + dezacordul
+    FAPTIC scor 6D vs modele predictive, randate in DOCX. Combinate cu fixture-ul
+    diacritic-greu (AEGRM/historical_flags) deja verificat, ca proba ca sectiunile
+    noi nu strica generarea existenta."""
+
+    def _combined_fixture(self) -> dict:
+        return {
+            "tavily_quota_exhausted": {"value": True, "usage": 950},
+            "risk_score": {"score": "Verde", "numeric_score": 78.0},
+            "predictive_scores": {
+                "altman_z": {"z_score": None, "zone": "INDISPONIBIL"},
+                "piotroski_f": {"f_score": 4, "max_possible": 5, "grade": "STRONG"},
+                "beneish_m": {"m_score": None, "risk": "INDISPONIBIL", "available": False},
+                "zmijewski_x": {"x_score": 2.4, "distress": True, "available": True},
+                "distress_signals": 1,
+                "summary": "Firma in zona gri (1/4 modele calculate)",
+            },
+            # Diacritics context, same shape as test_functioneaza_cu_rich_fields_aegrm_historical.
+            "historical_flags": [
+                {"type": "cesiune_parti_sociale", "label": "Cesiune părți sociale detectată",
+                 "severity": "HIGH", "snippet": "Schimbare asociați — cesiune 60% părți sociale"},
+            ],
+        }
+
+    def test_content_rendered_with_diacritics_context(self):
+        from docx import Document
+
+        from backend.reports.docx_generator import generate_docx
+
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as f:
+            path = f.name
+        try:
+            generate_docx(_make_sections(), _make_meta(), path, self._combined_fixture())
+            doc = Document(path)
+            full_text = "\n".join(p.text for p in doc.paragraphs)
+
+            assert "Verificare Incompleta" in full_text
+            assert "NU a fost efectuata" in full_text
+            assert "950/1000" in full_text
+            assert "Dezacord intre scorul 6D si modelele predictive" in full_text
+            assert "Scor 6D: Verde (78.0)" in full_text
+            assert "semnal de distres" in full_text
+            assert "Cele doua metode nu concorda" in full_text
+            # Fixture-ul diacritic invecinat tot randeaza corect.
+            assert "Cesiune părți sociale detectată" in full_text
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
+    def test_no_divergence_when_models_agree(self):
+        """Caz real (TAROM): scor Verde + Zmijewski fara distres -- fara bloc de dezacord."""
+        from docx import Document
+
+        from backend.reports.docx_generator import generate_docx
+
+        data = self._combined_fixture()
+        data["tavily_quota_exhausted"] = {}
+        data["predictive_scores"]["zmijewski_x"] = {"x_score": -0.85, "distress": False, "available": True}
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as f:
+            path = f.name
+        try:
+            generate_docx(_make_sections(), _make_meta(), path, data)
+            doc = Document(path)
+            full_text = "\n".join(p.text for p in doc.paragraphs)
+            assert "Verificare Incompleta" not in full_text
+            assert "Dezacord intre scorul 6D" not in full_text
+        finally:
+            if os.path.exists(path):
+                os.remove(path)

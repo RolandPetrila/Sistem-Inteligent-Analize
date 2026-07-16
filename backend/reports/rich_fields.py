@@ -2,7 +2,8 @@
 build_rich_fields_model(verified_data) -- normalizeaza campurile bogate
 (predictive_scores, benchmark, eurostat_sector, achizitii SEAP,
 tender_opportunities, actionariat+relations, sanctiuni,
-aegrm_guarantees+historical_flags, funding_programs, credit_exposure)
+aegrm_guarantees+historical_flags, funding_programs, credit_exposure,
+tavily_quota_exhausted, predictive_scores.divergences)
 intr-o forma stabila,
 consumata identic de html_generator / pdf_generator / docx_generator.
 
@@ -16,12 +17,141 @@ in fiecare renderer -- modelul centralizeaza DOAR:
       din 2026-06-27, triplicata independent in 3 fisiere.
   (4) normalizarea listei itemizate de garantii AEGRM (cheia reala e
       "details", nu "guarantees"/"results" cum cautau cele 3 randere).
+  (5) A6 (2026-07-16): mesajul onest cand verificarea Tavily (litigii + OSINT
+      istoric) NU a rulat din lipsa de cota -- "verificare nefacuta", nu
+      "nimic gasit".
+  (6) A4 (2026-07-16): FAPTUL dezacordului dintre scorul 6D (verified["risk_score"])
+      si modelele predictive de faliment DISPONIBILE -- NICIODATA un verdict nou,
+      scoring.py ramane sursa unica a culorii/scorului. Un model INDISPONIBIL nu
+      poate diverge (exclus din comparatie, nu tratat ca "de acord").
 """
+
+
+
+from backend.config import settings
+
+TAVILY_QUOTA_MESSAGE_TEMPLATE = (
+    "Verificarea litigiilor si a semnalelor istorice OSINT NU a fost efectuata pentru "
+    "aceasta analiza -- cota Tavily lunara era epuizata la momentul rularii ({usage}). "
+    "Absenta semnalelor in acest raport NU inseamna ca firma e curata -- inseamna ca "
+    "aceasta verificare nu a rulat. Reanalizeaza firma dupa reinnoirea cotei (lunar) "
+    "pentru o verificare completa."
+)
+
+
+def _build_tavily_quota_message(usage) -> str:
+    if isinstance(usage, int):
+        quota = settings.tavily_monthly_quota
+        usage_str = f"{usage}/{quota} interogari" if quota else f"{usage} interogari"
+    else:
+        usage_str = "uzaj necunoscut"
+    return TAVILY_QUOTA_MESSAGE_TEMPLATE.format(usage=usage_str)
+
+
+def _predictive_bucket_signal(color) -> str | None:
+    """Semnalul scorului 6D, redus la 2 stari comparabile cu modelele predictive.
+    Galben (zona ambigua) nu se compara -- nu e nici clar sanatos, nici clar in
+    distres, deci orice comparatie ar fi zgomot, nu fapt."""
+    if color == "Verde":
+        return "healthy"
+    if color == "Rosu":
+        return "distress"
+    return None
+
+
+def _altman_signal(d: dict) -> str | None:
+    zone = d.get("zone")
+    if zone == "SAFE":
+        return "healthy"
+    if zone == "DISTRESS":
+        return "distress"
+    return None  # GREY sau INDISPONIBIL -- nu diverge, nu concorda
+
+
+def _piotroski_signal(d: dict) -> str | None:
+    grade = d.get("grade")
+    if grade == "STRONG":
+        return "healthy"
+    if grade == "WEAK":
+        return "distress"
+    return None  # AVERAGE sau INSUFICIENT
+
+
+def _zmijewski_signal(d: dict) -> str | None:
+    if not d.get("available"):
+        return None
+    return "distress" if d.get("distress") else "healthy"
+
+
+def _beneish_signal(d: dict) -> str | None:
+    if not d.get("available"):
+        return None
+    risk = d.get("risk")
+    if risk == "OK":
+        return "healthy"
+    if risk in ("INVESTIGAT", "MANIPULATOR_PROBABIL"):
+        return "distress"
+    return None
+
+
+def _build_predictive_divergences(verified_data: dict, pred: dict, has_pred: bool) -> list[dict]:
+    """Compara faptic scorul 6D cu semnalul fiecarui model predictiv DISPONIBIL.
+    Randeaza DOAR faptul dezacordului ("cele doua metode nu concorda"), niciodata
+    un scor combinat sau un verdict nou -- scoring.py ramane neatins si e sursa
+    unica a culorii/scorului. Caz real verificat (TAROM, CUI 477647): scor 74.5/
+    Verde, Zmijewski -0.85 = fara semnal de distres -- NU diverge (ambele "ok"),
+    deci lista de mai jos ramane goala pe acel caz, corect."""
+    if not has_pred:
+        return []
+    risk = verified_data.get("risk_score", {})
+    color = risk.get("score") if isinstance(risk, dict) else None
+    numeric = risk.get("numeric_score") if isinstance(risk, dict) else None
+    bucket_signal = _predictive_bucket_signal(color)
+    if bucket_signal is None or numeric is None:
+        return []
+
+    checks = [
+        (
+            "Altman Z''", pred.get("altman_z", {}) or {}, _altman_signal,
+            lambda d: f"zona {d.get('zone')} (Z''={d.get('z_score')})",
+        ),
+        (
+            "Piotroski F", pred.get("piotroski_f", {}) or {}, _piotroski_signal,
+            lambda d: f"{d.get('grade')} ({d.get('f_score')}/{d.get('max_possible')})",
+        ),
+        (
+            "Beneish M", pred.get("beneish_m", {}) or {}, _beneish_signal,
+            lambda d: f"{d.get('risk')} (M={d.get('m_score')})",
+        ),
+        (
+            "Zmijewski X", pred.get("zmijewski_x", {}) or {}, _zmijewski_signal,
+            lambda d: ("semnal de distres" if d.get("distress") else "fara semnal de distres") + f" (X={d.get('x_score')})",
+        ),
+    ]
+
+    divergences: list[dict] = []
+    for label, data, signal_fn, describe_fn in checks:
+        model_signal = signal_fn(data)
+        if model_signal is None or model_signal == bucket_signal:
+            continue
+        divergences.append({
+            "model": label,
+            "text": (
+                f"Scor 6D: {color} ({numeric}). {label}: {describe_fn(data)}. "
+                "Cele doua metode nu concorda."
+            ),
+        })
+    return divergences
 
 
 def build_rich_fields_model(verified_data: dict) -> dict:
     pred = verified_data.get("predictive_scores", {})
     has_pred = bool(isinstance(pred, dict) and pred.get("summary"))
+    pred_divergences = _build_predictive_divergences(verified_data, pred, has_pred)
+
+    tq = verified_data.get("tavily_quota_exhausted", {})
+    tq_flag = bool(isinstance(tq, dict) and tq.get("value"))
+    tq_message = _build_tavily_quota_message(tq.get("usage")) if tq_flag else ""
 
     bench = verified_data.get("benchmark", {})
     has_bench = bool(isinstance(bench, dict) and bench.get("available") and bench.get("comparisons"))
@@ -148,7 +278,8 @@ def build_rich_fields_model(verified_data: dict) -> dict:
     has_wi = bool(wi_categories_normalized)
 
     return {
-        "predictive_scores": {"shown": has_pred, "data": pred},
+        "predictive_scores": {"shown": has_pred, "data": pred, "divergences": pred_divergences},
+        "tavily_quota_exhausted": {"shown": tq_flag, "message": tq_message},
         "benchmark": {"shown": has_bench, "data": bench},
         "eurostat_sector": {"shown": has_eust, "data": eust},
         "seap": {"shown": has_seap, "data": seap},

@@ -69,6 +69,7 @@ async def test_absent_orphan_fields_stay_absent():
     assert "web_intelligence" not in verified
     assert "brave_reputation" not in verified
     assert "data_freshness" not in verified
+    assert "tavily_quota_exhausted" not in verified
 
 
 async def test_staging_fields_wired_without_consumer_in_scoring():
@@ -83,3 +84,28 @@ async def test_staging_fields_wired_without_consumer_in_scoring():
     assert verified["web_intelligence"] == official["web_intelligence"]
     assert verified["brave_reputation"] == official["brave_reputation"]
     assert verified["data_freshness"] == official["data_freshness"]
+
+
+async def test_tavily_quota_exhausted_wired_when_flagged():
+    """A6 (2026-07-16): official_data["tavily_quota_exhausted"] (set by
+    agent_official._check_tavily_quota when the monthly Tavily quota runs out --
+    gates BOTH the legal search AND OSINT historical flags) must reach `verified`
+    so reports can say "verification NOT performed" instead of silently looking
+    like a clean firm. Executed through the REAL VerificationAgent.execute(),
+    not a reimplementation."""
+    official = {"tavily_quota_exhausted": True, "tavily_usage": 950}
+    result = await VerificationAgent().execute(_state(official))
+    verified = result["verified_data"]
+
+    assert verified["tavily_quota_exhausted"] == {"value": True, "usage": 950}
+
+
+async def test_tavily_quota_ok_leaves_field_absent():
+    """official_data without the flag (quota healthy, or search_term absent) must
+    NOT create a phantom key in verified — absence of the key IS the signal that
+    verification ran normally."""
+    official = {"tavily_usage": 12}  # usage present but no exhaustion flag
+    result = await VerificationAgent().execute(_state(official))
+    verified = result["verified_data"]
+
+    assert "tavily_quota_exhausted" not in verified

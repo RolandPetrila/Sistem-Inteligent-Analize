@@ -63,6 +63,15 @@ def _add_rich_fields_docx(doc, verified_data: dict):
     """Render previously-dropped rich fields into the DOCX: predictive scores,
     benchmark, actionariat/relations, AEGRM guarantees, historical OSINT, funding."""
     model = build_rich_fields_model(verified_data)
+
+    # ---- A6: verificare Tavily NEFACUTA (cota epuizata) — mesaj onest, nu tacere ----
+    if model["tavily_quota_exhausted"]["shown"]:
+        doc.add_page_break()
+        doc.add_heading("Verificare Incompleta — Cota Tavily Epuizata", level=1)
+        wp = doc.add_paragraph()
+        wr = wp.add_run(model["tavily_quota_exhausted"]["message"])
+        wr.font.color.rgb = RGBColor(180, 120, 0)
+
     pred = model["predictive_scores"]["data"]
     if model["predictive_scores"]["shown"]:
         doc.add_page_break()
@@ -81,6 +90,16 @@ def _add_rich_fields_docx(doc, verified_data: dict):
             doc.add_paragraph(ln_, style="List Bullet")
         cp = doc.add_paragraph()
         cp.add_run(f"Concluzie: {pred.get('summary', '')} ({pred.get('distress_signals', 0)} semnale)").bold = True
+
+        # A4: dezacord FAPTIC fata de scorul 6D (nu un verdict nou).
+        divergences = model["predictive_scores"]["divergences"]
+        if divergences:
+            dp = doc.add_paragraph()
+            dr = dp.add_run("Dezacord intre scorul 6D si modelele predictive:")
+            dr.bold = True
+            dr.font.color.rgb = RGBColor(200, 40, 40)
+            for d in divergences:
+                doc.add_paragraph(d["text"], style="List Bullet")
 
     bench = model["benchmark"]["data"]
     if model["benchmark"]["shown"]:

@@ -617,4 +617,64 @@ class TestDueDiligenceHtml:
         html = out.read_text(encoding="utf-8")
 
         assert 'id="due-diligence"' not in html
+
+
+class TestTavilyQuotaExhaustedHtml:
+    """A6 (2026-07-16): official['tavily_quota_exhausted'] (agent_official.py)
+    was never read anywhere -- a quota-exhausted analysis rendered IDENTICAL to
+    a genuinely clean firm (no litigation/OSINT signals found). Rendered onest."""
+
+    def test_message_rendered_when_flag_set(self):
+        data = {"tavily_quota_exhausted": {"value": True, "usage": 950}}
+        html, nav = _build_rich_fields_html(data)
+        assert 'id="tavily-quota"' in html
+        assert "Verificare Incompleta" in html
+        assert "NU a fost efectuata" in html
+        assert "950/1000 interogari" in html
+        assert 'href="#tavily-quota"' in nav
+
+    def test_omitted_when_absent(self):
+        html, nav = _build_rich_fields_html({})
+        assert 'id="tavily-quota"' not in html
+        assert "tavily-quota" not in nav
+
+
+class TestPredictiveDivergenceHtml:
+    """A4 (2026-07-16): dezacordul FAPTIC intre scorul 6D si modelele predictive
+    de faliment disponibile, randat ca addendum in sectiunea existenta -- fara
+    verdict nou, fara sectiune/nav separate."""
+
+    def _sample_with_risk_score(self, risk_score, zmijewski):
+        return {
+            "risk_score": risk_score,
+            "predictive_scores": {
+                "altman_z": {"z_score": None, "zone": "INDISPONIBIL"},
+                "piotroski_f": {"f_score": 4, "max_possible": 5, "grade": "STRONG"},
+                "beneish_m": {"m_score": None, "risk": "INDISPONIBIL", "available": False},
+                "zmijewski_x": zmijewski,
+                "distress_signals": 0,
+                "summary": "Indicatori financiari in zona normala",
+            },
+        }
+
+    def test_divergence_rendered_when_present(self):
+        data = self._sample_with_risk_score(
+            {"score": "Verde", "numeric_score": 78.0},
+            {"x_score": 2.4, "distress": True, "available": True},
+        )
+        html, _ = _build_rich_fields_html(data)
+        assert "Dezacord intre scorul 6D si modelele predictive" in html
+        assert "Scor 6D: Verde (78.0)" in html
+        assert "Cele doua metode nu concorda" in html
+        # verdictul original NU e suprascris -- inca apare in randare.
+        assert "Verde" in html
+
+    def test_no_divergence_block_when_models_agree(self):
+        """Caz real (TAROM): scor Verde, Zmijewski fara semnal de distres -- ambele "ok"."""
+        data = self._sample_with_risk_score(
+            {"score": "Verde", "numeric_score": 74.5},
+            {"x_score": -0.85, "distress": False, "available": True},
+        )
+        html, _ = _build_rich_fields_html(data)
+        assert "Dezacord intre scorul 6D" not in html
         assert "Due Diligence Checklist" not in html

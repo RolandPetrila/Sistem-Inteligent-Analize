@@ -240,9 +240,10 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
     bench = model["benchmark"]["data"]
     has_pred = model["predictive_scores"]["shown"]
     has_bench = model["benchmark"]["shown"]
+    tq_shown = model["tavily_quota_exhausted"]["shown"]
 
-    # ---- Page 1: Predictive + Benchmark ----
-    if has_pred or has_bench:
+    # ---- Page 1: verificare incompleta (A6) + Predictive + Benchmark ----
+    if tq_shown or has_pred or has_bench:
         pdf.add_page()
         pdf.start_section("Analiza Predictiva si Benchmark", level=0)
         pdf.set_font("Helvetica", "B", 16)
@@ -253,6 +254,13 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
         pdf.ln(6)
         pdf.set_font("Helvetica", "", 10)
         pdf.set_text_color(40, 40, 40)
+
+        if tq_shown:
+            _add_section_header(pdf, "Verificare Incompleta — Cota Tavily Epuizata")
+            pdf.set_text_color(180, 120, 0)
+            pdf.multi_cell(0, 6, _sanitize(model["tavily_quota_exhausted"]["message"]), new_x="LMARGIN", new_y="NEXT")
+            pdf.set_text_color(40, 40, 40)
+            pdf.ln(4)
 
         if has_pred:
             _add_section_header(pdf, "Scoruri Predictive Faliment")
@@ -272,6 +280,19 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
             pdf.set_font("Helvetica", "B", 10)
             pdf.multi_cell(0, 6, _sanitize(f"Concluzie: {pred.get('summary', '')} ({pred.get('distress_signals', 0)} semnale)"), new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("Helvetica", "", 10)
+
+            # A4: dezacord FAPTIC fata de scorul 6D (nu un verdict nou).
+            divergences = model["predictive_scores"]["divergences"]
+            if divergences:
+                pdf.ln(2)
+                pdf.set_font("Helvetica", "B", 10)
+                pdf.set_text_color(200, 40, 40)
+                pdf.multi_cell(0, 6, _sanitize("Dezacord intre scorul 6D si modelele predictive:"), new_x="LMARGIN", new_y="NEXT")
+                pdf.set_font("Helvetica", "", 10)
+                for d in divergences:
+                    pdf.multi_cell(0, 6, _sanitize(f"- {d['text']}"), new_x="LMARGIN", new_y="NEXT")
+                pdf.set_text_color(40, 40, 40)
+
             pdf.ln(4)
 
         if has_bench:

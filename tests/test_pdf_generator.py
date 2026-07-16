@@ -228,6 +228,89 @@ class TestRichFieldsPdf:
                 os.remove(path)
 
 
+class TestTavilyQuotaAndDivergencePdf:
+    """A6 + A4 (2026-07-16): verifica randarea PDF a mesajului onest de cota
+    Tavily epuizata si a dezacordului scor 6D vs modele predictive, COMBINATE
+    in acelasi document cu fixture-ul diacritic-greu existent (_rich_verified_data)
+    -- proba ca sectiunile noi nu strica pagina/calea latin-1 existenta."""
+
+    def _combined_fixture(self) -> dict:
+        data = _rich_verified_data()
+        data["tavily_quota_exhausted"] = {"value": True, "usage": 950}
+        data["risk_score"] = {"score": "Verde", "numeric_score": 78.0}
+        data["predictive_scores"] = {
+            "altman_z": {"z_score": None, "zone": "INDISPONIBIL"},
+            "piotroski_f": {"f_score": 4, "max_possible": 5, "grade": "STRONG"},
+            "beneish_m": {"m_score": None, "risk": "INDISPONIBIL", "available": False},
+            "zmijewski_x": {"x_score": 2.4, "distress": True, "available": True},
+            "distress_signals": 1,
+            "summary": "Firma in zona gri (1/4 modele calculate) — monitorizare periodica recomandata",
+        }
+        return data
+
+    def test_content_rendered_with_diacritics_context(self):
+        from backend.reports.pdf_generator import generate_pdf
+
+        sections = {"executive_summary": {"title": "Rezumat Executiv", "content": "Firma analizata."}}
+        meta = {
+            "title": "Raport RIS", "company_name": "Test SRL", "report_level": 2,
+            "generated_at": "2026-07-16T10:00:00", "sources_count": 3,
+            "risk_score": "Verde", "numeric_score": 78,
+            "sources": [{"name": "ANAF", "level": 1, "status": "OK"}],
+        }
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            path = f.name
+        try:
+            # Nu trebuie sa arunce -- combina mesajul static (ASCII) cu fixture-ul
+            # diacritic-greu deja verificat (aegrm/historical/sanctions/eurostat/seap).
+            generate_pdf(sections, meta, path, self._combined_fixture())
+            assert os.path.exists(path)
+
+            import pdfplumber
+
+            with pdfplumber.open(path) as pdf:
+                full_text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+
+            assert "Verificare Incompleta" in full_text
+            assert "NU a fost efectuata" in full_text
+            assert "950/1000" in full_text
+            assert "Dezacord intre scorul 6D si modelele predictive" in full_text
+            assert "Scor 6D: Verde (78.0)" in full_text
+            assert "semnal de distres" in full_text
+            assert "Cele doua metode nu concorda" in full_text
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
+    def test_no_divergence_section_when_models_agree(self):
+        """Caz real (TAROM): scor Verde + Zmijewski fara distres -- fara bloc de dezacord."""
+        from backend.reports.pdf_generator import generate_pdf
+
+        data = self._combined_fixture()
+        data["tavily_quota_exhausted"] = {}
+        data["predictive_scores"]["zmijewski_x"] = {"x_score": -0.85, "distress": False, "available": True}
+        sections = {"executive_summary": {"title": "Rezumat Executiv", "content": "Firma analizata."}}
+        meta = {
+            "title": "Raport RIS", "company_name": "Test SRL", "report_level": 2,
+            "generated_at": "2026-07-16T10:00:00", "sources_count": 3,
+            "risk_score": "Verde", "numeric_score": 74.5,
+            "sources": [{"name": "ANAF", "level": 1, "status": "OK"}],
+        }
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            path = f.name
+        try:
+            generate_pdf(sections, meta, path, data)
+            import pdfplumber
+
+            with pdfplumber.open(path) as pdf:
+                full_text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+            assert "Verificare Incompleta" not in full_text
+            assert "Dezacord intre scorul 6D" not in full_text
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
+
 def _basic_meta() -> dict:
     return {
         "title": "Raport RIS",

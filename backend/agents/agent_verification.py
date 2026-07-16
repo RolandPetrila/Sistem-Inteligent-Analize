@@ -278,6 +278,22 @@ class VerificationAgent(BaseAgent):
         if "data_freshness" in official:
             verified["data_freshness"] = official["data_freshness"]
 
+        # A6 (2026-07-16): official_data["tavily_quota_exhausted"] (agent_official.py,
+        # _check_tavily_quota) e scris cand cota Tavily lunara e epuizata — gateaza
+        # SI cautarea legala (litigii/insolventa), SI semnalele istorice OSINT (vezi
+        # nota din _check_tavily_quota). Pana acum NIMIC nu citea acest flag: cand
+        # cota era epuizata, raportul afisa "niciun litigiu / niciun semnal istoric"
+        # identic cu o firma cu adevarat curata — absenta dovezii randata ca dovada
+        # a absentei, cel mai periculos mod de esec pentru un produs de risc.
+        # Propagat aici (acelasi pattern ca web_intelligence de mai sus); randat
+        # onest in rapoarte de rich_fields.py — mesajul spune "verificarea NU a
+        # fost facuta", NU "nu s-a gasit nimic".
+        if official.get("tavily_quota_exhausted"):
+            verified["tavily_quota_exhausted"] = {
+                "value": True,
+                "usage": official.get("tavily_usage"),
+            }
+
         return {
             "verified_data": verified,
             "current_step": f"Verificare completa. Risc: {verified['risk_score']['score']} | Completitudine: {verified['completeness']['score']}%",

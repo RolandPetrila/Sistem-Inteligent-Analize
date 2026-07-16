@@ -527,6 +527,15 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
     nav = ""
     model = build_rich_fields_model(verified_data)
 
+    # ---- A6: verificare Tavily NEFACUTA (cota epuizata) — mesaj onest, nu tacere ----
+    if model["tavily_quota_exhausted"]["shown"]:
+        out.append(f'''
+    <section id="tavily-quota" class="report-section" style="border-left:3px solid #eab308">
+        <h2 style="color:#eab308">Verificare Incompleta — Cota Tavily Epuizata</h2>
+        <p style="color:#fde68a">{_escape(model["tavily_quota_exhausted"]["message"])}</p>
+    </section>''')
+        nav += '<a href="#tavily-quota" class="nav-link">Verificare Incompleta</a>\n'
+
     # ---- Scoruri predictive faliment ----
     pred = model["predictive_scores"]["data"]
     if model["predictive_scores"]["shown"]:
@@ -555,11 +564,22 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
         cards.append(_badge("Zmijewski X", x_val, "bad" if zmijewski.get("distress") else ("ok" if z_av else "na")))
         signals = pred.get("distress_signals", 0)
         sig_color = "#ef4444" if signals >= 3 else "#eab308" if signals >= 1 else "#22c55e"
+        # A4: divergenta FAPTICA fata de scorul 6D — un fapt raportat, nu un verdict nou.
+        divergences = model["predictive_scores"]["divergences"]
+        div_html = ""
+        if divergences:
+            items = "".join(f'<li style="color:#fca5a5;margin-top:4px">{_escape(d["text"])}</li>' for d in divergences)
+            div_html = (
+                '<div style="margin-top:14px;padding:10px 14px;background:#1f1520;border-left:3px solid #ef4444;border-radius:6px">'
+                '<p style="color:#ef4444;font-weight:600;margin:0">Dezacord intre scorul 6D si modelele predictive</p>'
+                f'<ul style="margin:6px 0 0 18px;padding:0">{items}</ul></div>'
+            )
         out.append(f'''
     <section id="predictive" class="report-section">
         <h2>Scoruri Predictive Faliment</h2>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:8px">{"".join(cards)}</div>
         <p style="margin-top:14px;color:{sig_color};font-weight:600">{_escape(str(pred.get("summary", "")))} ({signals} semnale de distres)</p>
+        {div_html}
         <p style="color:#64748b;font-size:0.78em;margin-top:6px;font-style:italic">Modele statistice orientative — praguri calibrate international, interpretare cu prudenta pentru piata RO.</p>
     </section>''')
         nav += '<a href="#predictive" class="nav-link">Scoruri Predictive</a>\n'
