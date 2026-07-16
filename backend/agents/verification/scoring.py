@@ -1071,23 +1071,77 @@ def _detect_zombie_and_anomalies(
     """T12: Zombie detection (CA=0 + angajati=0 + status activ = firma nu
     opereaza; exclude statusuri explicit inactive) + 9B anomaly flags pt
     feedback loop synthesis. Muteaza dimensions["operational"]["score"]=10
-    daca e zombie (override — exact ca in codul original)."""
+    daca e zombie (override — exact ca in codul original).
+
+    FIX 2026-07-16 (dublu bug, gasit + verificat la sursa): cheia citita aici
+    era `stare_firma`, care NU e scrisa NICIODATA de `agent_verification.py`
+    (verificat: 0 assignment-uri in tot backend-ul) — `company` real are
+    `stare_inregistrare` (ANAF), fallback `stare_onrc` (ONRC). Cu cheia
+    gresita, `stare` era mereu `{}` -> orice firma cu CA=0+angajati=0 era
+    etichetata ZOMBIE necontitionat, INCLUSIV firmele legal
+    RADIATE/DIZOLVATE — carve-out-ul de mai jos era cod mort.
+
+    A doua capcana (verificata direct in DB, nu presupusa): valorile REALE
+    ale `stare_inregistrare`/`stare_onrc` sunt text liber CU data
+    ("INREGISTRAT din data 09.12.2009"), nu un token curat — un simplu
+    rename pastrand egalitatea EXACTA pe lista de statusuri ar fi omorat
+    detectia complet (nicio valoare reala nu mai e egala exact cu "ACTIVA").
+    Matching-ul de mai jos e deci pe SUBSTRING case-insensitive (prefixele
+    masculine INACTIV/DIZOLVAT/RADIAT/STINS acopera si formele feminine
+    INACTIVA/DIZOLVATA/RADIATA/STINSA prin substring).
+
+    Comportament: implicit ZOMBIE (poarta CA=0+angajati=0 deja verificata
+    mai jos), CU EXCEPTIA cazului in care statusul de inregistrare contine
+    explicit un termen de inactivitate/inchidere legala. Schimbare fata de
+    codul vechi: un status necunoscut/neclasificat (ex.
+    "TRANSFER(SOSIRE) din data ...") e acum ZOMBIE — decizie intentionata,
+    aliniata cu intentia documentata ("exclude DOAR statusuri explicit
+    inactive") si conservatoare pt un sistem de risc.
+
+    NU foloseste `facts.fiscal.anaf_inactive` (semnal bool fiabil) ca sa
+    suprime zombie, desi e disponibil: ANAF "inactiv fiscal" e un flag de
+    CONFORMITATE (nedepunere declaratii etc.), nu unul de existenta legala
+    — o firma poate fi ANAF-inactiva SI, simultan, exact profilul de
+    shell/zombie pe care aceasta detectie trebuie sa-l prinda (CA=0,
+    angajati=0, dar inca activa la ONRC). Semnalul ramane folosit exact
+    unde a fost mereu — penalizarea de -50 in `_score_fiscal`.
+
+    FIX 2026-07-16 (a treia capcana, gasita la review): fallback-ul initial
+    `company.get("stare_inregistrare") or company.get("stare_onrc") or {}`
+    nu cadea NICIODATA in practica — `_make_field()` (agent_verification.py)
+    produce un dict cu 4 chei (`value`/`trust`/`source`/`timestamp`) chiar
+    si cand `value` e None, deci dict-ul insusi e TRUTHY si `or` se opreste
+    la primul (`stare_inregistrare`) indiferent daca valoarea lui e utila.
+    Reachable: ANAF raspunde fara camp de stare (value=None) + ONRC are
+    stare reala -> ONRC era ignorat complet, firma etichetata ZOMBIE degeaba.
+    Fallback-ul de mai jos alege pe TEXTUL extras (nu pe dict-ul brut), ca
+    sa cada efectiv pe a doua sursa cand prima nu are valoare.
+    """
     ca_val = facts.financiar.ca_val
     profit_val = facts.financiar.profit_val
     cap_val = facts.financiar.cap_val
     angajati_val = facts.operational.angajati_val
 
+    def _stare_text(field) -> str:
+        """Extrage textul de stare dintr-un camp `_make_field` (sau text brut),
+        normalizat upper/strip. Returneaza "" daca valoarea lipseste/e None —
+        asta permite `or`-ul de mai jos sa cada pe a doua sursa."""
+        val = field.get("value") if isinstance(field, dict) else field
+        return str(val).upper().strip() if val else ""
+
     risk_factors: list[tuple[str, str]] = []
     is_zombie = False
     if ca_val is not None and ca_val == 0 and angajati_val is not None and angajati_val == 0:
-        stare = company.get("stare_firma", {})
-        stare_val = stare.get("value", stare) if isinstance(stare, dict) else stare
-        stare_upper = str(stare_val).upper().strip() if stare_val else ""
-        inactive_statuses = ("INACTIV", "INACTIVA", "DIZOLVATA", "DIZOLVAT", "RADIATA", "RADIAT", "STINS", "STINSA")
-        if stare_upper in inactive_statuses:
-            # Explicitly inactive — not a zombie, just a closed company
+        stare_upper = (
+            _stare_text(company.get("stare_inregistrare"))
+            or _stare_text(company.get("stare_onrc"))
+        )
+        inactive_tokens = ("INACTIV", "DIZOLVAT", "RADIAT", "STINS")
+        if any(tok in stare_upper for tok in inactive_tokens):
+            # Explicitly inactive/dissolved registration status — not a
+            # zombie, just a closed company
             pass
-        elif not stare_val or stare_upper in ("ACTIVA", "ACTIV", "INREGISTRAT", ""):
+        else:
             is_zombie = True
             dimensions["operational"]["score"] = 10
             risk_factors.append(("ZOMBIE: CA=0 + angajati=0 + status activ — firma nu opereaza", "CRITICAL"))

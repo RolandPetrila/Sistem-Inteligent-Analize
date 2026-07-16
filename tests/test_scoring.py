@@ -382,3 +382,100 @@ class TestFinancialRatios:
         from backend.agents.verification.scoring import _calculate_financial_ratios
         ratios = _calculate_financial_ratios({})
         assert len(ratios) == 0
+
+
+class TestZombieDetection:
+    """FIX 2026-07-16: `_detect_zombie_and_anomalies` citea `company["stare_firma"]`,
+    o cheie NICIODATA scrisa de `agent_verification.py` (verificat: 0
+    assignment-uri in tot backend-ul) -> orice firma cu CA=0+angajati=0 era
+    etichetata ZOMBIE necontitionat, INCLUSIV una legal RADIATA/DIZOLVATA
+    (carve-out-ul pt firme inchise era cod mort). Cheia reala e
+    `stare_inregistrare` (ANAF)/`stare_onrc` (ONRC), emisa ca text liber CU
+    data ("INREGISTRAT din data 09.12.2009", verificat direct in DB) — NU un
+    token curat, deci un simplu rename pastrand egalitate EXACTA ar fi
+    omorat detectia complet (nicio valoare reala nu mai e egala exact cu
+    "ACTIVA"). Matching-ul e deci pe substring case-insensitive."""
+
+    @staticmethod
+    def _verified(stare_inregistrare_value, ca=0, angajati=0):
+        return {
+            "company": {
+                "stare_inregistrare": {
+                    "value": stare_inregistrare_value, "trust": "OFICIAL", "source": "ANAF",
+                },
+            },
+            "financial": {
+                "cifra_afaceri": {"value": ca},
+                "numar_angajati": {"value": angajati},
+            },
+        }
+
+    def test_real_active_status_text_still_flags_zombie(self):
+        """Formatul REAL de status 'activ' ("INREGISTRAT din data ...") +
+        CA=0 + angajati=0 -> ramane ZOMBIE. NOTA de non-vacuitate: pe codul
+        VECHI, acest caz producea deja True (cheia gresita `stare_firma`
+        lipsea -> `not stare_val` -> zombie necontitionat) — testul asta NU
+        proveaza singur fix-ul, doar confirma ca noul cod nu a inversat
+        comportamentul asteptat pt cazul 'activ'. Proba reala de
+        non-vacuitate e testul urmator (`..._is_not_zombie`)."""
+        from backend.agents.verification.scoring import calculate_risk_score
+        result = calculate_risk_score(self._verified("INREGISTRAT din data 09.12.2009"))
+        assert any("ZOMBIE" in text for text, _ in result["factors"])
+        assert any("Firma zombie" in a for a in result["anomalies"])
+        assert result["dimensions"]["operational"]["score"] == 10
+
+    def test_explicit_radiata_status_is_not_zombie(self):
+        """PROBA REALA de non-vacuitate: pe codul vechi (`stare_firma`
+        niciodata scrisa in productie), acelasi input producea ZOMBIE=True
+        gresit — carve-out-ul pt firme legal inchise era cod mort. Dupa fix,
+        cheia corecta + matching pe substring detecteaza "RADIAT" in text
+        si NU marcheaza zombie (presupunere NEVERIFICATA in productie —
+        nicio firma radiata reala in DB la data fix-ului — dar format
+        consistent cu cel confirmat pt statusuri active)."""
+        from backend.agents.verification.scoring import calculate_risk_score
+        result = calculate_risk_score(self._verified("RADIATA din data 01.01.2020"))
+        assert not any("ZOMBIE" in text for text, _ in result["factors"])
+        assert not any("Firma zombie" in a for a in result["anomalies"])
+
+    def test_control_active_company_with_real_ca_unaffected(self):
+        """Control: firma cu activitate reala (CA>0, angajati>0) nu intra
+        deloc pe poarta CA=0+angajati=0 -> zombie detection complet ocolita,
+        indiferent de textul de status."""
+        from backend.agents.verification.scoring import calculate_risk_score
+        result = calculate_risk_score(
+            self._verified("INREGISTRAT din data 09.12.2009", ca=500_000, angajati=10)
+        )
+        assert not any("ZOMBIE" in text for text, _ in result["factors"])
+        assert not any("Firma zombie" in a for a in result["anomalies"])
+
+    def test_fallback_to_stare_onrc_when_anaf_value_is_none(self):
+        """FIX 2026-07-16 (a treia capcana, gasita la review): `_make_field()`
+        (agent_verification.py) produce un dict cu 4 chei (`value`/`trust`/
+        `source`/`timestamp`) chiar si cand ANAF nu are camp de stare
+        (`value=None`) -> acel dict e TRUTHY, deci un `or` pe DICT-uri brute
+        (`company.get("stare_inregistrare") or company.get("stare_onrc")`)
+        alege mereu primul si nu cade NICIODATA pe ONRC. Reachable: ANAF
+        raspunde fara status, ONRC are status real -> ONRC era ignorat,
+        firma etichetata ZOMBIE degeaba. Forma exacta a `value=None` de mai
+        jos e cea produsa real de `_make_field(None, "ANAF")` (inspectata la
+        sursa, nu inventata)."""
+        from backend.agents.verification.scoring import calculate_risk_score
+        verified = {
+            "company": {
+                "stare_inregistrare": {
+                    "value": None, "trust": "OFICIAL", "source": "ANAF",
+                    "timestamp": "2026-07-16T12:00:00+00:00",
+                },
+                "stare_onrc": {
+                    "value": "RADIATA din data 01.01.2020", "trust": "OFICIAL", "source": "ONRC",
+                    "timestamp": "2026-07-16T12:00:00+00:00",
+                },
+            },
+            "financial": {
+                "cifra_afaceri": {"value": 0},
+                "numar_angajati": {"value": 0},
+            },
+        }
+        result = calculate_risk_score(verified)
+        assert not any("ZOMBIE" in text for text, _ in result["factors"])
+        assert not any("Firma zombie" in a for a in result["anomalies"])
