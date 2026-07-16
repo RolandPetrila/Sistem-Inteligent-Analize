@@ -376,6 +376,106 @@ class TestTableCellTruncation:
         truncated.encode("latin-1")  # nu trebuie sa arunce UnicodeEncodeError
 
 
+class TestMapsRatingKeyTakeawaysSectorPositionPdf:
+    """2026-07-16 ("RIS colecteaza > afiseaza", etajul 3): 3 campuri calculate corect,
+    randate in 0/8 formate inainte de acest fix. Fixture-urile folosesc formele si
+    valorile REALE gasite in data/ris.db (job 85ec7fff, TAROM CUI 477647; job
+    29bc2f4b pentru sector_position -- repo public)."""
+
+    def _meta(self):
+        return {
+            "title": "Raport RIS", "company_name": "Test SRL", "report_level": 2,
+            "generated_at": "2026-07-16T10:00:00", "sources_count": 3,
+            "risk_score": "Verde", "numeric_score": 74.5,
+            "sources": [{"name": "ANAF", "level": 1, "status": "OK"}],
+        }
+
+    def test_all_three_rendered_with_real_shapes(self):
+        from backend.reports.pdf_generator import generate_pdf
+
+        verified_data = {
+            "maps_rating": {
+                "found": True, "name": "TAROM", "rating": 3.3, "reviews_count": 767,
+                "address": "Calea Bucurestilor 224F, 075100 Otopeni", "source": "google_maps",
+            },
+            "key_takeaways": (
+                "• Cu o cifra de afaceri de 1,226,498,739 RON, TAROM prezinta o baza "
+                "financiara solida pentru parteneriat.\n"
+                "• Capitalurile proprii negative de -105,192,156 RON indica un risc de "
+                "insolventa tehnica ce necesita monitorizare."
+            ),
+            "risk_score": {"sector_position": {
+                "Cifra de afaceri": {"ratio_vs_avg": 0.37, "estimated_percentile": "sub P25"},
+            }},
+            # sector_position is only rendered alongside a benchmark table, matching
+            # the real coupling in scoring.py (_score_piata builds both from the same
+            # comparisons list).
+            "benchmark": {"available": True, "caen_code": "5110", "comparisons": [
+                {"metric": "Cifra de afaceri", "firma": 1226498739, "media_sector": 3300000000, "ratio": 0.37, "pozitie": "Sub medie"},
+            ]},
+        }
+        sections = {"executive_summary": {"title": "Rezumat Executiv", "content": "Firma analizata."}}
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            path = f.name
+        try:
+            generate_pdf(sections, self._meta(), path, verified_data)
+            assert os.path.exists(path)
+
+            import pdfplumber
+
+            with pdfplumber.open(path) as pdf:
+                full_text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+
+            assert "Puncte Cheie" in full_text
+            assert "financiara solida pentru parteneriat" in full_text
+            assert "Prezenta pe Google Maps" in full_text
+            assert "3.3/5" in full_text
+            assert "767 recenzii" in full_text
+            assert "Pozitie in Sector" in full_text
+            assert "sub P25" in full_text
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
+    def test_maps_rating_not_found_omits_section(self):
+        """Real shape: {"found": False, "error": "no_results", "source":
+        "google_maps"} -- must NOT render '0 stele'."""
+        from backend.reports.pdf_generator import generate_pdf
+
+        verified_data = {"maps_rating": {"found": False, "error": "no_results", "source": "google_maps"}}
+        sections = {"executive_summary": {"title": "Rezumat Executiv", "content": "Firma analizata."}}
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            path = f.name
+        try:
+            generate_pdf(sections, self._meta(), path, verified_data)
+            import pdfplumber
+
+            with pdfplumber.open(path) as pdf:
+                full_text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+            assert "Prezenta pe Google Maps" not in full_text
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
+    def test_key_takeaways_none_omits_section(self):
+        from backend.reports.pdf_generator import generate_pdf
+
+        verified_data = {"key_takeaways": None}
+        sections = {"executive_summary": {"title": "Rezumat Executiv", "content": "Firma analizata."}}
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            path = f.name
+        try:
+            generate_pdf(sections, self._meta(), path, verified_data)
+            import pdfplumber
+
+            with pdfplumber.open(path) as pdf:
+                full_text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+            assert "Puncte Cheie" not in full_text
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
+
 class TestRiskFactorsPdf:
     """BUG2 (2026-07-16): risk_score['factors'] was never rendered in PDF — the most
     shared report format never explained WHY the score dropped (BPI insolvency,

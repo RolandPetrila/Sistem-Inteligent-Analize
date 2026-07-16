@@ -357,3 +357,83 @@ class TestPredictiveDivergence:
         model = build_rich_fields_model(data)
         divergences = model["predictive_scores"]["divergences"]
         assert any(d["model"] == "Beneish M" for d in divergences)
+
+
+class TestMapsRatingKeyTakeawaysSectorPosition:
+    """2026-07-16 ("RIS colecteaza > afiseaza", etajul 3): 3 campuri calculate corect
+    dar randate in 0/8 formate inainte de acest fix (grep in backend/reports/ = 0
+    potriviri pt fiecare). Fixture-urile de mai jos folosesc formele REALE gasite in
+    data/ris.db (job 85ec7fff, TAROM CUI 477647) -- valorile sunt cele reale (repo
+    public)."""
+
+    def test_maps_rating_shown_when_found(self):
+        data = {"maps_rating": {
+            "found": True, "name": "TAROM", "rating": 3.3, "reviews_count": 767,
+            "place_id": "ChIJP-J_np8cskAR6IF5_IXDPgU",
+            "address": "Calea Bucurestilor 224F, 075100 Otopeni", "source": "google_maps",
+        }}
+        model = build_rich_fields_model(data)
+        assert model["maps_rating"]["shown"] is True
+        assert model["maps_rating"]["data"]["rating"] == 3.3
+
+    def test_maps_rating_hidden_when_not_found(self):
+        """Real shape observed in data/ris.db: {"found": False, "error": "no_results",
+        "source": "google_maps"} -- must be treated as legitimate absence, not shown
+        as "0 stele"."""
+        data = {"maps_rating": {"found": False, "error": "no_results", "source": "google_maps"}}
+        model = build_rich_fields_model(data)
+        assert model["maps_rating"]["shown"] is False
+
+    def test_maps_rating_hidden_when_absent(self):
+        model = build_rich_fields_model({})
+        assert model["maps_rating"]["shown"] is False
+
+    def test_key_takeaways_normalized_from_real_tarom_string(self):
+        """Real shape observed in data/ris.db: a single string, bullets separated by
+        "\\n", each prefixed "• "."""
+        kt = (
+            "• Cu o cifra de afaceri de 1,226,498,739 RON, TAROM prezinta o baza "
+            "financiara solida pentru parteneriat.\n"
+            "• Capitalurile proprii negative de -105,192,156 RON indica un risc de "
+            "insolventa tehnica ce necesita monitorizare.\n"
+            "• Avand 709 dosare judecatoresti, decidentii ar trebui sa evalueze "
+            "suplimentar riscurile juridice asociate parteneriatului cu TAROM."
+        )
+        model = build_rich_fields_model({"key_takeaways": kt})
+        assert model["key_takeaways"]["shown"] is True
+        items = model["key_takeaways"]["items"]
+        assert len(items) == 3
+        assert items[0].startswith("Cu o cifra de afaceri")
+        assert "•" not in items[0]
+
+    def test_key_takeaways_none_hides_section(self):
+        """Real shape observed: 11/78 reports have key_takeaways=None."""
+        model = build_rich_fields_model({"key_takeaways": None})
+        assert model["key_takeaways"]["shown"] is False
+        assert model["key_takeaways"]["items"] == []
+
+    def test_key_takeaways_absent_hides_section(self):
+        model = build_rich_fields_model({})
+        assert model["key_takeaways"]["shown"] is False
+
+    def test_sector_position_shown_with_real_bucket_shape(self):
+        """Real shape observed in data/ris.db (28/78 reports): dict keyed by metric
+        name, each a CATEGORICAL bucket ("P90+".."sub P25"), NOT a numeric percentile."""
+        data = {"risk_score": {"sector_position": {
+            "Cifra de afaceri": {"ratio_vs_avg": 0.37, "estimated_percentile": "sub P25"},
+            "Numar angajati": {"ratio_vs_avg": 0.12, "estimated_percentile": "sub P25"},
+        }}}
+        model = build_rich_fields_model(data)
+        assert model["sector_position"]["shown"] is True
+        assert model["sector_position"]["data"]["Cifra de afaceri"]["estimated_percentile"] == "sub P25"
+
+    def test_sector_position_hidden_when_empty_dict(self):
+        """Real shape: benchmark unavailable -> risk_score["sector_position"] == {}
+        (confirmed in job 85ec7fff itself, benchmark.available=False)."""
+        data = {"risk_score": {"sector_position": {}}}
+        model = build_rich_fields_model(data)
+        assert model["sector_position"]["shown"] is False
+
+    def test_sector_position_hidden_when_absent(self):
+        model = build_rich_fields_model({})
+        assert model["sector_position"]["shown"] is False

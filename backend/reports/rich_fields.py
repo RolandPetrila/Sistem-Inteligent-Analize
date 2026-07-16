@@ -24,6 +24,20 @@ in fiecare renderer -- modelul centralizeaza DOAR:
       si modelele predictive de faliment DISPONIBILE -- NICIODATA un verdict nou,
       scoring.py ramane sursa unica a culorii/scorului. Un model INDISPONIBIL nu
       poate diverge (exclus din comparatie, nu tratat ca "de acord").
+  (7) 2026-07-16 (RIS colecteaza > afiseaza, etajul 3): 3 campuri calculate CORECT
+      dar randate in 0 din 8 formate (grep in backend/reports/ = 0 potriviri pt
+      fiecare, inainte de acest fix):
+      - maps_rating: verified["maps_rating"] (Google Maps, gasit=True/False).
+        found:False / error e absenta LEGITIMA (firma mica, nu e pe Maps) --
+        gate-ul ascunde sectiunea intreg, nu afiseaza "0 stele".
+      - key_takeaways: verified["key_takeaways"] -- un STRING cu bullet-uri
+        "\\n"-separate, fiecare deja prefixat "• " (verificat in
+        data/ris.db: 67/78 populat, 11 None, niciodata lista) -- normalizat
+        aici intr-o lista curata, o singura data.
+      - sector_position: verified["risk_score"]["sector_position"] -- dict
+        per-metrica {ratio_vs_avg, estimated_percentile}, unde percentile e un
+        BUCKET categorial ("P90+"/"P75-P90"/"P50-P75"/"P25-P50"/"sub P25"),
+        NU un procentil numeric exact -- randat ca eticheta, nu ca bara/procent.
 """
 
 
@@ -142,6 +156,22 @@ def _build_predictive_divergences(verified_data: dict, pred: dict, has_pred: boo
             ),
         })
     return divergences
+
+
+def _normalize_key_takeaways(kt) -> list[str]:
+    """verified["key_takeaways"] (agent_synthesis) is a single string, bullets
+    separated by "\\n", each already prefixed "• " (confirmed in data/ris.db:
+    67/78 reports populated as str, 11 as None -- never a list, never an empty
+    string). Split into a clean list once here instead of each renderer
+    re-splitting/re-stripping the bullet marker independently."""
+    if not isinstance(kt, str) or not kt.strip():
+        return []
+    items = []
+    for line in kt.split("\n"):
+        line = line.strip().lstrip("•").strip()
+        if line:
+            items.append(line)
+    return items
 
 
 def build_rich_fields_model(verified_data: dict) -> dict:
@@ -277,6 +307,19 @@ def build_rich_fields_model(verified_data: dict) -> dict:
                 })
     has_wi = bool(wi_categories_normalized)
 
+    # ---- 2026-07-16 (etajul 3, "colecteaza > afiseaza"): maps_rating, key_takeaways,
+    # sector_position -- calculate corect, randate in 0/8 formate inainte de acest fix.
+    maps_rating = verified_data.get("maps_rating", {})
+    has_maps_rating = bool(isinstance(maps_rating, dict) and maps_rating.get("found") is True)
+
+    key_takeaways_items = _normalize_key_takeaways(verified_data.get("key_takeaways"))
+
+    risk_score_field = verified_data.get("risk_score", {})
+    sector_position = (
+        risk_score_field.get("sector_position", {}) if isinstance(risk_score_field, dict) else {}
+    )
+    has_sector_position = bool(isinstance(sector_position, dict) and sector_position)
+
     return {
         "predictive_scores": {"shown": has_pred, "data": pred, "divergences": pred_divergences},
         "tavily_quota_exhausted": {"shown": tq_flag, "message": tq_message},
@@ -296,4 +339,7 @@ def build_rich_fields_model(verified_data: dict) -> dict:
         "funding_programs": {"shown": has_funding, "data": funding},
         "credit_exposure": {"shown": has_cred, "data": cred},
         "web_intelligence": {"shown": has_wi, "categories": wi_categories_normalized},
+        "maps_rating": {"shown": has_maps_rating, "data": maps_rating},
+        "key_takeaways": {"shown": bool(key_takeaways_items), "items": key_takeaways_items},
+        "sector_position": {"shown": has_sector_position, "data": sector_position},
     }

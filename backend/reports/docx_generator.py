@@ -64,6 +64,15 @@ def _add_rich_fields_docx(doc, verified_data: dict):
     benchmark, actionariat/relations, AEGRM guarantees, historical OSINT, funding."""
     model = build_rich_fields_model(verified_data)
 
+    # ---- 2026-07-16 ("RIS colecteaza > afiseaza"): Puncte Cheie (key_takeaways) ----
+    # verified["key_takeaways"] -- 3 bullet-uri de calitate, randate in 0/8 formate
+    # inainte de acest fix (grep in backend/reports/ = 0 potriviri).
+    kt_items = model["key_takeaways"]["items"]
+    if model["key_takeaways"]["shown"]:
+        doc.add_heading("Puncte Cheie", level=1)
+        for t in kt_items:
+            doc.add_paragraph(t, style="List Bullet")
+
     # ---- A6: verificare Tavily NEFACUTA (cota epuizata) — mesaj onest, nu tacere ----
     if model["tavily_quota_exhausted"]["shown"]:
         doc.add_page_break()
@@ -122,6 +131,20 @@ def _add_rich_fields_docx(doc, verified_data: dict):
         except Exception:
             for c in bench["comparisons"]:
                 doc.add_paragraph(str(c.get("text", "")), style="List Bullet")
+
+        # 2026-07-16: Pozitie in Sector -- dict per-metrica cu bucket categorial
+        # ("P90+".."sub P25"), derivat din aceleasi comparisons de mai sus. NU e
+        # un procentil numeric exact -- randat ca eticheta.
+        sector_position = model["sector_position"]["data"]
+        if model["sector_position"]["shown"]:
+            doc.add_heading("Pozitie in Sector", level=2)
+            for metric, info in sector_position.items():
+                if not isinstance(info, dict):
+                    continue
+                pct = str(info.get("estimated_percentile", ""))
+                ratio = info.get("ratio_vs_avg")
+                ratio_str = f"{_fmt_docx_ratio(ratio)}x media" if ratio is not None else "-"
+                doc.add_paragraph(f"{metric}: {ratio_str} ({pct})", style="List Bullet")
 
     act = model["actionariat"]["act"]
     act_ok = model["actionariat"]["act_ok"]
@@ -302,6 +325,19 @@ def _add_rich_fields_docx(doc, verified_data: dict):
         note = doc.add_paragraph()
         note.add_run(str(cred.get("disclaimer", ""))).italic = True
 
+    maps_rating = model["maps_rating"]["data"]
+    if model["maps_rating"]["shown"]:
+        # 2026-07-16: found:False/error e absenta LEGITIMA (firma mica, nu e pe
+        # Maps) -- gate-ul omite sectiunea intreg, nu "0 stele".
+        doc.add_page_break()
+        doc.add_heading("Prezenta pe Google Maps", level=1)
+        doc.add_paragraph(f"Rating: {maps_rating.get('rating')}/5 ({maps_rating.get('reviews_count', 0)} recenzii)")
+        addr = maps_rating.get("address", "")
+        if addr:
+            note = doc.add_paragraph(str(addr))
+            note.runs[0].font.size = Pt(9)
+            note.runs[0].font.color.rgb = RGBColor(120, 120, 120)
+
     wi = model["web_intelligence"]
     if wi["shown"]:
         doc.add_page_break()
@@ -436,6 +472,43 @@ def generate_docx(report_sections: dict, meta: dict, output_path: str, verified_
                             run.font.color.rgb = RGBColor(255, 136, 0)
 
         doc.add_paragraph()  # spacer
+
+    # 2026-07-16 ("RIS colecteaza > afiseaza"): risk_score["financial_ratios"] --
+    # HTML has _build_financial_ratios_html, PDF has a dedicated E6 section, DOCX
+    # had ZERO code (grep "financial_ratios" in docx_generator.py = 0 hits before
+    # this fix). Real data (job 85ec7fff, TAROM CUI 477647): Marja Profit Net
+    # 23.39%, ROA 25.19%, CA/Angajat 1,130,414 RON -- computed correctly, never
+    # rendered in Word. Color-coding (interpretation -> color) mirrors HTML's
+    # _build_financial_ratios_html bucketing -- PDF E6 buckets "Bun" as green
+    # (with Excelent/Solid/Conservator) while HTML buckets it as yellow (with
+    # Moderat); this DOCX table follows HTML's grouping. Pre-existing HTML/PDF
+    # divergence, not introduced here and out of scope to reconcile.
+    financial_ratios = verified_data.get("risk_score", {}).get("financial_ratios", [])
+    if financial_ratios:
+        doc.add_page_break()
+        doc.add_heading("Indicatori Financiari", level=1)
+        table = doc.add_table(rows=1, cols=3)
+        table.style = "Table Grid"
+        hdr = table.rows[0].cells
+        hdr[0].text, hdr[1].text, hdr[2].text = "Indicator", "Valoare", "Interpretare"
+        _RATIO_COLOR = {
+            "Excelent": RGBColor(34, 197, 94), "Solid": RGBColor(34, 197, 94), "Conservator": RGBColor(34, 197, 94),
+            "Bun": RGBColor(200, 150, 0), "Moderat": RGBColor(200, 150, 0),
+            "Pierdere": RGBColor(220, 50, 50), "Negativ": RGBColor(220, 50, 50),
+            "Periculos": RGBColor(220, 50, 50), "Subcapitalizat": RGBColor(220, 50, 50),
+        }
+        for r in financial_ratios:
+            val = r.get("value", 0)
+            unit = r.get("unit", "")
+            interp = str(r.get("interpretation", ""))
+            val_str = f"{val:,.0f} {unit}" if unit == "RON" else f"{val}{unit}"
+            row = table.add_row().cells
+            row[0].text = str(r.get("name", ""))
+            row[1].text = val_str
+            row[2].text = interp
+            interp_color = _RATIO_COLOR.get(interp, RGBColor(100, 100, 100))
+            if row[2].paragraphs[0].runs:
+                row[2].paragraphs[0].runs[0].font.color.rgb = interp_color
 
     # BUG2 fix (2026-07-16): risk_score["factors"] was never rendered in DOCX — the
     # score's actual drivers (BPI insolvency, Portal Just litigation, Monitorul

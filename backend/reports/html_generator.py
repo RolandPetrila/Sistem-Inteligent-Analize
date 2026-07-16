@@ -326,6 +326,23 @@ def _build_executive_summary(verified_data: dict, meta: dict) -> str:
     </div>'''
 
 
+def _build_key_takeaways_html(verified_data: dict) -> str:
+    """2026-07-16 ("RIS colecteaza > afiseaza"): verified["key_takeaways"] --
+    3 bullet-uri de calitate generate real de agent_synthesis -- randate NICAIERI
+    in cele 8 formate (grep in backend/reports/ = 0 potriviri inainte de acest fix).
+    Placed right after the Executive Summary, the most natural pairing (both are
+    "read this first" summaries)."""
+    model = build_rich_fields_model(verified_data)
+    if not model["key_takeaways"]["shown"]:
+        return ""
+    items = "".join(f'<li style="color:#cbd5e1;margin-bottom:6px">{_escape(t)}</li>' for t in model["key_takeaways"]["items"])
+    return f'''
+    <section id="key-takeaways" class="report-section" style="padding-top:24px">
+        <h2>Puncte Cheie</h2>
+        <ul class="list-disc ml-6" style="margin-top:8px">{items}</ul>
+    </section>'''
+
+
 def _build_financial_ratios_html(risk_score: dict) -> str:
     """N1: Financial ratios table from calculated data."""
     ratios = risk_score.get("financial_ratios", [])
@@ -361,6 +378,45 @@ def _build_financial_ratios_html(risk_score: dict) -> str:
             </tr></thead>
             <tbody>{rows}</tbody>
         </table>
+    </section>'''
+
+
+def _build_alarm_warnings_html(verified_data: dict) -> str:
+    """D11 follow-up (2026-07-16): verified_data["early_warnings"] (real business
+    signals from agent_verification._detect_early_warnings -- e.g. "Scadere CA > 30%",
+    "Pierdere consecutiva 2+ ani") was NEVER read anywhere in html_generator.py (grep
+    = 0 hits). PDF/DOCX already render this exact key under the title "Semnale de
+    Alarma". HTML only had risk_score["early_warning_confidence"] (a DIFFERENT list --
+    anomaly flags + a 0-100 confidence score) under the near-identical title "Semnale
+    de Avertizare" -- a reader could not tell the two apart, and the real business
+    signals were simply absent. Real data verified (job 85ec7fff, TAROM CUI 477647):
+    "Scadere CA" and "Pierdere consecutiva" appear in raport.pdf/.docx, 0 hits in
+    raport.html before this fix."""
+    ew = verified_data.get("early_warnings", [])
+    if not isinstance(ew, list) or not ew:
+        return ""
+    items_html = ""
+    for w in ew[:10]:
+        if isinstance(w, dict):
+            signal = _escape(str(w.get("signal", w.get("message", "N/A"))))
+            severity = str(w.get("severity", "MEDIUM"))
+            detail = w.get("detail", "")
+            sev_color = "#ef4444" if severity == "HIGH" else "#eab308" if severity == "MEDIUM" else "#94a3b8"
+            detail_html = f'<div style="color:#94a3b8;font-size:0.85em;margin-top:4px">{_escape(str(detail))}</div>' if detail else ""
+            items_html += (
+                f'<div style="padding:10px 14px;margin-bottom:8px;background:#16213e;border-radius:8px;'
+                f'border-left:4px solid {sev_color}">'
+                f'<span style="color:{sev_color};font-weight:700">[{_escape(severity)}] {signal}</span>'
+                f'{detail_html}'
+                f'</div>\n'
+            )
+        elif isinstance(w, str):
+            items_html += f'<div style="color:#eab308;padding:6px 0">- {_escape(w)}</div>\n'
+    return f'''
+    <section id="alarm-warnings" class="report-section">
+        <h2>Semnale de Alarma</h2>
+        <p style="color:#64748b;font-size:.82em;font-style:italic;margin-top:-8px">Semnale de business directe (scadere CA, pierderi consecutive) — a nu se confunda cu "Semnale de Avertizare" de mai jos (anomalii + scor de incredere).</p>
+        <div style="margin-top:12px">{items_html}</div>
     </section>'''
 
 
@@ -602,6 +658,34 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
         <table class="ris-table" style="margin-top:12px"><thead><tr><th>Indicator</th><th style="text-align:right">Firma</th><th style="text-align:right">Media sector</th><th style="text-align:center">Pozitie</th></tr></thead><tbody>{rows}</tbody></table>
     </section>''')
         nav += '<a href="#benchmark" class="nav-link">Benchmark</a>\n'
+
+    # ---- Pozitie in Sector (bucket categorial, derivat din benchmark.comparisons) ----
+    # 2026-07-16: risk_score["sector_position"] -- dict per-metrica {ratio_vs_avg,
+    # estimated_percentile}. estimated_percentile e un BUCKET ("P90+".."sub P25"),
+    # NU un procentil numeric exact -- randat ca eticheta, nu ca bara/procent fals
+    # (greseala deja facuta si reparata in frontend pe 07-15 -- nu se repeta aici).
+    sector_position = model["sector_position"]["data"]
+    if model["sector_position"]["shown"]:
+        SP_COLORS = {"P90+": "#22c55e", "P75-P90": "#22c55e", "P50-P75": "#94a3b8",
+                     "P25-P50": "#eab308", "sub P25": "#ef4444"}
+        sp_rows = ""
+        for metric, info in sector_position.items():
+            if not isinstance(info, dict):
+                continue
+            pct = str(info.get("estimated_percentile", ""))
+            ratio = info.get("ratio_vs_avg")
+            sp_color = SP_COLORS.get(pct, "#94a3b8")
+            ratio_str = f"{_fmt_ratio(ratio)}x media" if ratio is not None else "&mdash;"
+            sp_rows += (f'<tr><td style="padding:6px 12px;color:#e2e8f0">{_escape(str(metric))}</td>'
+                        f'<td style="padding:6px 12px;text-align:right;color:#94a3b8">{ratio_str}</td>'
+                        f'<td style="padding:6px 12px;text-align:center;color:{sp_color};font-weight:700">{_escape(pct)}</td></tr>')
+        out.append(f'''
+    <section id="sector-position" class="report-section">
+        <h2>Pozitie in Sector</h2>
+        <table class="ris-table" style="margin-top:8px"><thead><tr><th>Indicator</th><th style="text-align:right">Raport vs medie</th><th style="text-align:center">Pozitie estimata</th></tr></thead><tbody>{sp_rows}</tbody></table>
+        <p style="color:#64748b;font-size:.78em;margin-top:6px;font-style:italic">Pozitie estimata pe baza raportului fata de media sectorului — bucket orientativ, nu un percentil statistic exact.</p>
+    </section>''')
+        nav += '<a href="#sector-position" class="nav-link">Pozitie Sector</a>\n'
 
     # ---- Benchmark sector UE (Eurostat) ----
     eust = model["eurostat_sector"]["data"]
@@ -854,6 +938,23 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
     </section>''')
         nav += '<a href="#bonitate" class="nav-link">Bonitate</a>\n'
 
+    # ---- Prezenta pe Google Maps ----
+    # 2026-07-16: verified["maps_rating"] -- found:False / error e absenta LEGITIMA
+    # (firma mica, nu e pe Google Maps), nu se afiseaza "0 stele" -- sectiunea e omisa.
+    maps_rating = model["maps_rating"]["data"]
+    if model["maps_rating"]["shown"]:
+        rating = maps_rating.get("rating") or 0
+        full_stars = int(round(rating))
+        stars = "★" * min(full_stars, 5) + "☆" * max(0, 5 - full_stars)
+        addr = str(maps_rating.get("address", "") or "")
+        out.append(f'''
+    <section id="maps-rating" class="report-section">
+        <h2>Prezenta pe Google Maps</h2>
+        <p style="font-size:1.3em;color:#eab308">{stars} <span style="color:#e2e8f0;font-weight:700;font-size:0.8em">{rating}/5</span></p>
+        <p style="color:#94a3b8">{maps_rating.get("reviews_count", 0)} recenzii{f" &middot; {_escape(addr)}" if addr else ""}</p>
+    </section>''')
+        nav += '<a href="#maps-rating" class="nav-link">Google Maps</a>\n'
+
     # ---- Prezenta Online (OSINT: Brave Search + Jina enrichment) ----
     wi_sent = {"positive": ("Pozitiv", "#22c55e"), "negative": ("Negativ", "#ef4444"), "neutral": ("Neutru", "#94a3b8")}
     if model["web_intelligence"]["shown"]:
@@ -900,6 +1001,9 @@ def generate_html(report_sections: dict, meta: dict, verified_data: dict, output
     # N3: Executive Summary
     exec_summary_html = _build_executive_summary(verified_data, meta)
 
+    # 2026-07-16: Puncte Cheie (key_takeaways) — right after Executive Summary
+    key_takeaways_html = _build_key_takeaways_html(verified_data)
+
     # N1: Financial Ratios
     risk_score_obj = verified_data.get("risk_score", {})
     financial_ratios_html = _build_financial_ratios_html(risk_score_obj)
@@ -909,6 +1013,8 @@ def generate_html(report_sections: dict, meta: dict, verified_data: dict, output
 
     # Build sections HTML
     nav_items = '<a href="#ratios" class="nav-link">Indicatori</a>\n<a href="#charts" class="nav-link">Grafice</a>\n'
+    if key_takeaways_html:
+        nav_items += '<a href="#key-takeaways" class="nav-link">Puncte Cheie</a>\n'
     sections_html = ""
     for key, section in report_sections.items():
         sec_title = _escape(section.get("title", key))
@@ -1036,9 +1142,16 @@ def generate_html(report_sections: dict, meta: dict, verified_data: dict, output
         early_warnings_html = f'''
         <section id="warnings" class="report-section">
             <h2>Semnale de Avertizare</h2>
+            <p style="color:#64748b;font-size:.82em;font-style:italic;margin-top:-8px">Anomalii detectate + scor de incredere (0-100%) per semnal — a nu se confunda cu "Semnale de Alarma" (semnale directe de business).</p>
             <div style="margin-top:12px">{ew_items}</div>
         </section>'''
         nav_items += '<a href="#warnings" class="nav-link">Avertizari</a>\n'
+
+    # D11 follow-up: verified_data["early_warnings"] (real business signals) --
+    # distinct from risk_score["early_warning_confidence"] above.
+    alarm_warnings_html = _build_alarm_warnings_html(verified_data)
+    if alarm_warnings_html:
+        nav_items += '<a href="#alarm-warnings" class="nav-link">Semnale de Alarma</a>\n'
 
     # F1-6: Company Network section
     company_network_html = _build_company_network_html(verified_data)
@@ -1125,11 +1238,13 @@ body{{font-family:'Segoe UI',system-ui,sans-serif;background:#1a1a2e;color:#e2e8
     </div>
     <nav class="nav">{nav_items}</nav>
     {exec_summary_html}
+    {key_takeaways_html}
     {financial_ratios_html}
     {sparkline_html}
     {charts_html}
     {sections_html}
     {due_diligence_html}
+    {alarm_warnings_html}
     {early_warnings_html}
     {company_network_html}
     {rich_fields_html}

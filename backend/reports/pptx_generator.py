@@ -171,8 +171,21 @@ def generate_pptx(report_sections: dict, meta: dict, verified_data: dict, output
             y_f += 0.35
 
     # --- Slide 5: Anomalii ---
+    # 2026-07-16: verified_data["anomalies"] (agent_verification._detect_anomalies)
+    # is ALWAYS EMPTY in production (confirmed: 0/78 reports in data/ris.db) --
+    # this slide never rendered even for firms WITH real anomalies. The anomalies
+    # that DO get computed live in risk_score["anomalies"]
+    # (scoring._detect_zombie_and_anomalies, 6/78 reports populated) -- a list of
+    # plain strings ("ANOMALIE: ..."), NOT the {level,rule,detail} dict shape the
+    # slide already handles below. Read BOTH sources -- if verified_data["anomalies"]
+    # is ever revived (or populated by another analysis path), it still renders
+    # exactly as before; the real production path (risk_score["anomalies"]) is
+    # rendered as its own simple bullet lines.
     anomalies = verified_data.get("anomalies", [])
-    if anomalies:
+    risk_score_anomalies = [
+        a for a in (risk_score.get("anomalies", []) or []) if isinstance(a, str) and a.strip()
+    ]
+    if anomalies or risk_score_anomalies:
         slide5 = prs.slides.add_slide(prs.slide_layouts[6])
         _set_slide_bg(slide5)
         _add_text(slide5, 0.5, 0.3, 12, 0.6, "Alerte si Anomalii", 28, ACCENT, bold=True)
@@ -184,6 +197,9 @@ def generate_pptx(report_sections: dict, meta: dict, verified_data: dict, output
             _add_text(slide5, 0.8, y, 11, 0.35, f"{icon} [{level}] {anomaly.get('rule', '')}", 13, color, bold=True)
             _add_text(slide5, 0.8, y + 0.35, 11, 0.4, anomaly.get("detail", ""), 11, LIGHT_TEXT)
             y += 0.85
+        for text in risk_score_anomalies[:8]:
+            _add_text(slide5, 0.8, y, 11, 0.4, f"! {text}", 12, RED, bold=True)
+            y += 0.5
 
     # --- Slide 6: Sectiuni raport (rezumat) ---
     slide6 = prs.slides.add_slide(prs.slide_layouts[6])

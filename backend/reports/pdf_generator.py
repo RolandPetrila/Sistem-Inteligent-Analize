@@ -242,6 +242,24 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
     has_bench = model["benchmark"]["shown"]
     tq_shown = model["tavily_quota_exhausted"]["shown"]
 
+    # ---- 2026-07-16 ("RIS colecteaza > afiseaza"): Puncte Cheie (key_takeaways) ----
+    # verified["key_takeaways"] -- 3 bullet-uri de calitate, randate in 0/8 formate
+    # inainte de acest fix (grep in backend/reports/ = 0 potriviri).
+    kt_items = model["key_takeaways"]["items"]
+    if model["key_takeaways"]["shown"]:
+        pdf.add_page()
+        pdf.start_section("Puncte Cheie", level=0)
+        pdf.set_font("Helvetica", "B", 16)
+        pdf.set_text_color(99, 102, 241)
+        pdf.cell(0, 12, _sanitize("Puncte Cheie"), new_x="LMARGIN", new_y="NEXT")
+        pdf.set_draw_color(99, 102, 241)
+        pdf.line(10, pdf.get_y(), 80, pdf.get_y())
+        pdf.ln(6)
+        pdf.set_font("Helvetica", "", 11)
+        pdf.set_text_color(40, 40, 40)
+        for t in kt_items:
+            pdf.multi_cell(0, 6, _sanitize(f"- {t}"), new_x="LMARGIN", new_y="NEXT")
+
     # ---- Page 1: verificare incompleta (A6) + Predictive + Benchmark ----
     if tq_shown or has_pred or has_bench:
         pdf.add_page()
@@ -307,6 +325,23 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
                 ])
             _render_pdf_table(pdf, rows, has_header=True)
 
+            # 2026-07-16: Pozitie in Sector -- dict per-metrica cu bucket categorial
+            # ("P90+".."sub P25"), derivat din aceleasi comparisons de mai sus.
+            # NU e un procentil numeric exact -- randat ca eticheta.
+            sector_position = model["sector_position"]["data"]
+            if model["sector_position"]["shown"]:
+                pdf.ln(2)
+                pdf.set_font("Helvetica", "B", 10)
+                pdf.multi_cell(0, 6, _sanitize("Pozitie in Sector:"), new_x="LMARGIN", new_y="NEXT")
+                pdf.set_font("Helvetica", "", 10)
+                for metric, info in sector_position.items():
+                    if not isinstance(info, dict):
+                        continue
+                    pct = str(info.get("estimated_percentile", ""))
+                    ratio = info.get("ratio_vs_avg")
+                    ratio_str = f"{_fmt_pdf_ratio(ratio)}x media" if ratio is not None else "-"
+                    pdf.multi_cell(0, 5.5, _sanitize(f"  * {metric}: {ratio_str} ({pct})"), new_x="LMARGIN", new_y="NEXT")
+
     # ---- Page 2: Actionariat + Garantii/Istoric + Finantare ----
     act = model["actionariat"]["act"]
     aegrm = model["garantii"]["aegrm"]
@@ -329,8 +364,10 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
     cred_ok = model["credit_exposure"]["shown"]
     wi = model["web_intelligence"]
     wi_ok = wi["shown"]
+    maps_rating = model["maps_rating"]["data"]
+    mr_ok = model["maps_rating"]["shown"]
 
-    if act_ok or rel_flags or aegrm_ok or hist_ok or fund_ok or sanc_ok or eust_ok or seap_ok or opp_ok or cred_ok or wi_ok:
+    if act_ok or rel_flags or aegrm_ok or hist_ok or fund_ok or sanc_ok or eust_ok or seap_ok or opp_ok or cred_ok or wi_ok or mr_ok:
         pdf.add_page()
         pdf.start_section("Actionariat, Garantii si Finantare", level=0)
         pdf.set_font("Helvetica", "B", 16)
@@ -508,6 +545,21 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
             pdf.multi_cell(0, 5, _sanitize(str(cred.get("disclaimer", ""))), new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("Helvetica", "", 10)
             pdf.set_text_color(40, 40, 40)
+            pdf.ln(3)
+
+        if mr_ok:
+            # 2026-07-16: verified["maps_rating"] -- found:False/error e absenta
+            # LEGITIMA (firma mica, nu e pe Maps), gate-ul omite sectiunea intreg.
+            _add_section_header(pdf, "Prezenta pe Google Maps")
+            rating = maps_rating.get("rating")
+            pdf.multi_cell(0, 6, _sanitize(f"Rating: {rating}/5 ({maps_rating.get('reviews_count', 0)} recenzii)"), new_x="LMARGIN", new_y="NEXT")
+            addr = maps_rating.get("address", "")
+            if addr:
+                pdf.set_font("Helvetica", "", 8)
+                pdf.set_text_color(120, 120, 120)
+                pdf.multi_cell(0, 5, _sanitize(str(addr)), new_x="LMARGIN", new_y="NEXT")
+                pdf.set_font("Helvetica", "", 10)
+                pdf.set_text_color(40, 40, 40)
             pdf.ln(3)
 
         if wi_ok:

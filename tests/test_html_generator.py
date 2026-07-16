@@ -1,6 +1,7 @@
 """F15: Tests for html_generator — _render_content (headers, lists, tables, bold)."""
 
 from backend.reports.html_generator import (
+    _build_alarm_warnings_html,
     _build_company_network_html,
     _build_executive_summary,
     _build_rich_fields_html,
@@ -10,6 +11,74 @@ from backend.reports.html_generator import (
     _render_inline,
     generate_html,
 )
+
+
+class TestAlarmWarningsHtml:
+    """D11 follow-up (2026-07-16): verified_data["early_warnings"] (real business
+    signals) was rendered in PDF/DOCX but NEVER in HTML (grep = 0 hits). Real shape
+    verified in data/ris.db (job 85ec7fff, TAROM CUI 477647, full_data['early_warnings']):
+    list of dicts {signal, severity, detail, years} -- fixture below uses that exact
+    real shape (values are the real TAROM ones, repo is public)."""
+
+    def _tarom_early_warnings(self):
+        return [
+            {
+                "signal": "Scadere CA > 30%",
+                "severity": "HIGH",
+                "detail": "CA a scazut cu 74% din 2019 (1,354,514,118 RON) in 2020 (355,310,102 RON)",
+                "years": "2019-2020",
+            },
+            {
+                "signal": "Pierdere consecutiva 2+ ani",
+                "severity": "HIGH",
+                "detail": "Pierdere neta in anii: 2019, 2020, 2021, 2022, 2023",
+                "years": "2019-2023",
+            },
+        ]
+
+    def test_real_tarom_signals_rendered(self):
+        """DOVADA DE NON-VACUITATE: pe codul vechi, verified_data["early_warnings"]
+        nu era citit nicaieri in html_generator.py -> aceasta functie nu exista si
+        acest test ar pica la import. Pe codul reparat, "Scadere CA" trebuie sa
+        apara in HTML (exact bug-ul semnalat: 0 potriviri in raport.html real,
+        1 potrivire in raport.pdf real, pt job-ul TAROM 85ec7fff)."""
+        html = _build_alarm_warnings_html({"early_warnings": self._tarom_early_warnings()})
+        assert 'id="alarm-warnings"' in html
+        assert "Semnale de Alarma" in html
+        assert "Scadere CA &gt; 30%" in html or "Scadere CA" in html
+        assert "Pierdere consecutiva 2+ ani" in html
+        assert "CA a scazut cu 74%" in html
+        assert "[HIGH]" in html
+
+    def test_empty_list_omits_section(self):
+        assert _build_alarm_warnings_html({"early_warnings": []}) == ""
+
+    def test_absent_key_omits_section(self):
+        assert _build_alarm_warnings_html({}) == ""
+
+    def test_string_items_rendered_without_crashing(self):
+        html = _build_alarm_warnings_html({"early_warnings": ["Semnal simplu, fara structura"]})
+        assert "Semnal simplu, fara structura" in html
+
+    def test_full_report_includes_alarm_warnings_section(self, tmp_path):
+        """End-to-end: generate_html() on the real TAROM shape must render the
+        section AND a working nav link -- this is what the brief's grep-on-real-
+        file evidence checks, not just the helper function in isolation."""
+        meta = {
+            "company_name": "TAROM", "title": "Raport Test",
+            "generated_at": "2026-07-16", "risk_score": "Verde", "numeric_score": 74.5,
+            "risk_recommendation": "", "report_level": 2, "sources": [],
+        }
+        verified = {
+            "company": {}, "financial": {}, "risk_score": {},
+            "early_warnings": self._tarom_early_warnings(),
+        }
+        out = tmp_path / "report.html"
+        generate_html({}, meta, verified, str(out))
+        html = out.read_text(encoding="utf-8")
+        assert "Scadere CA" in html
+        assert "Pierdere consecutiva 2+ ani" in html
+        assert '<a href="#alarm-warnings" class="nav-link">Semnale de Alarma</a>' in html
 
 
 class TestExecutiveSummaryRiskFactorSeverity:
@@ -637,6 +706,94 @@ class TestTavilyQuotaExhaustedHtml:
         html, nav = _build_rich_fields_html({})
         assert 'id="tavily-quota"' not in html
         assert "tavily-quota" not in nav
+
+
+class TestMapsRatingKeyTakeawaysSectorPositionHtml:
+    """2026-07-16 ("RIS colecteaza > afiseaza", etajul 3): 3 campuri calculate corect,
+    randate in 0/8 formate inainte de acest fix (grep in backend/reports/ = 0
+    potriviri pt fiecare). Fixture-urile folosesc formele si valorile REALE gasite
+    in data/ris.db (job 85ec7fff, TAROM CUI 477647) -- repo public."""
+
+    def test_maps_rating_rendered_with_real_tarom_shape(self):
+        data = {"maps_rating": {
+            "found": True, "name": "TAROM", "rating": 3.3, "reviews_count": 767,
+            "place_id": "ChIJP-J_np8cskAR6IF5_IXDPgU",
+            "address": "Calea Bucurestilor 224F, 075100 Otopeni", "source": "google_maps",
+        }}
+        html, nav = _build_rich_fields_html(data)
+        assert 'id="maps-rating"' in html
+        assert "3.3/5" in html
+        assert "767 recenzii" in html
+        assert "Otopeni" in html
+        assert 'href="#maps-rating"' in nav
+
+    def test_maps_rating_not_found_omits_section(self):
+        """Real shape observed: {"found": False, "error": "no_results", "source":
+        "google_maps"} -- must NOT render '0 stele', must omit the section entirely."""
+        data = {"maps_rating": {"found": False, "error": "no_results", "source": "google_maps"}}
+        html, nav = _build_rich_fields_html(data)
+        assert 'id="maps-rating"' not in html
+        assert "maps-rating" not in nav
+
+    def test_maps_rating_absent_omits_section(self):
+        html, _ = _build_rich_fields_html({})
+        assert 'id="maps-rating"' not in html
+
+    def test_sector_position_rendered_with_real_bucket_shape(self):
+        data = {"risk_score": {"sector_position": {
+            "Cifra de afaceri": {"ratio_vs_avg": 0.37, "estimated_percentile": "sub P25"},
+            "Numar angajati": {"ratio_vs_avg": 0.12, "estimated_percentile": "sub P25"},
+        }}}
+        html, nav = _build_rich_fields_html(data)
+        assert 'id="sector-position"' in html
+        assert "sub P25" in html
+        assert "Cifra de afaceri" in html
+        assert 'href="#sector-position"' in nav
+        # Must render as a categorical label, NOT a fabricated numeric percentage bar.
+        assert "37%" not in html
+
+    def test_sector_position_empty_dict_omits_section(self):
+        data = {"risk_score": {"sector_position": {}}}
+        html, nav = _build_rich_fields_html(data)
+        assert 'id="sector-position"' not in html
+
+    def test_key_takeaways_rendered_after_executive_summary(self, tmp_path):
+        kt = (
+            "• Cu o cifra de afaceri de 1,226,498,739 RON, TAROM prezinta o baza "
+            "financiara solida pentru parteneriat.\n"
+            "• Capitalurile proprii negative de -105,192,156 RON indica un risc de "
+            "insolventa tehnica ce necesita monitorizare.\n"
+            "• Avand 709 dosare judecatoresti, decidentii ar trebui sa evalueze "
+            "suplimentar riscurile juridice asociate parteneriatului cu TAROM."
+        )
+        meta = {
+            "company_name": "TAROM", "title": "Raport Test", "generated_at": "2026-07-16",
+            "risk_score": "Verde", "numeric_score": 74.5, "risk_recommendation": "",
+            "report_level": 2, "sources": [],
+        }
+        verified = {"company": {}, "financial": {}, "risk_score": {}, "key_takeaways": kt}
+        out = tmp_path / "report.html"
+        generate_html({}, meta, verified, str(out))
+        html = out.read_text(encoding="utf-8")
+        assert 'id="key-takeaways"' in html
+        assert "Puncte Cheie" in html
+        assert "Cu o cifra de afaceri de 1,226,498,739 RON" in html
+        assert "709 dosare judecatoresti" in html
+        assert '<a href="#key-takeaways" class="nav-link">Puncte Cheie</a>' in html
+        # Executive summary must appear BEFORE the key takeaways block.
+        assert html.index("Executive Summary") < html.index('id="key-takeaways"')
+
+    def test_key_takeaways_none_omits_section(self, tmp_path):
+        meta = {
+            "company_name": "X", "title": "Raport Test", "generated_at": "2026-07-16",
+            "risk_score": "Verde", "numeric_score": 74.5, "risk_recommendation": "",
+            "report_level": 2, "sources": [],
+        }
+        verified = {"company": {}, "financial": {}, "risk_score": {}, "key_takeaways": None}
+        out = tmp_path / "report.html"
+        generate_html({}, meta, verified, str(out))
+        html = out.read_text(encoding="utf-8")
+        assert 'id="key-takeaways"' not in html
 
 
 class TestPredictiveDivergenceHtml:

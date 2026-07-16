@@ -393,6 +393,185 @@ class TestGenerateDocx:
                 os.remove(path)
 
 
+class TestFinancialRatiosDocx:
+    """2026-07-16 ("RIS colecteaza > afiseaza"): HTML has _build_financial_ratios_html,
+    PDF has a dedicated E6 section, DOCX had 0 code (grep "financial_ratios" in
+    docx_generator.py = 0 hits before this fix). Real values from data/ris.db
+    (job 85ec7fff, TAROM CUI 477647) -- repo public."""
+
+    def test_real_tarom_ratios_rendered_as_table(self):
+        from docx import Document
+
+        from backend.reports.docx_generator import generate_docx
+
+        verified_data = {"risk_score": {"financial_ratios": [
+            {"name": "Marja Profit Net", "value": 23.39, "unit": "%", "interpretation": "Excelent"},
+            {"name": "ROA", "value": 25.19, "unit": "%", "interpretation": "Excelent"},
+            {"name": "Rata Capitalizare", "value": -9.23, "unit": "%", "interpretation": "Subcapitalizat"},
+            {"name": "CA per Angajat", "value": 1130414, "unit": "RON", "interpretation": ""},
+        ]}}
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as f:
+            path = f.name
+        try:
+            generate_docx(_make_sections(), _make_meta(), path, verified_data)
+            doc = Document(path)
+            text_parts = [p.text for p in doc.paragraphs]
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        text_parts.append(cell.text)
+            full_text = "\n".join(text_parts)
+
+            assert "Indicatori Financiari" in full_text
+            assert "Marja Profit Net" in full_text
+            assert "23.39%" in full_text
+            assert "ROA" in full_text
+            assert "25.19%" in full_text
+            assert "1,130,414 RON" in full_text
+            assert "Excelent" in full_text
+            assert "Subcapitalizat" in full_text
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
+    def test_empty_ratios_omits_section(self):
+        from docx import Document
+
+        from backend.reports.docx_generator import generate_docx
+
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as f:
+            path = f.name
+        try:
+            generate_docx(_make_sections(), _make_meta(), path, {"risk_score": {"financial_ratios": []}})
+            doc = Document(path)
+            full_text = "\n".join(p.text for p in doc.paragraphs)
+            assert "Indicatori Financiari" not in full_text
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
+    def test_absent_key_omits_section(self):
+        from docx import Document
+
+        from backend.reports.docx_generator import generate_docx
+
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as f:
+            path = f.name
+        try:
+            generate_docx(_make_sections(), _make_meta(), path, {})
+            doc = Document(path)
+            full_text = "\n".join(p.text for p in doc.paragraphs)
+            assert "Indicatori Financiari" not in full_text
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
+
+class TestMapsRatingKeyTakeawaysSectorPositionDocx:
+    """2026-07-16 ("RIS colecteaza > afiseaza", etajul 3): 3 campuri calculate corect,
+    randate in 0/8 formate inainte de acest fix. Fixture-urile folosesc formele si
+    valorile REALE gasite in data/ris.db (job 85ec7fff, TAROM CUI 477647 -- repo
+    public)."""
+
+    def test_all_three_rendered_with_real_shapes(self):
+        from docx import Document
+
+        from backend.reports.docx_generator import generate_docx
+
+        verified_data = {
+            "maps_rating": {
+                "found": True, "name": "TAROM", "rating": 3.3, "reviews_count": 767,
+                "address": "Calea Bucurestilor 224F, 075100 Otopeni", "source": "google_maps",
+            },
+            "key_takeaways": (
+                "• Cu o cifra de afaceri de 1,226,498,739 RON, TAROM prezinta o baza "
+                "financiara solida pentru parteneriat.\n"
+                "• Capitalurile proprii negative de -105,192,156 RON indica un risc de "
+                "insolventa tehnica ce necesita monitorizare."
+            ),
+            "benchmark": {"available": True, "caen_code": "5110", "comparisons": [
+                {"metric": "Cifra de afaceri", "firma": 1226498739, "media_sector": 3300000000, "ratio": 0.37, "pozitie": "Sub medie"},
+            ]},
+            "risk_score": {"sector_position": {
+                "Cifra de afaceri": {"ratio_vs_avg": 0.37, "estimated_percentile": "sub P25"},
+            }},
+        }
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as f:
+            path = f.name
+        try:
+            generate_docx(_make_sections(), _make_meta(), path, verified_data)
+            doc = Document(path)
+            text_parts = [p.text for p in doc.paragraphs]
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        text_parts.append(cell.text)
+            full_text = "\n".join(text_parts)
+
+            assert "Puncte Cheie" in full_text
+            assert "financiara solida pentru parteneriat" in full_text
+            assert "Prezenta pe Google Maps" in full_text
+            assert "3.3/5" in full_text
+            assert "767 recenzii" in full_text
+            assert "Pozitie in Sector" in full_text
+            assert "sub P25" in full_text
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
+    def test_maps_rating_not_found_omits_section(self):
+        """Real shape: {"found": False, "error": "no_results", "source":
+        "google_maps"} -- must NOT render '0 stele'."""
+        from docx import Document
+
+        from backend.reports.docx_generator import generate_docx
+
+        verified_data = {"maps_rating": {"found": False, "error": "no_results", "source": "google_maps"}}
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as f:
+            path = f.name
+        try:
+            generate_docx(_make_sections(), _make_meta(), path, verified_data)
+            doc = Document(path)
+            full_text = "\n".join(p.text for p in doc.paragraphs)
+            assert "Prezenta pe Google Maps" not in full_text
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
+    def test_key_takeaways_none_omits_section(self):
+        from docx import Document
+
+        from backend.reports.docx_generator import generate_docx
+
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as f:
+            path = f.name
+        try:
+            generate_docx(_make_sections(), _make_meta(), path, {"key_takeaways": None})
+            doc = Document(path)
+            full_text = "\n".join(p.text for p in doc.paragraphs)
+            assert "Puncte Cheie" not in full_text
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
+    def test_sector_position_empty_dict_omits_section(self):
+        from docx import Document
+
+        from backend.reports.docx_generator import generate_docx
+
+        verified_data = {"risk_score": {"sector_position": {}}}
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as f:
+            path = f.name
+        try:
+            generate_docx(_make_sections(), _make_meta(), path, verified_data)
+            doc = Document(path)
+            full_text = "\n".join(p.text for p in doc.paragraphs)
+            assert "Pozitie in Sector" not in full_text
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
+
 class TestTavilyQuotaAndDivergenceDocx:
     """A6 + A4 (2026-07-16): mesajul onest de cota Tavily epuizata + dezacordul
     FAPTIC scor 6D vs modele predictive, randate in DOCX. Combinate cu fixture-ul
