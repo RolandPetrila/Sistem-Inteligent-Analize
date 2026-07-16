@@ -9,6 +9,7 @@ import {
   Download,
   RefreshCw,
   Timer,
+  Stethoscope,
 } from "lucide-react";
 import clsx from "clsx";
 import { api } from "@/lib/api";
@@ -28,6 +29,36 @@ export default function AnalysisProgress() {
   >([]);
   const [reportId, setReportId] = useState<string | null>(null);
   const runStartRef = useRef<number | null>(null);
+
+  // Diagnostic per-sursa al jobului (GET /api/jobs/{id}/diagnostics)
+  const [diagnostics, setDiagnostics] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [diagError, setDiagError] = useState(false);
+  const [diagOpen, setDiagOpen] = useState(false);
+
+  const loadDiagnostics = () => {
+    if (!id) return;
+    if (diagOpen) {
+      setDiagOpen(false);
+      return;
+    }
+    setDiagOpen(true);
+    if (diagnostics) return; // already loaded once — just re-open
+    setDiagLoading(true);
+    setDiagError(false);
+    logAction("AnalysisProgress", "loadDiagnostics", { jobId: id });
+    api
+      .getJobDiagnostics(id)
+      .then((data) => setDiagnostics(data))
+      .catch(() => {
+        setDiagError(true);
+        toast("Eroare la incarcarea diagnosticului", "error");
+      })
+      .finally(() => setDiagLoading(false));
+  };
 
   // Load job on mount
   useEffect(() => {
@@ -333,6 +364,47 @@ export default function AnalysisProgress() {
         </div>
       )}
 
+      {/* Diagnostic Job — GET /api/jobs/{id}/diagnostics */}
+      {(job.status === "DONE" || job.status === "FAILED") && id && (
+        <div className="card">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+              <Stethoscope className="w-4 h-4" />
+              Diagnostic Job
+            </h2>
+            <button
+              onClick={loadDiagnostics}
+              className="text-xs px-3 py-1.5 rounded bg-dark-surface border border-dark-border
+                         hover:border-accent-primary hover:text-accent-light transition-colors
+                         flex items-center gap-1.5 text-gray-400"
+            >
+              {diagLoading ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Stethoscope className="w-3.5 h-3.5" />
+              )}
+              {diagOpen ? "Ascunde Diagnostic" : "Vezi Diagnostic"}
+            </button>
+          </div>
+
+          {diagOpen && (
+            <div className="mt-3 pt-3 border-t border-dark-border">
+              {diagLoading ? (
+                <p className="text-xs text-gray-500">
+                  Se incarca diagnosticul...
+                </p>
+              ) : diagError ? (
+                <p className="text-xs text-red-400">
+                  Nu am putut incarca diagnosticul jobului.
+                </p>
+              ) : diagnostics ? (
+                <DiagnosticsPanel data={diagnostics} />
+              ) : null}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Done */}
       {job.status === "DONE" && (
         <div className="card border-green-500/30 bg-green-500/5">
@@ -434,6 +506,138 @@ export default function AnalysisProgress() {
           Inapoi la Dashboard
         </Link>
       </div>
+    </div>
+  );
+}
+
+// Randare defensiva a diagnosticului (forma reala vine din backend/routers/jobs.py
+// get_job_diagnostics — completeness/risk_score pot lipsi daca parse-ul full_data esueaza).
+function DiagnosticsPanel({ data }: { data: Record<string, unknown> }) {
+  const completeness = data.completeness as
+    | {
+        score?: number;
+        quality_level?: string;
+        passed?: number;
+        total_checks?: number;
+        gaps?: string[];
+      }
+    | undefined;
+  const riskScore = data.risk_score as
+    { score?: string; numeric_score?: number } | undefined;
+  const sourceDiag = data.source_diagnostics as
+    Record<string, unknown> | undefined;
+  const perSource =
+    (sourceDiag?.per_source as Record<string, unknown> | undefined) ??
+    sourceDiag;
+  const missingSources = sourceDiag?.missing_sources as string[] | undefined;
+  const logTail = data.log_tail as string[] | undefined;
+  const parseError = data.parse_error as string | undefined;
+
+  return (
+    <div className="space-y-3 text-xs">
+      {parseError && <p className="text-red-400">{parseError}</p>}
+
+      {(completeness || riskScore) && (
+        <div className="grid grid-cols-2 gap-3">
+          {completeness && (
+            <div className="bg-dark-surface rounded-lg p-2.5">
+              <p className="text-gray-500 mb-1">Completitudine</p>
+              <p className="text-white font-mono text-sm">
+                {completeness.score ?? "?"}%{" "}
+                <span className="text-gray-500 font-normal">
+                  ({completeness.quality_level || "N/A"})
+                </span>
+              </p>
+              {completeness.passed !== undefined && (
+                <p className="text-gray-500 mt-0.5">
+                  {completeness.passed}/{completeness.total_checks} verificari
+                </p>
+              )}
+            </div>
+          )}
+          {riskScore && (
+            <div className="bg-dark-surface rounded-lg p-2.5">
+              <p className="text-gray-500 mb-1">Scor Risc</p>
+              <p className="text-white font-mono text-sm">
+                {riskScore.numeric_score ?? "?"}/100{" "}
+                <span className="text-gray-500 font-normal">
+                  ({riskScore.score || "N/A"})
+                </span>
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {completeness?.gaps && completeness.gaps.length > 0 && (
+        <div>
+          <p className="text-gray-500 mb-1">Lipsuri detectate</p>
+          <ul className="list-disc list-inside text-yellow-300 space-y-0.5">
+            {completeness.gaps.map((g, i) => (
+              <li key={i}>{g}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {perSource && typeof perSource === "object" && (
+        <div>
+          <p className="text-gray-500 mb-1">Surse</p>
+          <div className="space-y-1">
+            {Object.entries(perSource as Record<string, unknown>).map(
+              ([name, info]) => {
+                const i = info as
+                  | { status?: string; data_found?: boolean; error?: string }
+                  | undefined;
+                if (!i || typeof i !== "object" || i.status === undefined)
+                  return null;
+                const ok = i.data_found;
+                return (
+                  <div
+                    key={name}
+                    className="flex items-center justify-between bg-dark-surface rounded px-2 py-1"
+                  >
+                    <span className="text-gray-300">{name}</span>
+                    <span className={ok ? "text-green-400" : "text-red-400"}>
+                      {i.status}
+                      {i.error ? ` — ${i.error}` : ""}
+                    </span>
+                  </div>
+                );
+              },
+            )}
+          </div>
+        </div>
+      )}
+
+      {missingSources && missingSources.length > 0 && (
+        <div>
+          <p className="text-gray-500 mb-1">Surse lipsa</p>
+          <p className="text-red-300">{missingSources.join(", ")}</p>
+        </div>
+      )}
+
+      {logTail && logTail.length > 0 && (
+        <div>
+          <p className="text-gray-500 mb-1">
+            Ultimele randuri din log ({data.log_lines as number}
+            {" totale"})
+          </p>
+          <div className="bg-dark-surface rounded-lg p-2 max-h-40 overflow-y-auto font-mono space-y-0.5">
+            {logTail.map((line, i) => (
+              <p key={i} className="text-gray-400 break-words">
+                {line}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!completeness && !riskScore && !perSource && !logTail && (
+        <p className="text-gray-600 italic">
+          Niciun diagnostic disponibil pentru acest job.
+        </p>
+      )}
     </div>
   );
 }

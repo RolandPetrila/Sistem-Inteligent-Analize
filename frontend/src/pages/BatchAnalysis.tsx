@@ -6,6 +6,7 @@ import {
   CheckCircle,
   XCircle,
   FileSearch,
+  RotateCcw,
 } from "lucide-react";
 import clsx from "clsx";
 import { useToast } from "@/components/Toast";
@@ -56,6 +57,7 @@ export default function BatchAnalysis() {
   );
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewConfirmed, setPreviewConfirmed] = useState(false);
+  const [resuming, setResuming] = useState(false);
 
   // R2 fix: CSV header keywords to detect and skip header row
   const CSV_HEADER_KEYWORDS = [
@@ -202,6 +204,30 @@ export default function BatchAnalysis() {
       toast("Eroare la pornirea batch-ului", "error");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Reia CUI-urile esuate ale unui batch intrerupt (POST /api/batch/{id}/resume).
+  // Backend accepta doar status DONE/ERROR/PAUSED — vezi gate-ul din JSX mai jos.
+  const handleResume = async () => {
+    if (!batch) return;
+    setResuming(true);
+    logAction("BatchAnalysis", "resume", { batchId: batch.batch_id });
+    try {
+      const res = await api.resumeBatch(batch.batch_id);
+      if (res.resumed === 0) {
+        toast("Niciun CUI esuat de reincercat", "info");
+        setResuming(false);
+        return;
+      }
+      toast(`Se reiau ${res.resumed} CUI-uri esuate`, "success");
+      localStorage.setItem(ACTIVE_BATCH_KEY, batch.batch_id);
+      setBatch({ ...batch, status: "RUNNING" });
+      startPolling(batch.batch_id);
+    } catch {
+      toast("Eroare la reluarea batch-ului", "error");
+    } finally {
+      setResuming(false);
     }
   };
 
@@ -474,6 +500,34 @@ export default function BatchAnalysis() {
               Analizeaza CUI: {batch.current_cui}
             </p>
           )}
+
+          {/* Reia CUI-uri esuate — POST /api/batch/{id}/resume.
+              Backend accepta doar status DONE/ERROR/PAUSED (batch-ul in ansamblu
+              nu ajunge niciodata la "FAILED" — acela e statusul per-CUI din
+              rezultate; gatam pe valorile reale, nu pe cele presupuse).
+              NU gatam si pe `!polling`: efectul de resume-on-mount (mai sus)
+              porneste polling-ul si pt status "ERROR" (acelasi bug — verifica
+              doar DONE/FAILED, nu si ERROR/PAUSED, deci `polling` ramane true
+              la nesfarsit pt un batch picat definitiv; semnalat, neatins). */}
+          {batch.failed > 0 &&
+            (batch.status === "DONE" ||
+              batch.status === "ERROR" ||
+              batch.status === "PAUSED") && (
+              <button
+                onClick={handleResume}
+                disabled={resuming}
+                className="btn-secondary w-full flex items-center justify-center gap-2"
+              >
+                {resuming ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RotateCcw className="w-4 h-4" />
+                )}
+                {resuming
+                  ? "Se reiau CUI-urile esuate..."
+                  : `Reia CUI-urile esuate (${batch.failed})`}
+              </button>
+            )}
 
           {/* Download ZIP */}
           {batch.status === "DONE" && (
