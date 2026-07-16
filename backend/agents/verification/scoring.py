@@ -581,6 +581,21 @@ def _resolve_caen_section(caen_code_toplevel, company: dict) -> str:
         caen_code = caen_code.get("value", "") or ""
     caen_code = str(caen_code).strip()
 
+    # FIX 2026-07-16 — FEATURE-UL ERA 100% MORT IN PRODUCTIE.
+    # Benzile numerice de mai jos sunt scrise pentru DIVIZIUNI CAEN (2 cifre,
+    # 01-99). Productia livreaza insa mereu CLASA completa, de 4 cifre
+    # (verificat in `data/ris.db`: '5110', '7210', '4711', '4799', '3600' —
+    # si `verified["caen_code"]` top-level nu e scris NICIODATA, deci se cade
+    # mereu pe `company["caen_code"]`). `int("5110")` = 5110 nu nimereste
+    # nicio banda (maximul e ~99) -> caen_section ramanea "" -> DEFAULT (0.35)
+    # pentru ORICE firma, din ORICE sector. Cele 14 ramuri nu se declansau
+    # niciodata; baseline-ul "normalizat pe sector" nu normaliza nimic.
+    #
+    # In nomenclatorul CAEN, primele 2 cifre = diviziunea (4711 -> 47 -> G).
+    # Trunchierea e sigura si pt intrari de 2/3 cifre (deja diviziune/grupa).
+    if caen_code.isdigit() and len(caen_code) > 2:
+        caen_code = caen_code[:2]
+
     caen_section = ""
     if caen_code and caen_code[0].isalpha():
         caen_section = caen_code[0].upper()

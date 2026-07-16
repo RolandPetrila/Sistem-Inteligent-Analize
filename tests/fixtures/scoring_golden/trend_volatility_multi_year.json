@@ -14,7 +14,7 @@
       "confidence": 1.0,
       "data_available": true,
       "insufficient_data": false,
-      "raw_score": 85,
+      "raw_score": 90,
       "reasons": [
         {
           "impact": 10,
@@ -34,14 +34,10 @@
         },
         {
           "impact": -5,
-          "text": "Volatilitate CA moderata vs sector (CV=69.7%, 2.0x)"
-        },
-        {
-          "impact": -5,
           "text": "Scadere profit neta -35%"
         }
       ],
-      "score": 85.0,
+      "score": 90.0,
       "weight": 30
     },
     "fiscal": {
@@ -115,15 +111,11 @@
     }
   },
   "early_warning_confidence": [],
-  "factor_count": 3,
+  "factor_count": 2,
   "factors": [
     [
       "Trend structural pozitiv: +49.9%/an",
       "POSITIVE"
-    ],
-    [
-      "Volatilitate CA moderata vs sector (CV=69.7%, ratio=2.0x)",
-      "LOW"
     ],
     [
       "Scadere profit neta -35%",
@@ -150,7 +142,7 @@
       "value": 160000
     }
   ],
-  "numeric_score": 74.3,
+  "numeric_score": 75.8,
   "recommendation": "Risc scazut - parteneriat recomandat cu verificare standard",
   "score": "Verde",
   "sector_position": {},
