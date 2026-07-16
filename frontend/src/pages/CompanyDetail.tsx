@@ -19,7 +19,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import clsx from "clsx";
-import { api } from "@/lib/api";
+import { api, downloadBlob } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { logAction } from "@/lib/logger";
 import { ANALYSIS_TYPE_LABELS } from "@/lib/constants";
@@ -273,17 +273,23 @@ export default function CompanyDetail() {
     setTimelinePdfLoading(true);
     try {
       const blob = await api.downloadTimelineReportPdf(cui);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `evolutie_${cui}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      downloadBlob(blob, `evolutie_${cui}.pdf`);
       logAction("CompanyDetail", "downloadTimelinePdf", { cui });
     } catch {
       toast("Eroare la generarea raportului de evolutie", "error");
     } finally {
       setTimelinePdfLoading(false);
+    }
+  };
+
+  // <a href="/api/reports/{id}/download/{fmt}"> is a plain browser navigation
+  // and cannot carry the X-RIS-Key header — fetch + Blob via
+  // api.downloadReportFormat instead (same fix as ReportHeader/ReportsList).
+  const handleDownloadReportFormat = async (reportId: string, fmt: string) => {
+    try {
+      await api.downloadReportFormat(reportId, fmt);
+    } catch {
+      toast(`Eroare la descarcarea formatului ${fmt.toUpperCase()}`, "error");
     }
   };
 
@@ -390,17 +396,21 @@ export default function CompanyDetail() {
               Re-analiza
             </button>
             {company.cui && (
-              <a
-                href={`/api/companies/${company.cui}/timeline-report/pdf`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={handleDownloadTimelinePdf}
+                disabled={timelinePdfLoading}
                 className="btn-secondary flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
                 aria-label="Descarca raport PDF cu evolutia multi-an a firmei"
                 title="Genereaza PDF cu evolutia CA, Profit, Angajati si Scor Risc pe mai multi ani"
               >
-                <TrendingUp className="w-4 h-4" />
+                {timelinePdfLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <TrendingUp className="w-4 h-4" />
+                )}
                 Raport Evolutie
-              </a>
+              </button>
             )}
             <button
               onClick={() => {
@@ -881,17 +891,18 @@ export default function CompanyDetail() {
                   <div className="flex items-center gap-1">
                     <Download className="w-3 h-3 text-gray-600" />
                     {(["pdf", "excel", "html"] as const).map((fmt) => (
-                      <a
+                      <button
                         key={fmt}
-                        href={`/api/reports/${report.id}/download/${fmt}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDownloadReportFormat(report.id, fmt);
+                        }}
                         className="text-xs text-gray-500 hover:text-white uppercase px-1 py-0.5 rounded hover:bg-dark-border/50 transition-colors"
                         title={`Descarca ${fmt.toUpperCase()}`}
                       >
                         {fmt}
-                      </a>
+                      </button>
                     ))}
                   </div>
                   {report.risk_score && (

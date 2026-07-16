@@ -71,6 +71,7 @@ export default function BatchAnalysis() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewConfirmed, setPreviewConfirmed] = useState(false);
   const [resuming, setResuming] = useState(false);
+  const [zipDownloading, setZipDownloading] = useState(false);
 
   // R2 fix: CSV header keywords to detect and skip header row
   const CSV_HEADER_KEYWORDS = [
@@ -241,6 +242,21 @@ export default function BatchAnalysis() {
       toast("Eroare la reluarea batch-ului", "error");
     } finally {
       setResuming(false);
+    }
+  };
+
+  // <a href="/api/batch/{id}/download"> is a plain browser navigation and
+  // cannot carry the X-RIS-Key header — fetch + Blob via api.downloadBatchZip
+  // instead (same fix as the report format downloads).
+  const handleDownloadZip = async () => {
+    if (!batch || zipDownloading) return;
+    setZipDownloading(true);
+    try {
+      await api.downloadBatchZip(batch.batch_id);
+    } catch {
+      toast("Eroare la descarcarea arhivei ZIP", "error");
+    } finally {
+      setZipDownloading(false);
     }
   };
 
@@ -545,13 +561,19 @@ export default function BatchAnalysis() {
 
           {/* Download ZIP */}
           {batch.status === "DONE" && (
-            <a
-              href={`/api/batch/${batch.batch_id}/download`}
+            <button
+              type="button"
+              onClick={handleDownloadZip}
+              disabled={zipDownloading}
               className="btn-primary w-full flex items-center justify-center gap-2"
             >
-              <Download className="w-4 h-4" />
+              {zipDownloading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
               Descarca ZIP ({batch.completed} rapoarte)
-            </a>
+            </button>
           )}
 
           {/* New batch */}

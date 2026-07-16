@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { FileText, Eye, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { useToast } from "@/components/Toast";
 import { logAction } from "@/lib/logger";
 import { ANALYSIS_TYPE_LABELS } from "@/lib/constants";
 import type { Report } from "@/lib/types";
@@ -11,9 +12,20 @@ import clsx from "clsx";
 const PAGE_SIZE = 20;
 
 export default function ReportsList() {
+  const { toast } = useToast();
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
   const [reportType, setReportType] = useState("");
+
+  // <a href="/api/..."> is a plain browser navigation and cannot carry the
+  // X-RIS-Key header — fetch + Blob via api.downloadReportFormat instead.
+  const handleDownload = async (reportId: string, fmt: string) => {
+    try {
+      await api.downloadReportFormat(reportId, fmt);
+    } catch {
+      toast(`Eroare la descarcarea formatului ${fmt.toUpperCase()}`, "error");
+    }
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ["reports", page, reportType],
@@ -195,15 +207,16 @@ export default function ReportsList() {
                         <Eye className="w-3 h-3" /> Vezi
                       </Link>
                       {report.formats_available.map((fmt) => (
-                        <a
+                        <button
                           key={fmt}
-                          href={`/api/reports/${report.id}/download/${fmt}`}
+                          type="button"
+                          onClick={() => handleDownload(report.id, fmt)}
                           className="px-2.5 py-1 text-xs rounded bg-dark-surface
                                  hover:bg-dark-hover text-gray-400 hover:text-white
                                  transition-colors uppercase font-mono"
                         >
                           {fmt}
-                        </a>
+                        </button>
                       ))}
                     </div>
                   </div>

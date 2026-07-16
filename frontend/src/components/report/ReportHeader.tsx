@@ -12,6 +12,8 @@ import {
   Shield,
 } from "lucide-react";
 import clsx from "clsx";
+import { api } from "@/lib/api";
+import { useToast } from "@/components/Toast";
 import { logAction } from "@/lib/logger";
 import { ANALYSIS_TYPE_LABELS } from "@/lib/constants";
 import { getRiskBucket } from "@/lib/risk";
@@ -66,6 +68,20 @@ export function ReportHeader({
   onEmailOpen,
   onShare,
 }: ReportHeaderProps) {
+  const { toast } = useToast();
+
+  // <a href="/api/..."> cannot carry the X-RIS-Key header (plain browser
+  // navigation) — fetch + Blob via api.downloadReportFormat, same pattern
+  // as exportCompaniesCSV / the .ics export already used elsewhere.
+  const handleDownload = async (fmt: string) => {
+    logAction("ReportView", "download", { reportId: report.id, format: fmt });
+    try {
+      await api.downloadReportFormat(report.id, fmt);
+    } catch {
+      toast(`Eroare la descarcarea formatului ${fmt.toUpperCase()}`, "error");
+    }
+  };
+
   return (
     <>
       {/* Header */}
@@ -100,20 +116,15 @@ export function ReportHeader({
             {reanalyzing ? "Se porneste..." : "Re-analiza"}
           </button>
           {report.formats_available.map((fmt) => (
-            <a
+            <button
               key={fmt}
-              href={`/api/reports/${report.id}/download/${fmt}`}
-              onClick={() =>
-                logAction("ReportView", "download", {
-                  reportId: report.id,
-                  format: fmt,
-                })
-              }
+              type="button"
+              onClick={() => handleDownload(fmt)}
               className="btn-secondary flex items-center gap-1.5 text-sm"
             >
               <Download className="w-3.5 h-3.5" />
               {fmt.toUpperCase()}
-            </a>
+            </button>
           ))}
           <button
             onClick={onEmailOpen}

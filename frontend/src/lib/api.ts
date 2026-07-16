@@ -155,6 +155,69 @@ export class ApiError extends Error {
   }
 }
 
+// --- Binary downloads (report formats, batch ZIP, timeline PDF, one-pager) ---
+//
+// A plain `<a href="/api/...">` is a browser navigation, which CANNOT attach
+// the X-RIS-Key header — since RIS_API_KEY went live (2026-07-12) every such
+// link 401s with a raw JSON body in a new tab instead of downloading. Every
+// binary download must go through fetch() + risHeaders() + Blob, same as
+// exportCompaniesCSV below (the pattern this was extracted from).
+
+// Extracts the server-provided filename from Content-Disposition, handling
+// both forms the backend actually emits:
+//   filename*=UTF-8''name.ext   (reports.py download/{format}, RFC 5987)
+//   filename="name.ext"         (FileResponse(filename=...) — one_pager,
+//                                 batch ZIP, timeline PDF)
+function filenameFromResponse(res: Response, fallback: string): string {
+  const cd = res.headers.get("Content-Disposition");
+  if (!cd) return fallback;
+  const starMatch = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(cd);
+  if (starMatch) {
+    try {
+      return decodeURIComponent(starMatch[1]);
+    } catch {
+      /* malformed percent-encoding — fall through to the plain form below */
+    }
+  }
+  const plainMatch = /filename\s*=\s*"?([^";]+)"?/i.exec(cd);
+  return plainMatch ? plainMatch[1] : fallback;
+}
+
+// Triggers a browser "Save As" for an in-memory Blob. Shared by every binary
+// download call site instead of re-implementing the
+// createObjectURL/a.download/click/revoke dance per component.
+export function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// Fetches a binary endpoint with the API key header, surfaces HTTP errors as
+// ApiError (same contract as request()), and reads the real filename off
+// Content-Disposition when the server sends one.
+async function fetchBinary(
+  path: string,
+  fallbackFilename: string,
+): Promise<{ blob: Blob; filename: string }> {
+  const res = await fetch(`${BASE}${path}`, { headers: risHeaders() });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    const friendly = HTTP_ERROR_MESSAGES[res.status];
+    throw new ApiError(
+      friendly || err.detail || `HTTP ${res.status}`,
+      err.error_code || err.code || "",
+      res.status,
+    );
+  }
+  const blob = await res.blob();
+  return { blob, filename: filenameFromResponse(res, fallbackFilename) };
+}
+
 export const api = {
   // Stats
   getStats: () => request<import("./types").Stats>("/stats"),
@@ -264,16 +327,11 @@ export const api = {
     >(`/companies/${id}`),
 
   exportCompaniesCSV: async () => {
-    const res = await fetch(`${BASE}/companies/export/csv`, {
-      headers: risHeaders(),
-    });
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "companii_ris.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    const { blob, filename } = await fetchBinary(
+      "/companies/export/csv",
+      "companii_ris.csv",
+    );
+    downloadBlob(blob, filename);
   },
 
   // Analysis types
@@ -879,5 +937,31 @@ export const api = {
     if (!res.ok)
       throw new ApiError("Timeline PDF generation failed", "", res.status);
     return res.blob();
+  },
+
+  // Download any generated report format (pdf/docx/excel/html/pptx/one_pager)
+  // and trigger a browser save in one call — replaces the <a href="/api/..."> links
+  // in ReportHeader/ReportsList/CompanyDetail, which cannot carry X-RIS-Key.
+  downloadReportFormat: async (
+    reportId: string,
+    format: string,
+  ): Promise<void> => {
+    const ext =
+      format === "excel" ? "xlsx" : format === "one_pager" ? "pdf" : format;
+    const { blob, filename } = await fetchBinary(
+      `/reports/${reportId}/download/${format}`,
+      `raport_${reportId}.${ext}`,
+    );
+    downloadBlob(blob, filename);
+  },
+
+  // Download the batch ZIP and trigger a browser save (same reasoning as above)
+  // — replaces the <a href="/api/batch/{id}/download"> link in BatchAnalysis.
+  downloadBatchZip: async (batchId: string): Promise<void> => {
+    const { blob, filename } = await fetchBinary(
+      `/batch/${batchId}/download`,
+      `batch_${batchId.slice(0, 8)}.zip`,
+    );
+    downloadBlob(blob, filename);
   },
 };
