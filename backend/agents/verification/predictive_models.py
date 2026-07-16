@@ -247,7 +247,7 @@ def calculate_piotroski_f(bilant_t: dict, bilant_t1: dict | None = None) -> dict
     }
 
 
-def _screening_signals(dsri: float, aqi: float, sgi: float) -> list[dict]:
+def _screening_signals(dsri: float | None, aqi: float, sgi: float) -> list[dict]:
     """Semnale de screening din indicii Beneish REALI (calculati din date ANAF
     autentice: creante, cifra de afaceri, active totale, active imobilizate).
 
@@ -259,9 +259,14 @@ def _screening_signals(dsri: float, aqi: float, sgi: float) -> list[dict]:
     Pragurile sunt orientative si deliberat conservatoare (crestere >= 1.5x fata
     de anul anterior). NU pretind calibrare pe praguri din literatura, tocmai ca
     sa nu inlocuim un numar nefondat cu altul.
+
+    `dsri` poate fi None (2026-07-16: firma cu creante=0 in anul anterior —
+    raportul creante/CA e nemasurabil, nu doar "lipsa de semnal"). In acel caz
+    signalul DSRI e omis, nu fabricat cu o valoare care ar putea declansa
+    (sau ascunde) un semnal fals.
     """
     signals: list[dict] = []
-    if dsri >= 1.5:
+    if dsri is not None and dsri >= 1.5:
         signals.append({
             "cod": "DSRI",
             "valoare": round(dsri, 3),
@@ -347,8 +352,18 @@ def calculate_beneish_m(bilant_t: dict, bilant_t1: dict | None = None) -> dict:
     receivables_t = bilant_t.get("creante", bilant_t.get("active_curente", 0) * 0.4) or 0
     receivables_t1 = bilant_t1.get("creante", bilant_t1.get("active_curente", 0) * 0.4) or 0
 
-    # DSRI: Days Sales Receivables Index
-    dsri = (receivables_t / ca_t) / (receivables_t1 / ca_t1) if ca_t1 > 0 and receivables_t1 >= 0 else 1.0
+    # DSRI: Days Sales Receivables Index. Varianta veche accepta `receivables_t1 >= 0`,
+    # ceea ce include 0 -> numitorul (receivables_t1/ca_t1) devine 0.0 -> impartirea
+    # externa arunca ZeroDivisionError. REPRODUS cu date reale 2026-07-16 (CFL SOLUTION,
+    # CUI 49104500: creante=0 in 2023, CA/active_totale > 0 in ambii ani) — nu e un caz
+    # de coltul mesei, e o firma din DB analizata recurent. Un DSRI=1.0 fabricat in acest
+    # caz ar fi mai rau decat crash-ul: ar ascunde exact semnalul opus (crestere masiva a
+    # creantelor de la zero), pe care _screening_signals il semnaleaza doar la DSRI >= 1.5
+    # — "nimic de vazut" tacit peste un caz care chiar merita verificat manual. La fel ca
+    # F2/F3/F5/F7/GMI/TATA de mai sus: cand indicele nu e masurabil, se raporteaza None,
+    # nu o valoare neutra inventata.
+    dsri_masurabil = receivables_t1 > 0
+    dsri = (receivables_t / ca_t) / (receivables_t1 / ca_t1) if dsri_masurabil else None
 
     # GMI: Gross Margin Index. `cheltuieli_materiale` NU exista in ANAF Bilant
     # (0 hituri in name_map), iar default-ul proportional (ca*0.7) produce aceeasi
@@ -384,7 +399,11 @@ def calculate_beneish_m(bilant_t: dict, bilant_t1: dict | None = None) -> dict:
     cfo_t = bilant_t.get("cash_flow_operational", profit_t * 0.9) or profit_t
     tata = (profit_t - cfo_t) / TA_t if TA_t > 0 else 0
 
-    indici_cu_semnal = 3 + int(gmi_masurabil) + int(tata_masurabil)
+    # DSRI se putea presupune mereu real (3 = DSRI+AQI+SGI, AQI/SGI garantate de
+    # gate-ul CA/active_totale > 0 de mai sus) inainte de fix-ul DSRI de mai jos —
+    # acum poate fi si el nemasurabil (receivables_t1 <= 0), deci se conditioneaza
+    # explicit, nu se mai presupune.
+    indici_cu_semnal = int(dsri_masurabil) + 2 + int(gmi_masurabil) + int(tata_masurabil)
 
     # GATE (2026-07-15): daca GMI sau TATA nu sunt masurabile, M-score-ul NU se
     # publica, si mai ales NU se publica eticheta acuzatoare.
@@ -401,8 +420,15 @@ def calculate_beneish_m(bilant_t: dict, bilant_t1: dict | None = None) -> dict:
     # fals-pozitiv a variantei reduse e NECUNOSCUTA.
     # Semnalul REAL nu se pierde: DSRI/AQI/SGI sunt calculati din date ANAF
     # autentice si se expun ca semnale de screening (mai jos), fara verdict.
-    if not (gmi_masurabil and tata_masurabil):
+    # ADDENDUM (2026-07-16): DSRI se alatura gate-ului de mai sus. Cand
+    # receivables_t1 <= 0, raportul creante/CA nu are inteles matematic (nu doar
+    # "informatie lipsa" — impartire la zero), deci M5 nu poate fi calculat deloc.
+    if not (dsri_masurabil and gmi_masurabil and tata_masurabil):
         nemasurabili = []
+        if not dsri_masurabil:
+            nemasurabili.append(
+                "DSRI (creante/CA — creante zero sau lipsa in anul anterior, raport nedefinit)"
+            )
         if not gmi_masurabil:
             nemasurabili.append("GMI (marja bruta — lipsesc cheltuielile materiale)")
         if not tata_masurabil:
@@ -422,7 +448,11 @@ def calculate_beneish_m(bilant_t: dict, bilant_t1: dict | None = None) -> dict:
                 "fabricate, verdictul de manipulare ar fi arbitrar."
             ),
             "screening_signals": _screening_signals(dsri, aqi, sgi),
-            "indici_reali": {"DSRI": round(dsri, 3), "AQI": round(aqi, 3), "SGI": round(sgi, 3)},
+            "indici_reali": {
+                "DSRI": round(dsri, 3) if dsri_masurabil else None,
+                "AQI": round(aqi, 3),
+                "SGI": round(sgi, 3),
+            },
             "disclaimer": (
                 "M-score-ul NU se calculeaza din date ANAF gratuite. Indicii reali "
                 "(DSRI/AQI/SGI) sunt expusi ca semnale de screening, fara verdict de "

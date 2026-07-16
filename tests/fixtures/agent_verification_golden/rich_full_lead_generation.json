@@ -522,33 +522,54 @@
     "predictive_scores": {
       "altman_z": {
         "confidence": 0,
-        "reason": "Eroare interna la calcul",
+        "disclaimer": "Capitalul circulant net (X1) nu e calculabil din datele disponibile. X1 are coeficientul 6.56 din formula Z'' — mai mare decat intreaga banda gri (1.10-2.60), deci un scor calculat cu X1=0 ar putea indica SAFE pentru o firma in DISTRESS real. Scorul e raportat INDISPONIBIL in loc sa fie raportat gresit.",
+        "reason": "Lipsa split datorii curente/necurente (ANAF Bilant expune o singura linie DATORII)",
         "z_score": null,
         "zone": "INDISPONIBIL"
       },
       "beneish_m": {
         "available": false,
+        "disclaimer": "M-score-ul NU se calculeaza din date ANAF gratuite. Indicii reali (DSRI/AQI/SGI) sunt expusi ca semnale de screening, fara verdict de manipulare contabila.",
+        "indici_cu_semnal": 2,
+        "indici_reali": {
+          "AQI": 1.0,
+          "DSRI": null,
+          "SGI": 1.333
+        },
         "m_score": null,
-        "reason": "Eroare interna la calcul",
-        "risk": "INDISPONIBIL"
+        "reason": "3 din 5 indici nu sunt masurabili din ANAF Bilant: DSRI (creante/CA — creante zero sau lipsa in anul anterior, raport nedefinit); GMI (marja bruta — lipsesc cheltuielile materiale); TATA (angajamente contabile — lipseste cash-flow-ul operational, proxy-ul il reduce determinist la 0.1 x ROA). Pragurile (-2.22 / -1.78, banda de doar 0.44) sunt calibrate pentru toti 5 indici purtatori de semnal — cu intrari fabricate, verdictul de manipulare ar fi arbitrar.",
+        "risk": "INDISPONIBIL",
+        "screening_signals": []
       },
       "distress_signals": 0,
-      "error": true,
-      "models_available": 0,
+      "models_available": 2,
       "models_total": 4,
       "piotroski_f": {
-        "criteria": [],
-        "f_score": null,
-        "grade": "INSUFICIENT",
-        "reason": "Eroare interna la calcul"
+        "criteria": [
+          1,
+          null,
+          null,
+          1,
+          null,
+          0,
+          null,
+          1,
+          1
+        ],
+        "f_score": 4,
+        "grade": "STRONG",
+        "has_prior_year": true,
+        "max_possible": 5
       },
       "screening_signals": [],
-      "summary": "Modelele predictive nu au putut fi calculate (eroare interna) — riscul de faliment NU a fost evaluat din aceasta sursa, verifica logs/ris_runtime.log.",
+      "summary": "Indicatori financiari in zona normala din modelele disponibile (2/4 modele calculate — restul indisponibile din lipsa de date)",
       "zmijewski_x": {
-        "available": false,
-        "distress": null,
-        "reason": "Eroare interna la calcul",
-        "x_score": null
+        "available": true,
+        "confidence": 0.95,
+        "disclaimer": "Termenul de lichiditate (active curente / datorii curente) a fost omis — ANAF Bilant nu expune split-ul datorii curente/necurente. Coeficientul sau e 0.004, deci impactul asupra scorului e sub 1%; ceilalti doi termeni (rentabilitate si indatorare) sunt calculati din date complete.",
+        "distress": false,
+        "interpretation": "Fara semnal de distres",
+        "x_score": -2.869
       }
     },
     "relations": {

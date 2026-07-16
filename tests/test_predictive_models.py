@@ -263,6 +263,96 @@ class TestBeneishM:
         result = calculate_beneish_m(bilant_no_ca, bilant_no_ca)
         assert result["available"] is False
 
+    def test_creante_zero_an_anterior_nu_crapa(self):
+        """REGRESIE (gasita+reprodusa 2026-07-16 pe date REALE ANAF — firma reala
+        din DB, deja analizata recurent: CFL SOLUTION, CUI 49104500, verificata
+        direct din `get_bilant`, nu inventata). Codul VECHI: DSRI se calcula cu
+        `if ca_t1 > 0 and receivables_t1 >= 0 else 1.0` — `>= 0` include 0, deci
+        numitorul (receivables_t1/ca_t1) devine 0.0, iar impartirea externa
+        (receivables_t/ca_t) / 0.0 arunca ZeroDivisionError. Cifrele de mai jos:
+        2023 (t-1) are creante=0 real, 2024 (t) are creante=37057; CA si
+        active_totale sunt pozitive in AMBII ani, deci gate-urile anterioare
+        (CA>0 la ~:326, active_totale>0 la ~:344) NU opresc executia inainte
+        de DSRI — calea chiar ajunge la impartirea care crapa pe codul vechi."""
+        bilant_t = {
+            "cifra_afaceri": 177_176, "active_totale": 262_847,
+            "creante": 37_057, "profit_net": 5_000,
+        }
+        bilant_t1 = {
+            "cifra_afaceri": 1_300, "active_totale": 1_500,
+            "creante": 0, "profit_net": 100,
+        }
+        result = calculate_beneish_m(bilant_t, bilant_t1)  # nu trebuie sa arunce
+        assert result["available"] is False
+        assert result["m_score"] is None
+        assert result["risk"] == "INDISPONIBIL"
+        assert "DSRI" in result["reason"]
+
+    def test_creante_zero_an_anterior_nu_fabrica_dsri_neutru(self):
+        """DSRI nemasurabil (receivables_t1<=0) trebuie raportat ca atare — NU cu
+        un 1.0 fabricat, care ar ascunde exact semnalul opus (crestere masiva a
+        creantelor de la zero — genul de tipar pe care _screening_signals chiar
+        il semnaleaza la DSRI>=1.5)."""
+        bilant_t = {
+            "cifra_afaceri": 177_176, "active_totale": 262_847,
+            "creante": 37_057, "profit_net": 5_000,
+        }
+        bilant_t1 = {
+            "cifra_afaceri": 1_300, "active_totale": 1_500,
+            "creante": 0, "profit_net": 100,
+        }
+        result = calculate_beneish_m(bilant_t, bilant_t1)
+        assert result["indici_reali"]["DSRI"] is None
+        assert not any(s["cod"] == "DSRI" for s in result["screening_signals"])
+
+    def test_creante_zero_an_anterior_end_to_end_official_data(self):
+        """Traverseaza granita producator->consumator reala: forma bruta
+        `official_data` (cu `cifra_afaceri_neta`/`datorii_totale`, asa cum vine
+        din ANAF Bilant) -> `calculate_all_predictive_scores` -> `_to_predictive_shape`
+        -> `calculate_beneish_m`. Nu doar `calculate_beneish_m` direct — asta e
+        calea pe care ar fi crapat un job real (`agent_verification` trece
+        `official_data` brut). Date reale CFL SOLUTION, CUI 49104500."""
+        official_data = {
+            "financial_official": {
+                "data": {
+                    "2023": {
+                        "cifra_afaceri_neta": 1_300, "active_totale": 1_500,
+                        "creante": 0, "profit_net": 100, "datorii_totale": 500,
+                    },
+                    "2024": {
+                        "cifra_afaceri_neta": 177_176, "active_totale": 262_847,
+                        "creante": 37_057, "profit_net": 5_000, "datorii_totale": 100_000,
+                    },
+                }
+            }
+        }
+        result = calculate_all_predictive_scores({"financial": {}}, official_data)  # nu trebuie sa arunce
+        beneish = result["beneish_m"]
+        assert beneish["available"] is False
+        assert beneish["risk"] == "INDISPONIBIL"
+        assert "DSRI" in beneish["reason"]
+
+    def test_creante_pozitive_ambii_ani_dsri_neschimbat(self):
+        """Contra-proba: cazul normal (receivables_t1 > 0 in ambii ani) ramane
+        IDENTIC dupa fix — nimic nu se schimba pentru firmele cu creante reale.
+        Valoarea DSRI e calculata direct din formula (nu recopiata din productie)
+        si comparata exact."""
+        bilant_t = {
+            "cifra_afaceri": 11_950_149, "profit_net": 724_147, "creante": 2_049_027,
+            "active_totale": 6_005_910, "active_imobilizate": 2_920_496,
+            "cheltuieli_materiale": 8_000_000, "cash_flow_operational": 900_000,
+        }
+        bilant_t1 = {
+            "cifra_afaceri": 8_935_629, "profit_net": 320_280, "creante": 1_837_812,
+            "active_totale": 5_946_469, "active_imobilizate": 2_883_779,
+            "cheltuieli_materiale": 6_200_000, "cash_flow_operational": 400_000,
+        }
+        result = calculate_beneish_m(bilant_t, bilant_t1)
+        assert result["available"] is True
+        expected_dsri = round((2_049_027 / 11_950_149) / (1_837_812 / 8_935_629), 3)
+        assert result["components"]["DSRI"] == expected_dsri == 0.834
+        assert result["indici_cu_semnal"] == 5
+
 
 # ─── Zmijewski X-Score ───────────────────────────────────────────────────────
 
