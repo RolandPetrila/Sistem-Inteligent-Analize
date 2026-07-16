@@ -217,6 +217,7 @@ async def export_seap_calendar(report_id: str) -> dict:
 class SendEmailRequest(BaseModel):
     to: str
     subject: str | None = None
+    message: str | None = None
 
     @field_validator("to")
     @classmethod
@@ -225,11 +226,20 @@ class SendEmailRequest(BaseModel):
             raise ValueError("Adresa email invalida")
         return v
 
+    @field_validator("message")
+    @classmethod
+    def validate_message_length(cls, v: str | None) -> str | None:
+        if v is not None and len(v) > 5000:
+            raise ValueError("Mesajul depaseste 5000 caractere")
+        return v
+
 
 @router.post("/{report_id}/send-email")
 async def send_report_email(report_id: str, data: SendEmailRequest) -> dict:
     """Send the report PDF as an email attachment."""
-    row = await db.fetch_one("SELECT id, pdf_path FROM reports WHERE id = ?", (report_id,))
+    row = await db.fetch_one(
+        "SELECT id, title, created_at, pdf_path FROM reports WHERE id = ?", (report_id,)
+    )
     if not row:
         raise HTTPException(status_code=404, detail="Report not found")
 
@@ -245,13 +255,30 @@ async def send_report_email(report_id: str, data: SendEmailRequest) -> dict:
     except ValueError:
         raise HTTPException(status_code=403, detail="Access denied") from None
 
-    subject = data.subject or f"Raport RIS — {row.get('title', 'Raport')}"
+    import html as _html
+
+    # row.get(cheie, default) NU acopera cazul "cheia exista dar valoarea e None"
+    # (rand vechi/incomplet in DB) -> fallback explicit cu `or`, nu doar default de .get().
+    report_title = row.get("title") or "Raport"
+    report_created_at = row.get("created_at") or "N/A"
+
+    # `subject` ramane text BRUT — e folosit si ca antet MIME "Subject:" (text simplu,
+    # NU HTML; daca l-am escapa aici, destinatarul ar vedea literal "&amp;" in subiect).
+    # Pentru <h2> din corpul HTML folosim o varianta escapata separat, mai jos.
+    subject = data.subject or f"Raport RIS — {report_title}"
+    subject_html = _html.escape(subject)
 
     body_html = (
-        f"<h2>{subject}</h2>"
+        f"<h2>{subject_html}</h2>"
         f"<p>Raportul generat de Roland Intelligence System este atasat.</p>"
-        f"<p><small>Generat: {row.get('created_at', 'N/A')}</small></p>"
     )
+    user_message = (data.message or "").strip()
+    if user_message:
+        # Text liber de la utilizator -> escapare HTML obligatorie (altfel gaura XSS
+        # in corpul emailului). Newline-urile pastrate lizibil ca <br>.
+        escaped_message = _html.escape(user_message).replace("\n", "<br>")
+        body_html += f"<p>{escaped_message}</p>"
+    body_html += f"<p><small>Generat: {_html.escape(str(report_created_at))}</small></p>"
 
     from backend.services.notification import send_email
     ok = await send_email(to=data.to, subject=subject, body_html=body_html, attachments=[str(full_path)])
