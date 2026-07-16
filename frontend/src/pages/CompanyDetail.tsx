@@ -180,7 +180,7 @@ export default function CompanyDetail() {
     // Evolutie Scor: numeric trend (SQL window functions)
     setScoreTrendLoading(true);
     api
-      .getScoreTrend(Number(id))
+      .getScoreTrend(id)
       .then((points) => setScoreTrend(points ?? []))
       .catch(() => {
         /* score trend optional */

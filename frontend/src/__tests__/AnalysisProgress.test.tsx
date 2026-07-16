@@ -27,6 +27,11 @@ const mockJob = {
   current_step: null,
 };
 
+// Forma REALA emisa de backend/agents/verification/completeness.py — lista
+// de OBIECTE {field, section, severity, reason}, NU string-uri. Verificat
+// live pe GET /api/jobs/{id}/diagnostics (job real DONE, 2026-07-16):
+// randarea unui obiect ca ReactNode direct (`{g}` intr-un <li>) arunca
+// "Objects are not valid as a React child".
 const mockDiagnostics = {
   job_id: "job-abc123",
   status: "DONE",
@@ -35,7 +40,20 @@ const mockDiagnostics = {
     quality_level: "Buna",
     passed: 13,
     total_checks: 16,
-    gaps: ["BPI (buletinul.ro)"],
+    gaps: [
+      {
+        field: "Actionariat (asociati + administratori)",
+        section: "Actionariat",
+        severity: "HIGH",
+        reason: "openapi.ro nu a returnat date ONRC structurate",
+      },
+      {
+        field: "Benchmark financiar sector",
+        section: "Benchmark",
+        severity: "MEDIUM",
+        reason: "Necesita CAEN context + date financiare firma",
+      },
+    ],
   },
   risk_score: { score: "Verde", numeric_score: 87.3 },
   source_diagnostics: {
@@ -105,7 +123,14 @@ describe("AnalysisProgress — Diagnostic Job", () => {
     // Continutul real al diagnosticului trebuie sa apara randat, nu doar apelat
     await findByText(/82%/);
     await findByText(/Buna/);
-    await findByText(/BPI \(buletinul.ro\)/);
+    // "Lipsuri detectate" — gaps sunt OBIECTE (field/section/severity/reason),
+    // nu string-uri. Daca randarea ar face `{g}` direct pe obiect, React ar
+    // arunca inainte sa ajungem la aceste asertii.
+    await findByText("Actionariat (asociati + administratori)");
+    await findByText(/openapi.ro nu a returnat date ONRC structurate/);
+    await findByText("HIGH");
+    await findByText("Benchmark financiar sector");
+    await findByText("MEDIUM");
   });
 
   it("eroare la incarcarea diagnosticului: afiseaza mesaj + toast, nu buton mort", async () => {

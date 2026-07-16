@@ -519,7 +519,16 @@ function DiagnosticsPanel({ data }: { data: Record<string, unknown> }) {
         quality_level?: string;
         passed?: number;
         total_checks?: number;
-        gaps?: string[];
+        // Forma REALA emisa de backend/agents/verification/completeness.py —
+        // lista de OBIECTE, nu string-uri. Randarea unui obiect ca ReactNode
+        // arunca ("Objects are not valid as a React child") — verificat live
+        // pe GET /api/jobs/{id}/diagnostics.
+        gaps?: {
+          field: string;
+          section: string;
+          severity: "HIGH" | "MEDIUM" | string;
+          reason: string;
+        }[];
       }
     | undefined;
   const riskScore = data.risk_score as
@@ -572,9 +581,29 @@ function DiagnosticsPanel({ data }: { data: Record<string, unknown> }) {
       {completeness?.gaps && completeness.gaps.length > 0 && (
         <div>
           <p className="text-gray-500 mb-1">Lipsuri detectate</p>
-          <ul className="list-disc list-inside text-yellow-300 space-y-0.5">
+          <ul className="space-y-1">
             {completeness.gaps.map((g, i) => (
-              <li key={i}>{g}</li>
+              <li key={i} className="flex items-start gap-2">
+                <span
+                  className={clsx(
+                    "text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 mt-0.5",
+                    g.severity === "HIGH"
+                      ? "bg-red-500/20 text-red-300"
+                      : "bg-yellow-500/20 text-yellow-300",
+                  )}
+                >
+                  {g.severity}
+                </span>
+                <span className="text-yellow-300">
+                  <span className="font-medium">{g.field}</span>
+                  {g.section && (
+                    <span className="text-gray-500"> ({g.section})</span>
+                  )}
+                  {g.reason && (
+                    <span className="text-gray-500"> — {g.reason}</span>
+                  )}
+                </span>
+              </li>
             ))}
           </ul>
         </div>

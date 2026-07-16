@@ -531,7 +531,7 @@ export default function Companies() {
             Companiile apar automat dupa prima analiza
           </p>
           <Link
-            to="/new"
+            to="/new-analysis"
             className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent-primary text-white hover:opacity-90 transition-opacity"
           >
             Porneste analiza

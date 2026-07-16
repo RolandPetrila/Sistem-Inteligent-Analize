@@ -601,9 +601,13 @@ export const api = {
     total: number;
   }> => request("/companies/favorites"),
 
-  // Score trend with SQL window functions
+  // Score trend with SQL window functions.
+  // companyId is the company's UUID (TEXT primary key), NOT a numeric id —
+  // backend/routers/companies.py:428 declares `company_id: str`. A previous
+  // `number` signature forced callers to do `Number(uuid)` -> NaN -> silent
+  // empty result (verified live: /companies/NaN/score-trend -> []).
   getScoreTrend: (
-    companyId: number,
+    companyId: string,
   ): Promise<import("./types").ScoreTrendPoint[]> =>
     request(`/companies/${companyId}/score-trend`),
 
