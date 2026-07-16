@@ -56,6 +56,22 @@ async def _save_checkpoint(key: str, status: str = "OK"):
 
 _task: asyncio.Task | None = None
 
+# BUG 2 fix (2026-07-16): the main scheduler loop task above (`_task`) is already
+# safely retained via the module-level variable. `_auto_reanalyze_job` below fires a
+# SEPARATE analysis job per eligible company with `asyncio.create_task(...)` and keeps
+# no reference at all — per the asyncio docs ("Important: Save a reference"), such a
+# task can be garbage-collected mid-flight, silently dropping the re-analysis. Track
+# those in their own set with auto-discard on completion.
+_reanalyze_tasks: set[asyncio.Task] = set()
+
+
+def _track_background_task(coro) -> asyncio.Task:
+    """Wrap asyncio.create_task() with a retained reference (see note above)."""
+    task = asyncio.create_task(coro)
+    _reanalyze_tasks.add(task)
+    task.add_done_callback(_reanalyze_tasks.discard)
+    return task
+
 
 async def get_scheduler_status() -> dict:
     """Returneaza statusul curent al scheduler-ului (pentru health/status endpoint)."""
@@ -268,8 +284,9 @@ async def _auto_reanalyze_job():
                 )
 
                 # Porneste job-ul in background (fara WS — scheduler nu are conexiune WS)
+                # BUG 2 fix: referinta retinuta, vezi nota de langa _reanalyze_tasks.
                 from backend.services.job_service import run_analysis_job
-                asyncio.create_task(run_analysis_job(job_id, ws_manager=None))
+                _track_background_task(run_analysis_job(job_id, ws_manager=None))
 
                 logger.info(f"[scheduler] auto-reanalyze: job {job_id} creat pentru {name} (CUI {cui})")
 

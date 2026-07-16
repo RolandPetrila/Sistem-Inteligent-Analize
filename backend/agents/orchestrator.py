@@ -31,6 +31,34 @@ from backend.services.job_logger import (
     log_source_result,
 )
 
+
+class CuiInvalidError(Exception):
+    """BUG 1 fix (2026-07-16): raised when Agent 1 (official) flags an invalid CUI
+    (MOD 11 check) via `official_data["early_return"]`.
+
+    Before this fix, `early_return`/`early_return_reason` were written by
+    `agent_official.py` but never read anywhere downstream — `route_after_official`
+    only inspected `agents_needed` (fixed at job creation, independent of the CUI's
+    validity), so Agent 2 (web/Tavily), Agent 3 (market/SEAP), Agent 4 (verification —
+    which itself calls Eurostat/SEAP/sanctions screening), and Agent 5 (synthesis — AI
+    providers) all ran unconditionally for a CUI already proven invalid, burning real
+    external quota to produce a report about a company that doesn't exist.
+
+    Raising here (in `run_official`, right after the node would otherwise return
+    normally, BEFORE LangGraph calls `route_after_official`) aborts `graph.ainvoke()`
+    immediately — no conditional edge is evaluated, so agent_web/agent_market/
+    agent_verification/agent_synthesis never run. `job_service.run_analysis_job`'s
+    existing top-level except block (unmodified — outside this fix's file scope) then
+    marks the job FAILED with `error_message` = this exception's message (the exact
+    `early_return_reason` produced by the MOD 11 validator, not a new message),
+    broadcasts `job_failed` over WS, and creates a FAILED in-app notification — the
+    same fatal-error path already used for any other unrecoverable Agent 1 crash, so
+    the user gets a clear, existing-shaped explanation instead of a silently empty
+    DONE report. A valid CUI never sets `early_return`, so this path cannot trigger
+    for the normal case — behavior for valid CUIs is unchanged.
+    """
+
+
 # --- 10F M5.1: Request Deduplication ---
 # Track CUIs currently being analyzed to avoid duplicate work.
 _in_flight: dict[str, asyncio.Event] = {}
@@ -129,6 +157,18 @@ async def run_official(state: AnalysisState) -> dict:
     logger.info(f"[orchestrator] Agent 1 (Official) completed in {elapsed:.1f}s")
     await _ws_broadcast(state, {"type": "agent_complete", "agent": "official", "status": _status, "duration_ms": int(elapsed * 1000)})
     await _save_checkpoint(state.get("job_id", ""), "official", result)  # 10F M5.4
+
+    # BUG 1 fix (2026-07-16): stop the pipeline for a CUI proven invalid (MOD 11).
+    # See CuiInvalidError docstring for the full rationale. Only triggers when Agent 1
+    # itself set the flag (the success path above) — the error-boundary fallback dict
+    # built in the except-clause never contains "early_return", so a genuine Agent 1
+    # crash is unaffected and still continues via the normal error-boundary behavior.
+    official_data = result.get("official_data") or {}
+    if official_data.get("early_return"):
+        reason = official_data.get("early_return_reason") or "CUI invalid — analiza oprita"
+        logger.warning(f"[orchestrator] Pipeline oprit — early return de la Agent 1: {reason}")
+        raise CuiInvalidError(reason)
+
     return result
 
 
@@ -328,12 +368,11 @@ async def run_web(state: AnalysisState) -> dict:
         }
         # HIGH #10: aceasta ramura ruleaza DOAR pe succes (broadcast-ul e in try,
         # nu dupa try/except ca la official/verification/synthesis) — status e
-        # mereu "success" aici. NOTA (gasit adiacent, NU reparat acum — in afara
-        # scope-ului HIGH #10, care cerea doar adaugarea campului status):
-        # ramura except de mai jos NU trimite deloc agent_complete pe eroare —
-        # frontend-ul nu primeste niciun semnal de finalizare pt Agent 2 daca
-        # acesta pica (spre deosebire de official/verification/synthesis, care
-        # trimit agent_complete si pe eroare).
+        # mereu "success" aici. BUG 3 fix (2026-07-16): ramura except de mai jos
+        # acum trimite si ea agent_complete cu status="error" (acelasi contract
+        # ca official/verification/synthesis), semnalat 2026-07-13 si nereparat
+        # pana azi — fara el, frontend-ul nu primea niciun semnal de finalizare
+        # pt Agent 2 daca acesta pica (spinner ramas agatat).
         await _ws_broadcast(state, {"type": "agent_complete", "agent": "web", "status": "success", "duration_ms": int(elapsed * 1000)})
         await _save_checkpoint(job_id, "web", web_result)  # 10F M5.4
         return web_result
@@ -343,6 +382,8 @@ async def run_web(state: AnalysisState) -> dict:
         elapsed = time.time() - t0
         logger.warning(f"[web] Error boundary caught: {e} ({elapsed:.1f}s)")
         log_agent_end(job_id, "web", f"ERROR (boundary): {e}")
+        # BUG 3 fix: emit agent_complete on the error path too (see note above).
+        await _ws_broadcast(state, {"type": "agent_complete", "agent": "web", "status": "error", "duration_ms": int(elapsed * 1000)})
         return {"web_data": {}, "current_step": f"Agent 2 — eroare (continua): {e}", "progress": 0.40}
 
 
@@ -382,8 +423,9 @@ async def run_market(state: AnalysisState) -> dict:
             "current_step": f"Agent 3: {total} contracte SEAP gasite",
             "progress": 0.40,
         }
-        # HIGH #10: idem run_web — status mereu "success" aici (ramura except de
-        # mai jos nu trimite agent_complete deloc, nota separata, nu reparat acum).
+        # HIGH #10: idem run_web — status mereu "success" aici. BUG 3 fix
+        # (2026-07-16): ramura except de mai jos trimite acum agent_complete
+        # cu status="error" (vezi nota din run_web).
         await _ws_broadcast(state, {"type": "agent_complete", "agent": "market", "status": "success", "duration_ms": int(elapsed * 1000)})
         await _save_checkpoint(job_id, "market", market_result)  # 10F M5.4
         return market_result
@@ -393,6 +435,8 @@ async def run_market(state: AnalysisState) -> dict:
         logger.warning(f"[market] Error boundary caught: {e} ({elapsed:.1f}s)")
         log_source_result(job_id, "SEAP", False, 0, error=str(e))
         log_agent_end(job_id, "market", f"ERROR (boundary): {e}")
+        # BUG 3 fix: emit agent_complete on the error path too (see run_web note).
+        await _ws_broadcast(state, {"type": "agent_complete", "agent": "market", "status": "error", "duration_ms": int(elapsed * 1000)})
         return {"market_data": {}, "current_step": f"Agent 3 — eroare (continua): {e}", "progress": 0.40}
 
 

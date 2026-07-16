@@ -27,6 +27,21 @@ router = APIRouter()
 # 10F M8.3: Parallel Analysis — max CUI-uri procesate simultan intr-un batch
 MAX_PARALLEL_BATCH = settings.batch_max_parallel
 
+# BUG 2 fix (2026-07-16): asyncio.create_task() without a retained strong reference
+# is only held weakly — per the asyncio docs ("Important: Save a reference"), the task
+# can be garbage-collected mid-flight, silently dropping the whole batch run. Both
+# create_batch and resume_batch fire `_run_batch(...)` this way with nothing else
+# referencing the task object. Track in a module-level set with auto-discard.
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _track_background_task(coro) -> asyncio.Task:
+    """Wrap asyncio.create_task() with a retained reference (see note above)."""
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
+
 
 async def _get_batch_progress(batch_id: str) -> dict:
     """Citeste batch progress din DB (input_data JSON)."""
@@ -204,9 +219,9 @@ async def create_batch(
         ),
     )
 
-    # Porneste executia in background
+    # Porneste executia in background (BUG 2 fix: referinta retinuta, vezi mai sus)
     from backend.ws import ws_manager
-    asyncio.create_task(_run_batch(batch_id, cuis, analysis_type, report_level, ws_manager, refresh=refresh))
+    _track_background_task(_run_batch(batch_id, cuis, analysis_type, report_level, ws_manager, refresh=refresh))
 
     # 10E M8.2: Include validation warnings in response
     validation_warnings = {}
@@ -281,7 +296,8 @@ async def resume_batch(batch_id: str):
     refresh = input_data.get("refresh", False)
 
     from backend.ws import ws_manager
-    asyncio.create_task(_run_batch(batch_id, failed_cuis, analysis_type, report_level, ws_manager, refresh=refresh))
+    # BUG 2 fix: referinta retinuta, vezi nota de langa _background_tasks.
+    _track_background_task(_run_batch(batch_id, failed_cuis, analysis_type, report_level, ws_manager, refresh=refresh))
 
     return {
         "batch_id": batch_id,

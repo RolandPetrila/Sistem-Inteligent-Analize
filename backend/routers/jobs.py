@@ -17,6 +17,23 @@ from backend.utils import safe_json_loads
 
 router = APIRouter()
 
+# BUG 2 fix (2026-07-16): asyncio.create_task() without a retained strong reference
+# is only held weakly by the event loop internals — CPython's docs explicitly warn
+# the task can be garbage-collected mid-flight, silently dropping the work "at random
+# moments" (docs.python.org/3/library/asyncio-task.html#asyncio.create_task, "Important:
+# Save a reference"). `start_job` fires the whole analysis pipeline this way with
+# nothing else referencing the task object. Track it in a module-level set with
+# auto-discard on completion so it can't be collected before it finishes.
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _track_background_task(coro) -> asyncio.Task:
+    """Wrap asyncio.create_task() with a retained reference (see note above)."""
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
+
 
 def _safe_log_path(job_id: str) -> Path:
     """Validate job_id and return safe log path (prevents path traversal)."""
@@ -145,8 +162,8 @@ async def start_job(job_id: str):
 
     from backend.ws import ws_manager
 
-    # Porneste executia in background
-    asyncio.create_task(run_analysis_job(job_id, ws_manager=ws_manager))
+    # Porneste executia in background (BUG 2 fix: referinta retinuta, vezi mai sus)
+    _track_background_task(run_analysis_job(job_id, ws_manager=ws_manager))
     return {"status": "started", "job_id": job_id}
 
 

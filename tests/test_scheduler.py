@@ -141,3 +141,70 @@ class TestStartScheduler:
             from backend.services.scheduler import start_scheduler
             result = await start_scheduler()
             assert result is fake_task
+
+
+class TestReanalyzeTaskRetention:
+    """BUG 2 fix (2026-07-16): `_auto_reanalyze_job` used to fire each re-analysis job
+    with a bare `asyncio.create_task(...)` and no retained reference — per the asyncio
+    docs ("Important: Save a reference"), such a task can be garbage-collected mid-flight,
+    silently dropping the re-analysis. `_track_background_task` + `_reanalyze_tasks` fix
+    that. NOTE: this is a DIFFERENT tracking set than the main scheduler loop's `_task`
+    module variable (already safely retained before this fix — untouched here)."""
+
+    @pytest.fixture(autouse=True)
+    def cleanup_reanalyze_tasks(self):
+        import backend.services.scheduler as sched_module
+        sched_module._reanalyze_tasks.clear()
+        yield
+        sched_module._reanalyze_tasks.clear()
+
+    @pytest.mark.asyncio
+    async def test_tracked_task_is_retained_while_pending(self):
+        import asyncio
+
+        from backend.services.scheduler import _reanalyze_tasks, _track_background_task
+
+        release = asyncio.Event()
+
+        async def _work():
+            await release.wait()
+
+        task = _track_background_task(_work())
+        try:
+            assert task in _reanalyze_tasks
+        finally:
+            release.set()
+            await task
+
+    @pytest.mark.asyncio
+    async def test_tracked_task_is_discarded_on_completion(self):
+        from backend.services.scheduler import _reanalyze_tasks, _track_background_task
+
+        async def _work():
+            return "done"
+
+        task = _track_background_task(_work())
+        await task
+        assert task not in _reanalyze_tasks
+
+    @pytest.mark.asyncio
+    async def test_tracked_task_still_completes_when_local_reference_is_dropped(self):
+        """Simulates the _auto_reanalyze_job pattern: fire-and-forget per eligible
+        company, no local var kept for the asyncio.create_task() return value."""
+        import asyncio
+
+        from backend.services.scheduler import _reanalyze_tasks, _track_background_task
+
+        result = {"ran": False}
+
+        async def _work():
+            await asyncio.sleep(0)
+            result["ran"] = True
+
+        _track_background_task(_work())
+
+        for _ in range(5):
+            await asyncio.sleep(0)
+
+        assert result["ran"] is True
+        assert len(_reanalyze_tasks) == 0
