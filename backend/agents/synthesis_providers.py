@@ -33,21 +33,31 @@ class SynthesisProvidersMixin:
         if settings.synthesis_mode != "claude_code":
             return None
 
+        # settings.claude_cli_path: cale absoluta optionala (vezi config.py pt motiv —
+        # PATH-ul serviciului Windows e cachet de SCM la boot). Gol = comportament
+        # vechi neschimbat ("claude" cautat in PATH-ul procesului curent).
+        claude_cmd = settings.claude_cli_path or "claude"
         try:
-            logger.debug("[synthesis] Trying Claude Code CLI...")
+            logger.debug(f"[synthesis] Trying Claude Code CLI ({claude_cmd})...")
             import sys
             creation_flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+            # 2026-07-17: promptul NU se mai paseaza ca argument de linie de comanda
+            # ("-p", prompt) — Windows CreateProcess taie linia de comanda la ~32.767
+            # caractere (ERROR_FILENAME_EXCED_RANGE / WinError 206), iar Python il ridica
+            # drept FileNotFoundError (identic cu executabil lipsa), mascand root cause-ul.
+            # Prompturile RIS reale au 20.000-28.000+ caractere si loveau garantat limita.
+            # Fix dovedit live: promptul trece prin stdin (input=), nu prin argv.
             result = await asyncio.wait_for(
                 asyncio.get_event_loop().run_in_executor(
                     None,
                     lambda: subprocess.run(
                         [
-                            "claude",
+                            claude_cmd,
                             "--print",
-                            "--model", "claude-opus-4-6",
+                            "--model", "claude-opus-4-8",
                             "--effort", "max",
-                            "-p", prompt,
                         ],
+                        input=prompt,
                         capture_output=True,
                         text=True,
                         timeout=180,
@@ -65,8 +75,26 @@ class SynthesisProvidersMixin:
                 stderr = result.stderr[:200] if result.stderr else ""
                 logger.warning(f"[synthesis] Claude Code failed: rc={result.returncode} {stderr}")
                 return None
-        except FileNotFoundError:
-            logger.warning("[synthesis] Claude CLI not found — falling back to Gemini")
+        except FileNotFoundError as e:
+            # WinError 2 (executabil/cale inexistenta) SI WinError 206 (linie de comanda
+            # prea lunga) ajung AMANDOUA aici ca FileNotFoundError pe Windows — fara
+            # distinctie explicita, mesajul vechi ("not found") mintea cand cauza reala
+            # era lungimea liniei de comanda (asa a fost mascat bug-ul de mai sus ore intregi).
+            winerror = getattr(e, "winerror", None)
+            if winerror == 206:
+                logger.warning(
+                    f"[synthesis] Claude Code: linie de comanda prea lunga (WinError 206) — "
+                    f"promptul are {len(prompt)} caractere. Windows limiteaza linia de comanda "
+                    "la ~32.767 caractere. Daca vezi asta, promptul a ajuns din nou in argv "
+                    "in loc de stdin (input=) — verifica ca nimeni nu a reintrodus '-p prompt'."
+                )
+            else:
+                logger.warning(
+                    f"[synthesis] Claude CLI not found at '{claude_cmd}' — falling back to Gemini. "
+                    "Daca serviciul Windows nu vede PATH-ul actualizat (Service Control Manager "
+                    "cacheaza PATH la boot), seteaza CLAUDE_CLI_PATH in .env cu calea absoluta "
+                    "catre claude.exe (nu necesita restart de PATH)."
+                )
             return None
         except (TimeoutError, subprocess.TimeoutExpired):
             logger.warning("[synthesis] Claude Code timeout — falling back to Gemini")
@@ -290,9 +318,14 @@ class SynthesisProvidersMixin:
 
     async def _concurrent_fallback(
         self, section: dict, verified_data: dict, providers: list[str]
-    ) -> str | None:
+    ) -> tuple[str | None, str | None]:
         """FIX #9: Launch multiple providers concurrently, return first successful result.
-        Uses asyncio.wait(FIRST_COMPLETED) with 30s timeout."""
+        Uses asyncio.wait(FIRST_COMPLETED) with 30s timeout.
+
+        Sonnet 2026-07-17: returneaza acum (text, winning_provider) in loc de doar
+        text — apelantul (generate_section) are nevoie sa stie CINE a castigat, ca
+        sa poata loga observabilitatea (log_synthesis). Logica de selectie interna
+        (asyncio.wait, cancel pending, circuit breaker) e neschimbata."""
         _provider_methods = {
             "groq": self._generate_with_groq,
             "gemini": self._generate_with_gemini,
@@ -308,7 +341,7 @@ class SynthesisProvidersMixin:
         active = [p for p in providers if not is_provider_circuit_open(p)]
         if not active:
             logger.warning("[synthesis] _concurrent_fallback: all provider circuits open")
-            return None
+            return None, None
 
         tasks = {
             asyncio.create_task(
@@ -318,7 +351,7 @@ class SynthesisProvidersMixin:
             if p in _provider_methods
         }
         if not tasks:
-            return None
+            return None, None
 
         try:
             done, pending = await asyncio.wait(
@@ -339,7 +372,7 @@ class SynthesisProvidersMixin:
                         provider_name = tasks[task]
                         reset_provider_circuit(provider_name)
                         logger.info(f"[synthesis] Concurrent fallback winner: {provider_name}")
-                        return result
+                        return result, provider_name
                 else:
                     provider_name = tasks[task]
                     logger.warning(f"[synthesis] Concurrent fallback {provider_name} error: {exc}")
@@ -347,4 +380,4 @@ class SynthesisProvidersMixin:
         except Exception as e:
             logger.warning(f"[synthesis] Concurrent fallback failed: {e}")
 
-        return None
+        return None, None

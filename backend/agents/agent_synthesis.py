@@ -9,6 +9,7 @@ Fallback autonom: Gemini Flash API (gratuit)
 import copy
 import json
 import re
+import time
 
 from loguru import logger
 
@@ -18,6 +19,7 @@ from backend.agents.synthesis_providers import SynthesisProvidersMixin
 from backend.agents.verification.scoring import risk_bucket
 from backend.prompts.section_prompts import get_sections_for_analysis
 from backend.prompts.system_prompt import SYSTEM_PROMPT
+from backend.services.job_logger import log_synthesis
 
 # Runda 2 / C: nucleul analitic pe care niciun prompt de sectiune nu-l poate pierde
 # (fara el, sectiunile nu au date de baza — vezi verificarea la sursa in raportul
@@ -82,6 +84,7 @@ class SynthesisAgent(BaseAgent, SynthesisProvidersMixin):
         verified_data = state.get("verified_data", {})
         analysis_type = state.get("analysis_type", "CUSTOM_REPORT")
         report_level = state.get("report_level", 2)
+        job_id = state.get("job_id", "")
 
         if not verified_data:
             return {
@@ -98,7 +101,7 @@ class SynthesisAgent(BaseAgent, SynthesisProvidersMixin):
         for i, section in enumerate(sections_config):
             logger.info(f"[synthesis] Section {i+1}/{total}: {section['title']}")
             report_sections[section["key"]] = await self.generate_section(
-                section, verified_data
+                section, verified_data, job_id=job_id
             )
 
         # 10B M4.3: Cross-Section Coherence — verify consistency between sections
@@ -121,7 +124,7 @@ class SynthesisAgent(BaseAgent, SynthesisProvidersMixin):
             "progress": 0.75,
         }
 
-    async def generate_section(self, section: dict, verified_data: dict) -> dict:
+    async def generate_section(self, section: dict, verified_data: dict, job_id: str = "") -> dict:
         """Genereaza (sau re-genereaza) o singura sectiune de raport.
 
         Extras din bucla execute() pentru a fi reutilizat la regenerarea on-demand
@@ -129,6 +132,12 @@ class SynthesisAgent(BaseAgent, SynthesisProvidersMixin):
         initiala: routing provider -> fallback in cascada -> strip scratchpad ->
         output validation -> reflexion -> verificare cifre.
         Returneaza dict-ul stocat in report_sections: {"title", "content", "word_count"}.
+
+        `job_id` (2026-07-17): daca prezent, logheaza in job log (log_synthesis) cine
+        a generat efectiv sectiunea (provider real, nu presupus) — vezi finding 7.7
+        PLAN_ANTI_DERIVA_2026-07-16.md. Optional (default "") pentru apelanti care nu
+        au un job in desfasurare cu sink activ (ex. regenerare post-job — vezi nota
+        din log_synthesis call mai jos); in acel caz logging-ul e sarit, nu inventat.
         """
         key = section["key"]
         title = section["title"]
@@ -164,6 +173,16 @@ class SynthesisAgent(BaseAgent, SynthesisProvidersMixin):
             route = "fast"
         logger.info(f"[synthesis] Generating section '{title}' ({word_target}w, route={route})")
 
+        # Observabilitate (2026-07-17, finding 7.7): masuram cine a generat REAL
+        # sectiunea si cat a durat — singurul mod de a dovedi, dupa trecerea la
+        # SYNTHESIS_MODE=claude_code, ca sectiunile chiar sunt scrise de Claude si
+        # nu de un fallback tacut. `gen_start` acopera DOAR cascada de generare
+        # (nu strip/validate/reflexion/verify de mai jos — acelea sunt post-procesare,
+        # nu generare, si reflexion poate el insusi apela Groq separat).
+        gen_start = time.monotonic()
+        provider_used: str | None = None
+        fallback_used = False
+
         if route == "fast":
             # B9 fix: Fast route — speed priority: Groq → concurrent fallback (Cerebras+Mistral+Gemini)
             # 10F M4.5: Token Budget Enforcement — check if prompt fits provider context
@@ -177,12 +196,15 @@ class SynthesisAgent(BaseAgent, SynthesisProvidersMixin):
             else:
                 text = None
 
-            # FIX #9: After primary failure, launch remaining providers concurrently
-            if not text:
-                text = await self._concurrent_fallback(
+            if text:
+                provider_used = "groq"
+            else:
+                # FIX #9: After primary failure, launch remaining providers concurrently
+                text, provider_used = await self._concurrent_fallback(
                     section, verified_data,
                     providers=["cerebras", "mistral", "gemini"],
                 )
+                fallback_used = bool(text)
         else:
             # B9 fix: Quality route — quality priority: Claude → concurrent fallback (Gemini+Groq+Mistral)
             # 10F M4.5: Token Budget Enforcement
@@ -196,19 +218,41 @@ class SynthesisAgent(BaseAgent, SynthesisProvidersMixin):
             else:
                 text = None
 
-            # FIX #9: After primary failure, launch remaining providers concurrently
-            if not text:
-                text = await self._concurrent_fallback(
+            if text:
+                provider_used = "claude"
+            else:
+                # FIX #9: After primary failure, launch remaining providers concurrently
+                text, provider_used = await self._concurrent_fallback(
                     section, verified_data,
                     providers=["gemini", "groq", "mistral"],
                 )
+                fallback_used = bool(text)
 
         if not text:
             text = await self._generate_with_cerebras(
                 self._build_section_prompt(section, verified_data, "cerebras"))
+            if text:
+                provider_used = "cerebras"
+                fallback_used = True
+
+        gen_success = bool(text)
         # 10F M4.2: Structured Degradation 3-Tier
         if not text:
             text = self._degraded_fallback(section, verified_data)
+            provider_used = "degraded"
+            fallback_used = True
+
+        elapsed_ms = int((time.monotonic() - gen_start) * 1000)
+        if job_id:
+            log_synthesis(
+                job_id, key, provider_used or "unknown",
+                word_count=len(text.split()) if text else 0,
+                elapsed_ms=elapsed_ms, success=gen_success, fallback=fallback_used,
+            )
+        else:
+            # Nu inventam un mecanism nou de job_id — apelantul (regenerare on-demand
+            # post-job) poate sa nu aiba unul cu sink activ. Semnalat, nu ascuns.
+            logger.debug(f"[synthesis] log_synthesis sarit pt sectiunea '{key}': fara job_id")
 
         # CoT: Strip <analiza_secreta> scratchpad before storing
         text = self._strip_scratchpad(text)

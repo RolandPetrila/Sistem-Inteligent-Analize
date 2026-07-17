@@ -177,9 +177,58 @@ class TestSettingsEndpoints:
         assert "synthesis_mode" in data
         assert "fields" in data
 
-    def test_update_settings(self, client):
-        resp = client.put("/api/settings", json={"fields": {"SYNTHESIS_MODE": "autonomous"}})
-        assert resp.status_code == 200
+    def test_update_settings(self, client, tmp_path, monkeypatch):
+        """Bug real (2026-07-1x, raportat de Roland): acest test apela endpointul
+        REAL cu SYNTHESIS_MODE=autonomous, iar `update_settings` rescria .env-ul
+        de PRODUCTIE (`ENV_PATH = Path(".env")` in backend/routers/settings.py) —
+        invizibil, fara restaurare. Fiecare rulare RIS_TEST.bat schimba tacut
+        sinteza in "autonomous". Testul verifica doar status_code == 200, deci
+        efectul secundar real (scriere pe disc + mutatie in-memory a singleton-ului
+        `settings`) nu era acoperit deloc.
+
+        Fix: izoleaza AMBELE canale prin care update_settings atinge stare reala:
+        1. `ENV_PATH` monkeypatch -> fisier in tmp_path (nu ".env" real). monkeypatch
+           reverteste automat la teardown, deci nu exista nicio fereastra in care
+           testul sa scrie in .env-ul de productie.
+        2. `_backup_env` inlocuit cu un spy — altfel ar fi copiat (real) fisierul
+           IZOLAT in %LOCALAPPDATA%\\RIS\\env-backups\\, poluand backup-urile reale
+           cu date de test. Spy-ul dovedeste totusi ca backup-ul e apelat (parte
+           din comportamentul real al endpointului), fara scriere pe disc.
+        3. `settings.synthesis_mode` (singleton global, mutat in-memory de
+           `_reload_settings` — C21) e restaurat explicit in finally, ca sa nu se
+           scurga in alte teste din aceeasi rulare pytest.
+
+        Non-vacuitate: testul verifica CONTINUTUL scris (cheia + valoarea corecta,
+        alte chei neatinse) si apelul de backup — nu doar codul HTTP 200."""
+        import backend.routers.settings as settings_router
+        from backend.config import settings as real_settings
+
+        fake_env = tmp_path / ".env"
+        fake_env.write_text("SYNTHESIS_MODE=claude_code\nOTHER_KEY=neschimbat\n", encoding="utf-8")
+        monkeypatch.setattr(settings_router, "ENV_PATH", fake_env)
+
+        backup_calls = []
+        monkeypatch.setattr(settings_router, "_backup_env", lambda: backup_calls.append(True))
+
+        original_mode = real_settings.synthesis_mode
+        try:
+            resp = client.put("/api/settings", json={"fields": {"SYNTHESIS_MODE": "autonomous"}})
+            assert resp.status_code == 200
+            body = resp.json()
+            assert body["updated"] == ["SYNTHESIS_MODE"]
+
+            assert backup_calls == [True], (
+                "endpointul trebuie sa faca backup INAINTE de scriere (comportament real)"
+            )
+
+            written = fake_env.read_text(encoding="utf-8")
+            assert "SYNTHESIS_MODE=autonomous" in written, "cheia noua nu a fost scrisa corect"
+            assert "OTHER_KEY=neschimbat" in written, "alte chei din .env nu trebuie atinse"
+
+            # C21: reload in-memory — comportament real, verificat aici, restaurat in finally.
+            assert real_settings.synthesis_mode == "autonomous"
+        finally:
+            object.__setattr__(real_settings, "synthesis_mode", original_mode)
 
 
 class TestCacheEndpoint:

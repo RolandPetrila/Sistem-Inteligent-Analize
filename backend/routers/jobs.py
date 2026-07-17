@@ -357,7 +357,7 @@ async def regenerate_section(
     from backend.agents.agent_synthesis import synthesis_agent
     try:
         new_section = await asyncio.wait_for(
-            synthesis_agent.generate_section(section, verified_data),
+            synthesis_agent.generate_section(section, verified_data, job_id=job_id),
             timeout=210,
         )
     except TimeoutError:

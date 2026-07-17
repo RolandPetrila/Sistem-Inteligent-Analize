@@ -47,6 +47,17 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     cerebras_api_key: str = ""
     synthesis_mode: str = "claude_code"  # "claude_code" | "autonomous"
+    # Cale ABSOLUTA optionala catre claude.exe (CLAUDE_CLI_PATH in .env). De ce exista:
+    # serviciul Windows RIS-Backend porneste ca SYSTEM, iar SCM (Service Control Manager)
+    # CACHEAZA blocul de mediu (inclusiv PATH) la BOOT-ul masinii — nu la pornirea
+    # serviciului. Daca Claude CLI e instalat/mutat DUPA ultimul reboot, procesul
+    # serviciului NU vede noul PATH pana la urmatorul reboot, desi orice shell nou
+    # deschis dupa instalare il gaseste instant (shell-urile citesc PATH-ul curent,
+    # nu cel cachet de SCM la boot) — nu e o problema de istoric/ordine, e o
+    # constrangere reala a Windows SCM. Un reboot ar repara temporar, dar problema
+    # revine tacut la orice viitoare schimbare de PATH. Gol = foloseste "claude" din
+    # PATH (comportament implicit, neschimbat).
+    claude_cli_path: str = ""
 
     # Web Search
     tavily_api_key: str = ""
