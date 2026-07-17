@@ -17,6 +17,7 @@ from backend.agents.base import BaseAgent
 from backend.agents.state import AnalysisState
 from backend.agents.synthesis_providers import SynthesisProvidersMixin
 from backend.agents.verification.scoring import risk_bucket
+from backend.config import settings
 from backend.prompts.section_prompts import get_sections_for_analysis
 from backend.prompts.system_prompt import SYSTEM_PROMPT
 from backend.services.job_logger import log_synthesis
@@ -78,7 +79,10 @@ class SynthesisAgent(BaseAgent, SynthesisProvidersMixin):
     name = "synthesis"
     max_retries = 2
     retry_backoff = [5, 15]
-    total_timeout = 600  # 10 min (sinteza poate fi lenta)
+    # Plafon global sinteza = plasa de siguranta din base.py (asyncio.wait_for). execute()
+    # se AUTO-TERMINA inainte (deadline intern) ca sa NU se piarda sectiunile deja scrise
+    # daca acest timeout s-ar declansa (bug real 2026-07-17). Reglabil din .env.
+    total_timeout = settings.synthesis_total_timeout
 
     async def execute(self, state: AnalysisState) -> dict:
         verified_data = state.get("verified_data", {})
@@ -98,10 +102,44 @@ class SynthesisAgent(BaseAgent, SynthesisProvidersMixin):
         report_sections: dict = {}
         total = len(sections_config)
 
+        # Deadline INTERN: execute() se auto-termina inainte ca timeout-ul global
+        # (self.total_timeout -> base.py::run -> asyncio.wait_for) sa poata ANULA execute()
+        # si sa ARUNCE sectiunile deja scrise. Bug real 2026-07-17 (job TAROM 646s): 4
+        # sectiuni Claude x ~180s impingeau peste 600s -> wait_for anula execute() ->
+        # returna doar {errors} -> "END | 0 sections" -> Formats: none, desi 4-6 sectiuni
+        # erau GATA. Cand bugetul e depasit, sectiunile ramase se randeaza DETERMINIST
+        # (fara AI, _degraded_fallback) si execute() returneaza MEREU un report_sections
+        # complet -> o sectiune lenta nu mai poate zero-iza raportul NICIODATA. Marja =
+        # cel putin un apel Claude complet, ca ultima sectiune reala sa se incheie sub plafon.
+        deadline = time.monotonic() + max(
+            settings.synthesis_claude_timeout,
+            self.total_timeout - settings.synthesis_claude_timeout - 60,
+        )
+        over_budget: list[str] = []
+
         for i, section in enumerate(sections_config):
+            if time.monotonic() > deadline:
+                logger.warning(
+                    f"[synthesis] Deadline intern atins (buget {self.total_timeout}s) — "
+                    f"sectiunea '{section['key']}' + urmatoarele randate DETERMINIST (fara AI), "
+                    f"ca sa NU se piarda cele {len(report_sections)} sectiuni deja scrise."
+                )
+                report_sections[section["key"]] = {
+                    "title": section["title"],
+                    "content": self._degraded_fallback(section, verified_data),
+                    "word_count": 0,
+                }
+                over_budget.append(section["key"])
+                continue
             logger.info(f"[synthesis] Section {i+1}/{total}: {section['title']}")
             report_sections[section["key"]] = await self.generate_section(
                 section, verified_data, job_id=job_id
+            )
+
+        if over_budget:
+            logger.warning(
+                f"[synthesis] {len(over_budget)} sectiuni degradate pt deadline intern: "
+                f"{', '.join(over_budget)} (raportul ramane complet, nu se pierde nimic)"
             )
 
         # 10B M4.3: Cross-Section Coherence — verify consistency between sections

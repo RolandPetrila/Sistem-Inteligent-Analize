@@ -11,6 +11,7 @@ Contine:
 """
 
 import asyncio
+import os
 import re
 import subprocess
 
@@ -37,8 +38,20 @@ class SynthesisProvidersMixin:
         # PATH-ul serviciului Windows e cachet de SCM la boot). Gol = comportament
         # vechi neschimbat ("claude" cautat in PATH-ul procesului curent).
         claude_cmd = settings.claude_cli_path or "claude"
+        # Effort + timeout din .env (config.py), NU hardcodate. Masurat live 2026-07-17:
+        # --effort max = 252s/sectiune, high = 143s. Vechiul timeout hardcodat de 180s
+        # taia MEREU Claude sub --effort max -> fallback tacut (Claude nu scria nimic).
+        effort = settings.synthesis_effort or "max"
+        sub_timeout = settings.synthesis_claude_timeout
+        # $0 GARANTAT prin abonamentul Max: fortam subprocesul pe login-ul Max
+        # (~/.claude/.credentials.json), NICIODATA pe ANTHROPIC_API_KEY (care ar consuma
+        # bani reali prin API). Serviciul RIS-Backend ruleaza ca ALIENWARE si MOSTENESTE
+        # ANTHROPIC_API_KEY din env var-ul Windows la nivel de User (verificat prezent
+        # 2026-07-17) — daca l-am lasa, Claude CLI l-ar prefera si ar factura. Decizia lui
+        # Roland: fara API key, doar Max. Nu atingem env var-ul global, doar mediul copilului.
+        child_env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
         try:
-            logger.debug(f"[synthesis] Trying Claude Code CLI ({claude_cmd})...")
+            logger.debug(f"[synthesis] Trying Claude Code CLI ({claude_cmd}, --effort {effort}, timeout {sub_timeout}s)...")
             import sys
             creation_flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
             # 2026-07-17: promptul NU se mai paseaza ca argument de linie de comanda
@@ -55,17 +68,18 @@ class SynthesisProvidersMixin:
                             claude_cmd,
                             "--print",
                             "--model", "claude-opus-4-8",
-                            "--effort", "max",
+                            "--effort", effort,
                         ],
                         input=prompt,
                         capture_output=True,
                         text=True,
-                        timeout=180,
+                        timeout=sub_timeout,
                         encoding="utf-8",
+                        env=child_env,
                         creationflags=creation_flags,
                     ),
                 ),
-                timeout=200,
+                timeout=sub_timeout + 20,
             )
             if result.returncode == 0 and result.stdout.strip():
                 text = result.stdout.strip()

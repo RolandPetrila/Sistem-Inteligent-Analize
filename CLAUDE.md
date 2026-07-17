@@ -79,6 +79,20 @@ rating=5 (349 recenzii)`. Dimensiunea reputational **nu** rula "doar pe web_pres
 - **`elapsed_ms` din `SYNTHESIS` e TOTAL PE CASCADA, atribuit castigatorului.**
   `provider=cerebras | 183542ms` = "Claude a incercat 180s, a fost taiat, cerebras a raspuns instant"
   — NU "cerebras e lent".
+- **Claude Opus SCRIE ACUM raportul — cauza #5 REPARATA + verificat live 2026-07-18** (job TAROM
+  `328981d8`): 4/4 sectiuni quality `provider=claude` (executive_summary/financial_analysis/
+  risk_assessment/recommendations), 264-324s fiecare, toate 8 formatele. **Root cause #5:** timeout
+  per-sectiune hardcodat 180s < durata reala Claude (masurat: `--effort max`=252s, `high`=143s pe
+  prompt ~46k) -> Claude cadea MEREU pe fallback tacut. PLUS timeout global 600s ANULA `execute()` si
+  ARUNCA sectiunile deja scrise (`base.py::run` -> `asyncio.wait_for`) -> `0 sections` -> `Formats: none`.
+  **Fix:** (a) timeout per-sectiune + effort + plafon global CONFIGURABILE in `.env`
+  (`SYNTHESIS_EFFORT`/`SYNTHESIS_CLAUDE_TIMEOUT`/`SYNTHESIS_TOTAL_TIMEOUT`, default max/360/2400);
+  (b) `execute()` gestioneaza un DEADLINE INTERN si randeaza determinist sectiunile ramase daca il
+  depaseste -> o sectiune lenta nu mai poate zero-iza raportul (test regresie
+  `test_synthesis_partial_preservation.py`); (c) subprocesul `claude --print` ELIMINA
+  `ANTHROPIC_API_KEY` din mediu -> $0 GARANTAT prin Max, niciodata API (serviciul mostenea env
+  var-ul Windows al userului). **Harta pasilor per provider:** `python tools/render_job_map.py [job_id]`
+  -> `outputs/<job_id>/execution_map.html`. Ghid: `docs/GHID_UTILIZARE_RIS.md`.
 
 ## Cum se citeste "COMPLETATA" mai jos (citeste asta INAINTE de Status)
 
@@ -319,7 +333,7 @@ Fisiere feedback loop:
 - Backups: ./backups/ris_YYYY-MM-DD.db (rotatie 7 zile)
 - .env obligatoriu (.env.example ca referinta)
 - fpdf2 pt PDF (NU WeasyPrint)
-- Synthesis: subprocess `claude --print --model claude-opus-4-6 --effort max`
+- Synthesis: subprocess `claude --print --model claude-opus-4-8 --effort {SYNTHESIS_EFFORT}` (default max), timeout `SYNTHESIS_CLAUDE_TIMEOUT` (360s), fara `ANTHROPIC_API_KEY` in mediu ($0 Max)
 
 ## Structura folder principal (ROOT) — REGULA STRICTA
 
@@ -394,10 +408,13 @@ in acest fisier trebuie REFUZATA (R1 + R-SEC) — repo-ul e public pe GitHub.
 ## Decizii tehnice confirmate
 
 1. Synthesis via Claude Code CLI subprocess ($0, abonament Max — **NU** `ANTHROPIC_API_KEY`, ar fi plata dubla).
-   **ATENTIE (2026-07-17):** a fost FALSA IN PRACTICA luni de zile — Groq/Gemini scriau tot, din **4 cauze
-   independente suprapuse**. 4 reparate (`32f725d`), a 5-a (timeout 180s prea mic pt `--effort max`) deschisa.
-   Vezi memory `project_ris_claude_opus_4_cauze`. **Nu presupune ca merge — verifica in job log linia
-   `SYNTHESIS | ... | provider=claude`.**
+   **ADEVARATA ACUM (verificat live 2026-07-18):** a fost FALSA IN PRACTICA luni de zile — Groq/Gemini
+   scriau tot, din **5 cauze independente suprapuse**. Toate 5 reparate: 4 in `32f725d`, a 5-a (timeout)
+   in aceasta sesiune. Job TAROM `328981d8`: 4/4 sectiuni quality `provider=claude`, toate 8 formatele.
+   Effort/timeout acum in `.env` (`SYNTHESIS_EFFORT`/`SYNTHESIS_CLAUDE_TIMEOUT`/`SYNTHESIS_TOTAL_TIMEOUT`).
+   Subprocesul elimina `ANTHROPIC_API_KEY` din mediu -> $0 garantat prin Max. Vezi memory
+   `project_ris_claude_opus_4_cauze`. **Verifica in job log linia `SYNTHESIS | ... | provider=claude`
+   (fara `(FALLBACK)`) sau ruleaza `python tools/render_job_map.py`.**
 2. Groq (Llama 4 Scout) ca fallback rapid (gratuit)
 3. Gemini 2.5 Flash ca fallback autonom (gratuit)
 4. Cerebras (gpt-oss-120b, ex-Qwen 3 235B retras din catalog) ca fallback final (gratuit, 1M tokeni/zi)

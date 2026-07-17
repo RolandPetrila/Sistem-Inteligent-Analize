@@ -59,6 +59,16 @@ class Settings(BaseSettings):
     # PATH (comportament implicit, neschimbat).
     claude_cli_path: str = ""
 
+    # Sinteza Claude Opus — reglabile din .env FARA cod. Masurat live 2026-07-17 pe prompt
+    # real de productie (~46k caractere, MEGA IMAGE): --effort max = 252s/sectiune (1128
+    # cuvinte), --effort high = 143s/sectiune (1044 cuvinte, calitate ~identica). Timeout-ul
+    # vechi hardcodat de 180s taia MEREU Claude -> fallback tacut pe Groq/Cerebras (Claude
+    # nu scria nimic). NB: numele e `synthesis_effort` (SYNTHESIS_EFFORT), NU `claude_effort` —
+    # ar coliziona cu env var-ul CLAUDE_EFFORT folosit de Claude Code CLI insusi.
+    synthesis_effort: str = "max"          # SYNTHESIS_EFFORT: max | high | medium | low
+    synthesis_claude_timeout: int = 360    # SYNTHESIS_CLAUDE_TIMEOUT: secunde per apel Claude (252 masurat + marja)
+    synthesis_total_timeout: int = 2400    # SYNTHESIS_TOTAL_TIMEOUT: plafon global sinteza (plasa de siguranta; execute() se auto-termina inainte)
+
     # Web Search
     tavily_api_key: str = ""
 

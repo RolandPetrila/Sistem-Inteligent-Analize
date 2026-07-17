@@ -248,10 +248,16 @@ async def test_service(service: str):
 
     try:
         if service == "tavily":
-            from backend.agents.tools.tavily_client import TavilyClient
-            client = TavilyClient()
-            result = await client.search("test connectivity RIS", max_results=1)
-            return {"ok": bool(result), "message": "Tavily OK" if result else "Tavily: niciun rezultat returnat"}
+            # Bug reparat 2026-07-17: importa `TavilyClient` (clasa INEXISTENTA) -> testul
+            # raporta mereu FAIL desi Tavily FUNCTIONEAZA in joburi reale (pipeline-ul
+            # foloseste functia modul `search`, nu o clasa). "Test care minte" — cazul clasic
+            # din acest proiect. Interfata reala = tavily_client.search(query, max_results).
+            from backend.agents.tools.tavily_client import search as tavily_search
+            result = await tavily_search("test connectivity RIS", max_results=1)
+            if result.get("error"):
+                return {"ok": False, "message": f"Tavily: {result['error']}"}
+            n = result.get("result_count", len(result.get("results", [])))
+            return {"ok": n > 0, "message": f"Tavily OK ({n} rezultate)"}
 
         elif service == "groq":
             from backend.http_client import get_client

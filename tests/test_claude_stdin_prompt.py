@@ -77,10 +77,13 @@ def _isolate_claude_settings():
     """
     original_path = settings.claude_cli_path
     original_mode = settings.synthesis_mode
+    original_effort = settings.synthesis_effort
     settings.synthesis_mode = "claude_code"
+    settings.synthesis_effort = "max"  # hermetic: argv-ul asteptat nu depinde de .env local
     yield
     settings.claude_cli_path = original_path
     settings.synthesis_mode = original_mode
+    settings.synthesis_effort = original_effort
 
 
 class _FakeCompletedProcess:

@@ -53,10 +53,13 @@ def _isolate_claude_settings():
     """Izoleaza testele de starea reala din .env local (claude_cli_path/synthesis_mode)."""
     original_path = settings.claude_cli_path
     original_mode = settings.synthesis_mode
+    original_effort = settings.synthesis_effort
     settings.synthesis_mode = "claude_code"  # forteaza ruta testata, indiferent de .env local
+    settings.synthesis_effort = "max"  # hermetic: argv-ul asteptat nu depinde de .env local
     yield
     settings.claude_cli_path = original_path
     settings.synthesis_mode = original_mode
+    settings.synthesis_effort = original_effort
 
 
 class _FakeCompletedProcess:
