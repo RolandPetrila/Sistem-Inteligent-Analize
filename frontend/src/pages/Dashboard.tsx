@@ -414,14 +414,69 @@ export default function Dashboard() {
             {Object.entries(healthData)
               .filter(([k]) => k !== "status")
               .map(([key, val]) => {
-                const isOk =
-                  typeof val === "object" &&
-                  val !== null &&
-                  (val as Record<string, unknown>).status === "ok";
-                const isFail =
-                  typeof val === "object" &&
-                  val !== null &&
-                  (val as Record<string, unknown>).status !== "ok";
+                // Clasificare robusta pt TOATE formele emise de /api/health/deep. Bug reparat
+                // 2026-07-18: codul vechi marca FAIL orice OBIECT fara `.status === "ok"` — dar
+                // `ai_providers` = {claude_cli:true,...} (dict de bool-uri, fara .status) si
+                // `http_pool` = {status:"open"} ("open", nu "ok") aparea ROSU desi conexiunile
+                // FUNCTIONEAZA (verificat live: toti 5 provideri true, pool open, status healthy).
+                // Plus: boolean-urile true (tavily_ok/disk_ok) aparea "?" in loc de OK.
+                const OK_WORDS = [
+                  "ok",
+                  "open",
+                  "healthy",
+                  "up",
+                  "true",
+                  "active",
+                  "connected",
+                ];
+                const FAIL_WORDS = [
+                  "fail",
+                  "error",
+                  "down",
+                  "closed",
+                  "false",
+                  "denied",
+                  "offline",
+                ];
+                let kind: "ok" | "fail" | "value" = "value";
+                let display = "?";
+                if (typeof val === "boolean") {
+                  kind = val ? "ok" : "fail";
+                  display = val ? "OK" : "FAIL";
+                } else if (typeof val === "number") {
+                  kind = "value";
+                  display = String(val);
+                } else if (typeof val === "string") {
+                  const s = val.trim().toLowerCase();
+                  if (OK_WORDS.includes(s)) {
+                    kind = "ok";
+                    display = val;
+                  } else if (FAIL_WORDS.includes(s)) {
+                    kind = "fail";
+                    display = val;
+                  } else {
+                    kind = "value";
+                    display = val; // ex. "3.2.0", "7/1000 (0.7%)"
+                  }
+                } else if (val && typeof val === "object") {
+                  const obj = val as Record<string, unknown>;
+                  const vals = Object.values(obj);
+                  const st = String(obj.status ?? "")
+                    .trim()
+                    .toLowerCase();
+                  if (
+                    vals.some((v) => v === false) ||
+                    FAIL_WORDS.includes(st)
+                  ) {
+                    kind = "fail";
+                    display = "FAIL";
+                  } else {
+                    kind = "ok"; // dict all-true (ai_providers) sau status sanatos (http_pool "open")
+                    display = "OK";
+                  }
+                }
+                const isOk = kind === "ok";
+                const isFail = kind === "fail";
                 return (
                   <div
                     key={key}
@@ -444,13 +499,7 @@ export default function Dashboard() {
                             : "text-gray-400",
                       )}
                     >
-                      {isOk
-                        ? "OK"
-                        : isFail
-                          ? "FAIL"
-                          : typeof val === "string"
-                            ? val
-                            : "?"}
+                      {display}
                     </span>
                     <p className="text-[10px] text-gray-500 mt-0.5">
                       {key.replace(/_/g, " ")}

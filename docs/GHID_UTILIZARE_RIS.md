@@ -43,6 +43,32 @@ Dacă vrei mai rapid (~10–11 min, calitate aproape identică), comută pe `--e
 
 ---
 
+## 2b. Cum te asiguri că TOTUL e conectat înainte de o analiză
+
+Ai **trei** feluri, de la cel mai sigur la cel mai rapid:
+
+1. **Preflight live (cel mai sigur)** — dublu-click pe **`Verifica conexiuni RIS`** (desktop), sau în
+   terminal `python tools/preflight_check.py`. Testează **efectiv** fiecare sursă + provider AI prin
+   serviciul real (cu cheile de producție) și îți spune clar **„GATA DE EXECUȚIE"** sau ce e picat.
+   E singurul care confirmă că o conexiune chiar răspunde acum, nu doar că e configurată.
+2. **Cardul „Health Status (Live)" din Dashboard** — verde/roșu la o privire. _(Reparat 2026-07-18: până
+   acum arăta fals FAIL roșu la `ai providers` și `http pool` — era un bug de randare, conexiunile
+   funcționau. Acum reflectă starea reală.)_
+3. **Butoanele „Testează" din Settings** — test individual per serviciu, când vrei să verifici doar unul.
+
+> **Cele 3 surse mereu roșii sunt normale și nu te împiedică:** BPI, AEGRM (DNS mort la furnizor),
+> INS TEMPO (offline). Nu sunt vina ta și nu se pot repara din cod. Preflight-ul le marchează explicit
+> ca „ignoră".
+
+## 2c. Starterul (dublu-click)
+
+- **`Deschide RIS`** (desktop) — starter **silențios**: se asigură că serviciul e pornit, apoi deschide
+  aplicația într-o fereastră curată (Chrome app-mode). Fără ferestre de terminal; te avertizează doar
+  dacă serviciul chiar nu pornește.
+- `RIS.vbs` (în folderul proiectului) — starterul „greu" existent: rebuild frontend + restart serviciu +
+  deschide. Folosește-l după ce s-au schimbat lucruri în cod; pentru deschidere zilnică, `Deschide RIS`
+  e mai rapid.
+
 ## 3. Ce face fiecare provider (pipeline-ul, pe scurt)
 
 Analiza trece prin 5 agenți. Fiecare pas e logat (vezi §4).
