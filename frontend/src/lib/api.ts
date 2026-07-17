@@ -904,8 +904,9 @@ export const api = {
     }),
 
   // Regenerate a single report section (re-runs synthesis for one section).
-  // Quality-route sections (e.g. executive_summary via Claude CLI) can take well
-  // over the default 30s, so use an extended client timeout (~server ceiling 210s).
+  // Quality-route sections (e.g. executive_summary via Claude Opus) take 264-324s at
+  // --effort max — server cap = SYNTHESIS_CLAUDE_TIMEOUT + 120 (~480s la default). Clientul
+  // trebuie sa astepte peste cap-ul server ca 504-ul serverului sa castige, nu abort-ul local.
   regenerateSection: (jobId: string, sectionKey: string) =>
     request<{
       job_id: string;
@@ -916,7 +917,7 @@ export const api = {
       `/jobs/${jobId}/section/${sectionKey}/regenerate`,
       { method: "POST" },
       0,
-      220_000,
+      520_000,
     ),
 
   // Export SEAP tenders as .ics calendar file

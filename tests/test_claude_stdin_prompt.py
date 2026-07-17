@@ -170,6 +170,42 @@ class TestLongPromptRegressionWinError206:
         assert captured["kwargs"].get("input") == long_prompt
 
 
+class TestNoApiKeyBilling:
+    """$0 GARANTAT prin abonamentul Max: subprocesul `claude --print` NU trebuie sa
+    mosteneasca ANTHROPIC_API_KEY (ar factura prin API in loc de Max). Serviciul
+    RIS-Backend ruleaza ca ALIENWARE si mosteneste env var-ul Windows al userului
+    (verificat prezent 2026-07-17) — de-aia codul construieste explicit un `env` fara
+    aceasta cheie. Verificarea discriminanta pe care un job live NU o poate da: `provider=claude`
+    in log arata IDENTIC fie ca Claude a mers pe Max, fie pe API."""
+
+    @pytest.mark.asyncio
+    async def test_anthropic_api_key_stripped_from_subprocess_env(self, agent, monkeypatch):
+        captured = {}
+
+        def fake_run(args, **kwargs):
+            captured["kwargs"] = kwargs
+            return _FakeCompletedProcess(returncode=0, stdout="Text generat. " * 5)
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        # Reproduce cazul serviciului real: ANTHROPIC_API_KEY prezent in mediu.
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-FAKE-nu-trebuie-sa-ajunga-la-subproces")
+        settings.claude_cli_path = ""
+
+        result = await agent._generate_with_claude("Scrie un rezumat.")
+
+        assert result is not None
+        env = captured["kwargs"].get("env")
+        assert env is not None, (
+            "subprocess.run trebuie apelat cu env= explicit (nu mosteni tot os.environ), "
+            "altfel ANTHROPIC_API_KEY se strecoara si factureaza prin API"
+        )
+        assert "ANTHROPIC_API_KEY" not in env, (
+            "ANTHROPIC_API_KEY TREBUIE eliminat din mediul subprocesului -> $0 prin Max, niciodata API"
+        )
+        # Restul mediului pastrat (ex. PATH) — altfel claude.exe n-ar gasi dependintele.
+        assert "PATH" in env or "Path" in env
+
+
 class TestErrorMessageDistinguishesWinError2From206:
     """WinError 2 (cale/executabil lipsa) si WinError 206 (linie de comanda
     prea lunga) ajung AMANDOUA ca FileNotFoundError pe Windows — mesajul

@@ -111,6 +111,14 @@ SYNTHESIS_TOTAL_TIMEOUT=2400  # plafon global sinteză (plasă de siguranță)
 
 După orice schimbare: **restart serviciu** → `tools\RIS-Backend.exe restart` (sau `sc stop/start RIS-Backend`).
 
+> **Prag minim (important dacă schimbi valorile):** păstrează `SYNTHESIS_TOTAL_TIMEOUT` cel puțin
+> `2 × SYNTHESIS_CLAUDE_TIMEOUT + 120` (la default: 2×360+120 = 840; 2400 e mult peste). Dacă îl setezi
+> prea mic, sinteza poate depăși plafonul global și pierde secțiuni. Default-urile sunt sigure.
+
+> **Butonul „Regenerează" o secțiune** (din pagina raportului) funcționează acum și cu Claude la `max` —
+> plafonul lui se mișcă automat cu `SYNTHESIS_CLAUDE_TIMEOUT` (+120s). O regenerare de secțiune „grea"
+> durează 264–324s la `max`; ai răbdare, nu e blocat.
+
 ---
 
 ## 6. Cost — de ce e $0
@@ -129,4 +137,7 @@ garantat prin cod. Nu atinge variabila ta globală.
 - **O sursă apare FAIL constant** → unele sunt moarte extern, nereparabile din cod: **BPI/buletinul.ro**
   (DNS mort), **AEGRM** (DNS mort), **INS TEMPO** (offline). Restul trebuie să fie verzi.
 - **Vrei să verifici toate conexiunile** → pagina **Settings** are butoane „Testează" per serviciu, sau
-  dashboard-ul `http://localhost:8001/audit.html` (doar de pe laptop).
+  dashboard-ul `http://localhost:8001/audit.html` (doar de pe laptop). Verificarea automată a acestei
+  sesiuni a testat **20 de unelte** (surse de date + provideri AI): 17 verzi, 3 moarte extern (mai sus).
+  **Cele 3 canale de notificare — Telegram, Email, Webhook — NU au fost în sweep** (ar trimite mesaje
+  reale); testează-le individual din **Settings** când vrei (butoanele lor trimit un mesaj de test real).

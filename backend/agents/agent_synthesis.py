@@ -111,8 +111,13 @@ class SynthesisAgent(BaseAgent, SynthesisProvidersMixin):
         # (fara AI, _degraded_fallback) si execute() returneaza MEREU un report_sections
         # complet -> o sectiune lenta nu mai poate zero-iza raportul NICIODATA. Marja =
         # cel putin un apel Claude complet, ca ultima sectiune reala sa se incheie sub plafon.
+        # Invarianta: execute() trebuie sa se incheie INAINTE de self.total_timeout (outer
+        # wait_for), altfel se pierde munca. O sectiune pornita chiar la deadline ruleaza inca
+        # pana la ~claude_timeout+20 -> deadline TREBUIE <= total - claude_timeout - 60. Nu
+        # folosim max(claude_timeout, ...) (ar impinge deadline-ul PESTE plafon cand cineva
+        # seteaza SYNTHESIS_TOTAL_TIMEOUT prea mic) — doar un prag minim de 30s.
         deadline = time.monotonic() + max(
-            settings.synthesis_claude_timeout,
+            30,
             self.total_timeout - settings.synthesis_claude_timeout - 60,
         )
         over_budget: list[str] = []

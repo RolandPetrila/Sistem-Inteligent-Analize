@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
 
+from backend.config import settings
 from backend.database import db
 from backend.models import JobCreate, JobListResponse, JobResponse, JobStatus
 from backend.rate_limiter import rate_limit_jobs
@@ -352,16 +353,20 @@ async def regenerate_section(
             detail=f"Sectiunea '{section_key}' nu face parte din acest raport. Valide: {valid}",
         )
 
-    # Re-ruleaza sinteza DOAR pentru aceasta sectiune. Plafon server-side anti-hang
-    # (Claude CLI quality-route are timeout intern de ~200s; wait_for il margineste global).
+    # Re-ruleaza sinteza DOAR pentru aceasta sectiune. Plafon server-side anti-hang DERIVAT
+    # din timeout-ul per-sectiune Claude (+120s pt cascada fallback + post-procesare). Vechiul
+    # cap hardcodat 210s presupunea ca Claude e taiat la ~180s si cade pe fallback — dupa ce
+    # cauza #5 a fost reparata (Claude scrie in 264-324s la --effort max), 210s < timpul real
+    # -> regenerarea sectiunilor quality esua garantat cu 504. Acum se misca odata cu .env.
+    regen_cap = settings.synthesis_claude_timeout + 120
     from backend.agents.agent_synthesis import synthesis_agent
     try:
         new_section = await asyncio.wait_for(
             synthesis_agent.generate_section(section, verified_data, job_id=job_id),
-            timeout=210,
+            timeout=regen_cap,
         )
     except TimeoutError:
-        logger.warning(f"[section_regen] Job {job_id} section '{section_key}' timed out (>210s)")
+        logger.warning(f"[section_regen] Job {job_id} section '{section_key}' timed out (>{regen_cap}s)")
         raise HTTPException(
             status_code=504, detail="Regenerarea sectiunii a depasit timpul maxim."
         ) from None
