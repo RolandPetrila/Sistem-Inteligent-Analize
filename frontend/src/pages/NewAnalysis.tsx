@@ -22,6 +22,7 @@ import { validateCUI } from "@/lib/cui-validator";
 import type { AnalysisTypeInfo } from "@/lib/types";
 import { REPORT_LEVEL_LABELS } from "@/lib/constants";
 import ChatInput from "@/components/ChatInput";
+import PreflightCheck from "@/components/PreflightCheck";
 
 // E4: Quick analysis templates
 const ANALYSIS_TEMPLATES = [
@@ -303,6 +304,9 @@ export default function NewAnalysis() {
           {step === "confirm" && "Confirma si porneste analiza"}
         </p>
       </div>
+
+      {/* Preflight: verifica LIVE ca toate conexiunile merg inainte de a porni */}
+      <PreflightCheck />
 
       {/* Wizard Step Indicator */}
       <WizardProgress currentStep={step} />

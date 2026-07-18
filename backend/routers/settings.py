@@ -235,9 +235,10 @@ TESTABLE_SERVICES = ["groq", "gemini", "mistral", "cerebras", "tavily", "telegra
 TESTABLE_SERVICES = TESTABLE_SERVICES + list(PING_REGISTRY.keys())
 
 
-@router.post("/test/{service}", dependencies=[Depends(require_api_key)])
-async def test_service(service: str):
-    """Test conectivitate individual per serviciu (groq, gemini, tavily, telegram + 15 surse externe)."""
+async def run_service_test(service: str) -> dict:
+    """Testeaza conectivitatea unui serviciu si returneaza {ok, message}.
+    Refolosita de endpoint-ul /test/{service} SI de /preflight (verificarea
+    centralizata din aplicatie) — o singura sursa de adevar pt testarea conexiunilor."""
     from backend.errors import ErrorCode, RISError
 
     if service not in TESTABLE_SERVICES:
@@ -338,3 +339,84 @@ async def test_service(service: str):
     except Exception as e:
         logger.warning(f"[settings] Test conexiune {service} esuat: {e}")
         return {"ok": False, "message": "Eroare la testarea conexiunii — verifica logs"}
+
+
+@router.post("/test/{service}", dependencies=[Depends(require_api_key)])
+async def test_service(service: str):
+    """Test conectivitate individual per serviciu (groq, gemini, tavily, telegram + 15 surse externe)."""
+    return await run_service_test(service)
+
+
+# ── Preflight: verificare LIVE centralizata inainte de o analiza ──────────────
+# Categoriile oglindesc tools/preflight_check.py (starterul din desktop). Verdictul
+# de "gata" depinde DOAR de: sursele critice (oficiale de baza) + sinteza (Claude SAU
+# macar un provider AI de rezerva). Canalele de notificare (telegram/email/webhook)
+# sunt EXCLUSE — ar trimite mesaje reale.
+PREFLIGHT_AI = ["groq", "gemini", "mistral", "cerebras"]
+PREFLIGHT_PRINCIPALE = ["anaf_tva", "anaf_bilant", "bnr", "openapi_ro", "seap", "tavily"]
+PREFLIGHT_SECUNDARE = ["monitorul_oficial", "sanctions", "eurostat", "brave", "jina", "google_maps", "just"]
+PREFLIGHT_KNOWN_DEAD = ["bpi", "ins_tempo", "aegrm"]  # moarte extern, nereparabile din cod
+PREFLIGHT_CRITICAL = {"anaf_tva", "anaf_bilant", "bnr", "openapi_ro"}
+
+
+def _claude_preflight() -> dict:
+    """Claude nu are endpoint /test (e subproces). Verificare usoara a setup-ului:
+    calea CLI + fisierul de credentiale Max. Testul DEFINITIV e o analiza reala."""
+    cli = settings.claude_cli_path or ""
+    creds = Path.home() / ".claude" / ".credentials.json"
+    cli_ok = bool(cli) and Path(cli).exists()
+    creds_ok = creds.exists()
+    if cli_ok and creds_ok:
+        return {"ok": True, "message": "CLI + login Max prezente (test definitiv = o analiza reala)"}
+    if not cli_ok:
+        return {"ok": False, "message": "CLAUDE_CLI_PATH lipsa/gresit in .env"}
+    return {"ok": False, "message": "login Max lipsa — deschide Claude Code si logheaza-te"}
+
+
+@router.get("/preflight", dependencies=[Depends(require_api_key)])
+async def preflight():
+    """Verificare LIVE a tuturor conexiunilor inainte de o analiza. Ruleaza testele
+    CONCURENT (asyncio.gather) prin serviciu, cu cheile de productie. Returneaza
+    categorii + verdict GATA/NU-E-GATA. Aceeasi logica ca starterul de pe desktop,
+    dar direct in aplicatie."""
+    import asyncio
+
+    to_test = PREFLIGHT_AI + PREFLIGHT_PRINCIPALE + PREFLIGHT_SECUNDARE
+    results = await asyncio.gather(
+        *[run_service_test(s) for s in to_test], return_exceptions=True
+    )
+    by_service: dict[str, dict] = {}
+    for svc, res in zip(to_test, results, strict=True):
+        if isinstance(res, Exception):
+            by_service[svc] = {"ok": False, "message": f"eroare: {str(res)[:100]}"}
+        else:
+            by_service[svc] = {
+                "ok": bool(res.get("ok")),
+                "message": str(res.get("message", ""))[:140],
+            }
+
+    claude = _claude_preflight()
+
+    def _cat(names: list[str]) -> list[dict]:
+        return [{"service": s, **by_service[s]} for s in names]
+
+    ai = _cat(PREFLIGHT_AI)
+    critical_down = [s for s in PREFLIGHT_CRITICAL if not by_service.get(s, {}).get("ok")]
+    synthesis_ok = claude["ok"] or any(x["ok"] for x in ai)
+    ready = (not critical_down) and synthesis_ok
+    ok_count = sum(1 for v in by_service.values() if v["ok"]) + (1 if claude["ok"] else 0)
+
+    return {
+        "ready": ready,
+        "verdict": "GATA DE EXECUTIE" if ready else "NU E GATA",
+        "claude": claude,
+        "categories": {
+            "ai": ai,
+            "principale": _cat(PREFLIGHT_PRINCIPALE),
+            "secundare": _cat(PREFLIGHT_SECUNDARE),
+        },
+        "known_dead": PREFLIGHT_KNOWN_DEAD,
+        "critical_down": critical_down,
+        "synthesis_ok": synthesis_ok,
+        "summary": {"ok": ok_count, "total": len(by_service) + 1},
+    }

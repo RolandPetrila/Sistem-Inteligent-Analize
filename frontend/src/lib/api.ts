@@ -1,5 +1,26 @@
 import { logApi } from "./logger";
 
+// Rezultatul verificarii live a conexiunilor (GET /api/settings/preflight).
+export interface PreflightItem {
+  service: string;
+  ok: boolean;
+  message: string;
+}
+export interface PreflightResult {
+  ready: boolean;
+  verdict: string;
+  claude: { ok: boolean; message: string };
+  categories: {
+    ai: PreflightItem[];
+    principale: PreflightItem[];
+    secundare: PreflightItem[];
+  };
+  known_dead: string[];
+  critical_down: string[];
+  synthesis_ok: boolean;
+  summary: { ok: number; total: number };
+}
+
 const BASE = "/api";
 const REQUEST_TIMEOUT_MS = 30_000;
 // Bagat la build-time (frontend/.env, VITE_RIS_API_KEY) — trimis pe fiecare
@@ -429,6 +450,11 @@ export const api = {
 
   // Health deep
   healthDeep: () => request<Record<string, unknown>>("/health/deep"),
+
+  // Preflight: verificare LIVE a tuturor conexiunilor inainte de o analiza.
+  // Ruleaza ~18 teste reale concurent server-side (~8-15s), de aceea timeout extins.
+  preflight: () =>
+    request<PreflightResult>("/settings/preflight", {}, 0, 90_000),
 
   // Batch upload (FormData — not JSON, needs custom fetch with logging)
   uploadBatch: async (
