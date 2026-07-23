@@ -55,10 +55,27 @@ rating=5 (349 recenzii)`. Dimensiunea reputational **nu** rula "doar pe web_pres
   **`AUDIT_FUNCTII.html` avea DREPTATE**; textul de mai sus (care il acuza ca "minte pasiv") era el
   minciuna. **CAUZA — GOTCHA MAJOR, se repeta:** `GOOGLE_CLOUD_API_KEY` din **env var-ul userului**
   DIFERA de cel din `.env`, iar `pydantic-settings` citeste env var-ul **INAINTEA** lui `.env`.
-  Serviciul ruleaza ca **SYSTEM** -> nu vede env var-ul userului -> foloseste `.env` (cheia BUNA).
   Un test din shell foloseste cheia VECHE -> `request_denied` -> concluzia falsa "API mort".
-  **4 chei difera intre shell si productie: `GOOGLE_CLOUD_API_KEY`, `GOOGLE_AI_API_KEY`,
-  `TELEGRAM_CHAT_ID`, `XAI_API_KEY`.** Nu declara NICIO sursa "moarta" pe baza unui test din shell —
+  ~~Serviciul ruleaza ca **SYSTEM** -> nu vede env var-ul userului -> foloseste `.env` (cheia BUNA).~~
+  **[FALS — INFIRMAT 2026-07-24 prin masurare. Serviciul ruleaza sub contul `.\ALIENWARE`, NU ca
+  LocalSystem: `sc qc RIS-Backend` -> `SERVICE_START_NAME : .\ALIENWARE`; procesul de pe :8001
+  (PID copil al serviciului) primea `TELEGRAM_CHAT_ID` din env var-ul USERULUI. Deci serviciul
+  mostenea mediul userului, iar env var-ul castiga SI in productie, nu doar in shell.]**
+  Concluzia despre Maps ramane valida (statea pe dovada directa de productie, nu pe aceasta premisa);
+  se schimba EXPLICATIA: shell-ul care dadea `request_denied` avea blocul de mediu VECHI, nu o cheie
+  diferita de a productiei. **Lectia: o premisa scrisa ca "verificata" a propagat intr-o regula de
+  lucru si a supravietuit pentru ca nimeni n-a masurat contul serviciului.**
+- ~~**4 chei difera intre shell si productie**~~ **[STALE — remasurat 2026-07-24: din 38 de chei
+  in `.env`, **16** au omonim in env vars User; **4 diverg**, dar NU aceleasi 4:
+  `DEEPSEEK_API_KEY` (env var GOL -> stergea cheia reala), `GOOGLE_AI_API_KEY`, `TELEGRAM_CHAT_ID`,
+  `XAI_API_KEY`. **`GOOGLE_CLOUD_API_KEY` nu mai diverge.** Nu te baza pe lista — remasoara:
+  `scratchpad/env_shadow_audit.py` compara pe hash, fara sa afiseze valori.]**
+  **REPARAT STRUCTURAL (2026-07-24):** `Settings.settings_customise_sources` inverseaza ordinea ->
+  **`.env` bate env var-ul** in RIS. Env vars-urile NU s-au sters din Windows: sunt sistemul central
+  de chei al masinii (`~/.api-keys`), folosit de alte proiecte — s-a eliminat clasa de bug, nu
+  instanta, si doar pentru RIS. `RIS_ENV` (setat de WinSW) e neatins: se citeste cu `os.environ.get`,
+  nu prin Settings. Regresie: `tests/test_config_source_priority.py`.
+  Regula ramane valabila ca disciplina: nu declara NICIO sursa "moarta" pe baza unui test din shell —
   confirma in `reports.full_data` (joburi reale) sau prin `POST /api/settings/test/{service}` (ruleaza
   IN serviciu). Cand ping-ul live si CLAUDE.md se contrazic, **productia castiga**.
 

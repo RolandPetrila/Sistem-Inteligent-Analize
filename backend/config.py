@@ -185,6 +185,35 @@ class Settings(BaseSettings):
                 "orice API). Seteaza RIS_API_KEY in .env pentru a activa autentificarea."
             )
 
+    @classmethod
+    def settings_customise_sources(cls, settings_cls, init_settings, env_settings,
+                                   dotenv_settings, file_secret_settings):
+        """`.env` are prioritate peste variabilele de mediu — INVERS fata de default.
+
+        De ce (verificat 2026-07-24, nu presupus): serviciul Windows ruleaza sub
+        contul `.\\ALIENWARE` (`sc qc RIS-Backend` -> SERVICE_START_NAME), NU ca
+        LocalSystem cum s-a crezut. Deci mosteneste blocul de mediu al userului,
+        iar ordinea implicita a pydantic-settings (env > dotenv) face ca orice
+        variabila de mediu cu acelasi nume sa CASTIGE in productie.
+
+        Masurat: 16 chei din `.env` au omonim in env vars User; 4 diverg. Una
+        (`TELEGRAM_CHAT_ID=@ris_notif_bot`) a facut ca NICIO alerta sa nu fie
+        livrata, tacut, luni intregi.
+
+        Nu stergem variabilele din Windows: ele sunt sistemul CENTRAL de chei al
+        masinii (`~/.api-keys`), folosit de alte proiecte. Schimbam doar ordinea
+        aici — elimina clasa de bug, nu instanta, si doar pentru RIS.
+
+        Sigur pentru overrideul intentionat `RIS_ENV` (setat de WinSW in
+        `tools/RIS-Backend.xml`): acela e citit direct cu `os.environ.get`
+        (`config.py:155,176`, `main.py:547`), nu prin Settings — deci ordinea
+        de mai jos nu-l atinge deloc.
+
+        Verificat si ca nimic nu se pierde: zero campuri Settings isi iau azi
+        valoarea din mediu fara sa existe si in `.env` (masurat pe toate 49).
+        """
+        return init_settings, dotenv_settings, env_settings, file_secret_settings
+
     @model_validator(mode="after")
     def validate_telegram_target(self) -> "Settings":
         """TELEGRAM_CHAT_ID trebuie sa fie DESTINATARUL, nu botul insusi.
