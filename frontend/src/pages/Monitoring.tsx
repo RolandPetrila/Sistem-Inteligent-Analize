@@ -26,6 +26,12 @@ interface MonitoringAlert {
   telegram_notify: boolean;
   suppressed_until?: string | null;
   suppress_reason?: string | null;
+  // 2026-07-24: rezultatul ultimei livrari de alerta. Fara asta, un esec de
+  // livrare era vizibil doar in loguri, deci absenta alertelor arata identic
+  // cu absenta schimbarilor de risc.
+  last_delivery_status?: string | null;
+  last_delivery_error?: string | null;
+  last_delivery_at?: string | null;
 }
 
 // F2-9: Mapare frecventa la eticheta lizibila
@@ -331,6 +337,23 @@ export default function Monitoring() {
                           {alert.suppress_reason
                             ? ` — ${alert.suppress_reason}`
                             : ""}
+                        </p>
+                      )}
+                    {alert.last_delivery_status === "failed" && (
+                      <p className="text-xs text-red-400 mt-0.5">
+                        Ultima alerta NU a fost livrata
+                        {alert.last_delivery_error
+                          ? ` — ${alert.last_delivery_error}`
+                          : ""}
+                      </p>
+                    )}
+                    {alert.last_delivery_status === "delivered" &&
+                      alert.last_delivery_at && (
+                        <p className="text-xs text-green-400 mt-0.5">
+                          Ultima alerta livrata:{" "}
+                          {new Date(alert.last_delivery_at).toLocaleString(
+                            "ro-RO",
+                          )}
                         </p>
                       )}
                   </div>

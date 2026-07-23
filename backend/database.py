@@ -193,6 +193,23 @@ class Database:
                 logger.info(f"Migration: added {col_name} to companies")
             except Exception as e:
                 logger.debug(f"Migration column check companies.{col_name} (expected if exists): {e}")
+        # 2026-07-24: rezultatul livrarii alertei, persistat pe alerta. Pana acum
+        # `delivered` doar se logha, deci un esec de livrare era invizibil in UI —
+        # iar absenta alertelor arata identic cu absenta schimbarilor de risc.
+        for col_sql, col_name in [
+            ("ALTER TABLE monitoring_alerts ADD COLUMN last_delivery_status TEXT DEFAULT NULL",
+             "last_delivery_status"),
+            ("ALTER TABLE monitoring_alerts ADD COLUMN last_delivery_error TEXT DEFAULT NULL",
+             "last_delivery_error"),
+            ("ALTER TABLE monitoring_alerts ADD COLUMN last_delivery_at TEXT DEFAULT NULL",
+             "last_delivery_at"),
+        ]:
+            try:
+                await self.db.execute(col_sql)
+                await self.db.commit()
+                logger.info(f"Migration: added {col_name} to monitoring_alerts")
+            except Exception as e:
+                logger.debug(f"Migration column check monitoring_alerts.{col_name} (expected if exists): {e}")
         # A1: Număr Raport Unic (RIS-YYYY-XXXX)
         try:
             await self.db.execute("ALTER TABLE reports ADD COLUMN report_number TEXT DEFAULT NULL")

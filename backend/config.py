@@ -186,6 +186,31 @@ class Settings(BaseSettings):
             )
 
     @model_validator(mode="after")
+    def validate_telegram_target(self) -> "Settings":
+        """TELEGRAM_CHAT_ID trebuie sa fie DESTINATARUL, nu botul insusi.
+
+        Caz real (2026-07-24): `TELEGRAM_CHAT_ID=@ris_notif_bot` — @username-ul
+        botului. Telegram raspunde 403 "the bot can't send messages to the bot",
+        deci nicio alerta de monitorizare nu se livra, tacut, luni intregi.
+        Verificarea e locala (fara apel de retea la pornire).
+        """
+        chat = str(self.telegram_chat_id or "").strip()
+        token = str(self.telegram_bot_token or "")
+        if not chat or not token:
+            return self
+
+        bot_id = token.split(":", 1)[0]
+        looks_like_bot = chat == bot_id or (chat.startswith("@") and chat.lower().endswith("bot"))
+        if looks_like_bot:
+            logger.warning(
+                f"TELEGRAM_CHAT_ID ({chat}) pare sa fie BOTUL INSUSI, nu destinatarul — "
+                "Telegram va raspunde 403 si NICIO alerta nu va fi livrata. "
+                "Scrie botului din contul tau, apoi ia `message.chat.id` din getUpdates. "
+                "ATENTIE: o variabila de mediu cu acelasi nume are prioritate fata de .env."
+            )
+        return self
+
+    @model_validator(mode="after")
     def validate_critical_keys(self) -> "Settings":
         if not self.tavily_api_key:
             import warnings

@@ -15,11 +15,18 @@ from loguru import logger
 from backend.config import settings
 
 
-async def send_telegram(message: str) -> bool:
-    """Trimite mesaj pe Telegram via Bot API."""
+async def send_telegram_detailed(message: str) -> dict:
+    """Trimite mesaj pe Telegram si returneaza MOTIVUL esecului, nu doar un bool.
+
+    Exista pentru ca un esec de livrare trebuie sa fie observabil fara citirea
+    logurilor: apelantul (monitoring) persista `error` pe alerta si il arata in UI.
+    Absenta alertelor era pana acum indistincta de absenta schimbarilor de risc.
+
+    Returneaza {"ok": bool, "error": str | None}.
+    """
     if not settings.telegram_bot_token or not settings.telegram_chat_id:
         logger.debug("Telegram not configured, skipping notification")
-        return False
+        return {"ok": False, "error": "Telegram neconfigurat (token sau chat_id lipsa)"}
 
     url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage"
     payload = {
@@ -35,13 +42,32 @@ async def send_telegram(message: str) -> bool:
         response = await client.post(url, json=payload, timeout=10)
         if response.status_code == 200:
             logger.info("Telegram notification sent")
-            return True
-        else:
-            logger.warning(f"Telegram error: {response.status_code} {response.text[:200]}")
-            return False
+            return {"ok": True, "error": None}
+
+        body = response.text[:200]
+        # Cazul verificat live 2026-07-24: chat_id-ul pointeaza catre BOTUL INSUSI
+        # (id numeric sau @username-ul lui) -> Telegram raspunde 403 cu acest text.
+        # Il ridicam la ERROR cu instructiunea de reparare, pentru ca mesajul brut
+        # ("Forbidden") nu spune utilizatorului ce sa schimbe.
+        if response.status_code == 403 and "send messages to the bot" in body:
+            logger.error(
+                "[telegram] chat_id-ul configurat este BOTUL INSUSI, nu destinatarul. "
+                "Scrie botului din contul tau, apoi ia `message.chat.id` din "
+                "https://api.telegram.org/bot<TOKEN>/getUpdates si pune-l in TELEGRAM_CHAT_ID. "
+                "ATENTIE: o variabila de mediu cu acelasi nume are prioritate fata de .env."
+            )
+            return {"ok": False, "error": "chat_id pointeaza catre bot, nu catre destinatar (403)"}
+
+        logger.warning(f"Telegram error: {response.status_code} {body}")
+        return {"ok": False, "error": f"HTTP {response.status_code}: {body}"}
     except Exception as e:
         logger.warning(f"Telegram notification failed: {e}")
-        return False
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+async def send_telegram(message: str) -> bool:
+    """Wrapper istoric peste `send_telegram_detailed` (apelantii care nu au nevoie de motiv)."""
+    return (await send_telegram_detailed(message))["ok"]
 
 
 async def send_email(

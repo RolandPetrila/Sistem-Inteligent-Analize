@@ -12,7 +12,7 @@ from loguru import logger
 
 from backend.agents.tools.anaf_client import get_anaf_data
 from backend.database import db
-from backend.services.notification import send_telegram
+from backend.services.notification import send_telegram_detailed
 
 # Smart severity mapping (8E)
 SEVERITY_MAP = {
@@ -143,18 +143,60 @@ async def _should_throttle(alert_id: str, severity: str) -> bool:
     return False
 
 
-async def _send_telegram_with_retry(message: str, max_retries: int = 3) -> bool:
-    """10E M9.2: Alert Escalation Retry — 3x exponential backoff on Telegram failure."""
+async def _send_telegram_with_retry(message: str, max_retries: int = 3) -> dict:
+    """10E M9.2: Alert Escalation Retry — 3x exponential backoff on Telegram failure.
+
+    Returneaza {"ok": bool, "error": str | None} — motivul e necesar pentru a fi
+    persistat pe alerta si aratat in UI (un esec de livrare tacut face absenta
+    alertelor indistincta de absenta schimbarilor de risc).
+    """
+    result = {"ok": False, "error": "necunoscut"}
     for attempt in range(max_retries):
-        success = await send_telegram(message)
-        if success:
-            return True
+        result = await send_telegram_detailed(message)
+        if result["ok"]:
+            return result
         if attempt < max_retries - 1:
             wait = 2 ** (attempt + 1)  # 2s, 4s
             logger.warning(f"[monitoring] Telegram retry {attempt + 1}/{max_retries}, waiting {wait}s")
             await asyncio.sleep(wait)
-    logger.error("[monitoring] Telegram delivery failed after all retries")
-    return False
+    logger.error(f"[monitoring] Telegram delivery failed after all retries: {result.get('error')}")
+    return result
+
+
+async def _record_delivery(alert_id: str, result: dict) -> None:
+    """Persista rezultatul livrarii pe alerta, ca UI-ul sa-l poata arata."""
+    try:
+        await db.execute(
+            "UPDATE monitoring_alerts SET last_delivery_status = ?, last_delivery_error = ?, "
+            "last_delivery_at = datetime('now') WHERE id = ?",
+            ("delivered" if result.get("ok") else "failed",
+             None if result.get("ok") else str(result.get("error"))[:300],
+             alert_id),
+        )
+    except Exception as e:
+        logger.warning(f"[monitoring] nu am putut persista starea livrarii pt {alert_id}: {e}")
+
+
+async def _create_inapp_notification(company_id: str, severity: str, company_name: str, message: str) -> None:
+    """Notificare in aplicatie — canal INDEPENDENT de Telegram.
+
+    Pana la 2026-07-24 crearea ei era inauntrul lui `if ... alert["telegram_notify"]`,
+    deci cine oprea Telegram pierdea SI alerta din aplicatie: schimbarea de risc
+    disparea complet, tacut.
+    """
+    try:
+        from backend.routers.notifications import create_notification
+        await create_notification(
+            type="monitoring_alert",
+            title=f"Alerta [{severity}]: {company_name}",
+            message=message,
+            link=f"/company/{company_id}",
+            severity="error" if severity in ("RED", "CRITICAL") else "warning",
+        )
+    except Exception as e:
+        # WARNING, nu debug: un except tacit pe aceasta cale a ascuns deja un bug real
+        # (TypeError culoare-vs-numar in job_service, reparat 2026-07-13).
+        logger.warning(f"[monitoring] notificare in-app esuata pt {company_name}: {e}")
 
 
 async def run_monitoring_check() -> list[dict]:
@@ -192,7 +234,14 @@ async def run_monitoring_check() -> list[dict]:
                         f"Firma NU mai apare in ANAF — posibil radiata/dizolvata!\n"
                         f"Verificat: {datetime.now(UTC).strftime('%d.%m.%Y %H:%M')}"
                     )
-                    await _send_telegram_with_retry(msg)
+                    await _record_delivery(alert_id, await _send_telegram_with_retry(msg))
+                # 2026-07-24: cea mai SEVERA alerta din sistem (firma disparuta din ANAF)
+                # nu producea NICIO notificare in-app — nici macar cu Telegram pornit.
+                # Canalul in-app e independent de Telegram, ca in restul fluxului.
+                await _create_inapp_notification(
+                    alert["company_id"], "RED", company_name,
+                    f"CUI {cui}: firma NU mai apare in ANAF — posibil radiata/dizolvata",
+                )
                 await _log_audit(alert_id, cui, company_name, "stare_firma", "activa", "NEGASIT ANAF", "RED")
                 results.append({"cui": cui, "company": company_name, "changed": True,
                                 "changes": [{"field": "stare_firma", "old": "activa",
@@ -303,52 +352,54 @@ async def run_monitoring_check() -> list[dict]:
                 (alert_id,),
             )
 
-            # 10E M9.1+M9.2: Send notification with throttling + retry
-            if changes and alert["telegram_notify"]:
-                throttled = await _should_throttle(alert_id, max_severity)
-                if not throttled:
-                    severity_icon = {"RED": "🔴", "YELLOW": "🟡", "GREEN": "🟢"}.get(max_severity, "ℹ️")
-                    msg = (
-                        f"{severity_icon} <b>ALERTA RIS [{max_severity}] — {company_name}</b>\n"
-                        f"CUI: {cui}\n"
-                        f"Schimbari detectate:\n"
-                    )
-                    for c in changes:
-                        sev_icon = {"RED": "🔴", "YELLOW": "🟡", "GREEN": "🟢"}.get(c["severity"], "")
-                        msg += f"  {sev_icon} {c['field']}: {c['old']} → {c['new']}\n"
-                    msg += f"Verificat: {datetime.now(UTC).strftime('%d.%m.%Y %H:%M')}"
-                    delivered = await _send_telegram_with_retry(msg)
-                    logger.info(f"[monitoring] Alert [{max_severity}] {'sent' if delivered else 'FAILED'} for {company_name}")
+            # 2026-07-24: restructurat pe trei niveluri de dependenta. Inainte, TOT
+            # blocul de mai jos era gatat pe `alert["telegram_notify"]`, iar sincronizarea
+            # `is_active` era in plus gatata si pe throttling — adica integritatea datelor
+            # si canalul in-app depindeau de o preferinta de notificare externa.
+            if changes:
+                # (1) Integritatea datelor — NU depinde de niciun canal de notificare.
+                # F4-2: Sync is_active in DB la detectie RADIAT/INACTIV
+                for change in changes:
+                    if change.get("field") == "Stare" and any(
+                        kw in str(change.get("new", "")).upper() for kw in ["RADIAT", "INACTIV"]
+                    ):
+                        try:
+                            await db.execute(
+                                "UPDATE companies SET is_active = 0 WHERE cui = ?",
+                                (cui,)
+                            )
+                            logger.info(f"[monitoring] companies.is_active=0 sync pentru CUI {cui}")
+                        except Exception as _e:
+                            logger.warning(f"[monitoring] is_active sync error: {_e}", exc_info=True)
+                        break
 
-                    # F4-2: Sync is_active in DB la detectie RADIAT/INACTIV
-                    for change in changes:
-                        if change.get("field") == "Stare" and any(
-                            kw in str(change.get("new", "")).upper() for kw in ["RADIAT", "INACTIV"]
-                        ):
-                            try:
-                                await db.execute(
-                                    "UPDATE companies SET is_active = 0 WHERE cui = ?",
-                                    (cui,)
-                                )
-                                logger.info(f"[monitoring] companies.is_active=0 sync pentru CUI {cui}")
-                            except Exception as _e:
-                                logger.warning(f"[monitoring] is_active sync error: {_e}", exc_info=True)
-                            break
-                else:
-                    logger.info(f"[monitoring] Alert [{max_severity}] throttled for {company_name}")
+                # (2) Canalul in-app — independent de Telegram (N-1).
+                await _create_inapp_notification(
+                    alert["company_id"], max_severity, company_name,
+                    "; ".join(f"{c['field']}: {c['old']}→{c['new']}" for c in changes),
+                )
 
-                # R2 Fix #1: Create in-app notification for monitoring alerts
-                try:
-                    from backend.routers.notifications import create_notification
-                    await create_notification(
-                        type="monitoring_alert",
-                        title=f"Alerta [{max_severity}]: {company_name}",
-                        message="; ".join(f"{c['field']}: {c['old']}→{c['new']}" for c in changes),
-                        link=f"/company/{alert['company_id']}",
-                        severity="error" if max_severity in ("RED", "CRITICAL") else "warning",
-                    )
-                except Exception as notif_err:
-                    logger.debug(f"Notification create failed: {notif_err}")
+                # (3) Telegram — optional, cu throttling + retry (10E M9.1+M9.2).
+                if alert["telegram_notify"]:
+                    if await _should_throttle(alert_id, max_severity):
+                        logger.info(f"[monitoring] Alert [{max_severity}] throttled for {company_name}")
+                    else:
+                        severity_icon = {"RED": "🔴", "YELLOW": "🟡", "GREEN": "🟢"}.get(max_severity, "ℹ️")
+                        msg = (
+                            f"{severity_icon} <b>ALERTA RIS [{max_severity}] — {company_name}</b>\n"
+                            f"CUI: {cui}\n"
+                            f"Schimbari detectate:\n"
+                        )
+                        for c in changes:
+                            sev_icon = {"RED": "🔴", "YELLOW": "🟡", "GREEN": "🟢"}.get(c["severity"], "")
+                            msg += f"  {sev_icon} {c['field']}: {c['old']} → {c['new']}\n"
+                        msg += f"Verificat: {datetime.now(UTC).strftime('%d.%m.%Y %H:%M')}"
+                        delivery = await _send_telegram_with_retry(msg)
+                        await _record_delivery(alert_id, delivery)
+                        logger.info(
+                            f"[monitoring] Alert [{max_severity}] "
+                            f"{'sent' if delivery['ok'] else 'FAILED'} for {company_name}"
+                        )
 
             results.append({
                 "cui": cui,
