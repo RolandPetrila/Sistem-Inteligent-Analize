@@ -156,20 +156,50 @@ class TestGardaDeRezolutie:
     fara parametrul de furnizor, raspunsul e lista nefiltrata (plafonul)."""
 
     @pytest.mark.asyncio
-    async def test_furnizor_negasit_opreste_inainte_de_al_doilea_apel(self):
+    @pytest.mark.parametrize("outcome,expect_verified", [
+        # "nu figureaza in registru" e un RASPUNS (firma nu e furnizor), nu un esec
+        ("not_a_supplier", True),
+        # ambiguitatea NU e un raspuns: nu stim care furnizor e firma ceruta
+        ("ambiguous", False),
+    ])
+    async def test_rezolutia_esuata_opreste_inainte_de_al_doilea_apel(self, outcome, expect_verified):
         with patch.object(seap_client, "resolve_supplier_id",
-                          AsyncMock(return_value={"resolved": False, "supplier_id": None,
-                                                  "reason": "CUI negasit"})), \
+                          AsyncMock(return_value={"resolved": False, "outcome": outcome,
+                                                  "supplier_id": None, "reason": "x"})), \
              patch.object(seap_client, "get_client") as mock_client, \
              patch("backend.services.cache_service.get", AsyncMock(return_value=None)), \
              patch("backend.services.cache_service.set", AsyncMock()):
 
             r = await seap_client.get_contracts_won("43978110")
 
-            assert r["contracts_verified"] is False
+            assert r["contracts_verified"] is expect_verified
             assert r["contracts"] == [] and r["direct_acquisitions"] == []
             assert r["total_contracts"] == 0
             mock_client.assert_not_called(), "s-a facut un request DUPA esecul rezolutiei"
+
+    @pytest.mark.asyncio
+    async def test_sursa_picata_nu_arata_ca_firma_fara_contracte(self):
+        """Clasa de bug reparata, mutata cu un strat mai sus: daca SICAP e BLOCAT,
+        rezultatul NU trebuie sa fie indistinct de o firma curata."""
+        with patch.object(seap_client, "resolve_supplier_id",
+                          AsyncMock(side_effect=seap_client.SeapSourceError("HTTP 503"))), \
+             patch("backend.services.cache_service.get", AsyncMock(return_value=None)), \
+             patch("backend.services.cache_service.set", AsyncMock()):
+            picata = await seap_client.get_contracts_won("12345678")
+
+        with patch.object(seap_client, "resolve_supplier_id",
+                          AsyncMock(return_value={"resolved": False, "outcome": "not_a_supplier",
+                                                  "supplier_id": None, "reason": "x"})), \
+             patch("backend.services.cache_service.get", AsyncMock(return_value=None)), \
+             patch("backend.services.cache_service.set", AsyncMock()):
+            curata = await seap_client.get_contracts_won("12345678")
+
+        assert picata["total_contracts"] == curata["total_contracts"] == 0
+        assert seap_status(picata) == "unverified"
+        assert seap_status(curata) == "verified_empty"
+        assert seap_status(picata) != seap_status(curata), (
+            "sursa blocata si firma fara contracte produc acelasi verdict"
+        )
 
     @pytest.mark.asyncio
     async def test_ambiguitatea_nu_se_rezolva_prin_ghicire(self):
@@ -254,3 +284,53 @@ class TestConsumatoriiRespectaFlagul:
         assert "Contracte SEAP" not in motive, (
             "bonusul de piata s-a acordat pe contracte neatribuite firmei"
         )
+
+
+class TestMarcajDiscontinuitateScoring:
+    """2e: granita de metodologie — delta suprimat in AMBELE sensuri.
+
+    Fixul de atribuire SEAP muta scorul cu +-1.0 pentru aceleasi date de intrare.
+    NU uniform: masurat pe 84 de rapoarte reale, 42.9% aveau bonusul (coboara),
+    57.1% nu-l aveau — fara nod `market` (33.3%) sau SEAP picat cu HTTP 403
+    (23.8%) — deci daca au contracte reale, URCA. De aceea marcajul suprima
+    comparatia, nu doar scaderile.
+    """
+
+    @pytest.mark.asyncio
+    async def test_delta_suprimat_la_traversarea_granitei(self, tmp_path):
+        import aiosqlite
+
+        import backend.routers.companies as companies_module
+        from backend.database import Database
+
+        test_db = Database(str(tmp_path / "t.db"))
+        test_db._db = await aiosqlite.connect(test_db.db_path)
+        test_db._db.row_factory = aiosqlite.Row
+        await test_db.run_migrations()
+        try:
+            await test_db.execute(
+                "INSERT INTO companies (id, cui, name) VALUES ('c1', '9901265', 'Test SRL')")
+            for score, ver, when in [(80.0, 1, "2026-07-01"), (79.0, 2, "2026-07-24"),
+                                     (81.0, 2, "2026-07-25")]:
+                await test_db.execute(
+                    "INSERT INTO score_history (company_id, cui, numeric_score, "
+                    "methodology_version, recorded_at) VALUES ('c1', '9901265', ?, ?, ?)",
+                    (score, ver, when))
+
+            with patch.object(companies_module, "db", test_db):
+                # `limit` explicit: apelul direct nu trece prin FastAPI, deci
+                # default-ul `Query(...)` ar ajunge ca obiect in SQL.
+                rows = await companies_module.get_score_trend("c1", limit=20)
+
+            by_date = {r["recorded_at"]: r for r in rows}
+            trecere = by_date["2026-07-24"]
+            assert trecere["methodology_changed"] is True
+            assert trecere["delta"] is None, (
+                "delta peste granita amesteca 's-a schimbat firma' cu "
+                "'s-a schimbat modul de calcul'"
+            )
+            acelasi = by_date["2026-07-25"]
+            assert acelasi["methodology_changed"] is False
+            assert acelasi["delta"] == pytest.approx(2.0)
+        finally:
+            await test_db._db.close()

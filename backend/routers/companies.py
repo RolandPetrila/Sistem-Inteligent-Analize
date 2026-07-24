@@ -436,19 +436,40 @@ async def get_score_trend(
     company_id: str,
     limit: int = Query(20, ge=1, le=100),
 ):
-    """Score trend cu LAG window function — delta per analiza."""
+    """Score trend cu LAG window function — delta per analiza.
+
+    2026-07-24: delta-ul e SUPRIMAT peste granita de metodologie. Fixul de
+    atribuire SEAP muta scorul cu pana la +-1.0 pentru aceleasi date de intrare
+    — in AMBELE sensuri, in functie de firma (42.9% din rapoartele istorice
+    aveau bonusul si coboara; restul nu-l aveau si pot urca). Un delta care
+    traverseaza granita ar amesteca "s-a schimbat firma" cu "s-a schimbat modul
+    de calcul", deci se raporteaza `null` + `methodology_changed: true`.
+    """
     rows = await db.fetch_all(
         """SELECT
                recorded_at,
                numeric_score as score,
-               numeric_score - LAG(numeric_score) OVER (ORDER BY recorded_at) as delta
+               COALESCE(methodology_version, 1) as methodology_version,
+               numeric_score - LAG(numeric_score) OVER (ORDER BY recorded_at) as delta,
+               COALESCE(methodology_version, 1)
+                   - LAG(COALESCE(methodology_version, 1)) OVER (ORDER BY recorded_at)
+                   as _version_shift
            FROM score_history
            WHERE company_id = ?
            ORDER BY recorded_at DESC
            LIMIT ?""",
         (company_id, limit),
     )
-    return rows
+
+    out = []
+    for r in rows:
+        item = dict(r)
+        crossed = bool(item.pop("_version_shift", 0))
+        item["methodology_changed"] = crossed
+        if crossed:
+            item["delta"] = None
+        out.append(item)
+    return out
 
 
 @router.get("/{cui}/predictive")

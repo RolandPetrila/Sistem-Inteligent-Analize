@@ -193,6 +193,25 @@ class Database:
                 logger.info(f"Migration: added {col_name} to companies")
             except Exception as e:
                 logger.debug(f"Migration column check companies.{col_name} (expected if exists): {e}")
+        # 2026-07-24: marcaj de DISCONTINUITATE METODOLOGICA pe score_history.
+        # Fixul de atribuire SEAP schimba dimensiunea Piata: pana acum, orice firma
+        # primea +10 daca SICAP raporta contracte, iar SICAP raporta contracte
+        # (ale altcuiva) pentru ORICE firma. Impactul e +1.0 pe scorul final (10
+        # puncte de dimensiune x pondere 10%) si NU e uniform:
+        #   - 42.9% din rapoartele istorice aveau bonusul -> vor COBORI
+        #   - 57.1% nu-l aveau (fara nod `market`, sau SEAP picat cu HTTP 403)
+        #     -> daca au contracte reale, vor URCA
+        # Deci comparatiile care traverseaza granita se suprima in AMBELE sensuri,
+        # nu doar scaderile. Scorurile NU se recalculeaza: masurat pe 83 de rapoarte,
+        # zero si-ar fi schimbat culoarea, iar monitorizarea nu compara scorul.
+        try:
+            await self.db.execute(
+                "ALTER TABLE score_history ADD COLUMN methodology_version INTEGER DEFAULT 1"
+            )
+            await self.db.commit()
+            logger.info("Migration: added methodology_version to score_history")
+        except Exception as e:
+            logger.debug(f"Migration column check score_history.methodology_version: {e}")
         # 2026-07-24: rezultatul livrarii alertei, persistat pe alerta. Pana acum
         # `delivered` doar se logha, deci un esec de livrare era invizibil in UI —
         # iar absenta alertelor arata identic cu absenta schimbarilor de risc.

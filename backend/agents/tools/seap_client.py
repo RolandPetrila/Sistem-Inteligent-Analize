@@ -127,14 +127,19 @@ async def resolve_supplier_id(cui: str, use_cache: bool = True) -> dict:
         and _normalize_cui(str(it.get("text") or "").strip().split(" ")[0]) == cui_clean
     ]
 
+    # TREI rezultate, nu doua. "Nu figureaza in registru" e un RASPUNS DEFINITIV
+    # (firma nu e furnizor, deci nu are contracte), nu un esec de verificare.
+    # Colapsate impreuna, o BLOCARE a sursei ar arata identic cu o firma fara
+    # contracte — exact clasa de bug reparata mai jos, mutata cu un strat mai sus.
     if len(exact) == 1:
-        result = {"resolved": True, "supplier_id": exact[0].get("id"),
+        result = {"resolved": True, "outcome": "resolved", "supplier_id": exact[0].get("id"),
                   "reason": "", "supplier_text": str(exact[0].get("text") or "")}
     elif not exact:
-        result = {"resolved": False, "supplier_id": None,
-                  "reason": "CUI negasit in registrul de furnizori SICAP"}
+        result = {"resolved": False, "outcome": "not_a_supplier", "supplier_id": None,
+                  "reason": "firma nu figureaza in registrul de furnizori SICAP"}
     else:
-        result = {"resolved": False, "supplier_id": None,
+        # Ambiguitatea NU e un raspuns: nu stim care furnizor e firma ceruta.
+        result = {"resolved": False, "outcome": "ambiguous", "supplier_id": None,
                   "reason": f"{len(exact)} furnizori cu acelasi CUI — ambiguu, nu ghicim"}
 
     if use_cache:
@@ -261,11 +266,26 @@ async def get_contracts_won(cui: str, page_size: int = 20, use_cache: bool = Tru
             logger.debug(f"SEAP: cache hit for CUI {cui_clean}")
             return cached
 
-    def _unverified(reason: str) -> dict:
-        return {"cui": cui_clean, "contracts_verified": False, "contracts": [],
+    def _empty_result(verified: bool, reason: str) -> dict:
+        return {"cui": cui_clean, "contracts_verified": verified, "contracts": [],
                 "direct_acquisitions": [], "reason": reason, "total_contracts": 0,
                 "contracts_count": 0, "direct_count": 0, "total_value": None,
-                "won_cpv_codes": [], "source": "SEAP"}
+                "won_cpv_codes": [], "source": "SEAP",
+                "counts_reliable": verified, "total_capped": False, "items_truncated": False}
+
+    def _unverified(reason: str) -> dict:
+        """NU s-a putut determina — sursa a esuat sau raspunsul e ambiguu."""
+        return _empty_result(False, reason)
+
+    def _confirmed_empty(reason: str) -> dict:
+        """VERIFICAT: firma nu are contracte publice. E un fapt, nu o lipsa de date.
+
+        Distinctia conteaza in trei locuri: completitudinea numara checkul ca
+        REUSIT, narativul spune "fara istoric identificat" (nu "date
+        indisponibile"), iar o BLOCARE a sursei nu mai poate fi confundata cu
+        o firma curata.
+        """
+        return _empty_result(True, reason)
 
     # PAS 1 — rezolutia CUI -> id intern. GARDA CRITICA: daca nu se rezolva,
     # ne oprim AICI. Un request fara parametrul de furnizor NU e un fallback:
@@ -278,6 +298,9 @@ async def get_contracts_won(cui: str, page_size: int = 20, use_cache: bool = Tru
         return _unverified(f"sursa indisponibila la rezolutie: {e}")
 
     if not resolution.get("resolved"):
+        if resolution.get("outcome") == "not_a_supplier":
+            # Raspuns definitiv, nu esec: firma nu e furnizor -> nu are contracte.
+            return _confirmed_empty(resolution.get("reason") or "nu figureaza ca furnizor")
         return _unverified(resolution.get("reason") or "furnizor nerezolvat")
 
     supplier_id = resolution["supplier_id"]

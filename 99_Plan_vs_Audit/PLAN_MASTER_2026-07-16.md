@@ -84,7 +84,34 @@ agent_synthesis, scoring, agent_official) au **recrescut** peste 500-1000 LOC �
    Sectiunea "competition" **nu ajunge NICIODATA la un provider AI**, pt nicio firma.
 7. **Ponderare:** TAROM = **74.5/Verde/"parteneriat recomandat"** cu capitaluri proprii NEGATIVE, 5 ani de
    pierdere, 709 dosare — profitul din 2024 domina. Nu e bug, e alegere de produs. Aceeasi familie cu D2/D3.
-8. Chei neobtinute (cod gata): DeepSeek, OpenRouter, xAI, Cohere, Gmail.
+8. ~~Chei neobtinute (cod gata): DeepSeek, OpenRouter, xAI, Cohere, Gmail.~~
+   **[CORECTAT 2026-07-24 prin masurare — gresit pentru 4 din 5. Nu era un singur
+   item de backlog, ci trei, cu efort diferit.]**
+
+   | provider   | cheie in `.env` | cablat in `_PROVIDERS` | in lantul de fallback | blocat pe                                                                   |
+   | ---------- | --------------- | ---------------------- | --------------------- | --------------------------------------------------------------------------- |
+   | DeepSeek   | 35 car.         | da                     | **NU**                | ping live: **HTTP 402 Payment Required**                                    |
+   | OpenRouter | 73 car.         | da                     | **NU**                | ping live: **HTTP 404** — modelul `deepseek/deepseek-r1:free` nu mai exista |
+   | xAI        | 84 car.         | **nu**                 | nu                    | **COD**, nu cheie                                                           |
+   | Cohere     | 40 car.         | **nu**                 | nu                    | **COD**, nu cheie                                                           |
+   | Gmail      | **GOL**         | —                      | —                     | cheie (singurul real)                                                       |
+
+   **Trei categorii, nu una:** (a) Gmail — chiar lipseste cheia; (b) xAI + Cohere — au chei
+   valide, **nu sunt cablate**: item de implementare, nu de obtinut cheie; (c) DeepSeek +
+   OpenRouter — cablate in registru dar **nechemate de nimeni**, si oricum picate la ping
+   (credit epuizat / model retras, ca la Cerebras-Qwen 2026-07-12).
+
+   **Observatie de structura:** din cele 8 intrari din `_PROVIDERS`, doar 3 (groq, mistral,
+   cerebras) sunt chemate efectiv. Restul — deepseek, openrouter, github, fireworks,
+   sambanova — sunt configuratie moarta. Aceeasi clasa "colecteaza dar nu consuma".
+
+   **Nota de METODA (cum a supravietuit eroarea):** verificarea "e cablat?" prin
+   `grep -i cohere backend/` a dat 2 fisiere — ambele **false pozitive**: substringul se
+   potrivea in `_check_cross_section_coherence` / `coherence`. Grep pe substring **fara
+   delimitator de cuvant** a tinut un item in backlog cu verdict gresit. Aceeasi familie cu
+   grepul prea ingust care a ratat `_build_predictive_divergences` la A-4 (cautat doar in
+   `backend/agents/`, implementarea era in `backend/reports/`). **Un grep care raspunde la o
+   intrebare de tip da/nu trebuie confirmat prin citirea situsului, nu prin numarul de hituri.**
 
 ## CLASA E — strategice (din Deep Research, decizia lui Roland)
 

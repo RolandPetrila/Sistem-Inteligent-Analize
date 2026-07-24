@@ -14,6 +14,7 @@ from loguru import logger
 
 from backend.agents.orchestrator import build_analysis_graph
 from backend.agents.state import AnalysisState, get_agents_needed
+from backend.agents.verification.scoring import SCORING_METHODOLOGY_VERSION
 from backend.database import db
 from backend.services import cache_service
 from backend.services.job_logger import (
@@ -351,14 +352,18 @@ async def _save_job_results(
         try:
             rs = verified_data["risk_score"]
             await db.execute(
-                "INSERT INTO score_history (company_id, cui, numeric_score, dimensions, factors) "
-                "VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO score_history "
+                "(company_id, cui, numeric_score, dimensions, factors, methodology_version) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
                 (
                     company_id,
                     cui or "",
                     rs.get("numeric_score"),
                     json.dumps(rs.get("dimensions", {}), ensure_ascii=False),
                     json.dumps(rs.get("factors", []), ensure_ascii=False),
+                    # v2 = dupa fixul de atribuire SEAP (2026-07-24). Vezi nota din
+                    # `run_migrations` — delta peste granita v1/v2 nu e comparabil.
+                    SCORING_METHODOLOGY_VERSION,
                 ),
             )
         except Exception as e:

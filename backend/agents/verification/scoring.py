@@ -115,6 +115,16 @@ SECTOR_VOLATILITY_BASELINE = {
 
 
 # SCORE-02: Scoring constants — extracted from magic numbers
+# Versiunea metodologiei de scoring, persistata pe fiecare intrare din
+# `score_history`. Se INCREMENTEAZA la orice schimbare care muta scorul pentru
+# aceleasi date de intrare — altfel un delta intre doua analize amesteca
+# "s-a schimbat firma" cu "s-a schimbat modul de calcul".
+#   v1 -> pana la 2026-07-24
+#   v2 -> fixul de atribuire SEAP: bonusul de +10 pe dimensiunea Piata se acorda
+#         doar pe contracte VERIFICATE ca apartinand firmei. Impact +-1.0 pe
+#         scorul final, in ambele sensuri, in functie de firma.
+SCORING_METHODOLOGY_VERSION = 2
+
 DIMENSION_WEIGHTS = {
     "financiar": 30,
     "juridic": 20,
