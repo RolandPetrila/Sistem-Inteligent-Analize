@@ -64,7 +64,7 @@ FIXTURES: dict[str, dict] = {
         },
         "maps_rating": {"found": True, "rating": 4.6, "reviews_count": 120},
         "market": {
-            "seap": {"value": {"total_contracts": 3}},
+            "seap": {"value": {"contracts_verified": True, "total_contracts": 3}},
         },
         "benchmark": {
             "available": True,

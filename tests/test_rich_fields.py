@@ -139,7 +139,7 @@ class TestGateBooleans:
         assert model["garantii"]["hist_ok"] is False
 
     def test_seap_unwraps_make_field_value(self):
-        data = {"market": {"seap": {"value": {"total_contracts": 3}}}}
+        data = {"market": {"seap": {"value": {"contracts_verified": True, "total_contracts": 3}}}}
         model = build_rich_fields_model(data)
         assert model["seap"]["shown"] is True
         assert model["seap"]["data"]["total_contracts"] == 3

@@ -208,25 +208,19 @@
     "cross_validation": {
       "cui": {
         "confidence": 1.0,
-        "sources": [
-          "ANAF"
-        ],
+        "sources": ["ANAF"],
         "sources_count": 1,
         "status": "CONFIRMAT"
       },
       "denumire": {
         "confidence": 1.0,
-        "sources": [
-          "ANAF"
-        ],
+        "sources": ["ANAF"],
         "sources_count": 1,
         "status": "CONFIRMAT"
       },
       "financiar": {
         "confidence": 1.0,
-        "sources": [
-          "ANAF Bilant"
-        ],
+        "sources": ["ANAF Bilant"],
         "sources_count": 1,
         "status": "CONFIRMAT"
       }
@@ -512,10 +506,9 @@
         "timestamp": "2026-07-16T12:00:00+00:00",
         "trust": "ESTIMAT",
         "value": {
+          "contracts_verified": true,
           "total_contracts": 4,
-          "won_cpv_codes": [
-            "72212000"
-          ]
+          "won_cpv_codes": ["72212000"]
         }
       }
     },
@@ -545,17 +538,7 @@
       "models_available": 2,
       "models_total": 4,
       "piotroski_f": {
-        "criteria": [
-          1,
-          null,
-          null,
-          1,
-          null,
-          0,
-          null,
-          1,
-          1
-        ],
+        "criteria": [1, null, null, 1, null, 0, null, 1, 1],
         "f_score": 4,
         "grade": "STRONG",
         "has_prior_year": true,
@@ -836,14 +819,8 @@
       ],
       "factor_count": 3,
       "factors": [
-        [
-          "Mentiune insolventa gasita",
-          "HIGH"
-        ],
-        [
-          "Garantii reale mobiliare (2)",
-          "LOW"
-        ],
+        ["Mentiune insolventa gasita", "HIGH"],
+        ["Garantii reale mobiliare (2)", "LOW"],
         [
           "Pozitie sector: Cifra de afaceri=P90+, Numar angajati=P75-P90",
           "INFO"
@@ -911,10 +888,7 @@
       "thresholds_source": "ca_real_6_companies_CAEN6201"
     },
     "sanctions": {
-      "checked": [
-        "MOSSLEIN TEST SRL",
-        "Ion Popescu"
-      ],
+      "checked": ["MOSSLEIN TEST SRL", "Ion Popescu"],
       "hits": [
         {
           "list": "TEST",
@@ -1016,9 +990,7 @@
         "value": {
           "found": true,
           "source": "Tavily",
-          "urls": [
-            "https://mosslein.example"
-          ]
+          "urls": ["https://mosslein.example"]
         }
       }
     }

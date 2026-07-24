@@ -192,7 +192,13 @@ def build_rich_fields_model(verified_data: dict) -> dict:
     market = verified_data.get("market", {})
     seap_field = market.get("seap", {}) if isinstance(market, dict) else {}
     seap = seap_field.get("value", seap_field) if isinstance(seap_field, dict) else {}
-    has_seap = bool(isinstance(seap, dict) and (seap.get("total_contracts", 0) or 0) > 0)
+    # 2026-07-24: sectiunea se randeaza doar pe atribuiri CONFIRMATE. `total_contracts > 0`
+    # nu mai e suficient singur — inainte de fixul filtrului, orice firma avea 20 de
+    # "contracte" care apartineau altcuiva. `seap_state` e expus separat ca randerele
+    # sa poata distinge "verificat, n-are" de "n-am putut verifica".
+    from backend.agents.tools.seap_client import seap_status
+    seap_state = seap_status(seap_field if isinstance(seap_field, dict) else seap)
+    has_seap = seap_state == "verified_with_contracts"
 
     opp = verified_data.get("tender_opportunities", {})
     has_opp = bool(isinstance(opp, dict) and opp.get("available") and opp.get("count"))

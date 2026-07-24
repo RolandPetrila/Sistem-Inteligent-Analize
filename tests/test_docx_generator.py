@@ -125,6 +125,7 @@ class TestGenerateDocx:
         from backend.reports.docx_generator import generate_docx
 
         verified_data = {"market": {"seap": {"value": {
+            "contracts_verified": True,
             "total_contracts": 2, "contracts_count": 1, "direct_count": 1, "total_value": 900000,
             "contracts": [{"title": "Lucrări reabilitare școală", "value": 850000, "currency": "RON",
                            "authority": "Primăria Târgoviște", "date": "2025-01-15"}],

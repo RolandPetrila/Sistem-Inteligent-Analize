@@ -434,7 +434,11 @@ def _score_piata(market: dict, benchmark: dict) -> tuple[dict, list[tuple[str, s
         # C4 fix: Unwrap _make_field wrapper to access actual SEAP data
         seap = market.get("seap", {})
         seap_val = seap.get("value", seap) if isinstance(seap, dict) else {}
-        if isinstance(seap_val, dict) and (seap_val.get("total_contracts", 0) or 0) > 0:
+        # 2026-07-24: bonusul se acorda DOAR pe contracte atribuite firmei, verificate.
+        # Inainte, `total_contracts > 0` era adevarat pentru ORICE firma — datele
+        # veneau nefiltrate de la SICAP — deci bonusul era o constanta, nu un semnal.
+        from backend.agents.tools.seap_client import seap_status
+        if seap_status(seap_val) == "verified_with_contracts":
             contracts = seap_val.get("total_contracts", 0)
             mkt_score += 10
             mkt_reasons.append({"text": f"Contracte SEAP active ({contracts})", "impact": 10})

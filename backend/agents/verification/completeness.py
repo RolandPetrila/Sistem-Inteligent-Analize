@@ -115,8 +115,12 @@ def check_completeness(verified: dict, official: dict, market: dict) -> dict:
     # intors mereu 0 pe acel dict.
     seap_data = market.get("seap", {})
     # B6 fix: Check actual SEAP data, not bare dict truthiness
-    seap_contracts = seap_data.get("total_contracts", 0) or 0
-    if seap_contracts > 0:
+    # 2026-07-24: "verificat, firma n-are contracte" e un RASPUNS, deci trece
+    # verificarea de completitudine. "n-am putut verifica" NU e — inainte,
+    # ambele arata ca 0 si sursa era numarata ca lipsa chiar cand raspunsese.
+    from backend.agents.tools.seap_client import seap_status
+    _seap_state = seap_status(seap_data)
+    if _seap_state in ("verified_with_contracts", "verified_empty"):
         passed_checks += 1
     else:
         gaps.append({

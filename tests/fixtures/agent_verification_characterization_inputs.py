@@ -163,6 +163,10 @@ RICH_FULL_LEAD_GENERATION = {
     },
     "market_data": {
         "seap": {
+            # `contracts_verified` e emis de `get_contracts_won` din 2026-07-24 si e
+            # cheia pe care o citesc consumatorii: fara ea, payload-ul inseamna
+            # "n-am putut verifica", nu "firma are 4 contracte".
+            "contracts_verified": True,
             "total_contracts": 4,
             "won_cpv_codes": ["72212000"],
         },

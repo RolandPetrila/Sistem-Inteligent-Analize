@@ -104,7 +104,7 @@ def _opportunities_fixture() -> dict:
         "credit_exposure": {"expunere_ron": 100000},
         "predictive_scores": {"altman_z": {"zone": "safe"}},
         "tender_opportunities": {"opportunities": [{"title": "Licitatie SEAP X"}]},
-        "market": {"seap": {"value": {"total_contracts": 3}}},
+        "market": {"seap": {"value": {"contracts_verified": True, "total_contracts": 3}}},
         "funding_programs": {"eligible": [{"name": "PNRR"}]},
         "web_presence": {"opportunities": ["oportunitate web"]},
         # Irelevante pt "opportunities", dar voluminoase -> ar trebui taiate INAINTEA

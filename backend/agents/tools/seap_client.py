@@ -4,6 +4,7 @@ API public, rate limit strict — delay 3s intre request-uri.
 """
 
 import asyncio
+import re
 
 from loguru import logger
 
@@ -14,9 +15,210 @@ SEAP_NOTICES_URL = "https://e-licitatie.ro/api-pub/NoticeCommon/GetCANoticeList/
 SEAP_DIRECT_URL = "https://e-licitatie.ro/api-pub/DirectAcquisitionCommon/GetDirectAcquisitionList/"
 # Angle A: proceduri DESCHISE (oportunitati). api-pub cere Referer OBLIGATORIU, altfel respinge.
 SEAP_CNOTICE_URL = "https://e-licitatie.ro/api-pub/NoticeCommon/GetCNoticeList/"
+SEAP_SUPPLIER_LOOKUP_URL = "https://e-licitatie.ro/api-pub/ComboPub/searchSuppliers"
+
+# Starea unei achizitii directe. Masurat pe STRABAG (188 rezultate): id=7 "Oferta
+# acceptata" 170, id=6 "Oferta refuzata" 12, id=3 "Conditii refuzate" 3,
+# id=4 "Conditii neacceptate la termen" 2, id=8 "Oferta neacceptata in termen" 1.
+# DOAR id=7 inseamna contract castigat. Enumerarea de stari NU e garantat completa
+# (id=4 a aparut in masuratoarea noastra, dar lipsea dintr-un esantion de 100),
+# deci se compara cu 7, nu cu o lista de "stari rele" — o stare noua nu trebuie
+# sa poata intra ca "castigat".
+DA_STATE_WON = 7
+DA_STATE_PARAM = "sysDirectAcquisitionStateId"  # filtru server-side confirmat: total 188 -> 170
 _SICAP_HEADERS = {"Content-Type": "application/json", "Referer": "https://e-licitatie.ro"}
 OPEN_NOTICE_TYPE_IDS = [2, 17]  # CN (anunt de participare) + SCN (simplificat) = proceduri deschise
 REQUEST_DELAY = 3
+
+# `total` din raspuns e PLAFONAT la aceste valori. Un `total` egal cu plafonul nu
+# inseamna "atatea rezultate", ci "cel putin atatea" — deci nu se poate construi
+# nicio verificare de plauzibilitate pe el fara sa stim ca e sub plafon.
+TOTAL_CAP_CA = 3000
+TOTAL_CAP_DA = 2000
+
+# Numarul maxim de itemi adusi per endpoint. 200 confirmat functional pe
+# GetCANoticeList — elimina paginarea pentru orice firma normala.
+DETAIL_PAGE_SIZE = 200
+
+
+class SeapSourceError(RuntimeError):
+    """Raspuns SICAP nefolosibil (HTTP != 200, JSON invalid, forma neasteptata).
+
+    Exista ca tip separat pentru ca "sursa a esuat" si "firma n-are contracte"
+    sa NU mai arate identic in aval — azi ambele produc zero, iar SICAP nu expune
+    niciun header de rate-limit, deci o blocare se poate manifesta ca 200 cu
+    lista goala.
+    """
+
+
+def _normalize_cui(raw) -> str:
+    """'RO 6891914' / 'ro6891914' / 6891914 -> '6891914'."""
+    return "".join(c for c in str(raw or "").upper().replace("RO", "") if c.isdigit())
+
+
+def _cui_from_supplier_field(supplier: str) -> str:
+    """Extrage CUI-ul din campul `supplier` al unui item DA.
+
+    Formatul REAL, masurat: `'RO 6891914 STRABAG'` — CUI-ul e al DOILEA token,
+    dupa prefixul `RO`. Difera de `searchSuppliers`, unde textul e
+    `'6891914 STRABAG'`, fara prefix. Furnizorii straini pot sa n-aiba `RO`.
+    """
+    # `RO\s*` (nu `RO\s+`): forma lipita "RO6891914" apare in date reale.
+    m = re.match(r"^\s*(?:RO\s*)?(\d+)", str(supplier or ""), re.IGNORECASE)
+    return m.group(1) if m else ""
+
+
+def _json_or_raise(response, what: str) -> dict:
+    """Corp de raspuns folosibil, sau exceptie — niciodata zero tacut."""
+    if response.status_code != 200:
+        raise SeapSourceError(f"{what}: HTTP {response.status_code}")
+    try:
+        data = response.json()
+    except Exception as e:
+        raise SeapSourceError(f"{what}: corp non-JSON ({e})") from e
+    if not isinstance(data, dict) or "items" not in data:
+        raise SeapSourceError(f"{what}: forma neasteptata (chei: {sorted(data)[:8] if isinstance(data, dict) else type(data).__name__})")
+    return data
+
+
+async def resolve_supplier_id(cui: str, use_cache: bool = True) -> dict:
+    """CUI -> id intern de furnizor SICAP (`winnerId` / `supplierId`).
+
+    Filtrarea dupa furnizor NU se face pe CUI pe niciunul dintre endpoint-uri:
+    `spiCuiSupplier` (folosit pana la 2026-07-24) era o cheie NECUNOSCUTA, iar
+    SICAP ignora tacut cheile necunoscute — deci raspunsul era lista nefiltrata
+    la nivel national, identica pentru orice CUI si chiar fara niciun filtru
+    (verificat: acelasi set de id-uri, acelasi `total` plafonat).
+
+    Potrivire EXACTA pe primul token, nu `startswith`: exista CUI-uri de 7 cifre
+    (ex. 8000138) confundabile cu prefixe ale unora de 8.
+
+    Returneaza {"resolved": bool, "supplier_id": int | None, "reason": str}.
+    Ambiguitatea (>=2 potriviri) NU se rezolva prin ghicire — se raporteaza.
+    """
+    cui_clean = _normalize_cui(cui)
+    if not cui_clean:
+        return {"resolved": False, "supplier_id": None, "reason": "CUI invalid"}
+
+    if use_cache:
+        from backend.services import cache_service
+        ck = cache_service.make_cache_key("seap_supplier_id", cui_clean)
+        cached = await cache_service.get(ck)
+        if isinstance(cached, dict) and "resolved" in cached:
+            return cached
+
+    async def _lookup():
+        c = get_client()
+        return await c.get(SEAP_SUPPLIER_LOOKUP_URL, params={"filter": cui_clean},
+                           headers={"Referer": "https://e-licitatie.ro"})
+
+    resp = await with_retry(_lookup, retries=1, backoff=[3], source_name="SEAP searchSuppliers")
+    if resp.status_code != 200:
+        raise SeapSourceError(f"searchSuppliers: HTTP {resp.status_code}")
+    try:
+        payload = resp.json()
+    except Exception as e:
+        raise SeapSourceError(f"searchSuppliers: corp non-JSON ({e})") from e
+
+    items = payload if isinstance(payload, list) else (payload.get("items") or [])
+    exact = [
+        it for it in items
+        if isinstance(it, dict)
+        and _normalize_cui(str(it.get("text") or "").strip().split(" ")[0]) == cui_clean
+    ]
+
+    if len(exact) == 1:
+        result = {"resolved": True, "supplier_id": exact[0].get("id"),
+                  "reason": "", "supplier_text": str(exact[0].get("text") or "")}
+    elif not exact:
+        result = {"resolved": False, "supplier_id": None,
+                  "reason": "CUI negasit in registrul de furnizori SICAP"}
+    else:
+        result = {"resolved": False, "supplier_id": None,
+                  "reason": f"{len(exact)} furnizori cu acelasi CUI — ambiguu, nu ghicim"}
+
+    if use_cache:
+        from backend.services import cache_service
+        ck = cache_service.make_cache_key("seap_supplier_id", cui_clean)
+        await cache_service.set(ck, result, "seap_supplier_id")
+    return result
+
+
+def _parse_ca_notice(item: dict) -> dict:
+    """Atribuire clasica (GetCANoticeList).
+
+    Numele de campuri sunt cele MASURATE pe raspunsul real (2026-07-24), nu cele
+    presupuse. Codul anterior citea `contractingAuthorityName`, `publicationDate`,
+    `contractCurrency` si `sysNoticeTypeDescription` — NICIUNUL nu exista pe acest
+    endpoint, deci 4 din 7 campuri erau goale MEREU, mascate de `.get(k, default)`.
+
+    `ronContractValue` e 0.0 pe acordurile-cadru reale (valoarea nu e un numar unic).
+    Zero NU se raporteaza ca valoare — ar dezumfla totalul; se marcheaza necunoscut.
+    """
+    raw_value = item.get("ronContractValue")
+    value = raw_value if isinstance(raw_value, int | float) and raw_value > 0 else None
+    state = item.get("sysNoticeState")
+    return {
+        "title": item.get("contractTitle") or "",
+        "value": value,
+        "value_unknown": value is None,
+        "currency": item.get("currencyCode") or "RON",
+        "authority": item.get("contractingAuthorityNameAndFN") or "",
+        "date": item.get("noticeStateDate") or "",
+        "notice_no": item.get("noticeNo") or "",
+        # Starea NOTIFICARII, nu a achizitiei — se persista, NU se filtreaza pe ea
+        # pana nu stim ce id inseamna "anulat".
+        "state": (state or {}).get("text", "") if isinstance(state, dict) else str(state or ""),
+        "state_id": (state or {}).get("id") if isinstance(state, dict) else None,
+        "cpv": _cpv_code8(item.get("cpvCodeAndName") or ""),
+    }
+
+
+def _parse_direct_acquisition(item: dict) -> dict:
+    """Achizitie directa (GetDirectAcquisitionList).
+
+    Nume de campuri MASURATE pe raspunsul real filtrat (2026-07-24). Doua campuri
+    din parserul anterior nu existau deloc pe acest endpoint, deci erau goale
+    dintotdeauna, mascate de `.get(k, default)` si de faptul ca datele erau oricum
+    neatribuite:
+        contractingAuthorityName -> NU EXISTA; real: `contractingAuthority`
+        sysDirectAcqStateName    -> NU EXISTA; real: `sysDirectAcquisitionState`,
+                                    si e OBIECT {id, text}, nu string
+    """
+    state = item.get("sysDirectAcquisitionState")
+    state_id = state.get("id") if isinstance(state, dict) else None
+    return {
+        "title": item.get("directAcquisitionName") or "",
+        "value": item.get("closingValue"),
+        "authority": item.get("contractingAuthority") or "",
+        "date": item.get("publicationDate") or "",
+        "notice_no": item.get("uniqueIdentificationCode") or "",
+        "state": state.get("text", "") if isinstance(state, dict) else str(state or ""),
+        "state_id": state_id,
+        "won": state_id == DA_STATE_WON,
+        "cpv": _cpv_code8(item.get("cpvCode") or ""),
+        "supplier_cui": _cui_from_supplier_field(item.get("supplier")),
+    }
+
+
+def seap_status(seap) -> str:
+    """Verdictul unui payload SEAP, intr-un singur loc pentru toti consumatorii.
+
+    'verified_with_contracts' — atribuiri confirmate pentru firma ceruta
+    'verified_empty'          — verificat, firma NU are contracte publice (fapt)
+    'unverified'              — nu stim (sursa a esuat / furnizor nerezolvat)
+
+    Distinctia dintre ultimele doua e intreg scopul acestei functii: pana la
+    2026-07-24 ambele arata ca "0", iar zero era prezentat ca fapt.
+    Accepta si forma WRAPPED (`_make_field`), ca sa nu se re-implementeze
+    unwrap-ul in fiecare consumator.
+    """
+    if not isinstance(seap, dict):
+        return "unverified"
+    inner = seap.get("value") if isinstance(seap.get("value"), dict) else seap
+    if not inner.get("contracts_verified"):
+        return "unverified"
+    return "verified_with_contracts" if (inner.get("total_contracts", 0) or 0) > 0 else "verified_empty"
 
 
 def _cpv_code8(raw: str) -> str:
@@ -27,123 +229,204 @@ def _cpv_code8(raw: str) -> str:
 
 
 async def get_contracts_won(cui: str, page_size: int = 20, use_cache: bool = True, eur_ron_rate: float | None = None) -> dict:
-    """Cauta contracte/licitatii castigate de o firma pe SEAP. Cu cache optional."""
-    cui_clean = str(cui).strip()
-    if not cui_clean.isdigit():
-        return {"error": "CUI invalid", "contracts": []}
+    """Contracte publice ATRIBUITE firmei, pe SICAP.
 
-    # Cache check
+    CONTRACT DE RETUR — `contracts_verified` este cheia pe care trebuie s-o
+    citeasca ORICE consumator:
+      True  -> `contracts` / `direct_acquisitions` sunt atribuite firmei cerute,
+               verificate prin filtrare server-side pe id-ul intern de furnizor.
+      False -> NU stim nimic despre firma. `reason` spune de ce. Listele sunt
+               goale, iar zero NU inseamna "firma n-are contracte".
+
+    De ce exista flagul: pana la 2026-07-24 aceasta functie trimitea
+    `spiCuiSupplier`, o cheie pe care SICAP o ignora TACUT (cheile necunoscute nu
+    produc eroare). Raspunsul era lista nefiltrata la nivel national — identica
+    pentru orice CUI si chiar fara niciun filtru. Fiecare raport a prezentat
+    contractele altor firme ca fiind ale firmei analizate.
+
+    `page_size` e pastrat in semnatura pentru compatibilitate cu apelantii
+    existenti, dar nu mai limiteaza rezultatul: numaratoarea vine din `total`.
+    """
+    cui_clean = _normalize_cui(cui)
+    if not cui_clean:
+        return {"cui": str(cui), "contracts_verified": False, "contracts": [],
+                "direct_acquisitions": [], "reason": "CUI invalid",
+                "total_contracts": 0, "won_cpv_codes": [], "source": "SEAP"}
+
     if use_cache:
         from backend.services import cache_service
         cache_key = cache_service.make_cache_key("seap_history", cui_clean)
         cached = await cache_service.get(cache_key)
-        if cached is not None:
+        if isinstance(cached, dict) and "contracts_verified" in cached:
             logger.debug(f"SEAP: cache hit for CUI {cui_clean}")
             return cached
 
-    results = {"cui": cui_clean, "contracts": [], "direct_acquisitions": [], "source": "SEAP"}
+    def _unverified(reason: str) -> dict:
+        return {"cui": cui_clean, "contracts_verified": False, "contracts": [],
+                "direct_acquisitions": [], "reason": reason, "total_contracts": 0,
+                "contracts_count": 0, "direct_count": 0, "total_value": None,
+                "won_cpv_codes": [], "source": "SEAP"}
 
-    # 1. Licitatii (CA Notices)
+    # PAS 1 — rezolutia CUI -> id intern. GARDA CRITICA: daca nu se rezolva,
+    # ne oprim AICI. Un request fara parametrul de furnizor NU e un fallback:
+    # intoarce lista nefiltrata (plafonul de 3000/2000) si reinvie exact iluzia
+    # "o firma castiga tot".
     try:
-        payload = {
-            "pageSize": page_size,
-            "pageIndex": 0,
-            "spiCuiSupplier": cui_clean,
-            "sortField": "publicationDate",
-            "sortOrder": "desc",
-        }
+        resolution = await resolve_supplier_id(cui_clean, use_cache=use_cache)
+    except SeapSourceError as e:
+        logger.warning(f"[seap] rezolutie furnizor esuata pt {cui_clean}: {e}")
+        return _unverified(f"sursa indisponibila la rezolutie: {e}")
 
-        async def _fetch_notices():
-            c = get_client()
-            # Referer OBLIGATORIU la api-pub SICAP — fara el da HTTP 403 (bug istoric: lipsea)
-            return await c.post(SEAP_NOTICES_URL, json=payload, headers=_SICAP_HEADERS)
+    if not resolution.get("resolved"):
+        return _unverified(resolution.get("reason") or "furnizor nerezolvat")
 
-        logger.debug(f"SEAP: searching notices for CUI {cui_clean}")
-        response = await with_retry(_fetch_notices, retries=1, backoff=[3], source_name="SEAP notices")
+    supplier_id = resolution["supplier_id"]
+    results = {
+        "cui": cui_clean,
+        "contracts_verified": True,
+        "supplier_id": supplier_id,
+        "contracts": [],
+        "direct_acquisitions": [],
+        "source": "SEAP",
+        "reason": "",
+    }
 
-        if response.status_code == 200:
-            data = response.json()
-            items = data.get("items", data.get("searchResult", {}).get("items", []))
-            if isinstance(items, list):
-                for item in items[:10]:
-                    results["contracts"].append({
-                        "title": item.get("contractTitle", item.get("noticeTitle", "")),
-                        "value": item.get("ronContractValue", item.get("estimatedValue")),
-                        "currency": item.get("contractCurrency", "RON"),
-                        "authority": item.get("contractingAuthorityName", ""),
-                        "date": item.get("publicationDate", ""),
-                        "type": item.get("sysNoticeTypeDescription", ""),
-                        "cpv": _cpv_code8(item.get("cpvCodeAndName") or item.get("cpvCode") or ""),
-                    })
-            results["contracts_count"] = len(results["contracts"])
-            logger.debug(f"SEAP notices: {len(results['contracts'])} results")
-        else:
-            logger.warning(f"SEAP notices HTTP {response.status_code}")
-            results["notices_error"] = f"HTTP {response.status_code}"
+    # PAS 2 — atribuiri clasice (CA notices), filtrate pe `winnerId`.
+    # `sysNoticeTypeIds: []` = TOATE tipurile. Masurat pe STRABAG: tip 3 -> 84,
+    # toate -> 177 (tip 18 singur aduce 92). Pentru IMM-uri, unde procedurile
+    # simplificate sunt canalul principal, fixarea pe [3] ar rata grosul.
+    ca_payload = {
+        "pageSize": DETAIL_PAGE_SIZE, "pageIndex": 0,
+        "winnerId": supplier_id, "sysNoticeTypeIds": [],
+        "sortField": "publicationDate", "sortOrder": "desc",
+    }
 
-    except Exception as e:
-        logger.warning(f"SEAP notices error: {e}")
-        results["notices_error"] = str(e)
+    async def _fetch_ca():
+        c = get_client()
+        # Referer OBLIGATORIU la api-pub SICAP — fara el da HTTP 403 (bug istoric: lipsea)
+        return await c.post(SEAP_NOTICES_URL, json=ca_payload, headers=_SICAP_HEADERS)
 
-    await asyncio.sleep(REQUEST_DELAY)
-
-    # 2. Achizitii directe
     try:
-        da_payload = {
-            "pageSize": page_size,
-            "pageIndex": 0,
-            "spiCuiSupplier": cui_clean,
-            "sortField": "publicationDate",
-            "sortOrder": "desc",
-        }
+        resp = await with_retry(_fetch_ca, retries=1, backoff=[3], source_name="SEAP CA notices")
+        data = _json_or_raise(resp, "GetCANoticeList")
+        items = data.get("items") or []
+        results["contracts"] = [_parse_ca_notice(it) for it in items if isinstance(it, dict)]
+        ca_total = data.get("total")
+        results["contracts_count"] = ca_total if isinstance(ca_total, int) else len(results["contracts"])
+        results["contracts_count_capped"] = results["contracts_count"] >= TOTAL_CAP_CA
+    except SeapSourceError as e:
+        logger.warning(f"[seap] CA notices pt {cui_clean}: {e}")
+        return _unverified(f"atribuiri clasice indisponibile: {e}")
 
-        async def _fetch_direct():
-            c = get_client()
-            return await c.post(SEAP_DIRECT_URL, json=da_payload, headers=_SICAP_HEADERS)
+    await asyncio.sleep(REQUEST_DELAY)  # secvential: SICAP are anunt anti-bot din 15.07.2026
 
-        logger.debug(f"SEAP: searching direct acquisitions for CUI {cui_clean}")
-        response = await with_retry(_fetch_direct, retries=1, backoff=[3], source_name="SEAP direct")
+    # PAS 3 — achizitii directe. ACELASI endpoint ca inainte, dar cu parametrul
+    # corect: `supplierId` (NU `winnerId` — fiecare endpoint are alt nume, nu
+    # exista simetrie). Plus filtru de stare server-side: fara el, `total` numara
+    # si ofertele REFUZATE ca si cum ar fi contracte castigate (masurat pe STRABAG:
+    # 188 rezultate, dintre care doar 170 castigate).
+    da_payload = {
+        "pageSize": DETAIL_PAGE_SIZE, "pageIndex": 0,
+        "supplierId": supplier_id,
+        DA_STATE_PARAM: DA_STATE_WON,
+        "sortField": "publicationDate", "sortOrder": "desc",
+    }
 
-        if response.status_code == 200:
-            data = response.json()
-            items = data.get("items", data.get("searchResult", {}).get("items", []))
-            if isinstance(items, list):
-                for item in items[:10]:
-                    results["direct_acquisitions"].append({
-                        "title": item.get("directAcquisitionName", item.get("title", "")),
-                        "value": item.get("closingValue", item.get("estimatedValue")),
-                        "authority": item.get("contractingAuthorityName", ""),
-                        "date": item.get("publicationDate", ""),
-                        "state": item.get("sysDirectAcqStateName", ""),
-                        "cpv": _cpv_code8(item.get("cpvCode") or item.get("cpvCodeAndName") or ""),
-                    })
-            results["direct_count"] = len(results["direct_acquisitions"])
-            logger.debug(f"SEAP direct: {len(results['direct_acquisitions'])} results")
-        else:
-            logger.warning(f"SEAP direct HTTP {response.status_code}")
-            results["direct_error"] = f"HTTP {response.status_code}"
+    async def _fetch_da():
+        c = get_client()
+        return await c.post(SEAP_DIRECT_URL, json=da_payload, headers=_SICAP_HEADERS)
 
-    except Exception as e:
-        logger.warning(f"SEAP direct error: {e}")
-        results["direct_error"] = str(e)
+    try:
+        resp = await with_retry(_fetch_da, retries=1, backoff=[3], source_name="SEAP direct")
+        data = _json_or_raise(resp, "GetDirectAcquisitionList")
+        items = data.get("items") or []
+        parsed = [_parse_direct_acquisition(it) for it in items if isinstance(it, dict)]
 
-    # B4 fix: Sum contract values with RON conversion
-    # D1 fix: Use BNR rate if provided, fallback 4.97 (closer to real rate)
+        # DOUA LINII DE APARARE, ambele independente de filtrele serverului —
+        # tocmai pentru ca modul de esec al acestei surse e "parametru ignorat
+        # TACIT", nu eroare:
+        #   (a) furnizorul: itemul poarta `supplier`, deci se poate valida per-item
+        #   (b) starea: se re-verifica local ca e chiar "Oferta acceptata"
+        kept, wrong_supplier, not_won = [], 0, 0
+        for p in parsed:
+            if p["supplier_cui"] != cui_clean:
+                wrong_supplier += 1
+            elif not p["won"]:
+                not_won += 1
+            else:
+                kept.append(p)
+        if wrong_supplier:
+            logger.warning(
+                f"[seap] {wrong_supplier}/{len(parsed)} achizitii directe aruncate — furnizor "
+                f"diferit de CUI {cui_clean}; filtrul server-side pare RUPT"
+            )
+        if not_won:
+            logger.warning(
+                f"[seap] {not_won}/{len(parsed)} achizitii directe aruncate — stare != "
+                f"'Oferta acceptata'; filtrul de stare pare IGNORAT"
+            )
+
+        results["direct_acquisitions"] = kept
+        results["direct_dropped_mismatch"] = wrong_supplier
+        results["direct_dropped_not_won"] = not_won
+
+        da_total = data.get("total")
+        server_filters_held = not wrong_supplier and not not_won
+        # `total` e autoritar DOAR daca ambele filtre server-side au tinut. Daca
+        # nu, cade pe numaratoarea locala — care e la randul ei nesigura daca setul
+        # a fost trunchiat de plafon (vezi mai jos).
+        results["direct_count"] = (
+            da_total if isinstance(da_total, int) and server_filters_held else len(kept)
+        )
+        results["direct_count_capped"] = isinstance(da_total, int) and da_total >= TOTAL_CAP_DA
+    except SeapSourceError as e:
+        logger.warning(f"[seap] achizitii directe pt {cui_clean}: {e}")
+        return _unverified(f"achizitii directe indisponibile: {e}")
+
+    # Numaratoarea vine din `total`, nu din `len(items)`. Inainte, ambele erau
+    # plafonate la 10 de `items[:10]` cu page_size=20, deci orice firma raporta
+    # cel mult 10 contracte — mascat cat timp datele erau oricum false. STRABAG
+    # (177 atribuiri clasice) ar fi raportat "10".
+    results["total_contracts"] = results["contracts_count"] + results["direct_count"]
+
+    # GARDA DE TRUNCHIERE. Doua moduri distincte in care numarul poate minti:
+    #   (a) `total` atinge plafonul serverului (3000 CA / 2000 DA) -> nu e un numar,
+    #       e un "cel putin atat";
+    #   (b) am adus mai putini itemi decat spune `total` (pageSize) -> orice
+    #       numaratoare sau filtrare LOCALA pe setul adus da un numar fals mic,
+    #       prezentat cu aceeasi incredere ca unul complet.
+    # Ambele se declara explicit; consumatorii nu trebuie sa le deduca.
+    results["total_capped"] = bool(
+        results.get("contracts_count_capped") or results.get("direct_count_capped")
+    )
+    results["items_truncated"] = bool(
+        len(results["contracts"]) < results["contracts_count"]
+        or len(results["direct_acquisitions"]) < results["direct_count"]
+    )
+    results["counts_reliable"] = not (results["total_capped"] or results["items_truncated"])
+
+    # Valoarea insumeaza doar itemii ADUSI, nu tot `total` — deci e un minim, nu
+    # un total real. Se declara ca atare, ca sa nu fie citita drept cifra de afaceri.
     total_value_ron = 0
     eur_rate = eur_ron_rate or 4.97
     for c in results["contracts"] + results["direct_acquisitions"]:
         val = c.get("value")
-        if isinstance(val, (int, float)):
-            currency = str(c.get("currency", "RON")).upper()
-            if currency == "EUR":
+        if isinstance(val, int | float):
+            if str(c.get("currency", "RON")).upper() == "EUR":
                 total_value_ron += val * eur_rate
             else:
                 total_value_ron += val
     results["total_value"] = round(total_value_ron)
     results["total_value_currency"] = "RON"
-    results["total_contracts"] = len(results["contracts"]) + len(results["direct_acquisitions"])
+    results["total_value_is_partial"] = (
+        len(results["contracts"]) < results["contracts_count"]
+        or len(results["direct_acquisitions"]) < results["direct_count"]
+        or any(c.get("value_unknown") for c in results["contracts"])
+    )
 
-    # Angle A v2: CPV-uri reale castigate (competente dovedite) — matching precis al oportunitatilor
+    # Angle A v2: CPV-uri REAL castigate (competente dovedite) — matching precis
+    # al oportunitatilor. Alimentat acum din contracte verificate; inainte marca
+    # "competenta dovedita" pe baza contractelor altor firme.
     won_cpv: list[str] = []
     _seen_cpv: set[str] = set()
     for c in results["contracts"] + results["direct_acquisitions"]:
@@ -153,7 +436,6 @@ async def get_contracts_won(cui: str, page_size: int = 20, use_cache: bool = Tru
             won_cpv.append(code)
     results["won_cpv_codes"] = won_cpv
 
-    # Cache save
     if use_cache:
         from backend.services import cache_service
         cache_key = cache_service.make_cache_key("seap_history", cui_clean)

@@ -116,6 +116,7 @@ def _rich_verified_data() -> dict:
         },
         # SEAP procurement history (wrapped like verified["market"]["seap"]) — diacritics probe latin-1.
         "market": {"seap": {"value": {
+            "contracts_verified": True,
             "total_contracts": 2, "contracts_count": 1, "direct_count": 1, "total_value": 900000,
             "contracts": [{"title": "Lucrări reabilitare școală", "value": 850000, "currency": "RON",
                            "authority": "Primăria Târgoviște", "date": "2025-01-15"}],

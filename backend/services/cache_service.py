@@ -83,6 +83,11 @@ TTL_HOURS = {
     "onrc": 168,       # 7 zile
     "seap_active": 24,     # F5.3: 2h → 24h (reduce API calls pt analize repetate)
     "seap_history": 720,  # 30 zile
+    # Maparea CUI -> id intern de furnizor SICAP. Un furnizor primeste id-ul o
+    # singura data, la inregistrare, si nu se schimba — deci se poate cache-ui
+    # mult mai agresiv decat contractele. Separat de `seap_history` tocmai ca
+    # invalidarea contractelor sa nu forteze o re-rezolutie inutila.
+    "seap_supplier_id": 8760,  # 1 an
     "tavily": 48,          # F5.3: 6h → 48h (Tavily quota 1000/luna)
     "bnr": 24,
     "ins": 720,         # 30 zile

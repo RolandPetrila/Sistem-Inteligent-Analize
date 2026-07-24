@@ -97,16 +97,30 @@ class TestSearchOpenTenders:
         assert r_yes["count"] == 1 and r_yes["basis"] == "istoric_real"
 
     async def test_get_contracts_won_extracts_cpv(self):
+        # Forma REALA masurata 2026-07-24: autoritatea e `contractingAuthorityNameAndFN`
+        # pe CA si `contractingAuthority` pe DA — `contractingAuthorityName` (folosit
+        # de fixture-ul anterior) nu exista pe NICIUNUL. Itemul DA poarta `supplier`
+        # si `sysDirectAcquisitionState`, ambele validate per-item de client.
         ca_items = [{"contractTitle": "Gaze", "cpvCodeAndName": "09123000-7 - Gaze naturale",
-                     "ronContractValue": 1000, "contractingAuthorityName": "X"}]
+                     "ronContractValue": 1000, "contractingAuthorityNameAndFN": "X",
+                     "noticeStateDate": "2026-01-01T00:00:00+02:00"}]
         da_items = [{"directAcquisitionName": "Birotica", "cpvCode": "30190000-7",
-                     "closingValue": 500, "contractingAuthorityName": "Y"}]
-        with patch("backend.agents.tools.seap_client.get_client") as mc, \
+                     "closingValue": 500, "contractingAuthority": "Y",
+                     "publicationDate": "2026-01-01T00:00:00+02:00",
+                     "supplier": "RO 12345678 FIRMA TEST",
+                     "sysDirectAcquisitionState": {"id": 7, "text": "Oferta acceptata"}}]
+        with patch("backend.agents.tools.seap_client.resolve_supplier_id",
+                   new_callable=AsyncMock,
+                   return_value={"resolved": True, "supplier_id": 4242, "reason": ""}), \
+                patch("backend.agents.tools.seap_client.get_client") as mc, \
                 patch("backend.services.cache_service.get", new_callable=AsyncMock, return_value=None), \
                 patch("backend.services.cache_service.set", new_callable=AsyncMock), \
                 patch("backend.agents.tools.seap_client.asyncio.sleep", new_callable=AsyncMock):
             mc.return_value.post = AsyncMock(side_effect=[_mock_resp(ca_items), _mock_resp(da_items)])
             r = await get_contracts_won("12345678")
+        assert r["contracts_verified"] is True
         assert "09123000" in r["won_cpv_codes"]
         assert "30190000" in r["won_cpv_codes"]
         assert r["contracts"][0]["cpv"] == "09123000"
+        assert r["direct_acquisitions"][0]["authority"] == "Y"
+        assert r["contracts"][0]["authority"] == "X"

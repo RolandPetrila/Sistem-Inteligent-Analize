@@ -400,6 +400,7 @@ class TestRichFields:
     def test_seap_procurement_history_rendered(self):
         # SEAP data is wrapped by _make_field -> {"value": {...}} in verified["market"]["seap"]
         data = {"market": {"seap": {"value": {
+            "contracts_verified": True,
             "total_contracts": 3, "contracts_count": 2, "direct_count": 1, "total_value": 1500000,
             "contracts": [{"title": "Reparatii drum judetean", "value": 800000, "currency": "RON",
                            "authority": "Primaria Cluj", "date": "2025-03-01"}],

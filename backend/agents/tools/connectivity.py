@@ -99,15 +99,61 @@ async def ping_openapi_ro() -> dict:
     return {"ok": True, "message": f"openapi.ro OK (found={data.get('found')}{quota_msg})"}
 
 
+# Canar POZITIV: firma mare de constructii, cu istoric bogat si stabil de contracte
+# publice. Prag, nu egalitate — o firma activa castiga contracte noi.
+SEAP_CANARY_POSITIVE_CUI = "6891914"   # STRABAG (masurat 2026-07-24: 177 CA + 170 DA)
+# Canar NEGATIV: CUI valid care NU apare in registrul de furnizori SICAP.
+SEAP_CANARY_NEGATIVE_CUI = "43978110"  # verificat live: 0 potriviri la searchSuppliers
+
+
 async def ping_seap() -> dict:
+    """Valideaza CORECTITUDINEA filtrarii, nu disponibilitatea sursei.
+
+    Ping-ul anterior raporta "SEAP OK (N contracte gasite)" — ar fi trecut VERDE
+    peste bug-ul care a produs contracte fantoma in fiecare raport: sursa
+    raspundea, returna rezultate, numarul parea plauzibil. Un ping care numara
+    rezultate nu poate detecta o potrivire falsa.
+
+    Doua canare, pentru cele doua moduri de esec distincte:
+      POZITIV  — firma cu contracte trebuie sa intoarca > 0. Prinde BLOCAREA
+                 (SICAP nu expune niciun header de rate-limit, deci o blocare se
+                 poate manifesta ca 200 cu lista goala).
+      NEGATIV  — firma fara contracte trebuie sa intoarca 0 si `verified=False`.
+                 Prinde FILTRUL RUPT: daca revine brusc cu sute de rezultate,
+                 filtrarea a incetat sa functioneze. Acesta e canarul care ar fi
+                 prins bug-ul original.
+    """
     from backend.agents.tools.seap_client import get_contracts_won
+
     try:
-        data = await get_contracts_won(TEST_CUI, page_size=5, use_cache=True)
+        pos = await get_contracts_won(SEAP_CANARY_POSITIVE_CUI, use_cache=True)
     except Exception as e:
-        return {"ok": False, "message": f"SEAP eroare: {e}"[:200]}
-    if "notices_error" in data and "direct_error" in data:
-        return {"ok": False, "message": f"SEAP indisponibil: {data.get('notices_error')}"[:200]}
-    return {"ok": True, "message": f"SEAP OK ({data.get('total_contracts', 0)} contracte gasite pt CUI test)"}
+        return {"ok": False, "message": f"SEAP eroare (canar pozitiv): {e}"[:200]}
+
+    if not pos.get("contracts_verified"):
+        return {"ok": False,
+                "message": f"SEAP: canarul pozitiv nu s-a putut verifica — {pos.get('reason')}"[:200]}
+    pos_total = pos.get("total_contracts", 0) or 0
+    if pos_total <= 0:
+        return {"ok": False,
+                "message": (f"SEAP: firma-canar {SEAP_CANARY_POSITIVE_CUI} raporteaza 0 contracte "
+                            "— sursa raspunde dar nu livreaza (posibil blocare anti-bot)")[:200]}
+
+    try:
+        neg = await get_contracts_won(SEAP_CANARY_NEGATIVE_CUI, use_cache=True)
+    except Exception as e:
+        return {"ok": False, "message": f"SEAP eroare (canar negativ): {e}"[:200]}
+
+    neg_total = neg.get("total_contracts", 0) or 0
+    if neg.get("contracts_verified") and neg_total > 0:
+        return {"ok": False,
+                "message": (f"SEAP: FILTRU RUPT — CUI-ul {SEAP_CANARY_NEGATIVE_CUI}, care nu are "
+                            f"contracte, raporteaza {neg_total}. Rezultatele nu mai sunt atribuite "
+                            "firmei cerute.")[:200]}
+
+    return {"ok": True,
+            "message": (f"SEAP OK — filtrare verificata: canar pozitiv {pos_total} contracte, "
+                        f"canar negativ 0")}
 
 
 async def ping_bpi() -> dict:
