@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from loguru import logger
 from pydantic import BaseModel  # noqa: F401 — used by ChatRequest
 
+from backend.agents import ai_models
 from backend.config import settings
 from backend.database import db
 from backend.errors import ErrorCode, RISError
@@ -842,7 +843,8 @@ async def chat_with_company(company_id: str, req: ChatRequest):
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {settings.groq_api_key}"},
                 json={
-                    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+                    # Model din sursa unica (ai_models) — scout-ul vechi era RETRAS -> 404.
+                    "model": ai_models.get_model("groq"),
                     "messages": [{"role": "user", "content": prompt}],
                     "max_tokens": 600,
                     "temperature": 0.3,
@@ -855,13 +857,15 @@ async def chat_with_company(company_id: str, req: ChatRequest):
         except Exception as e:
             logger.warning(f"[chat] Groq failed: {e}")
 
-    if not answer and settings.gemini_api_key:
+    # BUG reparat: era `settings.gemini_api_key` (atribut INEXISTENT in config -> AttributeError
+    # cand Groq cadea, adica de cand scout-ul s-a retras). Cheia reala e `google_ai_api_key`.
+    if not answer and settings.google_ai_api_key:
         try:
             from backend.http_client import get_client
             client = get_client()
             resp = await client.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
-                f"?key={settings.gemini_api_key}",
+                f"https://generativelanguage.googleapis.com/v1beta/models/{ai_models.get_model('gemini')}:generateContent"
+                f"?key={settings.google_ai_api_key}",
                 json={
                     "contents": [{"parts": [{"text": prompt}]}],
                     "generationConfig": {"maxOutputTokens": 600, "temperature": 0.3},

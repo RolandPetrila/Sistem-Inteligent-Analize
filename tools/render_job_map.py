@@ -39,7 +39,7 @@ RE_SUM = re.compile(r"\|\s+(Status|Total time|Sources OK|Sources FAIL|Completene
 
 # Provider AI -> eticheta lizibila
 PROVIDER_LABEL = {
-    "claude": "Claude Opus (Max)", "groq": "Groq (Llama 4 Scout)",
+    "claude": "Claude Opus (Max)", "groq": "Groq (Llama 3.1 8B Instant)",
     "gemini": "Gemini 2.5 Flash", "mistral": "Mistral Small 3",
     "cerebras": "Cerebras (gpt-oss-120b)", "degraded": "Fallback determinist (fara AI)",
     "unknown": "necunoscut",

@@ -185,7 +185,7 @@ ANALYSIS_TYPES = [
 
 AI_PROVIDERS = [
     ("Claude Code CLI", "SYNTHESIS_MODE=claude_code", False, "NEACTIV in productie — .env are SYNTHESIS_MODE=autonomous (serviciul ruleaza ca SYSTEM, fara auth CLI). Vezi plan E2E."),
-    ("Groq (Llama 4 Scout)", "GROQ_API_KEY", True, "Testabil live prin /api/settings/test/groq."),
+    ("Groq (Llama 3.1 8B Instant)", "GROQ_API_KEY", True, "Testabil live prin /api/settings/test/groq."),
     ("Gemini 2.5 Flash", "GOOGLE_AI_API_KEY", True, "Testabil live prin /api/settings/test/gemini."),
     ("Mistral Small 3", "MISTRAL_API_KEY", True, "Testabil live prin /api/settings/test/mistral (adaugat in acest sweep, bug #6)."),
     ("Cerebras (gpt-oss-120b)", "CEREBRAS_API_KEY", True, "Testabil live prin /api/settings/test/cerebras. Model migrat 2026-07-12 (fostul model retras din catalog)."),

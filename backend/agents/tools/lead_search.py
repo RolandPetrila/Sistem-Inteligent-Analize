@@ -17,6 +17,7 @@ import re
 
 from loguru import logger
 
+from backend.agents import ai_models
 from backend.config import settings
 from backend.database import db
 from backend.http_client import get_client
@@ -52,7 +53,9 @@ async def parse_lead_criteria(ideal_client: str) -> dict:
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}"},
             json={
-                "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+                # Model din sursa unica (ai_models) — scout-ul vechi era RETRAS -> 404 tacut
+                # -> parsarea criteriilor cadea mereu pe fallback gol.
+                "model": ai_models.get_model("groq"),
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.1,
                 "max_tokens": 200,
