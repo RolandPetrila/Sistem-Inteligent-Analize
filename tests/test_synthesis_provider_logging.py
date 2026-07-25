@@ -29,7 +29,7 @@ import time as _time
 import pytest
 
 from backend.agents import agent_synthesis as agent_synthesis_module
-from backend.agents import circuit_breaker
+from backend.agents import ai_models, circuit_breaker
 from backend.agents.agent_synthesis import SynthesisAgent
 from backend.services.job_logger import finish_job_log, get_log_file_path, start_job_log
 
@@ -159,10 +159,9 @@ class TestLogSynthesisConcurrentFallbackWins:
 
 
 class TestLogSynthesisAllFailDegraded:
-    """Ruta 'quality': Claude + toti cei din concurrent fallback + plasa cerebras
-    pica -> degradare non-AI (_degraded_fallback). Nimeni nu reuseste sa raceze
-    aici (toti returneaza falsy), deci ordinea reala de completare a task-urilor
-    nu afecteaza rezultatul (vezi nota din clasa de mai sus)."""
+    """Ruta 'quality': TOTI providerii din lantul secvential pica -> degradare non-AI
+    (_degraded_fallback). Mockam TOTI cei 7 provideri (nu doar cei din vechiul lant) —
+    altfel openrouter/sambanova (noi in QUALITY_CHAIN) ar face apeluri LIVE reale."""
 
     @pytest.mark.asyncio
     async def test_degraded_fallback_logged_as_failure(self, agent, log_calls):
@@ -170,6 +169,8 @@ class TestLogSynthesisAllFailDegraded:
             return None
 
         agent._generate_with_claude = fail
+        agent._generate_with_openrouter = fail
+        agent._generate_with_sambanova = fail
         agent._generate_with_gemini = fail
         agent._generate_with_groq = fail
         agent._generate_with_mistral = fail
@@ -261,41 +262,59 @@ class TestLogSynthesisWritesToRealJobLogFile:
                 leftover.unlink(missing_ok=True)
 
 
-class TestConcurrentFallbackReturnsWinnerName:
-    """Test unitar direct pe `_concurrent_fallback`: trebuie sa intoarca tuplul
-    (text, provider_name), nu doar text — apelantul are nevoie de nume ca sa
-    poata loga cine a castigat."""
+class TestSequentialFallbackReturnsWinnerName:
+    """`_sequential_fallback` (inlocuieste _concurrent_fallback): lant ORDONAT — intoarce
+    (text, provider_castigator). Ordinea e REALA: primul non-None castiga, restul NU se
+    apeleaza. Non-vacuitate: pe codul vechi (_concurrent_fallback, FIRST_COMPLETED) toti
+    providerii porneau simultan si castiga cel mai RAPID -> asertiunea de ordine `calls`
+    de mai jos ar pica (si metoda nici nu exista sub acest nume)."""
 
     @pytest.mark.asyncio
-    async def test_returns_tuple_with_winning_provider(self, agent):
-        async def fake_mistral(prompt: str) -> str:
-            return "Continut Mistral"
+    async def test_returns_winner_and_stops_at_first_success(self, agent):
+        calls = []
 
-        agent._generate_with_mistral = fake_mistral
-        for _ in range(3):
-            circuit_breaker.record_provider_failure("cerebras")
-            circuit_breaker.record_provider_failure("gemini")
+        async def fake_claude(prompt: str):
+            calls.append("claude")
+            return None  # primar pica
 
-        section = {"key": "executive_summary", "title": "Rezumat", "word_count": 100, "prompt": "x"}
-        text, provider = await agent._concurrent_fallback(
-            section, _minimal_verified_data(), providers=["cerebras", "mistral", "gemini"]
+        async def fake_openrouter(prompt: str):
+            calls.append("openrouter")
+            return "Continut OpenRouter"  # al 2-lea castiga
+
+        async def fake_sambanova(prompt: str):
+            calls.append("sambanova")
+            return "NU trebuie atins"
+
+        async def fake_gemini(prompt: str):
+            calls.append("gemini")
+            return "NU trebuie atins"
+
+        agent._generate_with_claude = fake_claude
+        agent._generate_with_openrouter = fake_openrouter
+        agent._generate_with_sambanova = fake_sambanova
+        agent._generate_with_gemini = fake_gemini
+
+        section = {"key": "executive_summary", "title": "Rezumat", "word_count": 300, "prompt": "x"}
+        text, provider = await agent._sequential_fallback(
+            section, _minimal_verified_data(), ai_models.QUALITY_CHAIN
         )
 
-        assert text == "Continut Mistral"
-        assert provider == "mistral"
+        assert text == "Continut OpenRouter"
+        assert provider == "openrouter"
+        # Dovada ordinii: dupa succesul lui openrouter, sambanova/gemini NU au fost apelati.
+        assert calls == ["claude", "openrouter"], f"lantul nu s-a oprit la primul succes: {calls}"
 
     @pytest.mark.asyncio
     async def test_all_fail_returns_none_none(self, agent):
-        async def fail(prompt: str) -> str:
+        async def fail(prompt: str):
             return None
 
-        agent._generate_with_cerebras = fail
-        agent._generate_with_mistral = fail
-        agent._generate_with_gemini = fail
+        for name in ("claude", "openrouter", "sambanova", "gemini"):
+            setattr(agent, f"_generate_with_{name}", fail)
 
-        section = {"key": "executive_summary", "title": "Rezumat", "word_count": 100, "prompt": "x"}
-        text, provider = await agent._concurrent_fallback(
-            section, _minimal_verified_data(), providers=["cerebras", "mistral", "gemini"]
+        section = {"key": "executive_summary", "title": "Rezumat", "word_count": 300, "prompt": "x"}
+        text, provider = await agent._sequential_fallback(
+            section, _minimal_verified_data(), ai_models.QUALITY_CHAIN
         )
 
         assert text is None
