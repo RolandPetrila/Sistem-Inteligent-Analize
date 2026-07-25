@@ -159,9 +159,11 @@ class SynthesisProvidersMixin:
     ) -> str | None:
         """Apel generic OpenAI-compatible cu garzile de durabilitate §3/§4/§5.
         Returneaza textul sau None (None = sari providerul; motivul e logat distinct)."""
-        # §3: provider marcat INDISPONIBIL pe sesiune (model retras) -> sar fara apel
+        # §3: provider marcat INDISPONIBIL pe sesiune (model retras) -> sar fara apel.
+        # WARNING (nu info): marcajul persista pe proces pana la restart -> daca un model e
+        # retras, vrem semnal RECURENT in ris_runtime.log (WARNING+), nu tacere dupa primul.
         if ai_models.is_unavailable(provider):
-            logger.info(f"[ai] {provider} INDISPONIBIL pe sesiune — sar (nu reapelez modelul retras)")
+            logger.warning(f"[ai] {provider} INDISPONIBIL pe sesiune — sar (nu reapelez modelul retras)")
             return None
 
         if is_provider_circuit_open(provider):
@@ -256,7 +258,7 @@ class SynthesisProvidersMixin:
         modelul + URL-ul vin din ai_models (zero hardcodare)."""
         provider = "gemini"
         if ai_models.is_unavailable(provider):
-            logger.info(f"[ai] {provider} INDISPONIBIL pe sesiune — sar")
+            logger.warning(f"[ai] {provider} INDISPONIBIL pe sesiune — sar")
             return None
         if is_provider_circuit_open(provider):
             logger.info("[synthesis] Gemini circuit OPEN, skipping")

@@ -197,16 +197,19 @@ def classify_http_error(status_code: int, body: str) -> str:
     - "fail"     → esec generic/tranzitoriu → circuit breaker
 
     Ordinea conteaza: un 429 cu 'quota' e cota, un 400 cu 'context_length_exceeded' e overflow.
+
+    DEVIATIE CONSTIENTA de la D3 ("la 404 / model_not_found"): "gone" cere un MARKER in body,
+    NU doar `status_code == 404`. Motiv: un 404 GOL e adesea indisponibilitate TRANZITORIE upstream
+    (ex. OpenRouter "No endpoints found for X") — a-l trata ca "gone" ar dezactiva PERMANENT
+    providerul pe sesiune (pana la restart). Un 404 fara marker -> "fail" (circuit breaker cu TTL,
+    recuperabil). Retragerea reala (ex. groq scout) vine mereu cu `model_not_found` in body -> prinsa.
     """
     b = (body or "").lower()
-    if status_code == 404 or any(m in b for m in _GONE_MARKERS):
+    if any(m in b for m in _GONE_MARKERS):
         return "gone"
     if status_code == 429 or any(m in b for m in _QUOTA_MARKERS):
         return "quota"
-    if status_code == 400 and any(m in b for m in _OVERFLOW_MARKERS):
-        return "overflow"
-    # unele provideri intorc overflow ca 400 fara status dedicat sau ca 413
-    if status_code == 413 or any(m in b for m in _OVERFLOW_MARKERS):
+    if status_code in (400, 413) and any(m in b for m in _OVERFLOW_MARKERS):
         return "overflow"
     return "fail"
 

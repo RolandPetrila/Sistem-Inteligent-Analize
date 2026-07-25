@@ -101,8 +101,14 @@ class TestE5MonthlyValidityCatchesMissingModel:
 
 
 class TestErrorClassificationUnits:
-    def test_404_is_gone(self):
-        assert ai_models.classify_http_error(404, "") == "gone"
+    def test_bare_404_is_fail_not_gone(self):
+        # DEVIATIE D3 (advisor): un 404 GOL (fara marker) = tranzitoriu (ex. OpenRouter
+        # "no endpoints found") -> "fail" (circuit breaker, recuperabil), NU "gone"
+        # (care ar dezactiva permanent providerul pe sesiune). Retragerea reala vine cu marker.
+        assert ai_models.classify_http_error(404, "") == "fail"
+
+    def test_404_with_model_not_found_marker_is_gone(self):
+        assert ai_models.classify_http_error(404, '{"error":{"code":"model_not_found"}}') == "gone"
 
     def test_model_not_found_body_is_gone(self):
         assert ai_models.classify_http_error(400, '{"error":{"code":"model_not_found"}}') == "gone"

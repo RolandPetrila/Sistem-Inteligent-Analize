@@ -106,6 +106,19 @@ class TestSection3ModelGone:
         await _Bare()._generate_with_openai_compat("prompt", "groq")
         assert "groq" not in record_spy, "404 (model retras) nu trebuie tratat ca esec de continut"
 
+    @pytest.mark.asyncio
+    async def test_bare_404_no_marker_is_transient_not_permanent(self, monkeypatch, record_spy):
+        # Advisor: un 404 GOL fara marker (ex. OpenRouter "No endpoints found" = indisponibilitate
+        # TRANZITORIE upstream) NU trebuie sa dezactiveze PERMANENT providerul pe sesiune -> il
+        # tratam ca "fail" (circuit breaker cu TTL, recuperabil). Altfel un blip upstream ar
+        # ucide un slot de lant pana la restart.
+        monkeypatch.setattr(settings, "groq_api_key", "test-key", raising=False)
+        _install_fake_client(monkeypatch, _FakeResp(404, text="No endpoints found"))
+        out = await _Bare()._generate_with_openai_compat("prompt", "groq")
+        assert out is None
+        assert ai_models.is_unavailable("groq") is False, "404 gol tranzitoriu NU trebuie sa dezactiveze permanent"
+        assert "groq" in record_spy, "404 gol = fail tranzitoriu (circuit breaker), nu gone permanent"
+
 
 class TestSection5QuotaCanary:
     """E4 — §5: cota epuizata (429) distincta de esec de continut."""

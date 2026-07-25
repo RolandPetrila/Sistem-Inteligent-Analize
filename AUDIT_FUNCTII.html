@@ -56,10 +56,10 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
 <body>
 
 <h1>RIS — Audit Functii (dashboard live)</h1>
-<div class="subtitle">Generat din codul real la commit <code>ba87270</code> — regenereaza cu <code>python tools/generate_audit_dashboard.py</code> dupa orice functie noua.</div>
+<div class="subtitle">Generat din codul real la commit <code>a81dca8</code> — regenereaza cu <code>python tools/generate_audit_dashboard.py</code> dupa orice functie noua.</div>
 
 <div class="stats-bar">
-  <div class="stat-card"><div class="num">89/89</div><div class="label">Endpoint-uri REST+WS testate</div></div>
+  <div class="stat-card"><div class="num">89/90</div><div class="label">Endpoint-uri REST+WS testate</div></div>
   <div class="stat-card"><div class="num">9/9</div><div class="label">Tipuri de analiza</div></div>
   <div class="stat-card"><div class="num">5/5</div><div class="label">Provideri AI</div></div>
   <div class="stat-card"><div class="num">18/18</div><div class="label">Surse externe cu test live</div></div>
@@ -68,6 +68,11 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
 </div>
 
 
+<div class="warning-box">
+  <strong>⚠️ 1 endpoint(uri) noi, necuratate</strong> — gasite in cod dar fara metadate in
+  <code>tools/generate_audit_dashboard.py</code>. Adauga-le in <code>CURATED_ENDPOINTS</code> si regenereaza.
+  <ul><li><code>GET /api/settings/preflight</code></li></ul>
+</div>
 
 <div class="key-bar">
   <strong>Cheie API RIS (X-RIS-Key):</strong>
@@ -96,11 +101,11 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
   <a href="#pages">Pagini frontend</a>
 </div>
 
-<h2 id="endpoints">Endpoint-uri REST + WebSocket (89 total)</h2>
+<h2 id="endpoints">Endpoint-uri REST + WebSocket (90 total)</h2>
 <div class="filters">
-  <button class="active" data-filter="all">Toate (89)</button>
+  <button class="active" data-filter="all">Toate (90)</button>
   <button data-filter="tested">Testate (89)</button>
-  <button data-filter="untested">Netestate (0)</button>
+  <button data-filter="untested">Netestate (1)</button>
   <button data-filter="safe">Testabile live acum</button>
 </div>
 
@@ -551,6 +556,21 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
     </tbody>
   </table>
 </div>
+<div class="cat-block" data-catblock="NECURATAT">
+  <h3>NECURATAT <span class="cat-count">0/1 testate</span></h3>
+  <table class="ep-table">
+    <thead><tr><th>Metoda</th><th>Path</th><th>Status</th><th>Dovada / notă</th><th>Test</th></tr></thead>
+    <tbody>
+<tr data-cat="NECURATAT" data-tested="false">
+  <td><span class="method method-get">GET</span></td>
+  <td><code>/api/settings/preflight</code></td>
+  <td><span class="badge badge-fail">NETESTAT</span></td>
+  <td class="evidence">⚠️ Endpoint nou, fara metadate — adauga in CURATED_ENDPOINTS din generate_audit_dashboard.py.</td>
+  <td><code class="curl-cmd">curl -X GET &quot;$BASE_URL/api/settings/preflight&quot; -H &quot;X-RIS-Key: $RIS_API_KEY&quot;</code></td>
+</tr>
+    </tbody>
+  </table>
+</div>
 <div class="cat-block" data-catblock="NLQ">
   <h3>NLQ <span class="cat-count">1/1 testate</span></h3>
   <table class="ep-table">
@@ -839,7 +859,7 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
 <table><thead><tr><th>Provider</th><th>Env var</th><th>Test live</th><th>Nota</th></tr></thead><tbody><tr><td><strong>Claude Code CLI</strong></td><td><code>SYNTHESIS_MODE=claude_code</code></td>
 <td>—</td>
 <td>NEACTIV in productie — .env are SYNTHESIS_MODE=autonomous (serviciul ruleaza ca SYSTEM, fara auth CLI). Vezi plan E2E.</td></tr>
-<tr><td><strong>Groq (Llama 4 Scout)</strong></td><td><code>GROQ_API_KEY</code></td>
+<tr><td><strong>Groq (Llama 3.1 8B Instant)</strong></td><td><code>GROQ_API_KEY</code></td>
 <td><button class="btn-test" data-kind="provider" data-provider="groq">Testeaza live</button></td>
 <td>Testabil live prin /api/settings/test/groq.</td></tr>
 <tr><td><strong>Gemini 2.5 Flash</strong></td><td><code>GOOGLE_AI_API_KEY</code></td>
