@@ -77,6 +77,8 @@ def extract_and_validate_cui(text: str) -> dict:
     0-sau->=2->STOP ca filtrarea de furnizor SEAP din 93fa5de.
     Accepta formate: 12345678, RO12345678, RO 12345678.
     """
+    # Dedup pe sirul curatat EXACT: teoretic "09901265" si "9901265" ar putea numara
+    # ca 2 distincte (limita cunoscuta, nu bug — leading-zero pe CUI e practic inexistent).
     valid_distinct: list[str] = []
     for cand in _CUI_EXTRACT_RX.findall(text or ""):
         v = validate_cui(cand)

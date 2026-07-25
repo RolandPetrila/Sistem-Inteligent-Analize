@@ -60,6 +60,7 @@ class OfficialAgent(BaseAgent):
         # Cauta in ORICE camp text din input_params, nu doar unul hardcodat pe nume — evita
         # sa reparam aceeasi problema de N ori pe viitor pt alte tipuri de analiza noi.
         # Descoperit prin verificare E2E.
+        _fallback_reason = ""
         if not cui:
             for _val in params.values():
                 if not isinstance(_val, str) or not _val:
@@ -71,6 +72,7 @@ class OfficialAgent(BaseAgent):
                 if _r["valid"]:
                     cui = _r["cui_clean"]
                     break
+                _fallback_reason = _r["error"]  # ultimul esec (ambiguu / neidentificat)
         company_name = params.get("company_name", "")
         job_id = state.get("job_id", "")
 
@@ -105,13 +107,21 @@ class OfficialAgent(BaseAgent):
                     "progress": 0.20,
                 }
         else:
-            # 3c: slotul cui avea o valoare (nume in loc de CUI via analysis.py:88,
-            # sau text fara CUI valid MOD11) dar nu s-a rezolvat niciun CUI valid ->
-            # marcaj EXPLICIT, nu continua tacit pe gol. NU early_return:
-            # LEAD_GENERATION/CUSTOM pot rula legitim fara un CUI-tinta.
+            # 3c: nu s-a rezolvat niciun CUI valid MOD11. Marcaj EXPLICIT (nu continua
+            # tacit pe gol) in DOUA cazuri, nu doar unul:
+            #  (a) slotul cui avea o valoare (nume via analysis.py:88) — cui truthy;
+            #  (b) fallback-ul a incercat text liber si n-a gasit nimic valid (ambiguu
+            #      sau absent) — cui gol dar _fallback_reason setat. FARA asta, exact
+            #      calea pentru care exista fallback-ul producea un job fara CUI, tacut.
+            # NU early_return: LEAD_GENERATION/CUSTOM pot rula legitim fara CUI-tinta.
+            _cui_reason = ""
             if cui and str(cui).strip():
-                official_data["cui_warning"] = "CUI neidentificat (input fara CUI valid MOD 11)"
-                logger.warning(f"[official] CUI neidentificat din input: {cui!r}")
+                _cui_reason = "CUI neidentificat (input fara CUI valid MOD 11)"
+            elif _fallback_reason:
+                _cui_reason = f"CUI neidentificat din text liber ({_fallback_reason})"
+            if _cui_reason:
+                official_data["cui_warning"] = _cui_reason
+                logger.warning(f"[official] {_cui_reason}")
 
         # --- D1: ONRC Local lookup (instant, inaintea openapi.ro) ---
         if cui_clean:

@@ -1,0 +1,62 @@
+{
+  "current_step": "Agent 1 finalizat: 1/1 surse (100% complet)",
+  "historical_flags": [],
+  "official_data": {
+    "bnr_rates": {
+      "EUR": 5.05,
+      "USD": 4.6
+    },
+    "company_name": "",
+    "cui_input": "",
+    "cui_warning": "CUI neidentificat din text liber (Candidati multipli valizi (26313362, 18189442) — ambiguu)",
+    "data_freshness": {
+      "bnr": {
+        "data_age_years": 0,
+        "fresh": true,
+        "note": "daily rates"
+      }
+    },
+    "diagnostics": {
+      "completeness_score": 100,
+      "expected_sources": [
+        "BNR"
+      ],
+      "missing_fields": [
+        "ANAF fiscal status",
+        "Date financiare oficiale (ANAF Bilant)",
+        "ONRC structurat (openapi.ro) — CAEN, asociati, administratori",
+        "Cod CAEN (necesar pentru benchmark si context sector)",
+        "Context CAEN (sector, numar firme, benchmark)"
+      ],
+      "missing_sources": [],
+      "per_source": {
+        "BNR": {
+          "data_found": true,
+          "error": null,
+          "response_time_ms": 0,
+          "status": "OK"
+        }
+      }
+    },
+    "sources_summary": {
+      "failed": 0,
+      "ok": 1,
+      "total": 1
+    },
+    "timestamp": "2026-07-14T12:00:00+00:00"
+  },
+  "progress": 0.2,
+  "sources": [
+    {
+      "data": {
+        "EUR": 5.05,
+        "USD": 4.6
+      },
+      "data_found": true,
+      "response_time_ms": 0,
+      "source_name": "BNR",
+      "source_url": "https://www.bnr.ro/nbrfxrates.xml",
+      "status": "OK"
+    }
+  ]
+}

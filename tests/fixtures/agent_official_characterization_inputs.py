@@ -129,6 +129,31 @@ FIXTURES: dict[str, dict] = {
         "google_key": None,
     },
 
+    # --- 2b. Pas 3: fallback pe TEXT LIBER -> AMBIGUU (2 CUI distincte valide) -> niciun
+    # CUI rezolvat -> marcaj cui_warning "text liber" (branch-ul 3c largit). Exercita BUCLA
+    # fallback (input FARA camp cui dedicat), spre deosebire de no_cui_provided (nume in
+    # slotul cui -> bucla sarita). Fara acest fixture, calea fallback-gol e tacuta (advisor).
+    "fallback_ambiguous_no_cui": {
+        "input_params": {"ideal_client": "firma 26313362 si partenerul 18189442"},
+        "analysis_type": "LEAD_GENERATION",
+        "fetch_canned": {
+            "BNR": _sr("BNR", BNR_URL, True, BNR_OK),
+            "ONRC (Tavily)": _sr("ONRC (Tavily)", "https://recom.onrc.ro", True, ONRC_TAVILY_OK),
+            "Date financiare (listafirme.ro)": _sr("Date financiare (listafirme.ro)", FIN_TAVILY_URL, False, _fail()),
+            "Legal (BPI+Litigii)": _sr("Legal (BPI+Litigii)", LEGAL_URL, False, _fail()),
+        },
+        "aegrm_result": AEGRM_NO_DATA,
+        "dosare_result": DOSARE_NOT_FOUND,
+        "maps_result": {"found": False},
+        "mo_partea_iv_result": [],
+        "osint_result": {"historical_flags": []},
+        "brave_avail": False,
+        "brave_result": None,
+        "tavily_quota_ok": True,
+        "caen_ctx_result": CAEN_CTX_MISSING,
+        "google_key": None,
+    },
+
     # --- 3. Happy path complet: toate 6 surse din gather reusesc ---
     "all_sources_succeed": {
         "input_params": {"cui": VALID_CUI, "company_name": "MOSSLEIN TEST SRL"},
