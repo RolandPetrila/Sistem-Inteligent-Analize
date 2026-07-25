@@ -86,6 +86,29 @@ rating=5 (349 recenzii)`. Dimensiunea reputational **nu** rula "doar pe web_pres
 - **TESTELE POT STRICA PRODUCTIA.** `test_update_settings` facea `PUT /api/settings` pe endpointul
   REAL -> rescria `.env`-ul de productie la fiecare `RIS_TEST.bat`. Exista acum o **garda** in
   `tests/conftest.py` (hash `.env` inainte/dupa suita) care PICA mecanic daca se repeta.
+- **Surse „moarte confirmate" — 2 din 3 erau GRESITE (re-verificat din browser 2026-07-24, sesiune
+  extensie).** Din INS TEMPO + buletinul.ro + RNPM/AEGRM, toate marcate „moarte, confirmat repetat":
+  **INS TEMPO e VIU** (era „offline/timeout" — fals; shell-ul pe portul 8077 nu e dovada — instanta
+  noua a „shell != productie"). Contract REST captat:
+  `POST http://statistici.insse.ro:8077/tempo-ins/matrix/INT101W` (200) — intreprinderi active pe
+  **clase CAEN Rev.2** (4 cifre, 589 optiuni); baza e `/tempo-ins/`, **NU** `/tempo-online/` (ala e
+  doar frontendul). **buletinul.ro MORT si in browser** (DNS inexistent, nu blocaj — concluzia veche
+  corecta, dar re-atribuita cu metoda, nu lasata „confirmat repetat" fara data). **RNPM/AEGRM VIU dar
+  BLOCAT de reCAPTCHA v2 per-cerere, validat server-side** (categorie noua: nici mort, nici
+  automatizabil legitim — **NU** scraping cu CAPTCHA-solving). **CONVENTIE (nenegociabila de acum):**
+  orice premisa de tip „sursa moarta"/„blocat pe X" primeste **data + metoda + punct de observatie**
+  si EXPIRA — altfel devine o regula care minte (al treilea caz dupa premisa „SYSTEM" si Google Maps;
+  toate verificate o data, dintr-un singur punct, scrise ca fapt, niciodata re-testate).
+- **`caen_context.py` — benchmark-ul de CIFRA DE AFACERI nu are sursa corecta la nivel de clasa CAEN**
+  (masurat 2026-07-24; in coada dupa Pasul 4, NU „quick win"). `CAEN_BENCHMARK` (linia ~189) e cheiat
+  pe **DIVIZIUNE** (2 cifre): „media CAEN 45 = 1.500.000 RON" include si dealerii auto, dar se afiseaza
+  pentru clasa 4520. Calea live `INT101B` (linia ~346) e **diviziune Rev.1** SI suprascrie eticheta din
+  „estimare" in „date oficiale" (liniile ~320-326) — a repara doar conectivitatea ar transforma o
+  estimare prudenta intr-o afirmatie autoritara pe alta clasificare. **INS nu publica CA sub nivel de
+  SECTIUNE** (INT104, confirmat din meniu) -> `media_sector` pe CA la nivel de clasa e imposibila din
+  INS. Migrarea la INT101W e valida DOAR pt **numarul de firme** (context, nu verdict); verdictele „sub
+  percentila 25" pe CA se ELIMINA, nu se califica (nu plasezi o firma in percentila unei populatii care
+  nu exista ca data). Fix de onestitate separabil de migrare: eticheta „diviziune", nu clasa.
 - **`WinError 206` ("linie de comanda prea lunga") se ridica in Python ca `FileNotFoundError`.**
   A produs mesajul "Claude CLI not found" pentru un executabil care exista. **Cand un mesaj de
   eroare contrazice realitatea verificata, mesajul minte — nu realitatea.** Windows taie linia de
