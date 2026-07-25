@@ -13,6 +13,7 @@ import time
 
 from loguru import logger
 
+from backend.agents import ai_models
 from backend.agents.base import BaseAgent
 from backend.agents.state import AnalysisState
 from backend.agents.synthesis_providers import SynthesisProvidersMixin
@@ -227,57 +228,13 @@ class SynthesisAgent(BaseAgent, SynthesisProvidersMixin):
         provider_used: str | None = None
         fallback_used = False
 
-        if route == "fast":
-            # B9 fix: Fast route — speed priority: Groq → concurrent fallback (Cerebras+Mistral+Gemini)
-            # 10F M4.5: Token Budget Enforcement — check if prompt fits provider context
-            # FIX #30: Build prompt once, reuse for token check + generation
-            initial_provider = "groq"
-            prompt = self._build_section_prompt(section, verified_data, initial_provider)
-            initial_provider = self._check_token_budget(prompt, initial_provider)
-
-            if initial_provider == "groq":
-                text = await self._generate_with_groq(prompt)
-            else:
-                text = None
-
-            if text:
-                provider_used = "groq"
-            else:
-                # FIX #9: After primary failure, launch remaining providers concurrently
-                text, provider_used = await self._concurrent_fallback(
-                    section, verified_data,
-                    providers=["cerebras", "mistral", "gemini"],
-                )
-                fallback_used = bool(text)
-        else:
-            # B9 fix: Quality route — quality priority: Claude → concurrent fallback (Gemini+Groq+Mistral)
-            # 10F M4.5: Token Budget Enforcement
-            # FIX #30: Build prompt once, reuse for token check + generation
-            initial_provider = "claude"
-            prompt = self._build_section_prompt(section, verified_data, initial_provider)
-            initial_provider = self._check_token_budget(prompt, initial_provider)
-
-            if initial_provider == "claude":
-                text = await self._generate_with_claude(prompt)
-            else:
-                text = None
-
-            if text:
-                provider_used = "claude"
-            else:
-                # FIX #9: After primary failure, launch remaining providers concurrently
-                text, provider_used = await self._concurrent_fallback(
-                    section, verified_data,
-                    providers=["gemini", "groq", "mistral"],
-                )
-                fallback_used = bool(text)
-
-        if not text:
-            text = await self._generate_with_cerebras(
-                self._build_section_prompt(section, verified_data, "cerebras"))
-            if text:
-                provider_used = "cerebras"
-                fallback_used = True
+        # Rute din config (ai_models): ordinea e REALA (fallback SECVENTIAL — vezi
+        # _sequential_fallback). Primar = chain[0]: FAST→groq, QUALITY→claude (pilon).
+        # Garzile §3 (model retras)/§4 (context)/§5 (cota) sunt IN metodele de provider:
+        # return None = "sari providerul", motivul e logat distinct. Prima non-None castiga.
+        chain = ai_models.SPEED_CHAIN if route == "fast" else ai_models.QUALITY_CHAIN
+        text, provider_used = await self._sequential_fallback(section, verified_data, chain)
+        fallback_used = bool(text) and provider_used != chain[0]
 
         gen_success = bool(text)
         # 10F M4.2: Structured Degradation 3-Tier
@@ -510,16 +467,10 @@ Reguli:
         # Context awareness injection (8C) — structured summary
         context_summary = self._build_context_summary(section["key"], verified_data)
 
-        # B10 fix: Dynamic JSON context limits based on actual provider context windows
-        # Reserve ~40% of context for prompt+output; use ~60% for data JSON
-        max_json_chars = {
-            "claude": 50000,   # 200K context → plenty of room
-            "groq": 20000,     # 131K context (Llama 4 Scout)
-            "mistral": 20000,  # 128K context (Small 3)
-            "gemini": 400000,  # D8 fix: 1M context → use 400K chars for data
-            "cerebras": 20000, # 128K context (gpt-oss-120b)
-        }
-        json_limit = max_json_chars.get(provider, 15000)
+        # Buget de caractere JSON per provider — din config-ul unic (ai_models.json_char_budget),
+        # nu mai duplicat aici (comentariul stale "Llama 4 Scout" a fost sursa unei
+        # inconsistente). Un provider necunoscut -> default prudent.
+        json_limit = ai_models.get_json_char_budget(provider)
         data_json, omitted_keys = self._reduce_verified_data_for_json(
             verified_data, json_limit, section_key=section.get("key"))
         omitted_note = ""
@@ -911,8 +862,9 @@ Reguli:
         Tier 3 = raw JSON extract daca nici bullet-points nu sunt posibile."""
         key = section["key"]
         title = section["title"]
-        # SYNTH-02: Log which providers were attempted (all 5 must have failed to reach here)
-        providers_attempted = ["Claude CLI", "Gemini", "Groq", "Mistral", "Cerebras"]
+        # SYNTH-02: providerii incercati — DERIVAT din lanturile din config (nu mirror
+        # hardcodat, care ar diverge tacit de rutele reale cand se schimba un lant).
+        providers_attempted = sorted(set(ai_models.QUALITY_CHAIN) | set(ai_models.SPEED_CHAIN))
         logger.warning(
             f"[synthesis] ALL providers failed for '{key}': {', '.join(providers_attempted)}"
         )
@@ -1105,54 +1057,11 @@ Reguli:
         text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', text)
         return text
 
-    # ── 10F M4.5: Token Budget Enforcement ─────────────────────────────────
-    # Max context windows per provider (in tokens)
-    _PROVIDER_MAX_CONTEXT = {
-        "claude": 150_000,
-        "groq": 131_000,    # D7 fix: Llama 4 Scout has 131K context
-        "gemini": 1_000_000, # D8 fix: Gemini 2.5 Flash has 1M context
-        "mistral": 128_000,  # Mistral Small 3 has 128K context
-        "cerebras": 128_000, # gpt-oss-120b has 128K context
-    }
-    # Provider preference order: from largest to smallest context
-    _PROVIDER_SIZE_ORDER = ["claude", "gemini", "mistral", "cerebras", "groq"]
-
-    def _check_token_budget(self, prompt: str, provider: str) -> str:
-        """Verifica daca prompt-ul incape in 70% din contextul provider-ului.
-        Daca nu incape, recomanda un provider cu context mai mare.
-        Returneaza provider-ul recomandat (poate fi acelasi sau altul).
-        Foloseste tiktoken (cl100k_base) pentru numarare precisa; fallback len/4."""
-        try:
-            import tiktoken
-            enc = tiktoken.get_encoding("cl100k_base")
-            estimated_tokens = len(enc.encode(prompt))
-        except Exception:
-            estimated_tokens = len(prompt) / 4  # rough estimate: 1 token ~ 4 chars
-        max_ctx = self._PROVIDER_MAX_CONTEXT.get(provider, 12_000)
-        threshold = max_ctx * 0.7
-
-        if estimated_tokens <= threshold:
-            return provider  # Fits fine
-
-        logger.warning(
-            f"[synthesis] Token budget exceeded for {provider}: "
-            f"~{int(estimated_tokens)} tokens > {int(threshold)} (70% of {max_ctx}). "
-            f"Searching for larger provider..."
-        )
-
-        # Find a provider with enough capacity
-        for candidate in self._PROVIDER_SIZE_ORDER:
-            candidate_max = self._PROVIDER_MAX_CONTEXT.get(candidate, 12_000)
-            if estimated_tokens <= candidate_max * 0.7:
-                logger.info(f"[synthesis] Token budget: switching {provider} -> {candidate}")
-                return candidate
-
-        # None fit perfectly — use the largest available (claude)
-        logger.warning(
-            f"[synthesis] Token budget: prompt too large for all providers "
-            f"(~{int(estimated_tokens)} tokens). Using claude as largest context."
-        )
-        return "claude"
+    # NOTA: fostul _check_token_budget + _PROVIDER_MAX_CONTEXT + _PROVIDER_SIZE_ORDER au
+    # fost ELIMINATE. Aveau o A DOUA sursa de max_context (cerebras=128_000) si un prag de
+    # 70% care REROUTA la un provider mai mare. Garda §4 traieste acum in metodele de
+    # provider (ai_models.exceeds_context, prag 90%): SARE providerul si logheaza, nu
+    # rerouteaza — plus detectie de overflow la RUNTIME. Sursa unica: ai_models.max_context.
 
     def _build_context_summary(self, section_key: str, data: dict) -> str:
         """8C: Genereaza un rezumat structurat al datelor relevante per sectiune."""

@@ -2,21 +2,28 @@
 SynthesisProvidersMixin — Provider methods pentru SynthesisAgent.
 Extrase din agent_synthesis.py pentru a reduce dimensiunea fisierului principal.
 
+Numele de modele + limitele NU mai sunt aici — sunt in `backend/agents/ai_models.py`
+(sursa unica, verificata live GET /v1/models). Aici e DOAR logica de apel + garzile de
+durabilitate:
+- §3 detectie model disparut (404/model_not_found) -> provider INDISPONIBIL pe sesiune
+- §4 garda de context -> sare providerul daca promptul > 90% din max_context
+- §5 canar pe cota (429) -> logat distinct, NU tratat ca esec de continut (fara circuit)
+
 Contine:
-- _PROVIDERS config dict (OpenAI-compatible providers)
-- _generate_with_claude / _generate_with_openai_compat
-- _generate_with_groq/mistral/cerebras/deepseek/openrouter/github/fireworks/sambanova
+- _PROVIDERS = alias la ai_models.AI_PROVIDERS (settings.py + reflexion citesc de aici)
+- _generate_with_claude / _generate_with_openai_compat (+ garzile de mai sus)
+- _generate_with_groq/mistral/cerebras/openrouter/sambanova
 - _generate_with_gemini
-- _concurrent_fallback
+- _sequential_fallback (lant ORDONAT — ordinea e reala, nu concurenta)
 """
 
 import asyncio
 import os
-import re
 import subprocess
 
 from loguru import logger
 
+from backend.agents import ai_models
 from backend.agents.circuit_breaker import (
     is_provider_circuit_open,
     record_provider_failure,
@@ -67,7 +74,7 @@ class SynthesisProvidersMixin:
                         [
                             claude_cmd,
                             "--print",
-                            "--model", "claude-opus-4-8",
+                            "--model", ai_models.get_model("claude"),
                             "--effort", effort,
                         ],
                         input=prompt,
@@ -117,60 +124,46 @@ class SynthesisProvidersMixin:
             logger.warning(f"[synthesis] Claude Code error: {e}")
             return None
 
-    # F14: DRY provider config — OpenAI-compatible providers
-    _PROVIDERS = {
-        "groq": {
-            "url": "https://api.groq.com/openai/v1/chat/completions",
-            "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-            "api_key_attr": "groq_api_key",
-        },
-        "mistral": {
-            "url": "https://api.mistral.ai/v1/chat/completions",
-            "model": "mistral-small-latest",
-            "api_key_attr": "mistral_api_key",
-        },
-        "cerebras": {
-            "url": "https://api.cerebras.ai/v1/chat/completions",
-            # Qwen 3 235B a fost retras din catalogul Cerebras (verificat live 2026-07-12,
-            # GET /v1/models -> 404 "model_not_found" pe id-ul vechi). Inlocuit cu gpt-oss-120b
-            # (cel mai capabil disponibil acum din: gemma-4-31b, zai-glm-4.7, gpt-oss-120b).
-            "model": "gpt-oss-120b",
-            "api_key_attr": "cerebras_api_key",
-        },
-        # F7.2: DeepSeek R1 — financial reasoning specialist
-        "deepseek": {
-            "url": "https://api.deepseek.com/chat/completions",
-            "model": "deepseek-reasoner",
-            "api_key_attr": "deepseek_api_key",
-        },
-        # F7.6: OpenRouter — unified gateway (free :free models)
-        "openrouter": {
-            "url": "https://openrouter.ai/api/v1/chat/completions",
-            "model": "deepseek/deepseek-r1:free",
-            "api_key_attr": "openrouter_api_key",
-        },
-        # R6: GitHub Models — GPT-4.1 + Llama 4 Scout gratuit (50-150 req/zi)
-        "github": {
-            "url": "https://models.inference.ai.azure.com/chat/completions",
-            "model": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
-            "api_key_attr": "github_token",
-        },
-        # R6: Fireworks AI — Llama 4 Scout/Maverick (10 RPM permanent free)
-        "fireworks": {
-            "url": "https://api.fireworks.ai/inference/v1/chat/completions",
-            "model": "accounts/fireworks/models/llama4-scout-instruct-basic",
-            "api_key_attr": "fireworks_api_key",
-        },
-        # R6: SambaNova — Llama 3.1 405B GRATUIT (unic in industrie, 10 RPM)
-        "sambanova": {
-            "url": "https://api.sambanova.ai/v1/chat/completions",
-            "model": "Meta-Llama-3.1-405B-Instruct",
-            "api_key_attr": "sambanova_api_key",
-        },
-    }
+    # Sursa UNICA a configului de provideri: backend/agents/ai_models.py (nume verificate
+    # live GET /v1/models). Alias pastrat pt compatibilitate — settings.py::test/{service}
+    # citeste `SynthesisProvidersMixin._PROVIDERS["mistral"|"cerebras"]` (url/model/api_key_attr).
+    # ZERO nume de model hardcodate aici (regula E1). Providerii morti (github/fireworks/
+    # deepseek-native) au fost eliminati — erau in niciun lant, cu modele retrase.
+    _PROVIDERS = ai_models.AI_PROVIDERS
 
-    async def _generate_with_openai_compat(self, prompt: str, provider: str) -> str | None:
-        """F14: Generic OpenAI-compatible API call (Groq, Mistral, Cerebras)."""
+    def _log_provider_outcome(self, provider: str, model: str, status: int, body: str, headers) -> str:
+        """§3/§4/§5: clasifica un raspuns HTTP de EROARE si logheaza DISTINCT (nu un except
+        generic care ascunde totul). Returneaza outcome; efecte laterale per categorie:
+          gone     -> marcheaza providerul INDISPONIBIL pe sesiune (§3) — nu se mai reapeleaza
+          quota    -> logheaza retry-after/x-ratelimit; NU e esec de continut (§5) — fara circuit
+          overflow -> logheaza; problema de dimensiune, nu de provider (§4 runtime) — fara circuit
+          fail     -> caller-ul decide record_provider_failure (esec real, tranzitoriu)
+        """
+        outcome = ai_models.classify_http_error(status, body)
+        if outcome == "gone":
+            ai_models.mark_unavailable(provider, model)
+            logger.warning(f"[ai] {provider} model {model} INDISPONIBIL — retras? (HTTP {status})")
+        elif outcome == "quota":
+            rate = ai_models.extract_rate_limit_info(headers)
+            logger.warning(
+                f"[ai] {provider} COTA EPUIZATA (429) — fallback." + (f" {rate}" if rate else "")
+            )
+        elif outcome == "overflow":
+            logger.warning(f"[ai] {provider} context depasit la RUNTIME (HTTP {status}) — sar providerul")
+        else:
+            logger.warning(f"[ai] {provider} HTTP {status}: {(body or '')[:200]}")
+        return outcome
+
+    async def _generate_with_openai_compat(
+        self, prompt: str, provider: str, extra_headers: dict | None = None
+    ) -> str | None:
+        """Apel generic OpenAI-compatible cu garzile de durabilitate §3/§4/§5.
+        Returneaza textul sau None (None = sari providerul; motivul e logat distinct)."""
+        # §3: provider marcat INDISPONIBIL pe sesiune (model retras) -> sar fara apel
+        if ai_models.is_unavailable(provider):
+            logger.info(f"[ai] {provider} INDISPONIBIL pe sesiune — sar (nu reapelez modelul retras)")
+            return None
+
         if is_provider_circuit_open(provider):
             logger.info(f"[synthesis] {provider} circuit OPEN, skipping")
             return None
@@ -178,8 +171,17 @@ class SynthesisProvidersMixin:
         cfg = self._PROVIDERS.get(provider)
         if not cfg:
             return None
-        api_key = getattr(settings, cfg["api_key_attr"], "")
+        api_key = getattr(settings, cfg["api_key_attr"], "") if cfg.get("api_key_attr") else ""
         if not api_key:
+            return None
+
+        # §4: garda de context — sari providerul daca promptul > 90% din max_context
+        over, est, limit = ai_models.exceeds_context(provider, prompt)
+        if over:
+            logger.warning(
+                f"[ai] {provider} sarit — prompt {est} tokeni > limita {limit} "
+                f"(90% din {ai_models.get_max_context(provider)})"
+            )
             return None
 
         try:
@@ -194,11 +196,21 @@ class SynthesisProvidersMixin:
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
             }
+            if extra_headers:
+                headers.update(extra_headers)
             client = get_client()
-            response = await client.post(cfg["url"], json=payload, headers=headers, timeout=60)
-            response.raise_for_status()
-            data = response.json()
+            req_timeout = 90 if provider == "openrouter" else 60
+            response = await client.post(cfg["url"], json=payload, headers=headers, timeout=req_timeout)
 
+            if response.status_code >= 400:
+                outcome = self._log_provider_outcome(
+                    provider, cfg["model"], response.status_code, response.text, response.headers
+                )
+                if outcome == "fail":
+                    record_provider_failure(provider)
+                return None
+
+            data = response.json()
             choices = data.get("choices", [])
             if choices:
                 text = choices[0].get("message", {}).get("content", "").strip()
@@ -224,78 +236,48 @@ class SynthesisProvidersMixin:
     async def _generate_with_cerebras(self, prompt: str) -> str | None:
         return await self._generate_with_openai_compat(prompt, "cerebras")
 
-    async def _generate_with_deepseek(self, prompt: str) -> str | None:
-        """F7.2: DeepSeek R1 — strips <think> reasoning block before returning."""
-        result = await self._generate_with_openai_compat(prompt, "deepseek")
-        if result:
-            result = re.sub(r"<think>.*?</think>", "", result, flags=re.DOTALL).strip()
-        return result or None
-
     async def _generate_with_openrouter(self, prompt: str) -> str | None:
-        """F7.6: OpenRouter gateway — adds required headers for routing."""
-        if is_provider_circuit_open("openrouter"):
-            return None
-        cfg = self._PROVIDERS["openrouter"]
-        api_key = getattr(settings, cfg["api_key_attr"], "")
-        if not api_key:
-            return None
-        try:
-            client = get_client()
-            response = await client.post(
-                cfg["url"],
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "HTTP-Referer": "http://localhost:8001",
-                    "X-Title": "RIS - Roland Intelligence System",
-                },
-                json={
-                    "model": cfg["model"],
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.3,
-                    "max_tokens": 4096,
-                },
-                timeout=90,
-            )
-            response.raise_for_status()
-            data = response.json()
-            choices = data.get("choices", [])
-            if choices:
-                text = choices[0].get("message", {}).get("content", "").strip()
-                if text:
-                    logger.debug(f"[synthesis] OpenRouter OK: {len(text.split())} words")
-                    reset_provider_circuit("openrouter")
-                    return text
-            record_provider_failure("openrouter")
-            return None
-        except Exception as e:
-            logger.warning(f"[synthesis] OpenRouter error: {e}")
-            record_provider_failure("openrouter")
-            return None
-
-    async def _generate_with_github(self, prompt: str) -> str | None:
-        """R6: GitHub Models — Llama 4 Scout via Azure inference endpoint."""
-        return await self._generate_with_openai_compat(prompt, "github")
-
-    async def _generate_with_fireworks(self, prompt: str) -> str | None:
-        """R6: Fireworks AI — Llama 4 Scout (10 RPM permanent free)."""
-        return await self._generate_with_openai_compat(prompt, "fireworks")
+        """OpenRouter gateway — adauga headerele de routing; garzile §3/§4/§5 vin din compat."""
+        return await self._generate_with_openai_compat(
+            prompt,
+            "openrouter",
+            extra_headers={
+                "HTTP-Referer": "http://localhost:8001",
+                "X-Title": "RIS - Roland Intelligence System",
+            },
+        )
 
     async def _generate_with_sambanova(self, prompt: str) -> str | None:
-        """R6: SambaNova Cloud — Llama 3.1 405B (only free 405B in industry)."""
+        """SambaNova Cloud — bonus temporar (ai_models: temporary_free=True)."""
         return await self._generate_with_openai_compat(prompt, "sambanova")
 
     async def _generate_with_gemini(self, prompt: str) -> str | None:
-        """Gemini uses a different API format (not OpenAI-compatible)."""
-        if is_provider_circuit_open("gemini"):
+        """Gemini — format API diferit (nu OpenAI-compatible). Garzile §3/§4/§5 la fel;
+        modelul + URL-ul vin din ai_models (zero hardcodare)."""
+        provider = "gemini"
+        if ai_models.is_unavailable(provider):
+            logger.info(f"[ai] {provider} INDISPONIBIL pe sesiune — sar")
+            return None
+        if is_provider_circuit_open(provider):
             logger.info("[synthesis] Gemini circuit OPEN, skipping")
             return None
         if not settings.google_ai_api_key:
             logger.warning("[synthesis] No GOOGLE_AI_API_KEY — cannot use Gemini fallback")
             return None
 
+        # §4: garda de context
+        over, est, limit = ai_models.exceeds_context(provider, prompt)
+        if over:
+            logger.warning(
+                f"[ai] {provider} sarit — prompt {est} tokeni > limita {limit} "
+                f"(90% din {ai_models.get_max_context(provider)})"
+            )
+            return None
+
         try:
             logger.debug("[synthesis] Trying Gemini Flash API...")
-            url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+            cfg = self._PROVIDERS[provider]
+            url = cfg["url"].format(model=cfg["model"])
             payload = {
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {"temperature": 0.3, "maxOutputTokens": 4096},
@@ -307,9 +289,15 @@ class SynthesisProvidersMixin:
                 headers={"x-goog-api-key": settings.google_ai_api_key},
                 timeout=60,
             )
-            response.raise_for_status()
-            data = response.json()
+            if response.status_code >= 400:
+                outcome = self._log_provider_outcome(
+                    provider, cfg["model"], response.status_code, response.text, response.headers
+                )
+                if outcome == "fail":
+                    record_provider_failure(provider)
+                return None
 
+            data = response.json()
             candidates = data.get("candidates", [])
             if candidates:
                 parts = candidates[0].get("content", {}).get("parts", [])
@@ -317,81 +305,62 @@ class SynthesisProvidersMixin:
                     text = parts[0].get("text", "").strip()
                     if text:
                         logger.debug(f"[synthesis] Gemini OK: {len(text.split())} words")
-                        reset_provider_circuit("gemini")
+                        reset_provider_circuit(provider)
                         return text
 
             logger.warning("[synthesis] Gemini returned empty response")
-            record_provider_failure("gemini")
+            record_provider_failure(provider)
             return None
         except Exception as e:
             import re as _re
-            err_msg = _re.sub(r'key=[A-Za-z0-9_\-]+', 'key=***REDACTED***', str(e))
+            err_msg = _re.sub(r"key=[A-Za-z0-9_\-]+", "key=***REDACTED***", str(e))
             logger.warning(f"[synthesis] Gemini error: {err_msg}")
-            record_provider_failure("gemini")
+            record_provider_failure(provider)
             return None
 
-    async def _concurrent_fallback(
-        self, section: dict, verified_data: dict, providers: list[str]
-    ) -> tuple[str | None, str | None]:
-        """FIX #9: Launch multiple providers concurrently, return first successful result.
-        Uses asyncio.wait(FIRST_COMPLETED) with 30s timeout.
-
-        Sonnet 2026-07-17: returneaza acum (text, winning_provider) in loc de doar
-        text — apelantul (generate_section) are nevoie sa stie CINE a castigat, ca
-        sa poata loga observabilitatea (log_synthesis). Logica de selectie interna
-        (asyncio.wait, cancel pending, circuit breaker) e neschimbata."""
-        _provider_methods = {
+    # Dispatch nume-provider -> metoda. Sursa unica pt _sequential_fallback.
+    def _provider_method_map(self) -> dict:
+        return {
+            "claude": self._generate_with_claude,
             "groq": self._generate_with_groq,
-            "gemini": self._generate_with_gemini,
-            "mistral": self._generate_with_mistral,
-            "cerebras": self._generate_with_cerebras,
-            "deepseek": self._generate_with_deepseek,
             "openrouter": self._generate_with_openrouter,
-            "github": self._generate_with_github,
-            "fireworks": self._generate_with_fireworks,
             "sambanova": self._generate_with_sambanova,
+            "cerebras": self._generate_with_cerebras,
+            "mistral": self._generate_with_mistral,
+            "gemini": self._generate_with_gemini,
         }
 
-        active = [p for p in providers if not is_provider_circuit_open(p)]
-        if not active:
-            logger.warning("[synthesis] _concurrent_fallback: all provider circuits open")
-            return None, None
+    async def _sequential_fallback(
+        self, section: dict, verified_data: dict, chain: list[str]
+    ) -> tuple[str | None, str | None]:
+        """Fallback SECVENTIAL ORDONAT peste un lant de provideri — ordinea e REALA.
 
-        tasks = {
-            asyncio.create_task(
-                _provider_methods[p](self._build_section_prompt(section, verified_data, p))
-            ): p
-            for p in active
-            if p in _provider_methods
-        }
-        if not tasks:
-            return None, None
+        De ce nu concurent (fostul _concurrent_fallback): sub asyncio.wait(FIRST_COMPLETED)
+        castiga cine raspunde primul, deci Gemini (rapid) batea mereu DeepSeek/OpenRouter
+        (lent, dar mai bun) -> "lantul de calitate" nu ajungea NICIODATA la DeepSeek. Exact
+        clasa de bug pe care o repara aceasta cerinta. Prioritatea proprietarului
+        (DURABILITATE > viteza) cere ca ordinea sa conteze.
 
-        try:
-            done, pending = await asyncio.wait(
-                tasks.keys(), return_when=asyncio.FIRST_COMPLETED, timeout=30
-            )
-            for task in pending:
-                task.cancel()
-                try:
-                    await task
-                except (asyncio.CancelledError, Exception):
-                    pass
-
-            for task in done:
-                exc = task.exception()
-                if exc is None:
-                    result = task.result()
-                    if result:
-                        provider_name = tasks[task]
-                        reset_provider_circuit(provider_name)
-                        logger.info(f"[synthesis] Concurrent fallback winner: {provider_name}")
-                        return result, provider_name
-                else:
-                    provider_name = tasks[task]
-                    logger.warning(f"[synthesis] Concurrent fallback {provider_name} error: {exc}")
-                    record_provider_failure(provider_name)
-        except Exception as e:
-            logger.warning(f"[synthesis] Concurrent fallback failed: {e}")
-
+        Garzile §3 (indisponibil)/§4 (context)/§5 (cota) sunt IN metodele de provider:
+        return None = "sari providerul", iar motivul e logat distinct acolo. Primul non-None
+        castiga. Daca TOT lantul esueaza/e sarit -> esec EXPLICIT (nu tacut)."""
+        methods = self._provider_method_map()
+        for provider in chain:
+            fn = methods.get(provider)
+            if fn is None:
+                logger.warning(f"[ai] provider necunoscut in lant, sarit: {provider}")
+                continue
+            prompt = self._build_section_prompt(section, verified_data, provider)
+            try:
+                text = await fn(prompt)
+            except Exception as e:
+                logger.warning(f"[ai] {provider} exceptie in lant: {e}")
+                text = None
+            if text:
+                logger.info(f"[synthesis] Lant {chain} — castigator: {provider}")
+                return text, provider
+        logger.warning(
+            f"[ai] TOTI providerii din lantul {chain} au esuat/fost sariti — "
+            "esec EXPLICIT (motivele distincte sunt logate mai sus, NU tacut)"
+        )
         return None, None
