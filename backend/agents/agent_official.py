@@ -5,7 +5,6 @@ Output: JSON structurat cu toate campurile + sursa + timestamp
 """
 
 import asyncio
-import re
 from datetime import UTC, date, datetime
 
 from loguru import logger
@@ -19,7 +18,7 @@ from backend.agents.tools.bpi_client import check_insolvency
 from backend.agents.tools.brave_client import is_available as brave_available
 from backend.agents.tools.brave_client import search_company_reputation as brave_search
 from backend.agents.tools.caen_context import get_caen_context
-from backend.agents.tools.cui_validator import validate_cui
+from backend.agents.tools.cui_validator import extract_and_validate_cui, validate_cui
 from backend.agents.tools.jina_client import enrich_tavily_results
 from backend.agents.tools.just_client import search_dosare
 from backend.agents.tools.openapi_client import get_company_onrc
@@ -65,9 +64,12 @@ class OfficialAgent(BaseAgent):
             for _val in params.values():
                 if not isinstance(_val, str) or not _val:
                     continue
-                cui_match = re.search(r"\b(?:cui\s*)?(\d{6,10})\b", _val, re.IGNORECASE)
-                if cui_match:
-                    cui = cui_match.group(1)
+                # Pas 3: extractie validata MOD11 cu garda de ambiguitate (0 sau >=2
+                # candidati distincti valizi -> nu se alege niciunul), nu re.search pe
+                # primul numar 6-10 cifre. Un decoy (valoare/telefon) nu mai fura slotul.
+                _r = extract_and_validate_cui(_val)
+                if _r["valid"]:
+                    cui = _r["cui_clean"]
                     break
         company_name = params.get("company_name", "")
         job_id = state.get("job_id", "")
@@ -102,6 +104,14 @@ class OfficialAgent(BaseAgent):
                     "current_step": f"Agent 1: CUI {cui_clean} invalid — analiza oprita",
                     "progress": 0.20,
                 }
+        else:
+            # 3c: slotul cui avea o valoare (nume in loc de CUI via analysis.py:88,
+            # sau text fara CUI valid MOD11) dar nu s-a rezolvat niciun CUI valid ->
+            # marcaj EXPLICIT, nu continua tacit pe gol. NU early_return:
+            # LEAD_GENERATION/CUSTOM pot rula legitim fara un CUI-tinta.
+            if cui and str(cui).strip():
+                official_data["cui_warning"] = "CUI neidentificat (input fara CUI valid MOD 11)"
+                logger.warning(f"[official] CUI neidentificat din input: {cui!r}")
 
         # --- D1: ONRC Local lookup (instant, inaintea openapi.ro) ---
         if cui_clean:

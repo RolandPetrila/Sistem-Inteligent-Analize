@@ -16,6 +16,7 @@ from loguru import logger
 from backend.agents.base import BaseAgent
 from backend.agents.state import AnalysisState
 from backend.agents.synthesis_providers import SynthesisProvidersMixin
+from backend.agents.tools.cui_validator import CUI_DIGITS
 from backend.agents.verification.scoring import risk_bucket
 from backend.config import settings
 from backend.prompts.section_prompts import get_sections_for_analysis
@@ -654,7 +655,10 @@ Reguli:
 
         # Strip invented CUI numbers not matching input
         if input_cui:
-            invented_cuis = re.findall(r'\bCUI\s*:?\s*(\d{6,10})\b', text)
+            # Bound-ul 6-10 cifre e partajat cu extractorul de CUI (CUI_DIGITS) — daca
+            # se schimba vreodata, se muta in ambele locuri deodata. Semantica ramane
+            # findall peste CUI-uri LABELATE (inclusiv invalide), NU extractie de tinta.
+            invented_cuis = re.findall(rf'\bCUI\s*:?\s*({CUI_DIGITS})\b', text)
             for found_cui in invented_cuis:
                 if found_cui != input_cui:
                     logger.warning(f"[synthesis] Stripping invented CUI: {found_cui} (expected {input_cui})")

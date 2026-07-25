@@ -2,6 +2,19 @@
 Validare CUI Romania cu cifra de control (MOD 11).
 Previne request-uri inutile catre ANAF pentru CUI-uri invalide.
 """
+import re
+
+# Numarul de cifre al unui CUI extras din text liber. Sub 6 cifre = prea mult zgomot
+# (orice "42"/"1234" ar fi prins); campul dedicat accepta in continuare 2-10 cifre via
+# validate_cui. Definit o singura data — reutilizat si de detectia anti-halucinatie din
+# agent_synthesis (acelasi bound, semantica diferita: findall peste matches invalide).
+CUI_DIGITS = r"\d{6,10}"
+
+# Extractor din text liber: optional prefix RO, apoi 6-10 cifre. \b la ambele capete
+# impiedica prinderea unui subsir dintr-un numar mai lung — un telefon/CNP de 11+ cifre
+# nu se potriveste deloc, nu se ciopartesc primele 10 cifre. IGNORECASE: analysis.py
+# paseaza query deja lowercased, deci "ro9901265" se potriveste doar cu flag-ul pornit.
+_CUI_EXTRACT_RX = re.compile(rf"\b(?:RO\s*)?({CUI_DIGITS})\b", re.IGNORECASE)
 
 
 def validate_cui(cui: str) -> dict:
@@ -55,14 +68,27 @@ def validate_cui(cui: str) -> dict:
 
 def extract_and_validate_cui(text: str) -> dict:
     """
-    Extrage si valideaza un CUI din text liber.
-    Accepta formate: 12345678, RO12345678, RO 12345678
+    Extrage si valideaza un CUI dintr-un text liber.
+
+    Scaneaza TOTI candidatii 6-10 cifre si valideaza fiecare MOD11 — un numar de
+    zgomot (valoare, telefon) care pica MOD11 nu mai poate fura slotul unui CUI real
+    de mai tarziu (bug-ul vechi: re.search prindea doar primul numar). Ambiguitatea
+    (>=2 CUI-uri DISTINCTE valide) OPRESTE: nu ghicim care e tinta. Acelasi pattern
+    0-sau->=2->STOP ca filtrarea de furnizor SEAP din 93fa5de.
+    Accepta formate: 12345678, RO12345678, RO 12345678.
     """
-    import re
+    valid_distinct: list[str] = []
+    for cand in _CUI_EXTRACT_RX.findall(text or ""):
+        v = validate_cui(cand)
+        if v["valid"] and v["cui_clean"] not in valid_distinct:
+            valid_distinct.append(v["cui_clean"])
 
-    # Pattern CUI: optional RO prefix, 2-10 cifre
-    match = re.search(r'\b(?:RO\s*)?(\d{2,10})\b', text.strip(), re.IGNORECASE)
-    if not match:
-        return {"valid": False, "cui_clean": "", "error": "Nu s-a gasit un CUI valid in text"}
-
-    return validate_cui(match.group(1))
+    if len(valid_distinct) == 1:
+        return {"valid": True, "cui_clean": valid_distinct[0], "error": None}
+    if len(valid_distinct) >= 2:
+        return {
+            "valid": False,
+            "cui_clean": "",
+            "error": f"Candidati multipli valizi ({', '.join(valid_distinct)}) — ambiguu",
+        }
+    return {"valid": False, "cui_clean": "", "error": "CUI neidentificat"}

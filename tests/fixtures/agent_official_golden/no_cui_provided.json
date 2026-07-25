@@ -8,6 +8,7 @@
     },
     "company_name": "Firma Fara CUI Exemplu SRL",
     "cui_input": "Firma Fara CUI Exemplu SRL",
+    "cui_warning": "CUI neidentificat (input fara CUI valid MOD 11)",
     "data_freshness": {
       "bnr": {
         "data_age_years": 0,

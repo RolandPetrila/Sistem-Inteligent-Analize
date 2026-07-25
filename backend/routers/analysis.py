@@ -71,14 +71,15 @@ async def parse_natural_query(data: ParseQueryRequest):
     # de a fi sugerat, altfel un CUI tastat gresit ajunge pre-completat in
     # wizard cu incredere ridicata (decizia tehnica #13: validare MOD11
     # inainte de orice apel API).
-    from backend.agents.tools.cui_validator import validate_cui
+    from backend.agents.tools.cui_validator import extract_and_validate_cui
 
-    cui_match = re.search(r"\b(?:cui\s*)?(\d{6,10})\b", query)
-    if cui_match:
-        cui_candidate = cui_match.group(1)
-        if validate_cui(cui_candidate)["valid"]:
-            params["cui"] = cui_candidate
-            confidence += 0.15
+    # Pas 3: extractie validata MOD11 cu garda de ambiguitate. Scaneaza toti
+    # candidatii, nu doar primul numar — un decoy ("2500000 lei") nu mai fura slotul
+    # CUI-ului real din aceeasi fraza. 0 sau >=2 valizi distincti -> nu se sugereaza.
+    _cui_res = extract_and_validate_cui(query)
+    if _cui_res["valid"]:
+        params["cui"] = _cui_res["cui_clean"]
+        confidence += 0.15
 
     # Extrage nume firma (text intre ghilimele sau dupa "firma/compania")
     name_match = re.search(r'"([^"]+)"', data.query)
