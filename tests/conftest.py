@@ -125,3 +125,50 @@ def _no_provider_api_keys_in_tests():
     yield
     for a, v in originals.items():
         setattr(settings, a, v)
+
+
+# Chei EXTERNE PLATITE care NU sunt provideri AI — nu exista un registru derivabil (ca
+# AI_PROVIDERS pt cheile AI), deci lista e EXPLICITA. Criteriu de includere: cheia apeleaza
+# un serviciu cu facturare pe $ REAL (billing), NU free-tier/cota. tavily(1000/luna)/
+# brave(2000/luna)/jina(free) sunt COTA (se epuizeaza gratuitatea), NU bani reali — categorie
+# diferita, in afara scopului CERINTA #8 ($ real); daca vrei candva protectie de cota, adauga-le
+# aici cu comentariul corespunzator (o singura linie).
+_PAID_EXTERNAL_KEY_ATTRS = (
+    # Google Maps Places API — $200 credit/luna, apoi pay-as-you-go (facturare $ reala, billing activ).
+    "google_cloud_api_key",
+)
+
+
+@pytest.fixture(autouse=True)
+def _no_paid_external_keys_in_tests():
+    """CERINTA #8 (M) — profilaxie: cheile EXTERNE PLATITE care NU sunt provideri AI NU trebuie
+    sa fie LIVE in teste. Aceeasi clasa F1 ca #7 (scurgere de BANI in pytest), dar pt servicii
+    non-AI: un test care atinge `maps_client.get_maps_rating` NEMOCKAT cu o cheie reala ar factura
+    Google Maps Places ($ real). AZI nicio suita nu-l atinge nemockat (toate testele Maps seteaza
+    cheia LOCAL + mockeaza get_maps_rating) — deci e o GAURA LATENTA de clasa, nu un leak activ;
+    fixture-ul o inchide inainte sa apara.
+
+    SEPARAT de `_no_provider_api_keys_in_tests` (acela e AI-only, DERIVAT din AI_PROVIDERS): Maps
+    NU e provider AI, deci lista e EXPLICITA (`_PAID_EXTERNAL_KEY_ATTRS`, vezi mai sus) — nu exista
+    registru din care sa derive. save->empty->restore, ca #7; testele care au nevoie legitim de
+    cheie si-o seteaza LOCAL via `patch.object(settings, ...)` in corpul testului (ex.
+    test_agent_official_maps_address.py) — fixture-ul ruleaza la SETUP, patch-ul local suprascrie,
+    teardown-ul restaureaza valoarea reala.
+
+    Fail-LOUD (nu skip tacut) daca o cheie din lista nu are camp in Settings (typo / rename): a o
+    sari tacut ar lasa cheia vie = exact clasa F1. NU atinge `ris_api_key`, cheile de provider AI
+    (#7), sau garda `.env` hash — mutam DOAR obiectul `settings` in memorie, nu scriem in fisier.
+    """
+    from backend.config import settings
+
+    missing = [a for a in _PAID_EXTERNAL_KEY_ATTRS if not hasattr(settings, a)]
+    assert not missing, (
+        f"Cheie externa platita fara camp in Settings (typo / rename config): {missing}. "
+        "Fixture-ul nu poate goli o cheie inexistenta — repara lista sau config-ul (NU o sari tacut)."
+    )
+    originals = {a: getattr(settings, a) for a in _PAID_EXTERNAL_KEY_ATTRS}
+    for a in _PAID_EXTERNAL_KEY_ATTRS:
+        setattr(settings, a, "")
+    yield
+    for a, v in originals.items():
+        setattr(settings, a, v)

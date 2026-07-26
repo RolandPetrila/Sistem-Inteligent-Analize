@@ -51,9 +51,12 @@ class TestE1NoHardcodedModelLiterals:
 
 class TestE6ChainComposition:
     def test_quality_chain_order(self):
-        # CERINTA #6: cei 2 provideri OpenRouter-family adaugati DUPA "gemini" (fallback adanc).
+        # CERINTA #8/F2: SambaNova SCOS din lant (402 PAYMENT_METHOD_REQUIRED, credit bonus consumat)
+        # — intrarea AI_PROVIDERS["sambanova"] RAMANE (vezi test_sambanova_marked_temporary_free),
+        # doar lantul nu-l mai contine. Non-vacuitate: pe ai_models.py vechi (samba in lant) aceasta
+        # asertie PICA. CERINTA #6: cei 2 provideri OpenRouter-family raman DUPA "gemini" (fallback adanc).
         assert ai_models.QUALITY_CHAIN == [
-            "claude", "openrouter", "sambanova", "gemini",
+            "claude", "openrouter", "gemini",
             "openrouter_gpt4o_mini", "openrouter_r1",
         ]
 

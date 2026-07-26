@@ -56,8 +56,14 @@ AI_PROVIDERS: dict[str, dict] = {
     "sambanova": {
         # Bonus temporar. `Meta-Llama-3.1-405B-Instruct` cerut de brief a fost RETRAS din
         # catalog (verificat 2026-07-25). SUBSTITUIT cu Meta-Llama-3.3-70B-Instruct (PRESENT,
-        # gratuit, 131k) — optiunea (a) a auditorului, pana la veto explicit al proprietarului.
-        # temporary_free=True: cand expira creditul, §5 (429) + §3 il scot din lant automat.
+        # gratuit, 131k) — decizia proprietarului 2026-07-25.
+        # SCOS din QUALITY_CHAIN 2026-07-27 (CERINTA #8/F2): masurat live 402
+        # PAYMENT_METHOD_REQUIRED, balance_units:0 — creditul bonus e consumat. Intrarea RAMANE:
+        # o monitorizeaza §6 (`tools/check_ai_models.py::_sambanova_responds`) + e hook de
+        # reversibilitate — re-adauga "sambanova" in QUALITY_CHAIN cand reincarci credit.
+        # temporary_free=True. NOTA: auto-scoaterea NU merge pt samba — `mark_unavailable` se
+        # apeleaza DOAR pe "gone", iar 402 `payment_method_required` NU e in _PAYMENT_MARKERS ->
+        # cade pe "fail" -> circuit breaker; de-aia scoaterea din lant e MANUALA aici, nu automata.
         "model": "Meta-Llama-3.3-70B-Instruct",
         "max_context": 131_072,
         "temporary_free": True,
@@ -157,12 +163,16 @@ AI_PROVIDERS: dict[str, dict] = {
 }
 
 # ── Rute (LANTURI ORDONATE — fallback SECVENTIAL, ordinea e REALA) ─────────────
-# CALITATE (rapoarte profunde): Claude pilon → DeepSeek(OpenRouter) → SambaNova(bonus) → Gemini
+# CALITATE (rapoarte profunde): Claude pilon → DeepSeek(OpenRouter) → Gemini
 #   → [fallback ADANC platit, CERINTA #6] gpt-4o-mini → deepseek-r1.
-# Ultimele 2 (OpenRouter-family platit) se ating DOAR daca toate cele 4 optiuni free au esuat
+# SambaNova SCOS 2026-07-27 (CERINTA #8/F2): 402 PAYMENT_METHOD_REQUIRED (balance_units:0) masurat
+#   live — creditul bonus e consumat; irosea un hop la fiecare job de calitate + declansa circuit
+#   breaker (402 `payment_method_required` cade pe "fail", NU pe "payment"). Intrarea
+#   AI_PROVIDERS["sambanova"] e PASTRATA (monitorizata §6 + reversibila) — re-adaug-o cand reincarci.
+# Ultimele 2 (OpenRouter-family platit) se ating DOAR daca cele 3 optiuni upstream au esuat
 # -> rar -> cost-safe ($9.98 tine luni/an+). gpt-4o-mini INAINTEA lui r1: mai ieftin+rapid.
 QUALITY_CHAIN: list[str] = [
-    "claude", "openrouter", "sambanova", "gemini", "openrouter_gpt4o_mini", "openrouter_r1",
+    "claude", "openrouter", "gemini", "openrouter_gpt4o_mini", "openrouter_r1",
 ]
 # VITEZA (rapoarte rapide): Groq → Cerebras(garda §4) → Mistral → Gemini
 SPEED_CHAIN: list[str] = ["groq", "cerebras", "mistral", "gemini"]
