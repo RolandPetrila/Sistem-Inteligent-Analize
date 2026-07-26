@@ -366,8 +366,14 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
     wi_ok = wi["shown"]
     maps_rating = model["maps_rating"]["data"]
     mr_ok = model["maps_rating"]["shown"]
+    # CERINTA #4: linia de verificare manuala RNPM (garantii reale mobiliare) e
+    # NECONDITIONATA -- rnpm_manual e mereu un string nevid, deci pagina 2 se randeaza
+    # INTOTDEAUNA. `or rnpm_manual` de mai jos e intentionat (nu accident): fara el, un
+    # raport fara alte rich-fields ar sari pagina 2 si linia RNPM ar disparea tacit.
+    rnpm_manual = model["garantii"]["rnpm_manual"]
+    rnpm_url = model["garantii"]["rnpm_url"]
 
-    if act_ok or rel_flags or aegrm_ok or hist_ok or fund_ok or sanc_ok or eust_ok or seap_ok or opp_ok or cred_ok or wi_ok or mr_ok:
+    if act_ok or rel_flags or aegrm_ok or hist_ok or fund_ok or sanc_ok or eust_ok or seap_ok or opp_ok or cred_ok or wi_ok or mr_ok or rnpm_manual:
         pdf.add_page()
         pdf.start_section("Actionariat, Garantii si Finantare", level=0)
         pdf.set_font("Helvetica", "B", 16)
@@ -399,24 +405,33 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
                 pdf.multi_cell(0, 5.5, _sanitize(f"[{fl.get('severity', 'INFO')}] {fl.get('type', '')}: {fl.get('detail', '')}"), new_x="LMARGIN", new_y="NEXT")
             pdf.ln(3)
 
-        if aegrm_ok or hist_ok:
-            _add_section_header(pdf, "Garantii si Istoric (OSINT)")
-            if aegrm_ok:
-                pdf.multi_cell(0, 6, _sanitize(f"Garantii reale mobiliare (AEGRM): {aegrm.get('count', 0)}"), new_x="LMARGIN", new_y="NEXT")
-                guarantees = model["garantii"]["guarantees"]
-                for g in guarantees[:8]:
-                    txt = f"{g['creditor']} - {g['tip_bun']} (status: {g['status']}, data: {g['data']})"
-                    pdf.multi_cell(0, 5.5, _sanitize(f"  * {txt[:200]}"), new_x="LMARGIN", new_y="NEXT")
-            if hist_ok:
-                for flx in hist:
-                    if flx["is_dict"]:
-                        label = flx["label"]
-                        detail = flx["detail"]
-                        date_raw = flx["date"]
-                        pdf.multi_cell(0, 5.5, _sanitize(f"- {label} {date_raw}: {detail}"[:200]), new_x="LMARGIN", new_y="NEXT")
-                    else:
-                        pdf.multi_cell(0, 5.5, _sanitize(f"- {flx['detail']}"), new_x="LMARGIN", new_y="NEXT")
-            pdf.ln(3)
+        # CERINTA #4: sectiunea Garantii se randeaza INTOTDEAUNA -- header + linia RNPM
+        # sunt neconditionate; blocurile AEGRM/istoric raman conditionate inauntru.
+        _add_section_header(pdf, "Garantii si Istoric (OSINT)")
+        if aegrm_ok:
+            pdf.multi_cell(0, 6, _sanitize(f"Garantii reale mobiliare (AEGRM): {aegrm.get('count', 0)}"), new_x="LMARGIN", new_y="NEXT")
+            guarantees = model["garantii"]["guarantees"]
+            for g in guarantees[:8]:
+                txt = f"{g['creditor']} - {g['tip_bun']} (status: {g['status']}, data: {g['data']})"
+                pdf.multi_cell(0, 5.5, _sanitize(f"  * {txt[:200]}"), new_x="LMARGIN", new_y="NEXT")
+        if hist_ok:
+            for flx in hist:
+                if flx["is_dict"]:
+                    label = flx["label"]
+                    detail = flx["detail"]
+                    date_raw = flx["date"]
+                    pdf.multi_cell(0, 5.5, _sanitize(f"- {label} {date_raw}: {detail}"[:200]), new_x="LMARGIN", new_y="NEXT")
+                else:
+                    pdf.multi_cell(0, 5.5, _sanitize(f"- {flx['detail']}"), new_x="LMARGIN", new_y="NEXT")
+        # Linia RNPM: mesaj pe un rand, URL pe randul urmator (token scurt, nu se rupe la
+        # wrap-ul lui multi_cell -> pdfplumber il extrage intreg). Gri neutru, fara verde.
+        pdf.set_font("Helvetica", "", 8)
+        pdf.set_text_color(120, 120, 120)
+        pdf.multi_cell(0, 5, _sanitize(rnpm_manual), new_x="LMARGIN", new_y="NEXT")
+        pdf.multi_cell(0, 5, _sanitize(rnpm_url), new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("Helvetica", "", 10)
+        pdf.set_text_color(40, 40, 40)
+        pdf.ln(3)
 
         if sanc_ok:
             _add_section_header(pdf, "Screening Sanctiuni")

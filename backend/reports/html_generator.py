@@ -867,8 +867,8 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
     # ---- AEGRM garantii + semnale istorice OSINT ----
     aegrm = model["garantii"]["aegrm"]
     aegrm_ok = model["garantii"]["aegrm_ok"]
+    body = ""
     if model["garantii"]["shown"]:
-        body = ""
         if aegrm_ok:
             cnt = aegrm.get("count", 0)
             gc = "#eab308" if aegrm.get("has_guarantees") else "#22c55e"
@@ -895,13 +895,20 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
                              f'<span style="color:#cbd5e1">— {detail}</span></div>')
                 else:
                     body += f'<div style="color:#cbd5e1">{_escape(flx["detail"])}</div>'
-        if body:
-            out.append(f'''
+    # CERINTA #4: linia de verificare manuala RNPM se adauga NECONDITIONAT (auto-verificarea
+    # AEGRM e structural indisponibila) -> body devine mereu nevid -> sectiunea mereu emisa.
+    # Culoare neutra (gri), NICIODATA marker verde pe absenta datelor.
+    rnpm_url = model["garantii"]["rnpm_url"]
+    body += (f'<p style="color:#94a3b8;font-size:.85em;margin-top:10px">'
+             f'{_escape(model["garantii"]["rnpm_manual"])} '
+             f'<a href="{_escape(rnpm_url)}" style="color:#a5b4fc" target="_blank" rel="noopener">co.rnpm.ro</a></p>')
+    if body:
+        out.append(f'''
     <section id="garantii" class="report-section">
         <h2>Garantii &amp; Istoric (OSINT)</h2>
         {body}
     </section>''')
-            nav += '<a href="#garantii" class="nav-link">Garantii &amp; Istoric</a>\n'
+        nav += '<a href="#garantii" class="nav-link">Garantii &amp; Istoric</a>\n'
 
     # ---- Programe de finantare ----
     funding = model["funding_programs"]["data"]

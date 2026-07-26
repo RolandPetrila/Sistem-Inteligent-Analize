@@ -643,3 +643,29 @@ class TestTavilyQuotaAndDivergenceDocx:
         finally:
             if os.path.exists(path):
                 os.remove(path)
+
+
+class TestRnpmManualGuaranteesDocx:
+    """CERINTA #4 (2026-07-26): sectiunea Garantii DOCX se randeaza NECONDITIONAT
+    cu linia de verificare manuala RNPM (co.rnpm.ro). Non-vacuitate: pe HEAD sectiunea
+    era gate-uita pe `aegrm_ok or hist_ok`, deci pe fixture gol co.rnpm.ro era ABSENT."""
+
+    def _text(self, path):
+        from docx import Document
+        return "\n".join(p.text for p in Document(path).paragraphs)
+
+    def test_e3_rnpm_link_present_on_no_data_fixture(self):
+        from backend.reports.docx_generator import generate_docx
+
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as f:
+            path = f.name
+        try:
+            generate_docx(_make_sections(), _make_meta(), path, {})
+            text = self._text(path)
+            assert "co.rnpm.ro" in text
+            assert "verificare automata indisponibila" in text.lower()
+            # E4 (santinela): fara afirmatii false de "curat" pe garantii mobiliare.
+            assert "0 garantii" not in text.lower()
+        finally:
+            if os.path.exists(path):
+                os.remove(path)

@@ -52,6 +52,22 @@ TAVILY_QUOTA_MESSAGE_TEMPLATE = (
     "pentru o verificare completa."
 )
 
+# CERINTA #4 (2026-07-26): AEGRM auto-fetch e structural MORT (aegrm_client loveste
+# aegrm.justportal.ro, DNS-dead confirmat repetat) -> partea de garantii reale mobiliare
+# lipsea TACIT din orice raport (esec tacit, clasa cunoscuta a proiectului). Portalul RNPM
+# oficial e VIU la co.rnpm.ro dar are reCAPTCHA per-cautare validat server-side ->
+# verificarea manuala e singura optiune legitima (scraping interzis: R1 + decizia
+# proprietarului). Linia de mai jos apare NECONDITIONAT in HTML/PDF/DOCX + frontend --
+# auto-verificarea e indisponibila STRUCTURAL, deci nu depinde de datele firmei. ASCII
+# intentionat: trece nealterata pe calea PDF latin-1 (_sanitize). Mesajul se termina la
+# "...Verifica manual la" -- fiecare renderer adauga URL-ul/link-ul, ca "co.rnpm.ro" sa
+# apara exact o data.
+RNPM_MANUAL_URL = "https://co.rnpm.ro"
+RNPM_MANUAL_MESSAGE = (
+    "Garantii reale mobiliare (RNPM/AEGRM): verificare automata indisponibila "
+    "(portal protejat anti-bot). Verifica manual la"
+)
+
 
 def _build_tavily_quota_message(usage) -> str:
     if isinstance(usage, int):
@@ -341,6 +357,10 @@ def build_rich_fields_model(verified_data: dict) -> dict:
             "shown": has_garantii, "aegrm_ok": aegrm_ok, "aegrm": aegrm,
             "guarantees": aegrm_guarantees_normalized,
             "hist_ok": hist_ok, "historical_flags": historical_flags_normalized,
+            # Neconditionat (vezi RNPM_MANUAL_* de sus): auto-verificarea AEGRM e moarta,
+            # deci cele 3 randere + frontend afiseaza mereu linia de verificare manuala RNPM.
+            "rnpm_url": RNPM_MANUAL_URL,
+            "rnpm_manual": RNPM_MANUAL_MESSAGE,
         },
         "funding_programs": {"shown": has_funding, "data": funding},
         "credit_exposure": {"shown": has_cred, "data": cred},

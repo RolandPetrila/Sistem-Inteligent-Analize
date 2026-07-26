@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import clsx from "clsx";
-import { buildRichFieldsModel } from "@/lib/richFields";
+import { buildRichFieldsModel, type RichFieldsModel } from "@/lib/richFields";
 import {
   getDueDiligenceItems,
   getEarlyWarnings,
@@ -45,6 +45,65 @@ const SEVERITY_COLOR: Record<string, string> = {
   LOW: "text-blue-400 border-blue-500/30",
 };
 
+// CERINTA #4 (2026-07-26): sectiunea Garantii se randeaza INTOTDEAUNA -- linia de
+// verificare manuala RNPM e neconditionata (auto-verificarea AEGRM e structural moarta).
+// De aceea o randam si pe ramura `!anyShown` (fixture gol), nu doar in corpul principal.
+// AEGRM/istoric raman conditionate inauntru; culoarea liniei RNPM e neutra, niciodata verde.
+function GarantiiSection({ model }: { model: RichFieldsModel }) {
+  return (
+    <Section id="garantii" title="Garantii & Istoric (OSINT)">
+      {model.garantii.aegrmOk && model.garantii.aegrm && (
+        <p
+          className={clsx(
+            "text-sm font-medium",
+            model.garantii.aegrm.has_guarantees
+              ? "text-yellow-400"
+              : "text-green-400",
+          )}
+        >
+          Garantii reale mobiliare (AEGRM): {model.garantii.aegrm.count ?? 0}
+        </p>
+      )}
+      {model.garantii.histOk && (
+        <div className="space-y-1.5 mt-2">
+          {model.garantii.historicalFlags.map((flx, i) =>
+            flx.isDict ? (
+              <div
+                key={i}
+                className={clsx(
+                  "p-2 rounded border-l-4 bg-dark-card text-xs",
+                  SEVERITY_COLOR[flx.severity] || SEVERITY_COLOR.INFO,
+                )}
+              >
+                <strong>{flx.label}</strong>{" "}
+                {flx.date && <span className="text-gray-600">{flx.date}</span>}{" "}
+                <span className="text-gray-400">
+                  — {flx.detail.slice(0, 240)}
+                </span>
+              </div>
+            ) : (
+              <div key={i} className="text-xs text-gray-400">
+                {flx.detail}
+              </div>
+            ),
+          )}
+        </div>
+      )}
+      <p className="text-xs text-gray-400 mt-2">
+        {model.garantii.rnpmManual}{" "}
+        <a
+          href={model.garantii.rnpmUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-accent-secondary underline"
+        >
+          co.rnpm.ro
+        </a>
+      </p>
+    </Section>
+  );
+}
+
 export function RichDataTab({ fullData, cui }: RichDataTabProps) {
   const model = buildRichFieldsModel(fullData ?? {});
   const dueDiligence = getDueDiligenceItems(fullData);
@@ -71,11 +130,16 @@ export function RichDataTab({ fullData, cui }: RichDataTabProps) {
     !!freshness;
 
   if (!anyShown) {
+    // Chiar si fara alte date extinse, linia de verificare manuala RNPM apare
+    // NECONDITIONAT (CERINTA #4) -- auto-verificarea garantiilor mobiliare e moarta.
     return (
-      <p className="text-xs text-gray-500 italic">
-        Nu exista date extinse (due-diligence, sanctiuni, actionariat,
-        benchmark, licitatii, retea) pentru acest raport.
-      </p>
+      <div className="space-y-3">
+        <p className="text-xs text-gray-500 italic">
+          Nu exista date extinse (due-diligence, sanctiuni, actionariat,
+          benchmark, licitatii, retea) pentru acest raport.
+        </p>
+        <GarantiiSection model={model} />
+      </div>
     );
   }
 
@@ -249,50 +313,7 @@ export function RichDataTab({ fullData, cui }: RichDataTabProps) {
         </Section>
       )}
 
-      {model.garantii.shown && (
-        <Section id="garantii" title="Garantii & Istoric (OSINT)">
-          {model.garantii.aegrmOk && model.garantii.aegrm && (
-            <p
-              className={clsx(
-                "text-sm font-medium",
-                model.garantii.aegrm.has_guarantees
-                  ? "text-yellow-400"
-                  : "text-green-400",
-              )}
-            >
-              Garantii reale mobiliare (AEGRM):{" "}
-              {model.garantii.aegrm.count ?? 0}
-            </p>
-          )}
-          {model.garantii.histOk && (
-            <div className="space-y-1.5 mt-2">
-              {model.garantii.historicalFlags.map((flx, i) =>
-                flx.isDict ? (
-                  <div
-                    key={i}
-                    className={clsx(
-                      "p-2 rounded border-l-4 bg-dark-card text-xs",
-                      SEVERITY_COLOR[flx.severity] || SEVERITY_COLOR.INFO,
-                    )}
-                  >
-                    <strong>{flx.label}</strong>{" "}
-                    {flx.date && (
-                      <span className="text-gray-600">{flx.date}</span>
-                    )}{" "}
-                    <span className="text-gray-400">
-                      — {flx.detail.slice(0, 240)}
-                    </span>
-                  </div>
-                ) : (
-                  <div key={i} className="text-xs text-gray-400">
-                    {flx.detail}
-                  </div>
-                ),
-              )}
-            </div>
-          )}
-        </Section>
-      )}
+      <GarantiiSection model={model} />
 
       {model.benchmark.shown && (
         <Section

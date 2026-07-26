@@ -17,6 +17,14 @@ export interface HistoricalFlagNormalized {
   severity: string;
 }
 
+// CERINTA #4 (2026-07-26): oglinda constantelor RNPM_MANUAL_* din rich_fields.py.
+// Auto-verificarea AEGRM e structural moarta -> linia de verificare manuala RNPM apare
+// NECONDITIONAT in raport + tabul RichDataTab (scraping interzis: reCAPTCHA per-cautare).
+export const RNPM_MANUAL_URL = "https://co.rnpm.ro";
+export const RNPM_MANUAL_MESSAGE =
+  "Garantii reale mobiliare (RNPM/AEGRM): verificare automata indisponibila " +
+  "(portal protejat anti-bot). Verifica manual la";
+
 export interface RichFieldsModel {
   predictiveScores: { shown: boolean; data: Record<string, any> };
   benchmark: { shown: boolean; data: Record<string, any> };
@@ -36,6 +44,8 @@ export interface RichFieldsModel {
     aegrm: Record<string, any> | undefined;
     histOk: boolean;
     historicalFlags: HistoricalFlagNormalized[];
+    rnpmUrl: string;
+    rnpmManual: string;
   };
   fundingPrograms: { shown: boolean; data: Record<string, any> };
   creditExposure: { shown: boolean; data: Record<string, any> };
@@ -135,7 +145,15 @@ export function buildRichFieldsModel(
     tenderOpportunities: { shown: hasOpp, data: opp },
     actionariat: { shown: hasActionariat, actOk, act, relFlags },
     sanctions: { shown: hasSanctions, data: sanc },
-    garantii: { shown: hasGarantii, aegrmOk, aegrm, histOk, historicalFlags },
+    garantii: {
+      shown: hasGarantii,
+      aegrmOk,
+      aegrm,
+      histOk,
+      historicalFlags,
+      rnpmUrl: RNPM_MANUAL_URL,
+      rnpmManual: RNPM_MANUAL_MESSAGE,
+    },
     fundingPrograms: { shown: hasFunding, data: funding },
     creditExposure: { shown: hasCred, data: cred },
   };

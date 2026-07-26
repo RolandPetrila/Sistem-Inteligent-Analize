@@ -542,3 +542,69 @@ class TestRiskFactorsPdf:
         finally:
             if os.path.exists(path):
                 os.remove(path)
+
+
+class TestRnpmManualGuaranteesPdf:
+    """CERINTA #4 (2026-07-26): cazul HARD -- pagina 2 (Actionariat/Garantii/Finantare)
+    nu se randa deloc daca un raport n-avea NIMIC pe ea. Linia RNPM neconditionata forteaza
+    randarea paginii. Non-vacuitate: pe HEAD, cu fixture ZERO rich fields, pagina 2 lipsea
+    -> co.rnpm.ro ABSENT -> E2 pica."""
+
+    def _meta(self):
+        return {
+            "title": "Raport RIS",
+            "company_name": "Test SRL",
+            "report_level": 1,
+            "generated_at": "2026-07-26T10:00:00",
+            "sources_count": 1,
+            "risk_score": "Galben",
+            "numeric_score": 55,
+            "sources": [{"name": "ANAF", "level": 1, "status": "OK"}],
+        }
+
+    def _extract(self, path):
+        import pdfplumber
+        with pdfplumber.open(path) as pdf:
+            return "\n".join(page.extract_text() or "" for page in pdf.pages)
+
+    def test_e2_rnpm_link_present_with_zero_rich_fields(self):
+        from backend.reports.pdf_generator import generate_pdf
+
+        sections = {"executive_summary": {"title": "Rezumat", "content": "Firma analizata."}}
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            path = f.name
+        try:
+            # verified_data GOL: nici actionariat, nici funding, nimic pe pagina 2.
+            generate_pdf(sections, self._meta(), path, {})
+            text = self._extract(path)
+            assert "co.rnpm.ro" in text
+            # E4 (santinela): fara afirmatii false de "curat" pe garantii mobiliare.
+            low = text.lower()
+            assert "verificare automata indisponibila" in low
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
+    def test_e6_populated_aegrm_still_renders_list_and_rnpm_link(self):
+        """SANTINELA (trece pe ambele versiuni): pe calea AEGRM populata, lista
+        itemizata (creditor/tip bun/status) inca se randeaza + linkul RNPM."""
+        from backend.reports.pdf_generator import generate_pdf
+
+        sections = {"executive_summary": {"title": "Rezumat", "content": "Firma analizata."}}
+        verified = {
+            "risk": {"aegrm_guarantees": {"value": {
+                "has_data": True, "count": 1, "has_guarantees": True,
+                "details": [{"creditor": "Banca Test", "data": "2025-01-01",
+                             "tip_bun": "Autovehicul", "status": "Activ"}],
+            }}},
+        }
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            path = f.name
+        try:
+            generate_pdf(sections, self._meta(), path, verified)
+            text = self._extract(path)
+            assert "Banca Test" in text
+            assert "co.rnpm.ro" in text
+        finally:
+            if os.path.exists(path):
+                os.remove(path)

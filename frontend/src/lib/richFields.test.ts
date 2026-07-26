@@ -87,6 +87,21 @@ describe("buildRichFieldsModel", () => {
     ).toBe(false);
   });
 
+  it("garantii: expune NECONDITIONAT rnpmUrl + rnpmManual (CERINTA #4)", () => {
+    // Oglinda garantii.rnpm_url/rnpm_manual din rich_fields.py. Auto-verificarea AEGRM
+    // e moarta -> linia de verificare manuala RNPM apare indiferent de datele firmei.
+    const empty = buildRichFieldsModel({});
+    expect(empty.garantii.rnpmUrl).toBe("https://co.rnpm.ro");
+    expect(empty.garantii.rnpmManual).toContain(
+      "verificare automata indisponibila",
+    );
+    // prezente si pe calea populata
+    const populated = buildRichFieldsModel({
+      risk: { aegrm_guarantees: { value: { has_data: true, count: 2 } } },
+    });
+    expect(populated.garantii.rnpmUrl).toBe("https://co.rnpm.ro");
+  });
+
   it("garantii: unwrap risk.aegrm_guarantees.value + gate pe has_data SAU historical_flags", () => {
     const aegrmOnly = buildRichFieldsModel({
       risk: { aegrm_guarantees: { value: { has_data: true, count: 2 } } },

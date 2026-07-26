@@ -171,24 +171,26 @@ def _add_rich_fields_docx(doc, verified_data: dict):
     hist = model["garantii"]["historical_flags"]
     aegrm_ok = model["garantii"]["aegrm_ok"]
     hist_ok = model["garantii"]["hist_ok"]
-    if aegrm_ok or hist_ok:
-        doc.add_page_break()
-        doc.add_heading("Garantii si Istoric (OSINT)", level=1)
-        if aegrm_ok:
-            doc.add_paragraph(f"Garantii reale mobiliare (AEGRM): {aegrm.get('count', 0)}")
-            guarantees = model["garantii"]["guarantees"]
-            for g in guarantees[:8]:
-                txt = f"{g['creditor']} - {g['tip_bun']} (status: {g['status']}, data: {g['data']})"
-                doc.add_paragraph(txt[:200], style="List Bullet")
-        if hist_ok:
-            for flx in hist:
-                if flx["is_dict"]:
-                    label = flx["label"]
-                    detail = flx["detail"]
-                    date_raw = flx["date"]
-                    doc.add_paragraph(f"{label} {date_raw}: {detail}"[:240], style="List Bullet")
-                else:
-                    doc.add_paragraph(flx["detail"], style="List Bullet")
+    # CERINTA #4: sectiunea Garantii se randeaza INTOTDEAUNA -- linia RNPM e neconditionata
+    # (auto-verificarea AEGRM e structural indisponibila); AEGRM/istoric raman conditionate.
+    doc.add_page_break()
+    doc.add_heading("Garantii si Istoric (OSINT)", level=1)
+    if aegrm_ok:
+        doc.add_paragraph(f"Garantii reale mobiliare (AEGRM): {aegrm.get('count', 0)}")
+        guarantees = model["garantii"]["guarantees"]
+        for g in guarantees[:8]:
+            txt = f"{g['creditor']} - {g['tip_bun']} (status: {g['status']}, data: {g['data']})"
+            doc.add_paragraph(txt[:200], style="List Bullet")
+    if hist_ok:
+        for flx in hist:
+            if flx["is_dict"]:
+                label = flx["label"]
+                detail = flx["detail"]
+                date_raw = flx["date"]
+                doc.add_paragraph(f"{label} {date_raw}: {detail}"[:240], style="List Bullet")
+            else:
+                doc.add_paragraph(flx["detail"], style="List Bullet")
+    doc.add_paragraph(f"{model['garantii']['rnpm_manual']} {model['garantii']['rnpm_url']}")
 
     sanc = model["sanctions"]["data"]
     if model["sanctions"]["shown"]:

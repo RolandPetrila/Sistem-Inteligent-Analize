@@ -323,10 +323,18 @@ class TestRichFields:
         assert 'href="#predictive"' in nav
         assert 'href="#funding"' in nav
 
-    def test_empty_when_no_rich_data(self):
+    def test_only_rnpm_garantii_when_no_rich_data(self):
+        # CERINTA #4 (2026-07-26): linia de verificare manuala RNPM apare NECONDITIONAT,
+        # deci pe date goale se randeaza DOAR sectiunea garantii (co.rnpm.ro), nimic
+        # altceva. (Inainte de #4 acest test cerea html == "" -- premisa "sectiune
+        # absenta fara date", exact ce a schimbat cerinta.)
         html, nav = _build_rich_fields_html({})
-        assert html == ""
-        assert nav == ""
+        assert "co.rnpm.ro" in html
+        assert 'id="garantii"' in html
+        assert '<a href="#garantii" class="nav-link">' in nav
+        for other in ('id="sanctions"', 'id="eurostat"', 'id="funding"',
+                      'id="benchmark"', 'id="bonitate"', 'id="tavily-quota"'):
+            assert other not in html
 
     def test_funding_link_xss_safe(self):
         data = {"funding_programs": {"eligible": [
@@ -337,10 +345,15 @@ class TestRichFields:
         assert "&lt;script&gt;" in html
         assert 'href="javascript:' not in html
 
-    def test_aegrm_skipped_when_no_data(self):
+    def test_aegrm_data_line_skipped_when_no_data_but_rnpm_present(self):
+        # has_data=False -> linia "Garantii reale mobiliare (AEGRM): N" NU se randeaza,
+        # dar sectiunea + linia RNPM neconditionata SUNT prezente (CERINTA #4). Inainte
+        # de #4 testul cerea 'id="garantii"' not in html (sectiune complet absenta).
         data = {"risk": {"aegrm_guarantees": {"value": {"has_data": False}}}}
         html, nav = _build_rich_fields_html(data)
-        assert 'id="garantii"' not in html
+        assert 'id="garantii"' in html
+        assert "co.rnpm.ro" in html
+        assert "Garantii reale mobiliare (AEGRM):" not in html
 
     def test_sanctions_clean_rendered(self):
         data = {"sanctions": {"status": "clean", "hits": [],
@@ -836,3 +849,53 @@ class TestPredictiveDivergenceHtml:
         html, _ = _build_rich_fields_html(data)
         assert "Dezacord intre scorul 6D" not in html
         assert "Due Diligence Checklist" not in html
+
+
+class TestRnpmManualGuaranteesHtml:
+    """CERINTA #4 (2026-07-26): linia de verificare manuala RNPM (co.rnpm.ro) apare
+    NECONDITIONAT in sectiunea Garantii, chiar cand nu exista date AEGRM/istoric.
+    Non-vacuitate: pe HEAD sectiunea garantii se emitea DOAR pe `aegrm_ok or hist_ok`,
+    deci pe fixture gol co.rnpm.ro era ABSENT -> E1 pica."""
+
+    def _meta(self):
+        return {
+            "company_name": "Exemplu Test SRL",
+            "title": "Raport Test",
+            "generated_at": "2026-07-26",
+            "risk_score": "Verde",
+            "numeric_score": 82,
+            "risk_recommendation": "",
+            "report_level": 2,
+            "sources": [],
+        }
+
+    def test_e1_rnpm_link_present_on_no_data_fixture(self, tmp_path):
+        # Fixture FARA risk.aegrm_guarantees SI historical_flags=[] (calea necondiționata).
+        verified = {"company": {}, "financial": {}, "historical_flags": []}
+        out = tmp_path / "report.html"
+        generate_html({}, self._meta(), verified, str(out))
+        html = out.read_text(encoding="utf-8")
+
+        assert 'id="garantii"' in html
+        assert "co.rnpm.ro" in html
+        assert 'href="https://co.rnpm.ro"' in html
+        assert '<a href="#garantii" class="nav-link">' in html
+
+    def test_e4_negative_no_false_clean_marker(self, tmp_path):
+        # Pe calea no-data, sectiunea NU trebuie sa afirme "0 garantii"/"curat"/
+        # "fara garantii" -- doar "indisponibil / verifica manual". [SANTINELA:
+        # poate trece si pe HEAD unde sectiunea lipseste; nu e non-vac.]
+        verified = {"company": {}, "financial": {}, "historical_flags": []}
+        out = tmp_path / "report.html"
+        generate_html({}, self._meta(), verified, str(out))
+        html = out.read_text(encoding="utf-8")
+
+        start = html.index('id="garantii"')
+        end = html.index("</section>", start)
+        garantii = html[start:end].lower()
+        assert "verificare automata indisponibila" in garantii
+        assert "0 garantii" not in garantii
+        assert "fara garantii" not in garantii
+        assert "curat" not in garantii
+        # fara marker verde (#22c55e) pe absenta datelor de garantii
+        assert "#22c55e" not in garantii

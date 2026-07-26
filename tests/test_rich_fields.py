@@ -437,3 +437,37 @@ class TestMapsRatingKeyTakeawaysSectorPosition:
     def test_sector_position_hidden_when_absent(self):
         model = build_rich_fields_model({})
         assert model["sector_position"]["shown"] is False
+
+
+class TestRnpmManualGuarantees:
+    """CERINTA #4 (2026-07-26): AEGRM auto-fetch e structural mort -> partea de garantii
+    reale mobiliare lipsea tacit din orice raport. Modelul expune NECONDITIONAT
+    garantii.rnpm_url + rnpm_manual (portalul RNPM viu la co.rnpm.ro, verificat manual)
+    -- indiferent de datele firmei, pentru ca auto-verificarea e indisponibila structural.
+    Non-vacuitate: pe HEAD dict-ul garantii nu avea aceste chei -> KeyError la acces."""
+
+    def test_rnpm_fields_present_on_empty_verified(self):
+        g = build_rich_fields_model({})["garantii"]
+        assert g["rnpm_url"] == "https://co.rnpm.ro"
+        assert "co.rnpm.ro" in g["rnpm_url"]
+        assert "verificare automata indisponibila" in g["rnpm_manual"]
+
+    def test_rnpm_fields_present_even_when_aegrm_and_hist_populated(self):
+        # santinela: pe calea populata (aegrm has_data + historical_flags) cheile
+        # RNPM raman prezente alaturi de datele reale.
+        data = {
+            "risk": {"aegrm_guarantees": {"value": {"has_data": True, "count": 2}}},
+            "historical_flags": [{"type": "radiere", "snippet": "x"}],
+        }
+        g = build_rich_fields_model(data)["garantii"]
+        assert g["shown"] is True
+        assert g["aegrm_ok"] is True
+        assert g["rnpm_url"] == "https://co.rnpm.ro"
+
+    def test_rnpm_manual_is_ascii_safe_for_pdf_latin1(self):
+        # Mesajul trebuie sa treaca nealterat pe calea PDF latin-1 (fara diacritice
+        # ne-latin1 ca s/t cu virgula, care ar deveni "?").
+        msg = build_rich_fields_model({})["garantii"]["rnpm_manual"]
+        msg.encode("latin-1")  # nu arunca => sigur pe calea _sanitize
+        assert "0 garantii" not in msg.lower()
+        assert "curat" not in msg.lower()
