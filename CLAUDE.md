@@ -260,7 +260,7 @@ Fisiere feedback loop:
 
 - Backend: Python 3.13 + FastAPI + SQLite (aiosqlite, WAL mode)
 - Frontend: React 19 + Vite + TypeScript + Tailwind CSS
-- AI: Claude CLI (Opus, pilon calitate) + OpenRouter/DeepSeek-chat (calitate #2, platit-ieftin) + Groq (Llama 3.1 8B Instant) + Cerebras (gpt-oss-120b) + Mistral (Small) + Gemini (2.5 Flash) + SambaNova (Llama 3.3 70B, bonus temporar). **Numele de modele NU mai sunt hardcodate — sursa unica `backend/agents/ai_models.py`** (verificat live GET /v1/models); rute ORDONATE (fallback secvential) `QUALITY_CHAIN`/`SPEED_CHAIN`; garzi §3 (model retras→INDISPONIBIL), §4 (context→skip+overflow runtime), §5 (429→cota distincta, fara circuit). Test lunar `tools/check_ai_models.py`. Reconfigurat 2026-07-25 (CERINTA #1 jurnal audit).
+- AI: Claude CLI (Opus, pilon calitate) + OpenRouter/DeepSeek-chat (calitate #2, platit-ieftin) + Groq (Llama 3.1 8B Instant) + Cerebras (gpt-oss-120b) + Mistral (Small) + Gemini (2.5 Flash) + SambaNova (Llama 3.3 70B — SCOS din lant #8 (credit epuizat), intrare pastrata pt reversibilitate + monitorizare §6). Vendori activi in lanturi = **6** (Claude, OpenRouter, Groq, Cerebras, Mistral, Gemini). **Numele de modele NU mai sunt hardcodate — sursa unica `backend/agents/ai_models.py`** (verificat live GET /v1/models); rute ORDONATE (fallback secvential) `QUALITY_CHAIN`/`SPEED_CHAIN`; garzi §3 (model retras→INDISPONIBIL), §4 (context→skip+overflow runtime), §5 (429→cota distincta, fara circuit), §5b (402 credit/plata→fallback curat, fara circuit). Test lunar `tools/check_ai_models.py`. Reconfigurat 2026-07-25 (CERINTA #1) + hardening plata/doc 2026-07-27 (CERINTA #9).
 - ONRC: openapi.ro (100 req/luna gratuit, date structurate)
 - Licitatii: SEAP e-licitatie.ro API (contracte publice)
 - Search: Tavily API (1000 req/luna gratuit)
@@ -416,7 +416,7 @@ Fisierele permise in root sunt NUMAI:
 
 `AUDIT_FUNCTII.html` (+ `AUDIT_FUNCTII.js`) e dashboard-ul LIVE de audit al tuturor
 functiilor testabile din RIS: cele 88 endpoint-uri REST+WebSocket, 9 tipuri de analiza,
-5 provideri AI, 18 integrari surse externe, 3 canale de notificare, 7 task-uri scheduler,
+8 provideri AI (randuri model-level in dashboard: OpenRouter apare cu 3 modele; la nivel de vendor = 6, vezi docs/FUNCTII_SISTEM.md), 18 integrari surse externe, 3 canale de notificare, 7 task-uri scheduler,
 8 formate raport, 15 pagini frontend. Servit de backend la `/audit.html` + `/audit.js`
 (same-origin — evita CORS si respecta CSP-ul `script-src 'self'` existent, care blocheaza
 silentios orice `<script>` inline sau `onclick="..."`).

@@ -108,13 +108,13 @@ Data actualizare: 2026-04-09 | Versiune: R7 | Faze 1-21 complete + Audit R14/R15
 
 ## Agenti AI (5)
 
-| Agent                  | Rol                   | Surse                                                                                                                   |
-| ---------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Agent 1 (Official)     | Extrage date oficiale | ANAF, ANAF Bilant, BNR, openapi.ro, Tavily, SEAP, INS TEMPO                                                             |
-| Agent 2 (Web)          | Web intelligence      | Tavily search (stiri, recenzii)                                                                                         |
-| Agent 3 (Market)       | Analiza piata         | Tavily search (competitori, sector)                                                                                     |
-| Agent 4 (Verification) | Verificare + scoring  | Cross-validare, scoring 0-100, due diligence, early warnings, benchmark, relations                                      |
-| Agent 5 (Synthesis)    | Generare text narativ | Claude CLI / Groq / Mistral / Gemini / Cerebras / GitHub Models / Fireworks AI / SambaNova (9 provideri, smart routing) |
+| Agent                  | Rol                   | Surse                                                                                                                                                                                                  |
+| ---------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Agent 1 (Official)     | Extrage date oficiale | ANAF, ANAF Bilant, BNR, openapi.ro, Tavily, SEAP, INS TEMPO                                                                                                                                            |
+| Agent 2 (Web)          | Web intelligence      | Tavily search (stiri, recenzii)                                                                                                                                                                        |
+| Agent 3 (Market)       | Analiza piata         | Tavily search (competitori, sector)                                                                                                                                                                    |
+| Agent 4 (Verification) | Verificare + scoring  | Cross-validare, scoring 0-100, due diligence, early warnings, benchmark, relations                                                                                                                     |
+| Agent 5 (Synthesis)    | Generare text narativ | Claude CLI / OpenRouter (DeepSeek-chat, GPT-4o-mini, DeepSeek-R1) / Groq / Cerebras / Mistral / Gemini — 6 vendori activi in lanturi (SambaNova = intrare pastrata, scoasa din lant #8), smart routing |
 
 ---
 
@@ -474,13 +474,13 @@ Data actualizare: 2026-04-09 | Versiune: R7 | Faze 1-21 complete + Audit R14/R15
 
 ### Statistici R7
 
-| Metric          | Valoare                                                                                 |
-| --------------- | --------------------------------------------------------------------------------------- |
-| Teste           | 365 pytest + 38 vitest = 403 total                                                      |
-| REST Endpoints  | 52+ (adăugate: /ask, /share, /ocr)                                                      |
-| Pagini Frontend | 13 (adăugat: /network/:cui)                                                             |
-| Provideri AI    | 9 (Claude+Groq+Gemini+Cerebras+Mistral+GitHub Models+Fireworks AI+SambaNova+OpenRouter) |
-| Surse Date      | 11 (adăugat: AEGRM)                                                                     |
+| Metric          | Valoare                                                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Teste           | 365 pytest + 38 vitest = 403 total                                                                                             |
+| REST Endpoints  | 52+ (adăugate: /ask, /share, /ocr)                                                                                             |
+| Pagini Frontend | 13 (adăugat: /network/:cui)                                                                                                    |
+| Provideri AI    | 6 vendori activi in lanturi (Claude+OpenRouter+Groq+Cerebras+Mistral+Gemini); SambaNova = intrare pastrata, scoasa din lant #8 |
+| Surse Date      | 11 (adăugat: AEGRM)                                                                                                            |
 
 ---
 
@@ -519,24 +519,23 @@ Data actualizare: 2026-04-09 | Versiune: R7 | Faze 1-21 complete + Audit R14/R15
 
 ## Surse Date (10+)
 
-| Sursa               | Nivel       | Status                      |
-| ------------------- | ----------- | --------------------------- |
-| ANAF TVA/Stare v9   | 1 (Oficial) | Activ                       |
-| ANAF Bilant         | 1 (Oficial) | Activ                       |
-| BNR Cursuri         | 1 (Oficial) | Activ                       |
-| openapi.ro (ONRC)   | 1 (Oficial) | Activ (100 req/luna)        |
-| SEAP e-licitatie.ro | 1 (Oficial) | Activ                       |
-| INS TEMPO           | 1 (Oficial) | Activ (optional)            |
-| Tavily Search       | 3 (Estimat) | Activ (1000 req/luna)       |
-| Groq AI             | -           | Activ (gratuit)             |
-| Mistral AI          | -           | Activ (1B tokeni/luna)      |
-| Gemini AI           | -           | Activ (gratuit)             |
-| Cerebras AI         | -           | Activ (1M tokeni/zi)        |
-| Claude CLI          | -           | Activ (local)               |
-| Telegram            | -           | Activ                       |
-| GitHub Models       | -           | Activ (gratuit, fallback 6) |
-| Fireworks AI        | -           | Activ (gratuit, fallback 7) |
-| SambaNova           | -           | Activ (gratuit, fallback 8) |
+| Sursa               | Nivel       | Status                                                 |
+| ------------------- | ----------- | ------------------------------------------------------ |
+| ANAF TVA/Stare v9   | 1 (Oficial) | Activ                                                  |
+| ANAF Bilant         | 1 (Oficial) | Activ                                                  |
+| BNR Cursuri         | 1 (Oficial) | Activ                                                  |
+| openapi.ro (ONRC)   | 1 (Oficial) | Activ (100 req/luna)                                   |
+| SEAP e-licitatie.ro | 1 (Oficial) | Activ                                                  |
+| INS TEMPO           | 1 (Oficial) | Activ (optional)                                       |
+| Tavily Search       | 3 (Estimat) | Activ (1000 req/luna)                                  |
+| Groq AI             | -           | Activ (gratuit)                                        |
+| Mistral AI          | -           | Activ (1B tokeni/luna)                                 |
+| Gemini AI           | -           | Activ (gratuit)                                        |
+| Cerebras AI         | -           | Activ (1M tokeni/zi)                                   |
+| Claude CLI          | -           | Activ (local)                                          |
+| Telegram            | -           | Activ                                                  |
+| OpenRouter          | -           | Activ (platit-ieftin, #2 calitate + fallback adanc)    |
+| SambaNova           | -           | Intrare pastrata, scoasa din lant (#8, credit epuizat) |
 
 ---
 
@@ -566,12 +565,14 @@ Data actualizare: 2026-04-09 | Versiune: R7 | Faze 1-21 complete + Audit R14/R15
 - Integrare in raportul HTML si sectiunea Oportunitati
 - Endpoint: GET /api/companies/{id}/funding
 
-### Provideri AI (9 total)
+### Provideri AI (stare actuala — sursa de adevar `backend/agents/ai_models.py`)
 
-- Anterior: Claude CLI + Groq + Mistral + Gemini + Cerebras (5 provideri)
-- Adaugati R6: GitHub Models + Fireworks AI + SambaNova (3 provideri noi)
-- Total: 9 provideri cu fallback chain automat
-- Smart routing: sectiuni scurte -> Groq/SambaNova, lungi -> Claude/Gemini
+- Baza istorica: Claude CLI + Groq + Mistral + Gemini + Cerebras (5 provideri).
+- Doi provideri experimentati in R6 nu au fost niciodata cablati intr-un lant — eliminati din config (reconfigurare 2026-07-25, CERINTA #1).
+- OpenRouter adaugat ca #2 pe ruta CALITATE (DeepSeek-chat) + fallback adanc (GPT-4o-mini, DeepSeek-R1).
+- SambaNova: intrare pastrata pt reversibilitate/§6, dar scoasa din lant (CERINTA #8, credit epuizat).
+- **Vendori activi in lanturi = 6:** Claude, OpenRouter, Groq, Cerebras, Mistral, Gemini.
+- Rute ordonate (fallback secvential): `QUALITY_CHAIN` = Claude -> OpenRouter -> Gemini -> gpt-4o-mini -> DeepSeek-R1; `SPEED_CHAIN` = Groq -> Cerebras -> Mistral -> Gemini.
 
 ### Section-Level Regeneration (F3-7)
 

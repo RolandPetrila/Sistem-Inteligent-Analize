@@ -100,6 +100,22 @@ class TestPaymentClassification:
         # Marker pe body, indiferent de status (aici 402, dar si un 400 cu marker ar prinde).
         assert ai_models.classify_http_error(402, body) == "payment"
 
+    @pytest.mark.parametrize(
+        "body",
+        [
+            # Forma EXACTA masurata live la SambaNova 2026-07-27 (CERINTA #8, balance_units:0).
+            '{"code":"PAYMENT_METHOD_REQUIRED","message":"A payment method is required to access this model"}',
+            # Doar codul (unele gateway-uri trimit doar `code`).
+            "payment_method_required",
+            # Doar mesajul in proza (marker `payment method` substring).
+            "A payment method is required",
+        ],
+    )
+    def test_sambanova_payment_method_required_is_payment(self, body):
+        # CERINTA #9/B — gapul MASURAT: forma SambaNova nu o prindea niciun marker vechi
+        # ("payment required" ≠ "payment method is required"). Non-vac.: pe HEAD -> "fail".
+        assert ai_models.classify_http_error(402, body) == "payment"
+
     def test_bare_402_no_marker_is_fail_not_payment(self):
         # Consecvent cu §3 (marker-required): un 402 GOL fara marker NU e plata -> "fail".
         assert ai_models.classify_http_error(402, "") == "fail"
@@ -112,6 +128,12 @@ class TestPaymentClassification:
         # SANTINELA over-breadth: markerul nud "insufficient" ar prinde auth-ul -> INTERZIS.
         # "insufficient permissions" (auth) trebuie sa ramana "fail". Trece pe AMBELE versiuni.
         assert ai_models.classify_http_error(403, "insufficient permissions") == "fail"
+
+    def test_payment_word_without_billing_marker_stays_fail(self):
+        # SANTINELA over-breadth pt markerii noi (#9/B): markerul e "payment method" /
+        # "payment_method_required", NU cuvantul nud "payment". Un mesaj cu "payment" fara forma
+        # de billing (aici un mesaj de auth/config) trebuie sa ramana "fail".
+        assert ai_models.classify_http_error(403, "your payment plan lacks permission for this model") == "fail"
 
 
 # ── M1 — comportamental (E-M1.2) + santinela (E-M1.3) ─────────────────────────

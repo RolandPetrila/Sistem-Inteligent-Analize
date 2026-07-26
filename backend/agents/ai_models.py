@@ -61,9 +61,11 @@ AI_PROVIDERS: dict[str, dict] = {
         # PAYMENT_METHOD_REQUIRED, balance_units:0 — creditul bonus e consumat. Intrarea RAMANE:
         # o monitorizeaza §6 (`tools/check_ai_models.py::_sambanova_responds`) + e hook de
         # reversibilitate — re-adauga "sambanova" in QUALITY_CHAIN cand reincarci credit.
-        # temporary_free=True. NOTA: auto-scoaterea NU merge pt samba — `mark_unavailable` se
-        # apeleaza DOAR pe "gone", iar 402 `payment_method_required` NU e in _PAYMENT_MARKERS ->
-        # cade pe "fail" -> circuit breaker; de-aia scoaterea din lant e MANUALA aici, nu automata.
+        # temporary_free=True. NOTA: 402 `PAYMENT_METHOD_REQUIRED` e acum clasificat corect ca
+        # "payment" (CERINTA #9/B: markerii `payment_method_required`+`payment method`) -> fallback
+        # curat, FARA circuit breaker. DAR scoaterea din lant ramane MANUALA aici: `mark_unavailable`
+        # (auto-scoatere §3) se apeleaza DOAR pe "gone", nu pe "payment" — un provider fara credit nu
+        # e "retras", doar temporar neplatit; se re-adauga cand reincarci, nu se auto-elimina.
         "model": "Meta-Llama-3.3-70B-Instruct",
         "max_context": 131_072,
         "temporary_free": True,
@@ -166,8 +168,9 @@ AI_PROVIDERS: dict[str, dict] = {
 # CALITATE (rapoarte profunde): Claude pilon → DeepSeek(OpenRouter) → Gemini
 #   → [fallback ADANC platit, CERINTA #6] gpt-4o-mini → deepseek-r1.
 # SambaNova SCOS 2026-07-27 (CERINTA #8/F2): 402 PAYMENT_METHOD_REQUIRED (balance_units:0) masurat
-#   live — creditul bonus e consumat; irosea un hop la fiecare job de calitate + declansa circuit
-#   breaker (402 `payment_method_required` cade pe "fail", NU pe "payment"). Intrarea
+#   live — creditul bonus e consumat; irosea un hop la fiecare job de calitate. (La #8 acel 402 cadea
+#   pe "fail" -> circuit; din CERINTA #9/B e clasificat corect ca "payment" -> fallback curat, dar
+#   scoaterea din lant ramane oricum decizia proprietarului, nu automata.) Intrarea
 #   AI_PROVIDERS["sambanova"] e PASTRATA (monitorizata §6 + reversibila) — re-adaug-o cand reincarci.
 # Ultimele 2 (OpenRouter-family platit) se ating DOAR daca cele 3 optiuni upstream au esuat
 # -> rar -> cost-safe ($9.98 tine luni/an+). gpt-4o-mini INAINTEA lui r1: mai ieftin+rapid.
@@ -236,10 +239,15 @@ _QUOTA_MARKERS = (
     "too many requests",
     "insufficient_quota",
 )
-# §5b — PLATA/CREDIT (distinct de cota): creditul PLATIT s-a epuizat. Masurat real
-# 2026-07-25 la DeepSeek direct: `402 + "Insufficient Balance"`. Semantic diferit de
-# 429 (nu e rate-limit; nu se rezolva prin retry) SI de esec de continut (nu triplam
-# circuit breaker-ul). Prins pe MARKER de body, NU pe status nud — la fel ca §3 ("gone"
+# §5b — PLATA/CREDIT (distinct de cota): creditul PLATIT s-a epuizat. Doua forme MASURATE real:
+#   - DeepSeek direct 2026-07-25: `402 + "Insufficient Balance"`.
+#   - SambaNova 2026-07-27 (CERINTA #8): `402 {"code":"PAYMENT_METHOD_REQUIRED","message":"A payment
+#     method is required…"}` — `balance_units:0`. Forma asta NU o prindea niciun marker vechi
+#     ("payment required" ≠ "payment method is required"; "payment_required" ≠ "payment_method_required")
+#     -> cadea pe "fail" -> circuit. Acoperita acum (CERINTA #9/B) cu `payment_method_required` +
+#     `payment method` (billing-specific — NU apar intr-un mesaj de auth).
+# Semantic diferit de 429 (nu e rate-limit; nu se rezolva prin retry) SI de esec de continut (nu
+# triplam circuit breaker-ul). Prins pe MARKER de body, NU pe status nud — la fel ca §3 ("gone"
 # cere marker, fiindca un 402 gol poate fi tranzitoriu upstream). INTERZIS markerul nud
 # "insufficient" (ar prinde "insufficient permissions" = auth -> trebuie sa ramana "fail").
 # `insufficient_quota` NU e aici: ramane in _QUOTA_MARKERS, verificat INAINTE de plata.
@@ -250,6 +258,8 @@ _PAYMENT_MARKERS = (
     "insufficient credits",
     "payment required",
     "payment_required",
+    "payment_method_required",
+    "payment method",
 )
 _OVERFLOW_MARKERS = (
     "context_length_exceeded",
