@@ -56,7 +56,7 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
 <body>
 
 <h1>RIS — Audit Functii (dashboard live)</h1>
-<div class="subtitle">Generat din codul real la commit <code>a81dca8</code> — regenereaza cu <code>python tools/generate_audit_dashboard.py</code> dupa orice functie noua.</div>
+<div class="subtitle">Generat din codul real la commit <code>1993ce3</code> — regenereaza cu <code>python tools/generate_audit_dashboard.py</code> dupa orice functie noua.</div>
 
 <div class="stats-bar">
   <div class="stat-card"><div class="num">89/90</div><div class="label">Endpoint-uri REST+WS testate</div></div>
@@ -857,8 +857,8 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
 
 <h2 id="providers">Provideri AI Sinteza — 5/5</h2>
 <table><thead><tr><th>Provider</th><th>Env var</th><th>Test live</th><th>Nota</th></tr></thead><tbody><tr><td><strong>Claude Code CLI</strong></td><td><code>SYNTHESIS_MODE=claude_code</code></td>
-<td>—</td>
-<td>NEACTIV in productie — .env are SYNTHESIS_MODE=autonomous (serviciul ruleaza ca SYSTEM, fara auth CLI). Vezi plan E2E.</td></tr>
+<td><button class="btn-test" data-kind="provider" data-provider="claude">Testeaza live</button></td>
+<td>ACTIV in productie — pilon de calitate: scrie sectiunile lungi via subprocess `claude --print` ($0 prin abonamentul Max, fara ANTHROPIC_API_KEY). Verificat live E7 2026-07-25 (job bd69a5d7: executive_summary + financial_analysis provider=claude, fara FALLBACK).</td></tr>
 <tr><td><strong>Groq (Llama 3.1 8B Instant)</strong></td><td><code>GROQ_API_KEY</code></td>
 <td><button class="btn-test" data-kind="provider" data-provider="groq">Testeaza live</button></td>
 <td>Testabil live prin /api/settings/test/groq.</td></tr>

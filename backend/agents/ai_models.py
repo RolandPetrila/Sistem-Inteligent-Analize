@@ -178,6 +178,21 @@ _QUOTA_MARKERS = (
     "too many requests",
     "insufficient_quota",
 )
+# §5b — PLATA/CREDIT (distinct de cota): creditul PLATIT s-a epuizat. Masurat real
+# 2026-07-25 la DeepSeek direct: `402 + "Insufficient Balance"`. Semantic diferit de
+# 429 (nu e rate-limit; nu se rezolva prin retry) SI de esec de continut (nu triplam
+# circuit breaker-ul). Prins pe MARKER de body, NU pe status nud — la fel ca §3 ("gone"
+# cere marker, fiindca un 402 gol poate fi tranzitoriu upstream). INTERZIS markerul nud
+# "insufficient" (ar prinde "insufficient permissions" = auth -> trebuie sa ramana "fail").
+# `insufficient_quota` NU e aici: ramane in _QUOTA_MARKERS, verificat INAINTE de plata.
+_PAYMENT_MARKERS = (
+    "insufficient balance",
+    "insufficient_balance",
+    "insufficient credit",
+    "insufficient credits",
+    "payment required",
+    "payment_required",
+)
 _OVERFLOW_MARKERS = (
     "context_length_exceeded",
     "maximum context",
@@ -193,10 +208,14 @@ def classify_http_error(status_code: int, body: str) -> str:
     """Clasifica un raspuns HTTP de eroare intr-o categorie de fallback:
     - "gone"     → §3: modelul a disparut din catalog (404 / marker) → INDISPONIBIL pe sesiune
     - "quota"    → §5: cota epuizata (429 / marker) → fallback, NU e esec de continut
+    - "payment"  → §5b: credit PLATIT epuizat (402 + marker "insufficient balance") → fallback,
+                   NU e esec de continut si NU e cota (nu se rezolva prin retry) → fara circuit
     - "overflow" → §4: prompt peste contextul real (400 + marker) → sari providerul
     - "fail"     → esec generic/tranzitoriu → circuit breaker
 
     Ordinea conteaza: un 429 cu 'quota' e cota, un 400 cu 'context_length_exceeded' e overflow.
+    Quota se verifica INAINTE de plata: `insufficient_quota` (marker de cota) NU trebuie sa cada
+    pe plata. Plata se prinde pe MARKER (nu pe status 402 nud), consecvent cu §3.
 
     DEVIATIE CONSTIENTA de la D3 ("la 404 / model_not_found"): "gone" cere un MARKER in body,
     NU doar `status_code == 404`. Motiv: un 404 GOL e adesea indisponibilitate TRANZITORIE upstream
@@ -209,6 +228,8 @@ def classify_http_error(status_code: int, body: str) -> str:
         return "gone"
     if status_code == 429 or any(m in b for m in _QUOTA_MARKERS):
         return "quota"
+    if any(m in b for m in _PAYMENT_MARKERS):
+        return "payment"
     if status_code in (400, 413) and any(m in b for m in _OVERFLOW_MARKERS):
         return "overflow"
     return "fail"

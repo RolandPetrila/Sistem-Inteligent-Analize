@@ -184,7 +184,7 @@ ANALYSIS_TYPES = [
 ]
 
 AI_PROVIDERS = [
-    ("Claude Code CLI", "SYNTHESIS_MODE=claude_code", False, "NEACTIV in productie — .env are SYNTHESIS_MODE=autonomous (serviciul ruleaza ca SYSTEM, fara auth CLI). Vezi plan E2E."),
+    ("Claude Code CLI", "SYNTHESIS_MODE=claude_code", True, "ACTIV in productie — pilon de calitate: scrie sectiunile lungi via subprocess `claude --print` ($0 prin abonamentul Max, fara ANTHROPIC_API_KEY). Verificat live E7 2026-07-25 (job bd69a5d7: executive_summary + financial_analysis provider=claude, fara FALLBACK)."),
     ("Groq (Llama 3.1 8B Instant)", "GROQ_API_KEY", True, "Testabil live prin /api/settings/test/groq."),
     ("Gemini 2.5 Flash", "GOOGLE_AI_API_KEY", True, "Testabil live prin /api/settings/test/gemini."),
     ("Mistral Small 3", "MISTRAL_API_KEY", True, "Testabil live prin /api/settings/test/mistral (adaugat in acest sweep, bug #6)."),

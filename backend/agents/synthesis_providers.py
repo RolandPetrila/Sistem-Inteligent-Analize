@@ -136,17 +136,28 @@ class SynthesisProvidersMixin:
         generic care ascunde totul). Returneaza outcome; efecte laterale per categorie:
           gone     -> marcheaza providerul INDISPONIBIL pe sesiune (§3) — nu se mai reapeleaza
           quota    -> logheaza retry-after/x-ratelimit; NU e esec de continut (§5) — fara circuit
+          payment  -> credit PLATIT epuizat (§5b); NU e esec de continut, NU e cota — fara circuit
           overflow -> logheaza; problema de dimensiune, nu de provider (§4 runtime) — fara circuit
           fail     -> caller-ul decide record_provider_failure (esec real, tranzitoriu)
+        Doar "fail" duce la record_provider_failure (la call-site) — restul sunt fallback curat.
         """
         outcome = ai_models.classify_http_error(status, body)
         if outcome == "gone":
             ai_models.mark_unavailable(provider, model)
             logger.warning(f"[ai] {provider} model {model} INDISPONIBIL — retras? (HTTP {status})")
         elif outcome == "quota":
+            # M1b: statusul REAL, nu "(429)" hardcodat — un marker de cota poate veni si pe
+            # alt status decat 429; un log care afirma un status pe care nu l-a vazut minte.
             rate = ai_models.extract_rate_limit_info(headers)
             logger.warning(
-                f"[ai] {provider} COTA EPUIZATA (429) — fallback." + (f" {rate}" if rate else "")
+                f"[ai] {provider} COTA EPUIZATA (HTTP {status}) — fallback." + (f" {rate}" if rate else "")
+            )
+        elif outcome == "payment":
+            # M1: credit PLATIT epuizat (ex. 402 "Insufficient Balance"). Distinct de cota si de
+            # esecul generic; NU declanseaza record_provider_failure (numai "fail" o face la
+            # call-site) — fallback curat la urmatorul provider, cu semnal truthful.
+            logger.warning(
+                f"[ai] {provider} CREDIT/PLATA EPUIZAT (HTTP {status}) — fallback, fara circuit"
             )
         elif outcome == "overflow":
             logger.warning(f"[ai] {provider} context depasit la RUNTIME (HTTP {status}) — sar providerul")

@@ -228,7 +228,7 @@ async def test_telegram():
     return {"success": ok}
 
 
-TESTABLE_SERVICES = ["groq", "gemini", "mistral", "cerebras", "tavily", "telegram", "email", "webhook"]
+TESTABLE_SERVICES = ["claude", "groq", "gemini", "mistral", "cerebras", "tavily", "telegram", "email", "webhook"]
 
 # 15 surse externe fara endpoint dedicat (audit 2026-07-12) — dispatch generic prin
 # PING_REGISTRY in loc de blocuri elif suplimentare (vezi connectivity.py pt motiv).
@@ -246,6 +246,14 @@ async def run_service_test(service: str) -> dict:
 
     if service in PING_REGISTRY:
         return await run_ping(service)
+
+    if service == "claude":
+        # Claude CLI e subproces, nu are endpoint HTTP de test — reutilizam preflight-ul
+        # (cale CLI + credentiale Max, forma {ok, message}). Butonul din dashboard-ul de audit
+        # tinteste aici de cand Claude e marcat ACTIV (M2) — altfel `/test/claude` intorcea
+        # null si butonul afisa fals "EROARE retea" pe un Claude functional. NU atinge
+        # subprocesul de sinteza (doar verifica setup-ul).
+        return _claude_preflight()
 
     try:
         if service == "tavily":
