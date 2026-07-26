@@ -56,7 +56,7 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
 <body>
 
 <h1>RIS — Audit Functii (dashboard live)</h1>
-<div class="subtitle">Generat din codul real la commit <code>b1ff0dc</code> — regenereaza cu <code>python tools/generate_audit_dashboard.py</code> dupa orice functie noua.</div>
+<div class="subtitle">Generat din codul real la commit <code>3d9218d</code> — regenereaza cu <code>python tools/generate_audit_dashboard.py</code> dupa orice functie noua.</div>
 
 <div class="stats-bar">
   <div class="stat-card"><div class="num">89/90</div><div class="label">Endpoint-uri REST+WS testate</div></div>
@@ -870,7 +870,16 @@ footer { margin-top:50px; padding-top:16px; border-top:1px solid #2a2f3a; color:
 <td>Testabil live prin /api/settings/test/mistral (adaugat in acest sweep, bug #6).</td></tr>
 <tr><td><strong>Cerebras (gpt-oss-120b)</strong></td><td><code>CEREBRAS_API_KEY</code></td>
 <td><button class="btn-test" data-kind="provider" data-provider="cerebras">Testeaza live</button></td>
-<td>Testabil live prin /api/settings/test/cerebras. Model migrat 2026-07-12 (fostul model retras din catalog).</td></tr></tbody></table>
+<td>Testabil live prin /api/settings/test/cerebras. Model migrat 2026-07-12 (fostul model retras din catalog).</td></tr>
+<tr><td><strong>OpenRouter DeepSeek-chat</strong></td><td><code>OPENROUTER_API_KEY</code></td>
+<td><button class="btn-test" data-kind="provider" data-provider="openrouter">Testeaza live</button></td>
+<td>Pozitia #2 pe ruta CALITATE (platit-ieftin, $0.20/$0.80 per 1M). Verificat live E7 2026-07-25 (job bd69a5d7: risk_assessment + recommendations provider=openrouter, dupa timeout Claude).</td></tr>
+<tr><td><strong>OpenRouter GPT-4o-mini</strong></td><td><code>OPENROUTER_API_KEY</code></td>
+<td><button class="btn-test" data-kind="provider" data-provider="openrouter">Testeaza live</button></td>
+<td>Fallback ADANC pe CALITATE (pozitia #5, CERINTA #6, 2026-07-26). Model OpenAI ieftin ($0.15/$0.60 per 1M), content curat verificat live. Se declanseaza doar dupa toate optiunile free.</td></tr>
+<tr><td><strong>OpenRouter DeepSeek-R1</strong></td><td><code>OPENROUTER_API_KEY</code></td>
+<td><button class="btn-test" data-kind="provider" data-provider="openrouter">Testeaza live</button></td>
+<td>Fallback ADANC pe CALITATE (pozitia #6, CERINTA #6, 2026-07-26). Reasoning ($0.70/$2.50 per 1M) cu cap `reasoning.max_tokens=1024` (fara cap -&gt; content GOL, masurat live) + timeout 200s (model lent, ~104-129s masurat).</td></tr></tbody></table>
 
 <h2 id="external">Integrari surse externe de date — 18</h2>
 <table><thead><tr><th>Sursa</th><th>Modul</th><th>Cost/cheie</th><th>Status test</th><th>Test</th><th>Nota</th></tr></thead><tbody><tr><td><strong>ANAF TVA/Stare</strong></td><td><code>anaf_client.py</code></td><td>Gratuit, fara cheie</td><td>TESTABIL live prin POST /api/settings/test/anaf_tva. Verificat 2026-07-12: OK.</td><td><button class="btn-test" data-kind="provider" data-provider="anaf_tva">Testeaza live</button></td><td class="improve">OK — implementat in acest sprint (connectivity.py).</td></tr>

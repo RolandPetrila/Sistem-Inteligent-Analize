@@ -846,14 +846,27 @@ Reguli:
         return True  # Default: allow generation
 
     def _strip_scratchpad(self, text: str) -> str:
-        """CoT: Elimina blocul <analiza_secreta>...</analiza_secreta> din output-ul modelului.
-        Modelele mici (Mistral/Gemini Flash) devin cu ~40% mai precise daca sunt obligate
-        sa argumenteze logic inainte de a genera continutul final.
+        """Elimina blocuri de scratchpad/rationament din output-ul modelului inainte de stocare:
+        - <analiza_secreta>...</analiza_secreta>: CoT cerut explicit in prompt (modelele mici
+          Mistral/Gemini Flash devin cu ~40% mai precise daca argumenteaza inainte de raspuns).
+        - <think>...</think>: urme de rationament ale modelelor de reasoning (ex. DeepSeek-R1,
+          CERINTA #6). SANTINELA DEFENSIVA (2026-07-26): OpenRouter separa rationamentul R1 in
+          `message.reasoning`, iar `content` vine CURAT (verificat live: gpt-4o-mini + deepseek-r1
+          -> 0 tag-uri <think> in content). Content-ul curat e o proprietate de RUTARE (OpenRouter
+          poate ruta acelasi model prin upstream-uri diferite), NU a modelului -> daca o schimbare
+          de rutare/upstream scurge reasoning-ul in `content`, sectiunile raman proza curata.
+          Cost 0 cand e deja curat (cazul de azi).
         User-ul vede doar raportul curat, fara scratchpad-ul de gandire."""
-        if not text or "<analiza_secreta>" not in text:
+        if not text:
             return text
-        cleaned = re.sub(r"<analiza_secreta>.*?</analiza_secreta>", "", text, flags=re.DOTALL)
-        return cleaned.strip()
+        changed = False
+        if "<analiza_secreta>" in text:
+            text = re.sub(r"<analiza_secreta>.*?</analiza_secreta>", "", text, flags=re.DOTALL)
+            changed = True
+        if "<think>" in text and "</think>" in text:
+            text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+            changed = True
+        return text.strip() if changed else text
 
     def _degraded_fallback(self, section: dict, verified_data: dict) -> str:
         """Fallback in 3 trepte cand TOTI providerii esueaza:

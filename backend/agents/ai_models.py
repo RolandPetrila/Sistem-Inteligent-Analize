@@ -49,6 +49,9 @@ AI_PROVIDERS: dict[str, dict] = {
         "url": "https://openrouter.ai/api/v1/chat/completions",
         "endpoint_kind": "openai_compat",
         "json_char_budget": 20_000,
+        # request_timeout explicit = 90 (era 90 via `provider=="openrouter"` string-exact, acum
+        # centralizat aici odata cu C.1) — behavior-preserving, NU schimbare de rol/pozitie.
+        "request_timeout": 90,
     },
     "sambanova": {
         # Bonus temporar. `Meta-Llama-3.1-405B-Instruct` cerut de brief a fost RETRAS din
@@ -111,11 +114,56 @@ AI_PROVIDERS: dict[str, dict] = {
         "endpoint_kind": "openai_compat",
         "json_char_budget": 20_000,
     },
+    # ── OpenRouter-family — fallback ADANC pe CALITATE (CERINTA #6, 2026-07-26) ──
+    # Proprietarul a finantat OpenRouter ($9.98, is_free_tier=false). Aceste 2 modele
+    # se declanseaza DUPA toate optiunile free (pozitiile 5-6 in QUALITY_CHAIN) -> rar
+    # -> cost-safe. Ambele verificate live PRESENT 2026-07-26 (GET /api/v1/models).
+    # `request_timeout` per provider (nou) — vezi C.1: timeout-ul string-exact `=="openrouter"`
+    # ar fi dat 60s si acestora; centralizat aici.
+    "openrouter_gpt4o_mini": {
+        # OpenAI GPT-4o-mini prin OpenRouter. Model ieftin, rapid, generalist — umple golul
+        # "model OpenAI de incredere" in fallback-ul adanc. Pret $0.15/M in + $0.60/M out
+        # (verificat 2026-07-26). Content CURAT verificat live (0 <think>, proza romana).
+        "model": "openai/gpt-4o-mini",
+        "max_context": 128_000,
+        "temporary_free": False,
+        "api_key_attr": "openrouter_api_key",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "endpoint_kind": "openai_compat",
+        "json_char_budget": 20_000,
+        "request_timeout": 90,
+    },
+    "openrouter_r1": {
+        # DeepSeek-R1 (reasoning) prin OpenRouter. Pret $0.70/M in + $2.50/M out (2026-07-26).
+        # GOTCHA MASURAT LIVE 2026-07-26 (C.2): R1 e model de reasoning si reasoning-ul NU poate
+        # fi dezactivat ("Reasoning is mandatory for this endpoint" — HTTP 400). Fara plafon,
+        # reasoning-ul consuma TOT max_tokens (4096) -> content GOL -> cadea mereu la urmatorul
+        # + ardea ~$0.05/apel degeaba. CU `reasoning.max_tokens=1024` (extra_payload): content
+        # curat 563 cuvinte, ~$0.01, FARA <think> in content (reasoning e in `message.reasoning`,
+        # separat). Cap de tokeni (hard), NU `effort` (hint interpretat diferit de upstream).
+        # request_timeout=200: DERIVAT din masuratoare — 129s pe un prompt de 15k caractere
+        # (2026-07-26); prompturile reale de raport au 20-28k+ -> 200s da marja; R1 e model LENT
+        # (~14 tok/s). Daca depaseste 200s (deep fallback #6, rar) -> cade la degraded render.
+        "model": "deepseek/deepseek-r1",
+        "max_context": 163_840,
+        "temporary_free": False,
+        "api_key_attr": "openrouter_api_key",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "endpoint_kind": "openai_compat",
+        "json_char_budget": 20_000,
+        "request_timeout": 200,
+        "extra_payload": {"reasoning": {"max_tokens": 1024}},
+    },
 }
 
 # ── Rute (LANTURI ORDONATE — fallback SECVENTIAL, ordinea e REALA) ─────────────
 # CALITATE (rapoarte profunde): Claude pilon → DeepSeek(OpenRouter) → SambaNova(bonus) → Gemini
-QUALITY_CHAIN: list[str] = ["claude", "openrouter", "sambanova", "gemini"]
+#   → [fallback ADANC platit, CERINTA #6] gpt-4o-mini → deepseek-r1.
+# Ultimele 2 (OpenRouter-family platit) se ating DOAR daca toate cele 4 optiuni free au esuat
+# -> rar -> cost-safe ($9.98 tine luni/an+). gpt-4o-mini INAINTEA lui r1: mai ieftin+rapid.
+QUALITY_CHAIN: list[str] = [
+    "claude", "openrouter", "sambanova", "gemini", "openrouter_gpt4o_mini", "openrouter_r1",
+]
 # VITEZA (rapoarte rapide): Groq → Cerebras(garda §4) → Mistral → Gemini
 SPEED_CHAIN: list[str] = ["groq", "cerebras", "mistral", "gemini"]
 

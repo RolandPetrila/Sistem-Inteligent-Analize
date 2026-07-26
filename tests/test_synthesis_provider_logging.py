@@ -160,21 +160,17 @@ class TestLogSynthesisConcurrentFallbackWins:
 
 class TestLogSynthesisAllFailDegraded:
     """Ruta 'quality': TOTI providerii din lantul secvential pica -> degradare non-AI
-    (_degraded_fallback). Mockam TOTI cei 7 provideri (nu doar cei din vechiul lant) —
-    altfel openrouter/sambanova (noi in QUALITY_CHAIN) ar face apeluri LIVE reale."""
+    (_degraded_fallback). Mockam TOTI providerii din AMBELE lanturi (chain-driven, nu lista
+    hardcodata) — altfel un provider nou in QUALITY_CHAIN (ex. openrouter_gpt4o_mini/_r1,
+    CERINTA #6) ar face un apel LIVE real (platit + lent) in loc sa pice controlat."""
 
     @pytest.mark.asyncio
     async def test_degraded_fallback_logged_as_failure(self, agent, log_calls):
         async def fail(prompt: str) -> str:
             return None
 
-        agent._generate_with_claude = fail
-        agent._generate_with_openrouter = fail
-        agent._generate_with_sambanova = fail
-        agent._generate_with_gemini = fail
-        agent._generate_with_groq = fail
-        agent._generate_with_mistral = fail
-        agent._generate_with_cerebras = fail
+        for name in set(ai_models.QUALITY_CHAIN) | set(ai_models.SPEED_CHAIN):
+            setattr(agent, f"_generate_with_{name}", fail)
 
         section = {
             "key": "executive_summary",
@@ -309,7 +305,9 @@ class TestSequentialFallbackReturnsWinnerName:
         async def fail(prompt: str):
             return None
 
-        for name in ("claude", "openrouter", "sambanova", "gemini"):
+        # Chain-driven: stub FIECARE membru al QUALITY_CHAIN (inclusiv openrouter_gpt4o_mini/_r1
+        # adaugati in CERINTA #6) — altfel providerii nestubati fac apeluri LIVE reale (platit).
+        for name in ai_models.QUALITY_CHAIN:
             setattr(agent, f"_generate_with_{name}", fail)
 
         section = {"key": "executive_summary", "title": "Rezumat", "word_count": 300, "prompt": "x"}

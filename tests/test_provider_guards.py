@@ -17,6 +17,7 @@ from loguru import logger
 
 from backend.agents import ai_models, circuit_breaker
 from backend.agents import synthesis_providers as sp
+from backend.agents.agent_synthesis import SynthesisAgent
 from backend.agents.synthesis_providers import SynthesisProvidersMixin
 from backend.config import settings
 
@@ -40,9 +41,13 @@ class _FakeClient:
     def __init__(self, resp):
         self._resp = resp
         self.post_calls = 0
+        self.last_url = None
+        self.last_kwargs = {}
 
     async def post(self, *args, **kwargs):
         self.post_calls += 1
+        self.last_url = args[0] if args else kwargs.get("url")
+        self.last_kwargs = kwargs
         return self._resp
 
 
@@ -180,3 +185,119 @@ class TestGenericFailStillRecords:
         _install_fake_client(monkeypatch, _FakeResp(500, text="internal server error"))
         await _Bare()._generate_with_openai_compat("prompt", "groq")
         assert "groq" in record_spy, "un 500 real trebuie inca sa contorizeze esecul (circuit breaker)"
+
+
+# ═══════ CERINTA #6 — OpenRouter multi-model (fallback adanc) ═══════
+
+_OK_200 = {"choices": [{"message": {"content": "proza de raport"}}]}
+
+
+class TestE3DispatchInvariant:
+    """E3: FIECARE cheie din QUALITY_CHAIN si SPEED_CHAIN are metoda in _provider_method_map().
+    Prinde 'cheie in lant fara dispatch' (skip tacut in _sequential_fallback). Non-vacuitate:
+    pe HEAD openrouter_gpt4o_mini/openrouter_r1 sunt in lant (ai_models nou) dar NU in map -> PICA."""
+
+    def test_every_chain_key_has_dispatch(self):
+        methods = _Bare()._provider_method_map()
+        for provider in list(ai_models.QUALITY_CHAIN) + list(ai_models.SPEED_CHAIN):
+            assert provider in methods, f"'{provider}' e in lant dar NU are metoda in _provider_method_map"
+            assert callable(methods[provider])
+
+
+class TestE4PerProviderTimeout:
+    """E4 (C.1): timeout per provider din config. Non-vacuitate: pe codul vechi
+    `req_timeout = 90 if provider == 'openrouter' else 60` -> openrouter_r1 (!= 'openrouter')
+    ar fi primit 60 -> asertiunea >= 150 PICA."""
+
+    @pytest.mark.asyncio
+    async def test_r1_uses_generous_timeout(self, monkeypatch):
+        monkeypatch.setattr(settings, "openrouter_api_key", "test-key", raising=False)
+        fake = _install_fake_client(monkeypatch, _FakeResp(200, json_data=_OK_200))
+        out = await _Bare()._generate_with_openrouter_r1("prompt scurt")
+        assert out == "proza de raport"
+        assert fake.last_kwargs.get("timeout", 60) >= 150, "R1 (reasoning lent) trebuie timeout generos, nu 60s"
+
+    @pytest.mark.asyncio
+    async def test_gpt4o_mini_uses_90(self, monkeypatch):
+        monkeypatch.setattr(settings, "openrouter_api_key", "test-key", raising=False)
+        fake = _install_fake_client(monkeypatch, _FakeResp(200, json_data=_OK_200))
+        await _Bare()._generate_with_openrouter_gpt4o_mini("p")
+        assert fake.last_kwargs.get("timeout") == 90
+
+    @pytest.mark.asyncio
+    async def test_non_openrouter_stays_60(self, monkeypatch):
+        # Santinela: providerii fara request_timeout raman la default 60 (comportament neschimbat).
+        monkeypatch.setattr(settings, "groq_api_key", "test-key", raising=False)
+        fake = _install_fake_client(monkeypatch, _FakeResp(200, json_data=_OK_200))
+        await _Bare()._generate_with_groq("p")
+        assert fake.last_kwargs.get("timeout") == 60
+
+
+class TestE5OpenRouterFamilyRequest:
+    """E5: cei 2 provideri noi trimit headerele de routing OpenRouter; R1 trimite si capul
+    de reasoning (extra_payload). Non-vacuitate: pe HEAD n-au dispatch (AttributeError) -> PICA."""
+
+    @pytest.mark.asyncio
+    async def test_both_send_routing_headers(self, monkeypatch):
+        for method_name in ("_generate_with_openrouter_gpt4o_mini", "_generate_with_openrouter_r1"):
+            monkeypatch.setattr(settings, "openrouter_api_key", "test-key", raising=False)
+            fake = _install_fake_client(monkeypatch, _FakeResp(200, json_data=_OK_200))
+            await getattr(_Bare(), method_name)("prompt")
+            headers = fake.last_kwargs.get("headers", {})
+            assert headers.get("HTTP-Referer"), f"{method_name}: lipseste HTTP-Referer"
+            assert "RIS" in headers.get("X-Title", ""), f"{method_name}: lipseste X-Title"
+
+    @pytest.mark.asyncio
+    async def test_r1_sends_reasoning_cap(self, monkeypatch):
+        monkeypatch.setattr(settings, "openrouter_api_key", "test-key", raising=False)
+        fake = _install_fake_client(monkeypatch, _FakeResp(200, json_data=_OK_200))
+        await _Bare()._generate_with_openrouter_r1("prompt")
+        payload = fake.last_kwargs.get("json", {})
+        assert payload.get("reasoning", {}).get("max_tokens") == 1024, "R1 nu trimite capul de reasoning"
+
+    @pytest.mark.asyncio
+    async def test_gpt4o_mini_no_reasoning_cap(self, monkeypatch):
+        # Santinela: doar R1 are extra_payload; gpt-4o-mini nu trebuie sa trimita `reasoning`.
+        monkeypatch.setattr(settings, "openrouter_api_key", "test-key", raising=False)
+        fake = _install_fake_client(monkeypatch, _FakeResp(200, json_data=_OK_200))
+        await _Bare()._generate_with_openrouter_gpt4o_mini("prompt")
+        assert "reasoning" not in fake.last_kwargs.get("json", {})
+
+
+class TestReasoningEmptyContentDistinctLog:
+    """Advisor: content GOL de la un provider cu cap de reasoning e logat DISTINCT (nu ca pana
+    generica). R1 fara/insuficient cap -> content GOL (masurat live). Non-vacuitate: pe HEAD
+    ramura empty logheaza 'returned empty response' generic -> asertiunea PICA."""
+
+    @pytest.mark.asyncio
+    async def test_r1_empty_content_names_reasoning_cause(self, monkeypatch, loglines, record_spy):
+        monkeypatch.setattr(settings, "openrouter_api_key", "test-key", raising=False)
+        _install_fake_client(monkeypatch, _FakeResp(200, json_data={"choices": [{"message": {"content": ""}}]}))
+        out = await _Bare()._generate_with_openrouter_r1("prompt")
+        assert out is None
+        assert any("content GOL" in m and "reasoning" in m for m in loglines), \
+            "content GOL de la R1 nu e logat cu cauza (reasoning) — esec tacut nediferentiat"
+
+
+class TestE6ThinkStripSentinel:
+    """E6 (C.2): _strip_scratchpad elimina si <think>...</think> (santinela defensiva pt drift
+    de rutare — content R1 e curat AZI via OpenRouter, dar e o proprietate de rutare, nu de model).
+    Non-vacuitate: pe HEAD strip DOAR <analiza_secreta> -> <think> ramane -> PICA.
+    Metoda nu foloseste `self` (doar `re`) -> apel ca functie neData cu self dummy (fara __init__)."""
+
+    def _strip(self, text):
+        return SynthesisAgent._strip_scratchpad(object(), text)
+
+    def test_think_block_removed(self):
+        out = self._strip("<think>rationament intern lung</think>Proza curata de raport.")
+        assert out == "Proza curata de raport."
+        assert "<think>" not in out
+
+    def test_analiza_secreta_still_removed(self):
+        out = self._strip("<analiza_secreta>gandire</analiza_secreta>Text final.")
+        assert out == "Text final."
+
+    def test_clean_text_unchanged(self):
+        # Santinela: cazul de AZI (OpenRouter -> content curat) trece neatins.
+        clean = "Firma are lichiditate buna si profit stabil."
+        assert self._strip(clean) == clean

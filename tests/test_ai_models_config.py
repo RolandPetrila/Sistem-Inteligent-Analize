@@ -26,6 +26,8 @@ _MODEL_LITERALS = [
     "Meta-Llama-3.3-70B-Instruct",
     "claude-opus-4-8",
     "llama-4-scout",  # retras — nu trebuie sa reapara nicaieri
+    "openai/gpt-4o-mini",  # CERINTA #6 — sursa unica ramane ai_models
+    "deepseek/deepseek-r1",  # CERINTA #6 — idem
 ]
 
 
@@ -49,9 +51,14 @@ class TestE1NoHardcodedModelLiterals:
 
 class TestE6ChainComposition:
     def test_quality_chain_order(self):
-        assert ai_models.QUALITY_CHAIN == ["claude", "openrouter", "sambanova", "gemini"]
+        # CERINTA #6: cei 2 provideri OpenRouter-family adaugati DUPA "gemini" (fallback adanc).
+        assert ai_models.QUALITY_CHAIN == [
+            "claude", "openrouter", "sambanova", "gemini",
+            "openrouter_gpt4o_mini", "openrouter_r1",
+        ]
 
     def test_speed_chain_order(self):
+        # SPEED_CHAIN NEATINS de CERINTA #6.
         assert ai_models.SPEED_CHAIN == ["groq", "cerebras", "mistral", "gemini"]
 
     def test_quality_primary_is_claude_pillar(self):
@@ -72,6 +79,50 @@ class TestE6ChainComposition:
             cfg = ai_models.AI_PROVIDERS[provider]
             for field in ("model", "max_context", "temporary_free", "endpoint_kind"):
                 assert field in cfg, f"{provider} lipseste campul obligatoriu {field}"
+
+
+class TestE1E2OpenRouterMultiModel:
+    """CERINTA #6: cele 2 modele OpenRouter-family, ca fallback ADANC pe calitate.
+    Non-vacuitate: pe HEAD 3d9218d cheile nu existau -> KeyError -> PICA."""
+
+    def test_gpt4o_mini_config(self):
+        cfg = ai_models.AI_PROVIDERS["openrouter_gpt4o_mini"]
+        assert cfg["model"] == "openai/gpt-4o-mini"
+        assert cfg["api_key_attr"] == "openrouter_api_key"
+        assert cfg["endpoint_kind"] == "openai_compat"
+        assert cfg["max_context"] == 128_000
+        assert "openrouter.ai" in cfg["url"]
+
+    def test_r1_config(self):
+        cfg = ai_models.AI_PROVIDERS["openrouter_r1"]
+        assert cfg["model"] == "deepseek/deepseek-r1"
+        assert cfg["api_key_attr"] == "openrouter_api_key"
+        assert cfg["endpoint_kind"] == "openai_compat"
+        assert cfg["max_context"] == 163_840
+
+    def test_r1_has_reasoning_cap(self):
+        # GOTCHA masurat live: fara cap de reasoning, R1 returneaza content GOL. Capul (hard
+        # token cap, NU effort) TREBUIE sa ramana in config — altfel R1 redevine inutil tacut.
+        cfg = ai_models.AI_PROVIDERS["openrouter_r1"]
+        assert cfg.get("extra_payload", {}).get("reasoning", {}).get("max_tokens") == 1024
+
+    def test_r1_generous_timeout(self):
+        # C.1: R1 e model de reasoning LENT (masurat 104-129s). Timeout > 90 (peste openrouter
+        # normal) obligatoriu — altfel fallback-ul adanc se taie tacut pe timeout.
+        assert ai_models.AI_PROVIDERS["openrouter_r1"]["request_timeout"] >= 150
+
+    def test_openrouter_family_after_free_options(self):
+        # E2: cost-safety — cele 2 platite se ating DOAR dupa optiunile free (dupa "gemini").
+        chain = ai_models.QUALITY_CHAIN
+        gemini_idx = chain.index("gemini")
+        assert chain.index("openrouter_gpt4o_mini") > gemini_idx
+        assert chain.index("openrouter_r1") > gemini_idx
+        # gpt-4o-mini (ieftin+rapid) inaintea lui r1 (scump+lent)
+        assert chain.index("openrouter_gpt4o_mini") < chain.index("openrouter_r1")
+
+    def test_existing_openrouter_timeout_preserved(self):
+        # C.1 behavior-preserving: openrouter (deepseek-chat) ramane la 90s (era 90 via string-exact).
+        assert ai_models.AI_PROVIDERS["openrouter"]["request_timeout"] == 90
 
 
 class TestE5MonthlyValidityCatchesMissingModel:

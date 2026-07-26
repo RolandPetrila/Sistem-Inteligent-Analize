@@ -205,6 +205,10 @@ class SynthesisProvidersMixin:
                 "temperature": 0.3,
                 "max_tokens": 4096,
             }
+            # Extensii de payload per provider (ai_models: extra_payload). Ex. R1 (reasoning):
+            # `reasoning.max_tokens` — FARA acest cap reasoning-ul consuma tot max_tokens si
+            # content vine GOL (masurat live 2026-07-26). Gol {} pt ceilalti -> payload neschimbat.
+            payload.update(cfg.get("extra_payload", {}))
             headers = {
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
@@ -212,7 +216,10 @@ class SynthesisProvidersMixin:
             if extra_headers:
                 headers.update(extra_headers)
             client = get_client()
-            req_timeout = 90 if provider == "openrouter" else 60
+            # C.1 (CERINTA #6): timeout per provider din config. Era `90 if provider=="openrouter"
+            # else 60` — string-EXACT, deci openrouter_r1/openrouter_gpt4o_mini ar fi primit 60s.
+            # R1 e model de reasoning LENT (masurat 104-129s) -> 60s l-ar taia tacut. Default 60.
+            req_timeout = cfg.get("request_timeout", 60)
             response = await client.post(cfg["url"], json=payload, headers=headers, timeout=req_timeout)
 
             if response.status_code >= 400:
@@ -232,7 +239,19 @@ class SynthesisProvidersMixin:
                     reset_provider_circuit(provider)
                     return text
 
-            logger.warning(f"[synthesis] {provider.capitalize()} returned empty response")
+            # Content GOL. Semnatura de bug a proiectului = esec tacut NEDIFERENTIAT: pe HEAD
+            # asta se logheaza identic cu o pana de provider. Pt modelele de reasoning cu cap
+            # (extra_payload.reasoning) cauza tipica e ALTA — reasoning-ul a consumat tot
+            # max_tokens (masurat live 2026-07-26: R1 fara cap -> content GOL, $0.05 degeaba).
+            # Log DISTINCT ca sa fie o singura cautare, nu o vanatoare peste luni.
+            reasoning_cap = cfg.get("extra_payload", {}).get("reasoning")
+            if reasoning_cap:
+                logger.warning(
+                    f"[ai] {provider} content GOL desi are cap de reasoning ({reasoning_cap}) — "
+                    "probabil reasoning-ul a consumat tot max_tokens; NU e pana de provider"
+                )
+            else:
+                logger.warning(f"[synthesis] {provider.capitalize()} returned empty response")
             record_provider_failure(provider)
             return None
         except Exception as e:
@@ -249,15 +268,31 @@ class SynthesisProvidersMixin:
     async def _generate_with_cerebras(self, prompt: str) -> str | None:
         return await self._generate_with_openai_compat(prompt, "cerebras")
 
+    # Headere de routing OpenRouter (atributie in dashboard-ul lor). Aceleasi pentru TOTI
+    # providerii OpenRouter-family (openrouter, openrouter_gpt4o_mini, openrouter_r1) —
+    # definite O SINGURA DATA aici, nu copiate per wrapper (CERINTA #6: "nu 2 copii ale header-elor").
+    _OPENROUTER_HEADERS = {
+        "HTTP-Referer": "http://localhost:8001",
+        "X-Title": "RIS - Roland Intelligence System",
+    }
+
     async def _generate_with_openrouter(self, prompt: str) -> str | None:
-        """OpenRouter gateway — adauga headerele de routing; garzile §3/§4/§5 vin din compat."""
+        """OpenRouter gateway (deepseek-chat) — headere de routing; garzile §3/§4/§5 vin din compat."""
         return await self._generate_with_openai_compat(
-            prompt,
-            "openrouter",
-            extra_headers={
-                "HTTP-Referer": "http://localhost:8001",
-                "X-Title": "RIS - Roland Intelligence System",
-            },
+            prompt, "openrouter", extra_headers=self._OPENROUTER_HEADERS
+        )
+
+    async def _generate_with_openrouter_gpt4o_mini(self, prompt: str) -> str | None:
+        """OpenRouter-family (CERINTA #6): OpenAI GPT-4o-mini, fallback ADANC pe calitate."""
+        return await self._generate_with_openai_compat(
+            prompt, "openrouter_gpt4o_mini", extra_headers=self._OPENROUTER_HEADERS
+        )
+
+    async def _generate_with_openrouter_r1(self, prompt: str) -> str | None:
+        """OpenRouter-family (CERINTA #6): DeepSeek-R1 (reasoning). Capul de reasoning +
+        timeout-ul generos vin din ai_models (extra_payload / request_timeout)."""
+        return await self._generate_with_openai_compat(
+            prompt, "openrouter_r1", extra_headers=self._OPENROUTER_HEADERS
         )
 
     async def _generate_with_sambanova(self, prompt: str) -> str | None:
@@ -337,6 +372,8 @@ class SynthesisProvidersMixin:
             "claude": self._generate_with_claude,
             "groq": self._generate_with_groq,
             "openrouter": self._generate_with_openrouter,
+            "openrouter_gpt4o_mini": self._generate_with_openrouter_gpt4o_mini,
+            "openrouter_r1": self._generate_with_openrouter_r1,
             "sambanova": self._generate_with_sambanova,
             "cerebras": self._generate_with_cerebras,
             "mistral": self._generate_with_mistral,

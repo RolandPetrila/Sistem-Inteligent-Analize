@@ -189,6 +189,9 @@ AI_PROVIDERS = [
     ("Gemini 2.5 Flash", "GOOGLE_AI_API_KEY", True, "Testabil live prin /api/settings/test/gemini."),
     ("Mistral Small 3", "MISTRAL_API_KEY", True, "Testabil live prin /api/settings/test/mistral (adaugat in acest sweep, bug #6)."),
     ("Cerebras (gpt-oss-120b)", "CEREBRAS_API_KEY", True, "Testabil live prin /api/settings/test/cerebras. Model migrat 2026-07-12 (fostul model retras din catalog)."),
+    ("OpenRouter DeepSeek-chat", "OPENROUTER_API_KEY", True, "Pozitia #2 pe ruta CALITATE (platit-ieftin, $0.20/$0.80 per 1M). Verificat live E7 2026-07-25 (job bd69a5d7: risk_assessment + recommendations provider=openrouter, dupa timeout Claude)."),
+    ("OpenRouter GPT-4o-mini", "OPENROUTER_API_KEY", True, "Fallback ADANC pe CALITATE (pozitia #5, CERINTA #6, 2026-07-26). Model OpenAI ieftin ($0.15/$0.60 per 1M), content curat verificat live. Se declanseaza doar dupa toate optiunile free."),
+    ("OpenRouter DeepSeek-R1", "OPENROUTER_API_KEY", True, "Fallback ADANC pe CALITATE (pozitia #6, CERINTA #6, 2026-07-26). Reasoning ($0.70/$2.50 per 1M) cu cap `reasoning.max_tokens=1024` (fara cap -> content GOL, masurat live) + timeout 200s (model lent, ~104-129s masurat)."),
 ]
 
 EXTERNAL_SOURCES = [
