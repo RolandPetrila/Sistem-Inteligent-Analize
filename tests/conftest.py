@@ -80,3 +80,48 @@ def _no_api_key_in_tests():
     settings.ris_api_key = ""
     yield
     settings.ris_api_key = original
+
+
+@pytest.fixture(autouse=True)
+def _no_provider_api_keys_in_tests():
+    """CERINTA #7 — inchide clasa F1 (scurgere de BANI in pytest): cheile de PROVIDER AI
+    (openrouter/groq/cerebras/mistral/sambanova/google_ai) NU trebuie sa fie LIVE in teste.
+    Altfel orice test care ruleaza lantul de sinteza NEMOCKAT face un apel PLATIT REAL — s-a
+    intamplat in CERINTA #6: OpenRouter a fost facturat pana s-au reparat 2 teste chain-driven.
+    `_no_api_key_in_tests` (de mai sus) golea DOAR `ris_api_key`, lasand cheile de provider vii.
+
+    Setul de chei e DERIVAT din `ai_models.AI_PROVIDERS` (NU lista hardcodata) — auto-acopera
+    providerii viitori, exact ca stubbing-ul chain-driven din #6. save->empty->restore per cheie,
+    cu teardown LIFO. Compatibil cu testele care au nevoie legitim de o cheie: ele si-o seteaza
+    LOCAL via `monkeypatch` in corpul testului (ex. test_provider_guards.py) — fixture-ul ruleaza
+    la SETUP, monkeypatch-ul suprascrie, iar teardown-ul restaureaza valoarea reala.
+
+    Fail-LOUD (nu skip tacut): daca un `api_key_attr` din config nu are camp in Settings (typo /
+    provider nou fara field), o garda care il sare tacut ar reintroduce EXACT clasa F1 pe care o
+    inchide — asta e semnatura de bug a proiectului ("verificarea care nu poate pica"). Ridica in loc.
+
+    NU atinge `ris_api_key` (gestionat separat mai sus) si NICI garda `.env` hash (`_env_integrity_guard`):
+    mutam DOAR obiectul `settings` in memorie, nu scriem in fisierul .env de pe disc.
+    """
+    from backend.agents.ai_models import AI_PROVIDERS
+    from backend.config import settings
+
+    attrs = sorted(
+        {cfg["api_key_attr"] for cfg in AI_PROVIDERS.values() if cfg.get("api_key_attr")}
+    )
+    assert attrs, (
+        "Niciun api_key_attr derivat din AI_PROVIDERS — derivarea s-a rupt (import/shape). "
+        "Fara ea, garda F1 ar trece VACUU peste zero chei."
+    )
+    missing = [a for a in attrs if not hasattr(settings, a)]
+    assert not missing, (
+        f"api_key_attr fara camp in Settings (typo config / provider nou fara field): {missing}. "
+        "NU golesc doar restul — asta ar lasa un provider cu cheia vie (F1). Repara config-ul."
+    )
+
+    originals = {a: getattr(settings, a) for a in attrs}
+    for a in attrs:
+        setattr(settings, a, "")
+    yield
+    for a, v in originals.items():
+        setattr(settings, a, v)
