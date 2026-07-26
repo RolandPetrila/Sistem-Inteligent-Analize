@@ -229,18 +229,31 @@ async def ping_ins_tempo() -> dict:
     return {"ok": True, "message": f"INS TEMPO OK ({data})"}
 
 
+# Calea manuala RNPM/AEGRM. Auto-fetch-ul (aegrm.justportal.ro) e DNS-dead si
+# nereparabil din cod, DAR capacitatea "garantii reale mobiliare" NU e pierduta:
+# portalul oficial RNPM (co.rnpm.ro) e viu si e deja linkat neconditionat in raport
+# (CERINTA #4). Mesajul ping trebuie sa spuna adevarul despre calea manuala, ca sa nu
+# citeasca drept "capacitate moarta". Oglindeste reports/rich_fields.py::RNPM_MANUAL_URL
+# — NU importam de acolo (dep inversa tools->reports = risc de ciclu); pastram textul aici.
+AEGRM_MANUAL_HINT = "verifica manual la co.rnpm.ro (portalul RNPM oficial)"
+
+
 async def ping_aegrm() -> dict:
     from backend.agents.tools.aegrm_client import check_aegrm_guarantees
+    # Toate ramurile non-verzi mentioneaza calea manuala co.rnpm.ro. `ok` ramane FALSE
+    # pe absenta datelor (auto-fetch chiar e mort) — NU flipam la verde (ar fi minciuna
+    # opusa: sursa falsa-verde pe o capacitate auto-indisponibila). Doar ramura cu date
+    # reale (has_data) e ok:True — genuin, nu pe absenta.
     try:
         data = await check_aegrm_guarantees(TEST_CUI)
     except Exception as e:
-        return {"ok": False, "message": f"AEGRM eroare neasteptata: {e}"[:200]}
+        return {"ok": False, "message": f"AEGRM auto indisponibil (eroare neasteptata) — {AEGRM_MANUAL_HINT}. Detaliu: {str(e)[:100]}"}
     if data.get("has_data"):
         return {"ok": True, "message": f"AEGRM OK ({data.get('count', 0)} garantii pt CUI test)"}
     err = data.get("error", "")
     if _looks_like_network_error(err):
-        return {"ok": False, "message": f"AEGRM indisponibil (posibil DNS-dead): {err}"[:200]}
-    return {"ok": False, "message": f"AEGRM: raspuns fara date ({err})"[:200]}
+        return {"ok": False, "message": f"AEGRM auto indisponibil (posibil DNS-dead) — {AEGRM_MANUAL_HINT}. Detaliu: {err[:100]}"}
+    return {"ok": False, "message": f"AEGRM auto: raspuns fara date — {AEGRM_MANUAL_HINT}. Detaliu: {err[:100]}"}
 
 
 async def ping_just() -> dict:
