@@ -116,6 +116,17 @@ class TestPaymentClassification:
         # ("payment required" ≠ "payment method is required"). Non-vac.: pe HEAD -> "fail".
         assert ai_models.classify_http_error(402, body) == "payment"
 
+    def test_openrouter_402_verbatim_is_payment(self):
+        # CERINTA #10/B — REGRESSION-LOCK, NU non-vacuitate. Mesajul VERBATIM din docs
+        # OpenRouter (openrouter.ai/docs/api-reference/errors, re-fetch 2026-07-27: o
+        # SINGURA forma 402, type `payment_required`). ONEST: trece SI pe HEAD — deja
+        # acoperit de markerii `insufficient credits` + `payment_required` din
+        # _PAYMENT_MARKERS; nu e un fix, ci o garda care PICA daca cineva sterge vreun
+        # marker de credit. Docs-confirmat, non-verbatim-live (creditul platit ~$9.9 NU
+        # se goleste ca sa-l masor — decizia proprietarului, partea B non-destructiva).
+        msg = "Your account or API key has insufficient credits. Add more credits and retry the request."
+        assert ai_models.classify_http_error(402, msg) == "payment"
+
     def test_bare_402_no_marker_is_fail_not_payment(self):
         # Consecvent cu §3 (marker-required): un 402 GOL fara marker NU e plata -> "fail".
         assert ai_models.classify_http_error(402, "") == "fail"

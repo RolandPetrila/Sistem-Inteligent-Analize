@@ -20,22 +20,22 @@
 
 ## 1. AUDIT — ce are RIS ACUM
 
-**Legendă:** ✅ cablat+funcțional · ⚠️ cheie prezentă, cod inexistent/greșit · ❌ mort · 🚫 blocaj extern
+**Legendă:** ✅ cablat+funcțional · ⚠️ cheie prezentă, cod inexistent/greșit · ❌ mort · 🚫 blocaj extern · ➖ scos din config/lanț (eliminat în #1 sau păstrat-reversibil — vezi notă)
 
 ### 1.1 Provideri AI (sinteza rapoartelor)
 
-| Cheie `.env`         | Serviciu                | Status | Dovadă (2026-07-16)                                                                                                                                                                |
+| Cheie `.env`         | Serviciu                | Status | Dovadă (actualizat 2026-07-27)                                                                                                                                                                |
 | -------------------- | ----------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GROQ_API_KEY`       | Groq (Llama 4 Scout)    | ✅     | ping live OK; probabil generează majoritatea secțiunilor                                                                                                                           |
+| `GROQ_API_KEY`       | Groq (Llama 3.1 8B Instant) | ✅ | ruta VITEZĂ #1. `Llama 4 Scout` retras 2026-07 → migrat la `llama-3.1-8b-instant` (#1). Free-tier 6000 tok/min → 429 frecvent → **Cerebras** e de-facto primar pe viteză |
 | `GOOGLE_AI_API_KEY`  | Gemini 2.5 Flash        | ✅     | ping live OK                                                                                                                                                                       |
 | `CEREBRAS_API_KEY`   | Cerebras (gpt-oss-120b) | ✅     | ping live OK                                                                                                                                                                       |
 | `MISTRAL_API_KEY`    | Mistral Small 3 + OCR   | ✅     | **REPARAT prin rotire 2026-07-17** — ping `HTTP 200`. Cauza era cheia veche, nu codul                                                                                                                                            |
-| — (lipsește)         | **Claude / Anthropic**  | ❌     | `SYNTHESIS_MODE=autonomous` → `synthesis_providers.py:33` blochează Claude CLI. `/api/health/deep`: `claude_cli:false`. **„Decizia tehnică #1" din CLAUDE.md e falsă în practică** |
-| `GITHUB_TOKEN`       | GitHub Models           | ❌     | **CHEIE GREȘITĂ**: `synthesis_providers.py:114` folosește `github_token` = tokenul de **CLI (`gh`)**, nu `GITHUB_MODELS_TOKEN` (cel de LLM). De-aia n-a mers niciodată             |
-| `DEEPSEEK_API_KEY`   | DeepSeek                | ❌     | metodă scrisă, **zero apelanți**                                                                                                                                                   |
-| `OPENROUTER_API_KEY` | OpenRouter              | ❌     | idem                                                                                                                                                                               |
-| `FIREWORKS_API_KEY`  | Fireworks               | ❌     | idem                                                                                                                                                                               |
-| `SAMBANOVA_API_KEY`  | SambaNova               | ❌     | idem                                                                                                                                                                               |
+| — (fără cheie API)   | **Claude / Anthropic**  | ✅     | **Pilon CALITATE, ACTIV în producție.** Scrie secțiunile quality via subprocess `claude --print` — $0 prin Max, cu `ANTHROPIC_API_KEY` **eliminat din mediu** (fără plată dublă). Verificat live 2026-07-25 (job `bd69a5d7`: `executive_summary`+`financial_analysis` `provider=claude`, fără FALLBACK). „Decizia tehnică #1" e ADEVĂRATĂ acum (reparată 2026-07-18 — 5 cauze) |
+| `GITHUB_TOKEN`       | GitHub Models           | ➖     | **Eliminat din config în CERINTA #1** — nu era cablat în niciun lanț (config mort). `github`/`fireworks` absenți din `ai_models.py`. (Vechea notă „token CLI greșit" era stale.) |
+| `DEEPSEEK_API_KEY`   | DeepSeek (direct)       | ➖     | Client native eliminat din config în #1. DeepSeek se folosește ACUM prin **OpenRouter** (`deepseek/deepseek-chat`, #2 calitate) — nu direct |
+| `OPENROUTER_API_KEY` | OpenRouter              | ✅     | **#2 CALITATE, ACTIV** (`deepseek/deepseek-chat`) + fallback adânc plătit (`gpt-4o-mini`, `deepseek-r1`, poz. 4-5 în QUALITY_CHAIN). Plătit-ieftin (~$0.008/raport). Verificat live #1/#9: scrie secțiunile la timeout Claude |
+| `FIREWORKS_API_KEY`  | Fireworks               | ➖     | **Eliminat din config în #1** (nu era în niciun lanț) |
+| `SAMBANOVA_API_KEY`  | SambaNova               | ➖     | Intrare **păstrată** în `ai_models.py` (monitorizată §6, reversibilă) dar **scoasă din QUALITY_CHAIN în #8**: credit bonus epuizat (402 `PAYMENT_METHOD_REQUIRED`, `balance_units:0`, măsurat 2026-07-27). Re-adaugă în lanț la reîncărcare credit |
 | `XAI_API_KEY`        | xAI Grok                | ❌     | **doar câmpul în config** — zero cod de integrare                                                                                                                                  |
 | `COHERE_API_KEY`     | Cohere                  | ⚠️     | **cheie în `.env`, ZERO cod.** (Hit-urile „cohere" din backend sunt `coherence` — alt cuvânt.) **Rerank + embeddings neatinse**                                                    |
 
@@ -71,8 +71,8 @@
 
 | Prioritate | Env var                                                        | Ce deblochează în RIS                 | De ce contează                                                                                                                                                                                        |
 | ---------- | -------------------------------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🥇 **1**   | `ANTHROPIC_API_KEY_2`                                          | **Sinteza cu Claude, prin API**       | **Rezolvă definitiv `SYNTHESIS_MODE`.** Problema era că serviciul rulează ca SYSTEM și nu vede auth-ul Claude CLI. **O cheie API nu depinde de profil.** Rapoartele scrise de Claude, fără subprocess |
-| 🥈 **2**   | `GITHUB_MODELS_TOKEN`                                          | Provider GitHub Models **real**       | RIS folosește tokenul greșit (CLI). Un fix de o linie                                                                                                                                                 |
+| 🥇 **1**   | `ANTHROPIC_API_KEY_2`                                          | ~~Sinteză Claude prin API~~ **MOOT**  | **Claude CLI e ACTIV prin Max** (reparat 2026-07-18; verificat live 2026-07-25, job bd69a5d7). O cheie API = **plată dublă** — subprocesul ELIMINĂ intenționat `ANTHROPIC_API_KEY` ca să garanteze $0. Premisa veche („serviciul rulează ca SYSTEM") era falsă (rulează ca `.\ALIENWARE`) |
+| 🥈 **2**   | `GITHUB_MODELS_TOKEN`                                          | ~~Provider GitHub Models~~ **MOOT**   | GitHub **eliminat complet din config în #1** (niciodată cablat). Nu mai e aplicabil — providerul nu există în cod (vechea recomandare „o linie de reparat" era stale) |
 | 🥉 **3**   | `FIRECRAWL_API_KEY`                                            | **Monitorul Oficial** + scraping real | Azi e inert fiindcă Tavily trunchiază. Firecrawl face scraping adevărat. 500 credite/lună                                                                                                             |
 | 4          | `COHERE_API_KEY` (deja în `.env`)                              | **Rerank + embeddings**               | Cel mai mare salt de **calitate** la căutare: rerankează rezultatele Tavily/Brave înainte să ajungă la AI. 1000 req/lună                                                                              |
 | 5          | `AZURE_DOC_INTEL_KEY` + `_ENDPOINT`                            | OCR bilanțuri scanate                 | 500 pagini/lună; alternativă/dublură la Mistral OCR                                                                                                                                                   |
@@ -122,7 +122,7 @@ Pentru **fiecare** cheie nouă:
 
 | Capabilitate         | Primar                  | Fallback existent              | Ce lipsește                                                                       |
 | -------------------- | ----------------------- | ------------------------------ | --------------------------------------------------------------------------------- |
-| **Sinteză AI**       | Groq                    | Gemini → Cerebras → Mistral    | 🔴 **Claude (nivelul 1 e MORT)**. Fallback real: 3 nivele, nu 5. Mistral pică azi |
+| **Sinteză AI**       | **Claude** (calitate) / Groq (viteză) | quality: OpenRouter→Gemini→gpt-4o-mini→r1 · speed: Cerebras→Mistral→Gemini | ✅ Claude ACTIV nivelul 1 (reparat 2026-07-18, verificat live 2026-07-25). Mistral OK (rotire 2026-07-17). SambaNova scos #8 (credit) |
 | **Căutare web**      | Tavily (1000/lună)      | Brave (2000/lună, reparat azi) | Firecrawl ca al 3-lea + **Cohere rerank** peste ambele                            |
 | **Date firmă**       | ANAF                    | openapi.ro (parțial)           | ONRC local (0 rânduri)                                                            |
 | **Insolvență**       | BPI (DNS-dead)          | Tavily ✅                      | — funcționează prin fallback                                                      |
@@ -132,7 +132,7 @@ Pentru **fiecare** cheie nouă:
 | **Reputație**        | Google Maps ✅          | web_presence                   | Brave (reparat)                                                                   |
 | **Benchmark sector** | `CAEN_BENCHMARK` static | INS TEMPO (404)                | Eurostat ✅ · gol în **63%** din rapoarte                                         |
 
-**Principiu de fallback pentru RIS:** fiecare capabilitate ar trebui să aibă **≥2 surse independente**, iar absența să fie **explicită** (INDISPONIBIL cu motiv), niciodată tăcută. Azi: OCR și traducere au **zero** fallback; sinteza are un nivel 1 mort.
+**Principiu de fallback pentru RIS:** fiecare capabilitate ar trebui să aibă **≥2 surse independente**, iar absența să fie **explicită** (INDISPONIBIL cu motiv), niciodată tăcută. Azi: OCR și traducere au **zero** fallback; sinteza are nivelul 1 (Claude) ACTIV din 2026-07-18.
 
 ---
 
