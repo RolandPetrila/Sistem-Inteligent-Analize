@@ -31,6 +31,24 @@ from backend.services.job_logger import (
 )
 
 
+def _resolve_bilant_years(period: str | None) -> tuple[int, int]:
+    """CERINTA #12 (4b): mapeaza optiunea `period` din wizard la un interval real de
+    ani pt ANAF Bilant. `end_year` = ultimul an complet disponibil (an curent - 1),
+    identic cu default-ul din get_bilant_multi_year. Absent/necunoscut -> intervalul
+    default actual (2019..an-1), deci FARA regresie pt joburile fara `period`.
+
+    - "Ultimii 3 ani" -> (end-2, end)   (3 ani: end-2, end-1, end)
+    - "Ultimii 5 ani" -> (end-4, end)   (5 ani)
+    - orice altceva / None -> (2019, end)  (comportamentul curent)
+    """
+    end_year = date.today().year - 1
+    if period == "Ultimii 3 ani":
+        return end_year - 2, end_year
+    if period == "Ultimii 5 ani":
+        return end_year - 4, end_year
+    return 2019, end_year
+
+
 class OfficialAgent(BaseAgent):
     name = "official"
     max_retries = 3
@@ -164,7 +182,7 @@ class OfficialAgent(BaseAgent):
                 # Bug LATENT, mascat de cache-ul cald; expus de bump-ul CACHE_SCHEMA_VERSION
                 # v1->v2. Sursele ruleaza in paralel (asyncio.gather) sub un buget de agent
                 # de 300s, deci headroom-ul nu costa nimic in cazul normal.
-                self._fetch_with_timeout(self.fetch_with_retry(lambda: self._fetch_anaf_bilant(cui_clean), source_name="ANAF Bilant", source_url="https://webservicesp.anaf.ro/bilant"), "ANAF Bilant", 45),
+                self._fetch_with_timeout(self.fetch_with_retry(lambda: self._fetch_anaf_bilant(cui_clean, params.get("period")), source_name="ANAF Bilant", source_url="https://webservicesp.anaf.ro/bilant"), "ANAF Bilant", 45),
                 self._fetch_with_timeout(self.fetch_with_retry(lambda: self._fetch_bnr(), source_name="BNR", source_url="https://www.bnr.ro/nbrfxrates.xml"), "BNR", 5),
                 self._fetch_with_timeout(self.fetch_with_retry(lambda c=cui_clean: self._fetch_bpi(c), source_name="BPI (buletinul.ro)", source_url="https://www.buletinul.ro"), "BPI (buletinul.ro)", 10),
                 self._fetch_with_timeout(self._fetch_aegrm(cui_clean), "AEGRM", 15),
@@ -811,12 +829,18 @@ class OfficialAgent(BaseAgent):
             ttl_hours=168,  # 7 zile
         )
 
-    async def _fetch_anaf_bilant(self, cui: str) -> dict:
-        cache_key = cache_service.make_cache_key("anaf_bilant", cui)
+    async def _fetch_anaf_bilant(self, cui: str, period: str | None = None) -> dict:
+        # CERINTA #12 (4b): intervalul de ani interogat vine din optiunea `period` a
+        # wizardului (default = 2019..an-1, fara regresie). Cheia de cache INCLUDE anii
+        # -> doua joburi cu perioade diferite pe acelasi CUI NU se ciocnesc pe cache
+        # (altfel `period` ar fi ignorat TACIT la un cache hit = clasa de bug a proiectului:
+        # cod care primeste un parametru dar produce acelasi rezultat pt intrari diferite).
+        start_year, end_year = _resolve_bilant_years(period)
+        cache_key = cache_service.make_cache_key("anaf_bilant", f"{cui}_{start_year}_{end_year}")
         return await cache_service.get_or_fetch(
             key=cache_key,
             source="anaf",
-            fetch_coro=lambda: get_bilant_multi_year(cui),
+            fetch_coro=lambda: get_bilant_multi_year(cui, start_year=start_year, end_year=end_year),
             ttl_hours=168,  # 7 zile - datele financiare nu se schimba des
         )
 

@@ -60,7 +60,11 @@ ANALYSIS_TYPES_META = {
              "options": ["Due diligence", "Parteneriat", "Concurenta", "Altul"]},
             {"id": "focus", "label": "Aspecte prioritare de investigat", "type": "text", "required": False},
             {"id": "period", "label": "Perioada date financiare", "type": "select",
-             "options": ["Ultimii 3 ani", "Ultimii 5 ani", "Alt interval"]},
+             # CERINTA #12 (4c): "Alt interval" ELIMINAT (R-MINIMAL) — era o optiune
+             # neconectata (nu deschidea niciun camp de input; utilizatorul o selecta,
+             # continua cu valoare goala) = promisiune falsa. Ambele optiuni ramase se
+             # mapeaza la interval real de ani in agent_official (_resolve_bilant_years).
+             "options": ["Ultimii 3 ani", "Ultimii 5 ani"]},
         ],
     },
     AnalysisType.COMPETITION_ANALYSIS: {
