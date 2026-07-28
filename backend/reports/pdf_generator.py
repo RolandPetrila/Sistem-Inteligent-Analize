@@ -260,6 +260,22 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
         for t in kt_items:
             pdf.multi_cell(0, 6, _sanitize(f"- {t}"), new_x="LMARGIN", new_y="NEXT")
 
+    # ---- CERINTA #14 (B4): onestitate perioada financiara — cerut vs. interogat/disponibil ----
+    if model["financial_period_note"]["shown"]:
+        pdf.add_page()
+        pdf.start_section("Perioada Financiara", level=0)
+        pdf.set_font("Helvetica", "B", 16)
+        pdf.set_text_color(99, 102, 241)
+        pdf.cell(0, 12, _sanitize("Perioada Financiara Analizata"), new_x="LMARGIN", new_y="NEXT")
+        pdf.set_draw_color(99, 102, 241)
+        pdf.line(10, pdf.get_y(), 80, pdf.get_y())
+        pdf.ln(6)
+        pdf.set_font("Helvetica", "", 10)
+        pdf.set_text_color(180, 120, 0)
+        pdf.multi_cell(0, 6, _sanitize(model["financial_period_note"]["data"].get("message", "")),
+                       new_x="LMARGIN", new_y="NEXT")
+        pdf.set_text_color(40, 40, 40)
+
     # ---- Page 1: verificare incompleta (A6) + Predictive + Benchmark ----
     if tq_shown or has_pred or has_bench:
         pdf.add_page()

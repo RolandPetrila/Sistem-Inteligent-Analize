@@ -342,6 +342,14 @@ def build_rich_fields_model(verified_data: dict) -> dict:
     )
     has_sector_position = bool(isinstance(sector_position, dict) and sector_position)
 
+    # CERINTA #14 (B4): nota de onestitate perioada financiara custom — cerut-vs-clamp
+    # (transparenta ajustarii) + goluri ANAF in intervalul interogat. Populata de
+    # agent_official._build_period_note DOAR pe divergenta (clamp sau goluri); absenta
+    # cand cererea concorda perfect sau nu s-a cerut interval custom. `message` e deja
+    # construit determinist in backend — gate-ul de aici verifica doar prezenta.
+    fpn = verified_data.get("financial_period_note", {})
+    has_period_note = bool(isinstance(fpn, dict) and fpn.get("message"))
+
     return {
         "predictive_scores": {"shown": has_pred, "data": pred, "divergences": pred_divergences},
         "tavily_quota_exhausted": {"shown": tq_flag, "message": tq_message},
@@ -368,4 +376,5 @@ def build_rich_fields_model(verified_data: dict) -> dict:
         "maps_rating": {"shown": has_maps_rating, "data": maps_rating},
         "key_takeaways": {"shown": bool(key_takeaways_items), "items": key_takeaways_items},
         "sector_position": {"shown": has_sector_position, "data": sector_position},
+        "financial_period_note": {"shown": has_period_note, "data": fpn},
     }

@@ -288,6 +288,12 @@ class VerificationAgent(BaseAgent):
                 "value": True,
                 "usage": official.get("tavily_usage"),
             }
+        # CERINTA #14 (B4): nota de onestitate perioada financiara custom (cerut-vs-clamp
+        # + goluri ANAF). Randata in HTML/PDF/DOCX via rich_fields.py. Adaugata ULTIMA (ca
+        # celelalte campuri post-score) -> prefixul JSON pt truncarea prompt-urilor de
+        # sinteza ramane byte-identic pt campurile deja existente.
+        if "financial_period_note" in official:
+            verified["financial_period_note"] = official["financial_period_note"]
 
     def _log_verification_summary(self, verified: dict) -> None:
         """Sumarul final logat la fiecare rulare (risk score + completitudine + gaps)."""

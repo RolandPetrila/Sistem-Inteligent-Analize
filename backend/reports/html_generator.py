@@ -592,6 +592,15 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
     </section>''')
         nav += '<a href="#tavily-quota" class="nav-link">Verificare Incompleta</a>\n'
 
+    # ---- CERINTA #14 (B4): onestitate perioada financiara — cerut vs. interogat/disponibil ----
+    if model["financial_period_note"]["shown"]:
+        out.append(f'''
+    <section id="period-note" class="report-section" style="border-left:3px solid #eab308">
+        <h2 style="color:#eab308">Perioada Financiara — Interval Cerut vs. Disponibil</h2>
+        <p style="color:#fde68a">{_escape(model["financial_period_note"]["data"].get("message", ""))}</p>
+    </section>''')
+        nav += '<a href="#period-note" class="nav-link">Perioada Financiara</a>\n'
+
     # ---- Scoruri predictive faliment ----
     pred = model["predictive_scores"]["data"]
     if model["predictive_scores"]["shown"]:

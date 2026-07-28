@@ -65,6 +65,14 @@ ANALYSIS_TYPES_META = {
              # continua cu valoare goala) = promisiune falsa. Ambele optiuni ramase se
              # mapeaza la interval real de ani in agent_official (_resolve_bilant_years).
              "options": ["Ultimii 3 ani", "Ultimii 5 ani"]},
+            # CERINTA #14 (B1): interval personalizat CONECTAT (alternativa promisa in
+            # #12 §B3, acum reala) — parsat + clampat la limitele ANAF + cablat la ANAF
+            # Bilant in agent_official (_resolve_bilant_years). Are PRECEDENTA peste
+            # `period` select. Randare = generica (NewAnalysis.tsx: type text -> input),
+            # deci ZERO cod frontend. Gol/neparsabil -> cade pe `period` (fara regresie).
+            {"id": "period_custom",
+             "label": "Interval personalizat ani (ex: 2016-2024) — optional, are prioritate",
+             "type": "text", "required": False},
         ],
     },
     AnalysisType.COMPETITION_ANALYSIS: {

@@ -5,6 +5,7 @@ Output: JSON structurat cu toate campurile + sursa + timestamp
 """
 
 import asyncio
+import re
 from datetime import UTC, date, datetime
 
 from loguru import logger
@@ -30,23 +31,140 @@ from backend.services.job_logger import (
     log_source_result,
 )
 
+# ANAF Bilant API expune date financiare din 2014 (documentat in antetul
+# anaf_bilant_client.py: "Date disponibile 2014-2024" + CLAUDE.md). Folosit ca floor
+# pentru intervalul custom (CERINTA #14) — garda anti-input-absurd (ex. "1900-2099");
+# get_bilant_multi_year oricum se opreste la not-found, dar clampam EXPLICIT ca sa
+# putem raporta ONEST ce interval a fost efectiv interogat vs. ce a cerut userul.
+_ANAF_BILANT_FLOOR = 2014
 
-def _resolve_bilant_years(period: str | None) -> tuple[int, int]:
-    """CERINTA #12 (4b): mapeaza optiunea `period` din wizard la un interval real de
-    ani pt ANAF Bilant. `end_year` = ultimul an complet disponibil (an curent - 1),
-    identic cu default-ul din get_bilant_multi_year. Absent/necunoscut -> intervalul
-    default actual (2019..an-1), deci FARA regresie pt joburile fara `period`.
 
+def _parse_period_custom(period_custom: str | None) -> tuple[int, int] | None:
+    """CERINTA #14 (B2): parseaza cererea BRUTA de interval a userului ("YYYY-YYYY",
+    tolerant la spatii si la separatori -, en-dash, em-dash, /) in (start, end) asa cum
+    a cerut-o, INAINTE de orice clamp. None daca nu se poate parsa ca doi ani cu
+    start <= end (gol / non-string / text fara doua numere de 4 cifre / ordine inversa).
+
+    Aceasta e cererea BRUTA (necesara pt onestitatea B4: raw-vs-clamp) — clampul la
+    limitele ANAF se aplica SEPARAT in _resolve_bilant_years, ca sa NU pierdem
+    transparenta ajustarii (auditul A5: `years_requested` din get_bilant_multi_year e
+    deja intervalul CLAMPAT, nu cererea bruta)."""
+    if not period_custom or not isinstance(period_custom, str):
+        return None
+    m = re.search(r"(\d{4})\s*[-–—/]\s*(\d{4})", period_custom)
+    if not m:
+        return None
+    start, end = int(m.group(1)), int(m.group(2))
+    if start > end:
+        return None
+    return start, end
+
+
+def _resolve_bilant_years(period: str | None, period_custom: str | None = None) -> tuple[int, int]:
+    """CERINTA #12 (4b) + #14 (B2): mapeaza optiunile wizardului la un interval real de
+    ani pt ANAF Bilant. `end_year` default = ultimul an complet disponibil (an curent - 1),
+    identic cu default-ul din get_bilant_multi_year.
+
+    PRECEDENTA (CERINTA #14): `period_custom` ("YYYY-YYYY") BATE selectul `period`. Se
+    clampeaza la limitele ANAF (start >= 2014, end <= an curent - 1). Daca dupa clamp
+    intervalul e invalid (start > end, ex. cerere integral in viitor) SAU period_custom
+    nu se poate parsa -> cade pe `period` select, FARA regresie (joburile fara
+    period_custom se comporta IDENTIC cu inainte).
+
+    - period_custom "2016-2020" -> (2016, 2020)  (clampat daca depaseste limitele)
     - "Ultimii 3 ani" -> (end-2, end)   (3 ani: end-2, end-1, end)
     - "Ultimii 5 ani" -> (end-4, end)   (5 ani)
     - orice altceva / None -> (2019, end)  (comportamentul curent)
     """
     end_year = date.today().year - 1
+    raw = _parse_period_custom(period_custom)
+    if raw is not None:
+        start = max(raw[0], _ANAF_BILANT_FLOOR)
+        end = min(raw[1], end_year)
+        if start <= end:
+            return start, end
+        # post-clamp invalid (ex. interval integral in viitor) -> cade pe select
     if period == "Ultimii 3 ani":
         return end_year - 2, end_year
     if period == "Ultimii 5 ani":
         return end_year - 4, end_year
     return 2019, end_year
+
+
+def _build_period_note(period: str | None, period_custom: str | None,
+                       bilant_source: dict | None) -> dict | None:
+    """CERINTA #14 (B4 — ONESTITATE, nenegociabil): cand userul a cerut un interval
+    CUSTOM care a fost ajustat (clamp la limitele ANAF) SAU cand datele ANAF nu acopera
+    tot intervalul interogat, intoarce o structura care descrie transparent
+    "cerut X-Y, disponibil A-B". None cand:
+      - nu s-a cerut niciun interval custom parsabil -> calea `period` select ramane
+        IDENTICA (zero regresie: joburile de azi nu capata nicio nota noua);
+      - totul concorda perfect (cerut == livrat, fara goluri) -> fara zgomot.
+
+    Distinge (advisor item 3) "sursa a esuat" de "ANAF n-are date pt anii ceruti": cand
+    `bilant_source.data_found` e False, NU afirma disponibilitate ("niciun an"), ci doar
+    transparenta clampului (daca s-a aplicat) — absenta unei verificari reusite NU e
+    dovada ca datele nu exista (clasa de bug a proiectului: absenta-ca-dovada, cf. fixul
+    tavily_quota_exhausted)."""
+    raw = _parse_period_custom(period_custom)
+    if raw is None:
+        return None  # niciun interval custom -> nimic de raportat (calea select intacta)
+    raw_start, raw_end = raw
+    res_start, res_end = _resolve_bilant_years(period, period_custom)
+    clamped = (raw_start, raw_end) != (res_start, res_end)
+
+    data_found = bool(isinstance(bilant_source, dict) and bilant_source.get("data_found"))
+    years_found: list[int] = []
+    missing: list[int] = []
+    if data_found:
+        fin = bilant_source.get("data")
+        yf_raw = fin.get("years_found") if isinstance(fin, dict) else None
+        # Normalizare defensiva (advisor item 1): pe cache HIT blobul trece prin JSON.
+        # `years_found` e lista de int-uri (supravietuieste ca int prin JSON), dar
+        # normalizam EXPLICIT — un "2024" (str) ar face aritmetica set-range de mai jos
+        # sa raporteze FALS goluri pe fiecare an, exact clasa fixture-vs-producator.
+        for y in (yf_raw or []):
+            try:
+                years_found.append(int(y))
+            except (TypeError, ValueError):
+                continue
+        years_found = sorted(set(years_found))
+        missing = sorted(set(range(res_start, res_end + 1)) - set(years_found))
+
+    if not clamped and not missing:
+        return None  # concordanta perfecta cerut/livrat -> fara nota
+
+    parts = [f"Interval financiar cerut: {raw_start}-{raw_end}."]
+    if clamped:
+        parts.append(
+            f"Ajustat la limitele ANAF Bilant ({_ANAF_BILANT_FLOOR}-{res_end}): "
+            f"interogat {res_start}-{res_end}."
+        )
+    if data_found:
+        if years_found:
+            parts.append(f"Date disponibile: {years_found[0]}-{years_found[-1]}.")
+        if missing:
+            parts.append(
+                "Ani fara date la ANAF in intervalul interogat: "
+                + ", ".join(str(y) for y in missing) + "."
+            )
+    else:
+        parts.append(
+            "Datele ANAF Bilant nu au putut fi obtinute pentru acest interval "
+            "(sursa indisponibila la momentul rularii) — absenta lor NU inseamna ca "
+            "firma nu are bilanturi depuse."
+        )
+
+    return {
+        "requested": [raw_start, raw_end],
+        "resolved": [res_start, res_end],
+        "clamped": clamped,
+        "data_found": data_found,
+        "years_found": years_found,
+        "missing_years": missing,
+        "floor": _ANAF_BILANT_FLOOR,
+        "message": " ".join(parts),
+    }
 
 
 class OfficialAgent(BaseAgent):
@@ -182,7 +300,7 @@ class OfficialAgent(BaseAgent):
                 # Bug LATENT, mascat de cache-ul cald; expus de bump-ul CACHE_SCHEMA_VERSION
                 # v1->v2. Sursele ruleaza in paralel (asyncio.gather) sub un buget de agent
                 # de 300s, deci headroom-ul nu costa nimic in cazul normal.
-                self._fetch_with_timeout(self.fetch_with_retry(lambda: self._fetch_anaf_bilant(cui_clean, params.get("period")), source_name="ANAF Bilant", source_url="https://webservicesp.anaf.ro/bilant"), "ANAF Bilant", 45),
+                self._fetch_with_timeout(self.fetch_with_retry(lambda: self._fetch_anaf_bilant(cui_clean, params.get("period"), params.get("period_custom")), source_name="ANAF Bilant", source_url="https://webservicesp.anaf.ro/bilant"), "ANAF Bilant", 45),
                 self._fetch_with_timeout(self.fetch_with_retry(lambda: self._fetch_bnr(), source_name="BNR", source_url="https://www.bnr.ro/nbrfxrates.xml"), "BNR", 5),
                 self._fetch_with_timeout(self.fetch_with_retry(lambda c=cui_clean: self._fetch_bpi(c), source_name="BPI (buletinul.ro)", source_url="https://www.buletinul.ro"), "BPI (buletinul.ro)", 10),
                 self._fetch_with_timeout(self._fetch_aegrm(cui_clean), "AEGRM", 15),
@@ -205,6 +323,26 @@ class OfficialAgent(BaseAgent):
 
             # Process ANAF Bilant result
             self._process_bilant_result(bilant_source, official_data, sources, job_id)
+
+            # CERINTA #14 (B4): nota de onestitate perioada custom — calculata din
+            # params-ul jobului CURENT (period/period_custom) + `bilant_source` (data_found
+            # + years_found), NU din blobul cache-uit. Se declanseaza DOAR pe clamp sau
+            # goluri de date; joburile fara period_custom nu capata nicio nota (zero regresie).
+            _period_note = _build_period_note(
+                params.get("period"), params.get("period_custom"), bilant_source
+            )
+            if _period_note:
+                official_data["financial_period_note"] = _period_note
+                logger.info(f"[official] Perioada financiara custom: {_period_note['message']}")
+            elif params.get("period_custom") and _parse_period_custom(params.get("period_custom")) is None:
+                # Input custom non-gol dar NEPARSABIL -> fallback tacit pe `period` select.
+                # Logam explicit: "fallback care se declanseaza dar nu logheaza" e o clasa
+                # de bug numita a proiectului, iar un input acceptat-dar-ignorat e el insusi
+                # "accepta X, livreaza Y" (advisor).
+                logger.warning(
+                    "[official] period_custom neparsabil, ignorat (fallback pe optiunea "
+                    f"'period'): {params.get('period_custom')!r}"
+                )
 
             # Process BNR result
             self._process_bnr_result(bnr_source, official_data, sources, job_id)
@@ -829,13 +967,18 @@ class OfficialAgent(BaseAgent):
             ttl_hours=168,  # 7 zile
         )
 
-    async def _fetch_anaf_bilant(self, cui: str, period: str | None = None) -> dict:
-        # CERINTA #12 (4b): intervalul de ani interogat vine din optiunea `period` a
-        # wizardului (default = 2019..an-1, fara regresie). Cheia de cache INCLUDE anii
-        # -> doua joburi cu perioade diferite pe acelasi CUI NU se ciocnesc pe cache
-        # (altfel `period` ar fi ignorat TACIT la un cache hit = clasa de bug a proiectului:
-        # cod care primeste un parametru dar produce acelasi rezultat pt intrari diferite).
-        start_year, end_year = _resolve_bilant_years(period)
+    async def _fetch_anaf_bilant(self, cui: str, period: str | None = None,
+                                 period_custom: str | None = None) -> dict:
+        # CERINTA #12 (4b) + #14 (B3): intervalul de ani interogat vine din optiunea
+        # `period` a wizardului SAU din `period_custom` (care are PRECEDENTA, clampat la
+        # limitele ANAF). Default = 2019..an-1, fara regresie. Cheia de cache INCLUDE anii
+        # REZOLVATI -> doua joburi cu perioade diferite pe acelasi CUI NU se ciocnesc pe
+        # cache (altfel `period`/`period_custom` ar fi ignorat TACIT la un cache hit =
+        # clasa de bug a proiectului: cod care primeste un parametru dar produce acelasi
+        # rezultat pt intrari diferite). NOTA: raw-vs-clamp (onestitatea B4) NU se pune in
+        # cache — se calculeaza in execute() din params-ul jobului CURENT, fiindca doua
+        # cereri brute diferite pot rezolva la acelasi interval clampat (aceeasi cheie).
+        start_year, end_year = _resolve_bilant_years(period, period_custom)
         cache_key = cache_service.make_cache_key("anaf_bilant", f"{cui}_{start_year}_{end_year}")
         return await cache_service.get_or_fetch(
             key=cache_key,

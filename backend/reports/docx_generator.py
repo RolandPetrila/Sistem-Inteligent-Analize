@@ -81,6 +81,13 @@ def _add_rich_fields_docx(doc, verified_data: dict):
         wr = wp.add_run(model["tavily_quota_exhausted"]["message"])
         wr.font.color.rgb = RGBColor(180, 120, 0)
 
+    # ---- CERINTA #14 (B4): onestitate perioada financiara — cerut vs. interogat/disponibil ----
+    if model["financial_period_note"]["shown"]:
+        doc.add_heading("Perioada Financiara — Interval Cerut vs. Disponibil", level=1)
+        pp = doc.add_paragraph()
+        pr = pp.add_run(model["financial_period_note"]["data"].get("message", ""))
+        pr.font.color.rgb = RGBColor(180, 120, 0)
+
     pred = model["predictive_scores"]["data"]
     if model["predictive_scores"]["shown"]:
         doc.add_page_break()
