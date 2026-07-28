@@ -1200,6 +1200,73 @@ Reguli:
             if isinstance(seap_val, dict):
                 lines.append(f"Contracte SEAP: {seap_val.get('total_contracts', 0)}")
 
+        if section_key == "opportunities":
+            # CERINTA #13 (P1): sectiunea narativa "Oportunitati" iesea "INDISPONIBIL /
+            # nimic gasit" desi datele aveau licitatii deschise + programe de finantare +
+            # contracte SEAP (randate STRUCTURAT mai jos in raport) -> raportul se
+            # contrazicea pe focusul proprietarului. Cauza: aceasta functie (suprafata
+            # structurata pe care modelele "fast" o citesc cel mai bine — ruta sectiunii e
+            # SPEED) NU avea ramura "opportunities", iar pe bugetul JSON mic al providerului
+            # rapid campurile ajungeau doar via dump-ul JSON brut, care le evicta / nu le
+            # scotea la suprafata (_JSON_DROP_PRIORITY, chiar protejate le taie ultimele dar
+            # tot le taie cand nucleul e mare). Le randam AICI ca DATE (nu directiva) —
+            # context_summary NU e supus json_limit, deci vizibilitatea e garantata
+            # independent de bugetul providerului. Forme verificate la PRODUCATOR (aceleasi
+            # surse care le randeaza deja structurat, rich_fields.py / html_generator.py):
+            #   tender_opportunities.opportunities = list[{title, authority, cpv, value,
+            #     deadline, ...}] (NU wrapped in {"value":...}),
+            #   funding_programs.eligible = list[{nume, suma_max_eur, termen, ...}],
+            #   market.seap (posibil wrapped .value) .total_contracts.
+            # Cap 15 = acelasi [:15] ca randererul structurat SICAP (html/pdf/docx) ->
+            # suprapunere garantata intre naratiune si sectiunea structurata (concordanta #13).
+            tenders = data.get("tender_opportunities", {})
+            tlist = tenders.get("opportunities") if isinstance(tenders, dict) else None
+            if isinstance(tlist, list) and tlist:
+                lines.append(f"Licitatii deschise identificate ({len(tlist)}):")
+                for t in tlist[:15]:
+                    if not isinstance(t, dict):
+                        continue
+                    title = str(t.get("title", "") or "").strip()[:120] or "(fara titlu)"
+                    bits = [f"  - {title}"]
+                    auth = str(t.get("authority", "") or "").strip()
+                    if auth:
+                        bits.append(f"autoritate: {auth}")
+                    cpv = str(t.get("cpv", "") or "").strip()
+                    if cpv:
+                        bits.append(f"CPV {cpv}")
+                    val = t.get("value")
+                    if isinstance(val, (int, float)):
+                        bits.append(f"{val:,.0f} RON")
+                    deadline = str(t.get("deadline", "") or "").strip()[:10]
+                    if deadline:
+                        bits.append(f"termen {deadline}")
+                    lines.append(" — ".join(bits))
+
+            funding = data.get("funding_programs", {})
+            elig = funding.get("eligible") if isinstance(funding, dict) else None
+            if isinstance(elig, list) and elig:
+                lines.append(f"Programe de finantare eligibile ({len(elig)}):")
+                for p in elig:
+                    if not isinstance(p, dict):
+                        continue
+                    nume = str(p.get("nume", "") or "").strip() or "(program)"
+                    bits = [f"  - {nume}"]
+                    suma = p.get("suma_max_eur")
+                    if isinstance(suma, (int, float)) and suma:
+                        bits.append(f"pana la {suma:,.0f} EUR")
+                    termen = str(p.get("termen", "") or "").strip()
+                    if termen:
+                        bits.append(f"termen {termen}")
+                    lines.append(" — ".join(bits))
+
+            market = data.get("market", {})
+            seap = market.get("seap", {}) if isinstance(market, dict) else {}
+            seap_val = seap.get("value", seap) if isinstance(seap, dict) else {}
+            if isinstance(seap_val, dict):
+                total_contracts = seap_val.get("total_contracts", 0) or 0
+                if total_contracts:
+                    lines.append(f"Istoric contracte publice castigate (SEAP): {total_contracts}")
+
         return "\n".join(lines) if lines else "Fara context suplimentar disponibil."
 
     def _render_lead_candidates_content(self, leads: dict) -> str:
