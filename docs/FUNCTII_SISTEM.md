@@ -1,8 +1,15 @@
-<!-- Ultima actualizare: 2026-04-09 | Versiune: R7 | Endpoints: 52+ | Provideri AI: 9 | Teste: 365 pytest + 38 vitest -->
+<!-- Ultima actualizare: 2026-07-30 | Versiune: R7 (inventar de baza) | Endpoints: 89+ | Vendori AI activi: 6 | Teste: 1040 pytest -->
 
 # RIS — Inventar Complet Functionalitati
 
-Data actualizare: 2026-04-09 | Versiune: R7 | Faze 1-21 complete + Audit R14/R15/R16
+Data actualizare: 2026-07-30 | Versiune: R7 (inventar de baza) | Faze 1-21 + ciclurile AUDITOR↔EXECUTOR #1–#16
+
+> **Nota de actualitate (2026-07-30):** inventarul detaliat de mai jos e cel de baza (R7, apr. 2026) si
+> poate ramane in urma pe cifre punctuale. Sursele AUTORITARE pentru starea curenta: `CLAUDE.md` (sectiunea
+> Status + Key Files + Stack) si `backend/agents/ai_models.py` (lanturile de provideri). Corectie importanta
+> fata de vechiul header: **6 vendori AI activi** in lanturi (Claude, OpenRouter, Groq, Cerebras, Mistral,
+> Gemini) — NU 9; SambaNova scos (credit epuizat), intrare pastrata pt reversibilitate. Dashboard-ul LIVE
+> de audit al functiilor (introspectie automata a rutelor) e `AUDIT_FUNCTII.html` (`/audit.html`).
 
 ---
 

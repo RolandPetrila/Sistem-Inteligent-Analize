@@ -1,10 +1,16 @@
 # RIS — Plan Complet de Implementare
 
-Data actualizare: 2026-04-05 | Versiune plan: 7.0
+Data actualizare: 2026-07-30 | Versiune plan: 7.0
 
 **Sectiunea de mai jos ("STATUS CURENT") e invechita** — pentru status real/complet, vezi
 `CLAUDE.md` (sectiunea "Status", actualizata dupa fiecare sesiune). Acest fisier ramane
 pentru istoricul planului initial pe faze.
+
+**Stare curenta (2026-07-30):** modul de lucru activ = AUDITOR↔EXECUTOR serializat prin
+`99_Plan_vs_Audit/JURNAL_AUDIT.md` (UNTRACKED). Ciclurile #1–#15 livrate + PUSHATE; RE-AUDIT
+OFICIAL PASS 5/5 pe MOSSLEIN (2026-07-29). CERINTA #16 in executie (imbunatatiri sinteza/SEAP
+W1–W3 + doc-currency). Urmator dupa #16: P5/P6 LOW din `PLAN_REMEDIERE_RAPORT_2026-07-28.md`.
+Detaliu per-ciclu = JURNAL + `CLAUDE.md` sectiunea Status + memorie.
 
 ---
 
