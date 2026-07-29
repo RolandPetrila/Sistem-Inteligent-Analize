@@ -260,6 +260,14 @@ def _add_rich_fields_docx(doc, verified_data: dict):
         if tval:
             summ += f" - valoare totala ~{_fmt_docx_num(tval)} RON"
         doc.add_paragraph(summ)
+        # CERINTA #15 (P4): incadreaza numarul/valoarea cand sunt partiale/plafonate.
+        from backend.reports.rich_fields import seap_count_caveat, seap_value_caveat
+        for _cav in (seap_count_caveat(seap), seap_value_caveat(seap)):
+            if _cav:
+                _p = doc.add_paragraph()
+                _run = _p.add_run(f"! {_cav}")
+                _run.font.color.rgb = RGBColor(180, 120, 0)
+                _run.font.size = Pt(9)
         for label, items in (("Licitatii castigate", seap.get("contracts")), ("Achizitii directe", seap.get("direct_acquisitions"))):
             its = [i for i in (items or []) if isinstance(i, dict)][:8]
             if not its:

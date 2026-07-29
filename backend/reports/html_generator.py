@@ -731,6 +731,12 @@ def _build_rich_fields_html(verified_data: dict) -> tuple[str, str]:
         body = (f'<p style="color:#22c55e;font-weight:600">{tot} contracte publice castigate '
                 f'({cc} licitatii + {dc} achizitii directe)'
                 f'{f" &middot; valoare totala ~{_escape(_fmt_num(tval))} RON" if tval else ""}</p>')
+        # CERINTA #15 (P4): incadreaza numarul/valoarea cand sunt partiale/plafonate.
+        from backend.reports.rich_fields import seap_count_caveat, seap_value_caveat
+        for _cav in (seap_count_caveat(seap), seap_value_caveat(seap)):
+            if _cav:
+                body += (f'<p style="color:#eab308;font-size:.85em">&#9888; '
+                         f'{_escape(_cav)}</p>')
 
         def _seap_rows(items):
             rows_html = ""

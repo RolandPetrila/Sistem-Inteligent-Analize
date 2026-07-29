@@ -505,6 +505,16 @@ def _add_rich_fields_pdf(pdf, verified_data: dict):
             if tval:
                 summ += f" - valoare totala ~{_fmt_pdf_num(tval)} RON"
             pdf.multi_cell(0, 6, _sanitize(summ), new_x="LMARGIN", new_y="NEXT")
+            # CERINTA #15 (P4): incadreaza numarul/valoarea cand sunt partiale/plafonate.
+            # Prefix ASCII "! " (glyph-ul ⚠ nu supravietuieste sanitizarii latin-1).
+            from backend.reports.rich_fields import seap_count_caveat, seap_value_caveat
+            for _cav in (seap_count_caveat(seap), seap_value_caveat(seap)):
+                if _cav:
+                    pdf.set_font("Helvetica", "", 9)
+                    pdf.set_text_color(180, 120, 0)
+                    pdf.multi_cell(0, 5, _sanitize(f"! {_cav}"), new_x="LMARGIN", new_y="NEXT")
+                    pdf.set_font("Helvetica", "", 10)
+                    pdf.set_text_color(40, 40, 40)
             for label, items in (("Licitatii castigate", seap.get("contracts")), ("Achizitii directe", seap.get("direct_acquisitions"))):
                 its = [i for i in (items or []) if isinstance(i, dict)][:8]
                 if not its:

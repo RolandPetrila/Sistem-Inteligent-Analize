@@ -378,3 +378,57 @@ def build_rich_fields_model(verified_data: dict) -> dict:
         "sector_position": {"shown": has_sector_position, "data": sector_position},
         "financial_period_note": {"shown": has_period_note, "data": fpn},
     }
+
+
+# ---- CERINTA #15 (P4): calificative oneste de fiabilitate pt istoricul SEAP ----
+# Numarul si valoarea SICAP pot fi PARTIALE fara ca renderul s-o spuna: `total`
+# poate atinge plafonul serverului (3000 CA / 2000 DA), pot fi adusi mai putini
+# itemi decat spune totalul, iar valoarea insumeaza doar itemii adusi. Producatorul
+# le declara explicit (seap_client.py:422-448); pana acum cele 3 randere afisau
+# numarul/valoarea FERM, cu aceeasi incredere ca una completa. Cele doua functii de
+# mai jos produc formularea onesta O SINGURA DATA (identica in HTML/PDF/DOCX);
+# fiecare renderer aplica markup-ul propriu (galben, ca precedentul de la sanctiuni).
+
+def seap_count_caveat(seap: dict) -> str | None:
+    """Calificativ pt NUMARUL de contracte SEAP cand e plafonat/trunchiat.
+
+    Testeaza FAPTELE-sursa truthy (`total_capped` / `items_truncated`), NU
+    `counts_reliable is False`. `counts_reliable` e DERIVAT (seap_client.py:429)
+    si poate LIPSI din dict (calea CUI-invalid `:257-259` n-are niciun flag) sau
+    poate trece printr-un round-trip JSON de cache (aceeasi clasa de hazard ca
+    `years_found` la #14) -> un `.get(...) is False` pe cheie absenta/mutata ar
+    evalua TACIT la "fara calificativ", adica exact overclaim-ul ascuns pe care P4
+    il ucide. `.get()` truthy pe faptul-sursa e rezistent la absenta si la round-trip.
+
+    `total_capped` (plafon server) si `items_truncated` (mai putini itemi adusi)
+    sunt moduri de esec DISTINCTE -> formulare diferentiata. Returneaza None cand
+    numaratoarea e completa => ZERO text nou (fara regresie pt firme cu istoric complet).
+    """
+    if not isinstance(seap, dict):
+        return None
+    if seap.get("total_capped"):
+        return ("Numarare plafonata: serverul SICAP a returnat numarul maxim de "
+                "rezultate; totalul real poate fi mai mare (numarul afisat e un minim).")
+    if seap.get("items_truncated"):
+        return ("Numarare partiala: au fost adusi mai putini itemi decat totalul "
+                "raportat; lista detaliata de mai jos e un subset.")
+    return None
+
+
+def seap_value_caveat(seap: dict) -> str | None:
+    """Calificativ pt VALOAREA totala SEAP cand `total_value_is_partial` e truthy.
+
+    Valoarea insumeaza doar itemii adusi (unii pot avea si valoare necunoscuta),
+    deci e un MINIM, nu totalul real -- a nu se citi drept cifra de afaceri.
+    Formularea sta de sine chiar cand nu se afiseaza nicio valoare: `total_value`
+    poate fi 0 cand toti itemii adusi au valoare necunoscuta, iar un gate pe
+    "exista valoare afisata" ar reintroduce in mic acelasi overclaim (absenta
+    citita ca "nimic de spus"). Truthy pe faptul-sursa (rezistent la absenta /
+    round-trip JSON). None cand valoarea e completa.
+    """
+    if not isinstance(seap, dict):
+        return None
+    if seap.get("total_value_is_partial"):
+        return ("Valoare partiala: suma doar a itemilor adusi (unii fara valoare "
+                "cunoscuta), NU totalul real -- a nu se citi drept cifra de afaceri.")
+    return None
