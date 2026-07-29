@@ -233,6 +233,80 @@ def _cpv_code8(raw: str) -> str:
     return digits[:8] if len(digits) >= 8 else ""
 
 
+async def _fetch_seap_pages(url: str, base_payload: dict, cap: int, id_of, source_name: str) -> tuple[list[dict], int | None]:
+    """Paginare `pageIndex`-based pana la min(`total`, `cap`) itemi. (CERINTA #16 C)
+
+    Inainte, fetch-ul aducea DOAR pagina 0 (`pageSize=200`) -> pentru o firma cu >200
+    achizitii directe (MOSSLEIN: 485), setul era trunchiat la 200 iar `items_truncated`
+    ramanea True desi numarul real (485) incape sub plafonul serverului (2000). Acum se
+    aduc TOATE paginile pana la `total` (sau pana la `cap`, plafonul serverului).
+
+    Returneaza `(items, total)`. Ridica `SeapSourceError` DOAR pe esecul paginii 0
+    (comportament neschimbat: apelantul intoarce `_unverified`). O pagina >=1 care esueaza
+    NU arunca — pastreaza ce s-a adus (marcat partial in aval prin `len(items) < total`),
+    exact ca `_fetch_recent_open_notices`: un rate-limit tranzitoriu pe pagina 3 nu trebuie
+    sa arunce 400 de itemi deja verificati.
+
+    CANAR anti-"parametru ignorat TACIT" (acelasi mod de esec ca scarul `spiCuiSupplier`):
+    SICAP ignora tacit cheile/parametrii nesuportati. Daca `pageIndex` ar fi ignorat, fiecare
+    pagina ar reintoarce pagina 0 -> acumulare de duplicate -> numar si valoare umflate ~Nx,
+    prezentate cu aceeasi incredere ca un set complet. Se deduplica pe id-ul STABIL emis de
+    server; daca o pagina >=1 aduce un id deja vazut, paginarea e considerata ignorata: se
+    opreste, se pastreaza doar itemii unici (fara dublare), iar `len < total` marcheaza corect
+    setul ca partial. (Verificat LIVE 2026-07-30 ca pageIndex functioneaza; canarul e plasa.)
+    """
+    all_items: list[dict] = []
+    seen: set = set()
+    total: int | None = None
+    max_pages = cap // DETAIL_PAGE_SIZE + 1  # plasa de siguranta: nu depasi plafonul serverului
+    for page in range(max_pages + 1):
+        payload = {**base_payload, "pageSize": DETAIL_PAGE_SIZE, "pageIndex": page}
+
+        async def _fetch(p=payload):  # p=payload: capteaza valoarea curenta (nu closure pe var de bucla)
+            c = get_client()
+            return await c.post(url, json=p, headers=_SICAP_HEADERS)
+
+        try:
+            resp = await with_retry(_fetch, retries=1, backoff=[3], source_name=source_name)
+            data = _json_or_raise(resp, source_name)
+        except SeapSourceError:
+            if page == 0:
+                raise
+            logger.warning(f"[seap] {source_name}: pagina {page} esuata — pastrez {len(all_items)} itemi, marchez partial")
+            break
+
+        items = [it for it in (data.get("items") or []) if isinstance(it, dict)]
+        page_total = data.get("total")
+        if total is None and isinstance(page_total, int):
+            total = page_total
+
+        dup = 0
+        for it in items:
+            iid = id_of(it)
+            if iid is not None and iid in seen:
+                dup += 1
+                continue
+            if iid is not None:
+                seen.add(iid)
+            all_items.append(it)
+
+        if page > 0 and dup:
+            logger.warning(
+                f"[seap] {source_name}: pagina {page} aduce {dup}/{len(items)} id-uri deja "
+                f"vazute -> pageIndex pare IGNORAT; opresc la {len(all_items)} itemi (fara dublare)"
+            )
+            break
+
+        target = min(total, cap) if isinstance(total, int) else len(all_items)
+        # oprire normala: pagina incompleta (nu mai sunt) sau am atins targetul
+        if len(items) < DETAIL_PAGE_SIZE or len(all_items) >= target:
+            break
+
+        await asyncio.sleep(REQUEST_DELAY)  # secvential: SICAP are anunt anti-bot din 15.07.2026
+
+    return all_items, total
+
+
 async def get_contracts_won(cui: str, page_size: int = 20, use_cache: bool = True, eur_ron_rate: float | None = None) -> dict:
     """Contracte publice ATRIBUITE firmei, pe SICAP.
 
@@ -318,23 +392,18 @@ async def get_contracts_won(cui: str, page_size: int = 20, use_cache: bool = Tru
     # `sysNoticeTypeIds: []` = TOATE tipurile. Masurat pe STRABAG: tip 3 -> 84,
     # toate -> 177 (tip 18 singur aduce 92). Pentru IMM-uri, unde procedurile
     # simplificate sunt canalul principal, fixarea pe [3] ar rata grosul.
-    ca_payload = {
-        "pageSize": DETAIL_PAGE_SIZE, "pageIndex": 0,
+    # Referer OBLIGATORIU la api-pub SICAP (in `_SICAP_HEADERS`) — fara el da HTTP 403.
+    # Paginat (CERINTA #16 C): aduce TOATE atribuirile pana la `total`, nu doar primele 200.
+    ca_base = {
         "winnerId": supplier_id, "sysNoticeTypeIds": [],
         "sortField": "publicationDate", "sortOrder": "desc",
     }
-
-    async def _fetch_ca():
-        c = get_client()
-        # Referer OBLIGATORIU la api-pub SICAP — fara el da HTTP 403 (bug istoric: lipsea)
-        return await c.post(SEAP_NOTICES_URL, json=ca_payload, headers=_SICAP_HEADERS)
-
     try:
-        resp = await with_retry(_fetch_ca, retries=1, backoff=[3], source_name="SEAP CA notices")
-        data = _json_or_raise(resp, "GetCANoticeList")
-        items = data.get("items") or []
-        results["contracts"] = [_parse_ca_notice(it) for it in items if isinstance(it, dict)]
-        ca_total = data.get("total")
+        ca_items, ca_total = await _fetch_seap_pages(
+            SEAP_NOTICES_URL, ca_base, TOTAL_CAP_CA,
+            lambda it: it.get("caNoticeId") or it.get("noticeNo"), "SEAP CA notices",
+        )
+        results["contracts"] = [_parse_ca_notice(it) for it in ca_items]
         results["contracts_count"] = ca_total if isinstance(ca_total, int) else len(results["contracts"])
         results["contracts_count_capped"] = results["contracts_count"] >= TOTAL_CAP_CA
     except SeapSourceError as e:
@@ -348,26 +417,23 @@ async def get_contracts_won(cui: str, page_size: int = 20, use_cache: bool = Tru
     # exista simetrie). Plus filtru de stare server-side: fara el, `total` numara
     # si ofertele REFUZATE ca si cum ar fi contracte castigate (masurat pe STRABAG:
     # 188 rezultate, dintre care doar 170 castigate).
-    da_payload = {
-        "pageSize": DETAIL_PAGE_SIZE, "pageIndex": 0,
+    # Paginat (CERINTA #16 C): aduce TOATE achizitiile directe pana la `total`. La MOSSLEIN,
+    # 485 directe erau trunchiate la 200 -> `items_truncated=True` desi 485 < plafon 2000.
+    da_base = {
         "supplierId": supplier_id,
         DA_STATE_PARAM: DA_STATE_WON,
         "sortField": "publicationDate", "sortOrder": "desc",
     }
-
-    async def _fetch_da():
-        c = get_client()
-        return await c.post(SEAP_DIRECT_URL, json=da_payload, headers=_SICAP_HEADERS)
-
     try:
-        resp = await with_retry(_fetch_da, retries=1, backoff=[3], source_name="SEAP direct")
-        data = _json_or_raise(resp, "GetDirectAcquisitionList")
-        items = data.get("items") or []
-        parsed = [_parse_direct_acquisition(it) for it in items if isinstance(it, dict)]
+        da_items, da_total = await _fetch_seap_pages(
+            SEAP_DIRECT_URL, da_base, TOTAL_CAP_DA,
+            lambda it: it.get("directAcquisitionId") or it.get("uniqueIdentificationCode"), "SEAP direct",
+        )
+        parsed = [_parse_direct_acquisition(it) for it in da_items]
 
-        # DOUA LINII DE APARARE, ambele independente de filtrele serverului —
-        # tocmai pentru ca modul de esec al acestei surse e "parametru ignorat
-        # TACIT", nu eroare:
+        # DOUA LINII DE APARARE, ambele independente de filtrele serverului — tocmai
+        # pentru ca modul de esec al acestei surse e "parametru ignorat TACIT", nu eroare.
+        # Aplicate acum pe TOATE paginile agregat (`parsed` = toti itemii paginati):
         #   (a) furnizorul: itemul poarta `supplier`, deci se poate valida per-item
         #   (b) starea: se re-verifica local ca e chiar "Oferta acceptata"
         kept, wrong_supplier, not_won = [], 0, 0
@@ -393,11 +459,10 @@ async def get_contracts_won(cui: str, page_size: int = 20, use_cache: bool = Tru
         results["direct_dropped_mismatch"] = wrong_supplier
         results["direct_dropped_not_won"] = not_won
 
-        da_total = data.get("total")
         server_filters_held = not wrong_supplier and not not_won
-        # `total` e autoritar DOAR daca ambele filtre server-side au tinut. Daca
-        # nu, cade pe numaratoarea locala — care e la randul ei nesigura daca setul
-        # a fost trunchiat de plafon (vezi mai jos).
+        # `da_total` vine din `_fetch_seap_pages` (paginat). E autoritar DOAR daca ambele
+        # filtre server-side au tinut. Daca nu, cade pe numaratoarea locala — care e la
+        # randul ei nesigura daca setul a fost trunchiat de plafon (vezi mai jos).
         results["direct_count"] = (
             da_total if isinstance(da_total, int) and server_filters_held else len(kept)
         )

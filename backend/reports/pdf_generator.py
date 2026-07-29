@@ -75,6 +75,25 @@ def _sanitize(text: str) -> str:
     return text.encode("latin-1", errors="replace").decode("latin-1")
 
 
+def _soft_wrap_long_words(text: str, chunk: int = 55, threshold: int = 60) -> str:
+    """Sparge tokenii mai lungi decat `threshold` in bucati de <=`chunk` unite prin SPATIU,
+    ca `multi_cell` sa le poata infasura (fpdf2 rupe randul pe spatii, NU pe cratime).
+
+    CERINTA #16 D: vechiul `w[:55]+'-'+w[55:110]` ARUNCA tot ce trece de caracterul 110
+    (pierdere tacuta de continut) si producea un token de ~111 caractere care, intr-o coloana
+    ingusta, declansa `multi_cell` -> "Not enough horizontal space to render a single character"
+    -> `except` -> intreg paragraful inlocuit cu `[paragraf nerandat]`. Aici NU se pierde niciun
+    caracter, iar bucatile scurte + spatiile permit infasurarea. No-op strict sub prag.
+    """
+    out = []
+    for w in text.split():
+        if len(w) <= threshold:
+            out.append(w)
+        else:
+            out.append(" ".join(w[i:i + chunk] for i in range(0, len(w), chunk)))
+    return " ".join(out)
+
+
 def _render_pdf_table(pdf, rows: list[list[str]], has_header: bool):
     """F21: Render a markdown table as fpdf2 cells.
     PDF-01/PDF-02: Use multi_cell for long text, warn on truncation."""
@@ -739,9 +758,9 @@ def generate_pdf(report_sections: dict, meta: dict, output_path: str, verified_d
             if not line:
                 pdf.ln(3)
                 continue
-            # C9 fix: Break very long words with hyphens instead of truncating
-            words = line.split()
-            line = " ".join(w[:55] + "-" + w[55:110] if len(w) > 60 else w for w in words)
+            # C9 + CERINTA #16 D: sparge tokenii foarte lungi in bucati infasurabile,
+            # FARA a pierde caractere (vechiul break arunca tot dupa char 110).
+            line = _soft_wrap_long_words(line)
             # Skip raw JSON
             if line.startswith("{") or line.startswith("["):
                 continue

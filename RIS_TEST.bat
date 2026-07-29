@@ -71,6 +71,14 @@ echo.
 echo   VITEST: !VITEST_RESULT!
 echo.
 
+:: --- DOC-DRIFT GUARD (non-fatal, doar avertizare) ---
+:: Verifica daca ciclul curent a schimbat cod fara actualizare doc (regula HARD doc-currency).
+:: NU influenteaza PASS/FAIL — e un reminder. Ruleaza cu --strict in CI pt a-l face gate.
+echo. >> %LOGFILE%
+echo --- DOC-DRIFT GUARD --- >> %LOGFILE%
+python tools\check_doc_drift.py 2>&1 | tee -a %LOGFILE% 2>nul
+echo.
+
 :: --- SUMMARY ---
 echo ---------------------------------------- >> %LOGFILE%
 echo SUMMARY: pytest=!PYTEST_RESULT! vitest=!VITEST_RESULT! >> %LOGFILE%

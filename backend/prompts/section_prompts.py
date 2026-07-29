@@ -239,7 +239,11 @@ SECTION_PROVIDER_PREFERENCE = {
     "financial_analysis": "quality",
     "risk_assessment": "quality",
     "competition": "fast",
-    "opportunities": "fast",
+    # "quality" (CERINTA #16 B): pe FULL_COMPANY_PROFILE cu focus pe licitatii, "Oportunitati"
+    # e sectiunea-cheie a proprietarului si transcrie licitatii/finantari/CPV reale — fidelitate
+    # sensibila, la fel ca `lead_candidates`. Pe "fast" (masurat live: cerebras) profunzimea era
+    # mai slaba. word_target la nivel 2/3 (400/800) > 200, deci gardul ">200->fast" NU o forteaza.
+    "opportunities": "quality",
     # "quality" (nu "fast"): transcrierea a N firme distincte (CUI/CAEN/scor per firma) e o
     # sarcina sensibila la halucinatie pt modele mici/rapide -- verificat live: pe "fast"
     # (Groq initial) modelul a reutilizat CUI-ul firmei solicitante pt alte firme candidate.

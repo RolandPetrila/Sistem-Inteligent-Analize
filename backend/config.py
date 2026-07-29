@@ -66,8 +66,14 @@ class Settings(BaseSettings):
     # nu scria nimic). NB: numele e `synthesis_effort` (SYNTHESIS_EFFORT), NU `claude_effort` —
     # ar coliziona cu env var-ul CLAUDE_EFFORT folosit de Claude Code CLI insusi.
     synthesis_effort: str = "max"          # SYNTHESIS_EFFORT: max | high | medium | low
-    synthesis_claude_timeout: int = 360    # SYNTHESIS_CLAUDE_TIMEOUT: secunde per apel Claude (252 masurat + marja)
-    synthesis_total_timeout: int = 2400    # SYNTHESIS_TOTAL_TIMEOUT: plafon global sinteza (plasa de siguranta; execute() se auto-termina inainte)
+    # CERINTA #16 (A): ridicat 360->480. Masurat (re-audit d2b869dd 2026-07-29): coada Claude
+    # depaseste 360s pe exec_summary + risk_assessment (360.3s/360.2s pana la fallback) -> taiate
+    # -> openrouter cu context REDUS. 480 acopera coada; effort=max ~252s ramane cu marja.
+    synthesis_claude_timeout: int = 480    # SYNTHESIS_CLAUDE_TIMEOUT: secunde per apel Claude (252 masurat + marja pt coada)
+    # CUPLAJ cu A: cu 480s/sectiune si opportunities mutat pe QUALITY (CERINTA #16 B) sunt acum
+    # pana la 5 sectiuni pe Claude -> worst-case 5x480=2400 ATINGEA vechiul plafon -> execute() s-ar
+    # auto-termina si ar randa partial. Ridicat 2400->3600 in acelasi edit ca A.
+    synthesis_total_timeout: int = 3600    # SYNTHESIS_TOTAL_TIMEOUT: plafon global sinteza (plasa de siguranta; execute() se auto-termina inainte)
 
     # Web Search
     tavily_api_key: str = ""
