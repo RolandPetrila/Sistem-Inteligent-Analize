@@ -938,7 +938,15 @@ export const api = {
       job_id: string;
       section_key: string;
       status: string;
-      section: { title?: string; content?: string; word_count?: number };
+      // CERINTA #18: raspunsul re-emite fillerul "date insuficiente" cu markerul
+      // (backend jobs.py intoarce `new_section` verbatim din generate_section) ->
+      // ReportView il re-aplica in starea locala si sectiunea ramane ascunsa dupa regen.
+      section: {
+        title?: string;
+        content?: string;
+        word_count?: number;
+        insufficient_data_filler?: boolean;
+      };
     }>(
       `/jobs/${jobId}/section/${sectionKey}/regenerate`,
       { method: "POST" },

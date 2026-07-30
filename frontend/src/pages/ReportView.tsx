@@ -13,6 +13,7 @@ import { useToast } from "@/components/Toast";
 import { logAction, logValidation, validateReportData } from "@/lib/logger";
 import { ANALYSIS_TYPE_LABELS } from "@/lib/constants";
 import { getRiskBucket } from "@/lib/risk";
+import { partitionSections } from "@/lib/section-visibility";
 import { buildFinancialChartData } from "@/lib/financialChart";
 import type { AnalysisType } from "@/lib/types";
 import { ReportHeader } from "@/components/report/ReportHeader";
@@ -26,8 +27,16 @@ import { RichDataTab } from "@/components/report/RichDataTab";
 
 // A synthesis section value is normally an object {title, content, word_count};
 // the orchestrator error path stores a bare string instead — handle both.
+// CERINTA #18: fillerul "date insuficiente" poarta `insufficient_data_filler` (marcat de
+// sinteza la un punct unic de emisie) — folosit ca sa-l omitem din lista narativa live.
 type ReportSectionValue =
-  string | { title?: string; content?: string; word_count?: number };
+  | string
+  | {
+      title?: string;
+      content?: string;
+      word_count?: number;
+      insufficient_data_filler?: boolean;
+    };
 
 // Sections that the backend can re-generate individually
 // (mirror of VALID_SECTIONS in backend/routers/jobs.py).
@@ -728,9 +737,14 @@ export default function ReportView() {
               </p>
             );
           }
+          // CERINTA #18: fillerele "date insuficiente" (marcate de sinteza) nu apar in
+          // lista narativa principala (paritate de intentie cu raportul de pe disc), ci ca un
+          // rand mut sub lista — care PASTREAZA butonul "Regenereaza". Never-empty: daca TOATE
+          // sectiunile sunt filler, partitionSections le lasa pe toate vizibile (nimic ascuns).
+          const { visible, hidden } = partitionSections(entries);
           return (
             <div className="space-y-3">
-              {entries.map(([key, value]) => {
+              {visible.map(([key, value]) => {
                 const { title, content } = getSectionText(value);
                 const canRegenerate = REGENERATABLE_SECTIONS.has(key);
                 return (
@@ -765,6 +779,49 @@ export default function ReportView() {
                   </div>
                 );
               })}
+
+              {hidden.length > 0 && (
+                <div className="pt-3 mt-1 border-t border-dark-border text-xs text-gray-500">
+                  <span className="italic">
+                    {hidden.length === 1
+                      ? "1 sectiune omisa din raport (date insuficiente):"
+                      : `${hidden.length} sectiuni omise din raport (date insuficiente):`}
+                  </span>
+                  <div className="mt-2 space-y-1.5">
+                    {hidden.map(([key, value]) => {
+                      const { title } = getSectionText(value);
+                      const canRegenerate = REGENERATABLE_SECTIONS.has(key);
+                      return (
+                        <div
+                          key={key}
+                          className="flex items-center justify-between gap-3"
+                        >
+                          <span className="text-gray-400">
+                            {title || key.replace(/_/g, " ")}
+                          </span>
+                          {canRegenerate && (
+                            <button
+                              onClick={() => handleRegenerateSection(key)}
+                              disabled={regeneratingKey !== null}
+                              className="btn-secondary flex items-center gap-1.5 text-xs shrink-0"
+                            >
+                              <RefreshCw
+                                className={clsx(
+                                  "w-3 h-3",
+                                  regeneratingKey === key && "animate-spin",
+                                )}
+                              />
+                              {regeneratingKey === key
+                                ? "Se regenereaza..."
+                                : "Regenereaza"}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })()}
