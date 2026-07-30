@@ -6,6 +6,7 @@ import html as html_lib
 import json as json_lib
 
 from backend.reports.rich_fields import build_rich_fields_model
+from backend.reports.section_visibility import visible_sections
 
 DISCLAIMER = (
     "Acest raport a fost generat automat folosind exclusiv date disponibile public "
@@ -1038,7 +1039,9 @@ def generate_html(report_sections: dict, meta: dict, verified_data: dict, output
     if key_takeaways_html:
         nav_items += '<a href="#key-takeaways" class="nav-link">Puncte Cheie</a>\n'
     sections_html = ""
-    for key, section in report_sections.items():
+    # CERINTA #17 (P6): omite fillerele "date insuficiente" (marcate la sinteza). Nav-ul se
+    # construieste in aceasta bucla -> sectiunile omise nu primesc nici link de navigatie.
+    for key, section in visible_sections(report_sections).items():
         sec_title = _escape(section.get("title", key))
         content_html = _render_content(section.get("content", ""))
         nav_items += f'<a href="#{key}" class="nav-link">{sec_title}</a>\n'

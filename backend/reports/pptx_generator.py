@@ -9,6 +9,7 @@ from pptx.enum.text import PP_ALIGN
 from pptx.util import Inches, Pt
 
 from backend.agents.verification.scoring import risk_bucket
+from backend.reports.section_visibility import visible_sections
 
 ACCENT = RGBColor(99, 102, 241)
 DARK_BG = RGBColor(26, 26, 46)
@@ -206,7 +207,11 @@ def generate_pptx(report_sections: dict, meta: dict, verified_data: dict, output
     _set_slide_bg(slide6)
     _add_text(slide6, 0.5, 0.3, 12, 0.6, "Concluzii", 28, ACCENT, bold=True)
     y = 1.2
-    for key, section in list(report_sections.items())[:4]:
+    # CERINTA #17 (P6): FILTREZ intai fillerele "date insuficiente", APOI iau primele 4. Slice-ul
+    # e pozitional -> filtrarea inainte de slice garanteaza ca pe slide-ul "Concluzii" ajung pana la
+    # 4 sectiuni cu continut REAL, niciodata un filler (decizie declarata). Daca TOATE sunt filler,
+    # `visible_sections` le pastreaza (never-empty), deci slide-ul nu ramane gol.
+    for key, section in list(visible_sections(report_sections).items())[:4]:
         title = section.get("title", key)
         content = section.get("content", "")
         # Primul paragraf ca rezumat

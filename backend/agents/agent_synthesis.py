@@ -22,6 +22,7 @@ from backend.agents.verification.scoring import risk_bucket
 from backend.config import settings
 from backend.prompts.section_prompts import get_sections_for_analysis
 from backend.prompts.system_prompt import SYSTEM_PROMPT
+from backend.reports.section_visibility import INSUFFICIENT_DATA_MARKER
 from backend.services.job_logger import log_synthesis
 
 # Runda 2 / C: nucleul analitic pe care niciun prompt de sectiune nu-l poate pierde
@@ -246,6 +247,10 @@ class SynthesisAgent(BaseAgent, SynthesisProvidersMixin):
         # ER2: Skip AI generation if section has insufficient data
         if not self._has_sufficient_data(key, verified_data):
             logger.warning(f"[synthesis] Section {key}: insufficient data, using fallback")
+            # CERINTA #17 (P6): marcheaza EXPLICIT fillerul "date insuficiente" la acest PUNCT UNIC
+            # de emisie. Randarea (HTML/PDF/DOCX/PPTX via `visible_sections`) omite sectiunile marcate
+            # din raport — mai putin cand ar ramane ZERO sectiuni (atunci fillerul e raspunsul onest).
+            # Marker DOAR aici, NU pe ramura degradata de deadline (`execute()`) — acelea se PASTREAZA.
             return {
                 "title": title,
                 "content": (
@@ -255,6 +260,7 @@ class SynthesisAgent(BaseAgent, SynthesisProvidersMixin):
                     f"Se recomanda obtinerea acestor informatii direct de la companie."
                 ),
                 "word_count": 0,
+                INSUFFICIENT_DATA_MARKER: True,
             }
 
         # 8C: Provider routing per section type (overrides simple word-based routing)

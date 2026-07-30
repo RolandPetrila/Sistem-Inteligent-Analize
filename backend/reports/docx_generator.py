@@ -10,6 +10,7 @@ from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor
 
 from backend.reports.rich_fields import build_rich_fields_model
+from backend.reports.section_visibility import visible_sections
 
 DISCLAIMER = (
     "Acest raport a fost generat automat folosind exclusiv date disponibile public "
@@ -460,7 +461,9 @@ def generate_docx(report_sections: dict, meta: dict, output_path: str, verified_
     doc.add_page_break()
 
     # Sections
-    for key, section in report_sections.items():
+    # CERINTA #17 (P6): omite fillerele "date insuficiente" (marcate la sinteza). TOC-ul DOCX e un
+    # camp Word (F9) care reflecta heading-urile reale -> o sectiune omisa nu lasa intrare TOC moarta.
+    for key, section in visible_sections(report_sections).items():
         title = section.get("title", key)
         content = section.get("content", "")
 

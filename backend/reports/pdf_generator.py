@@ -12,6 +12,7 @@ from loguru import logger
 
 from backend.config import settings
 from backend.reports.rich_fields import build_rich_fields_model
+from backend.reports.section_visibility import visible_sections
 
 DISCLAIMER = (
     "Acest raport a fost generat automat folosind exclusiv date disponibile public "
@@ -709,7 +710,10 @@ def generate_pdf(report_sections: dict, meta: dict, output_path: str, verified_d
     pdf.insert_toc_placeholder(_render_toc, pages=1)
 
     # Sections
-    for key, section in report_sections.items():
+    # CERINTA #17 (P6): omite fillerele "date insuficiente" (marcate la sinteza). Filtrez SURSA
+    # de iterare (nu `continue` in corp) — `pdf.add_page()` + `start_section` (bookmark/TOC) sunt
+    # in bucla, deci sectiunile omise nu lasa pagina goala orfana si nici intrare TOC moarta.
+    for key, section in visible_sections(report_sections).items():
         pdf.add_page()
         title = section.get("title", key)
         content = section.get("content", "")
